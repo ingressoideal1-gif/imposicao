@@ -196,6 +196,40 @@
         box.style.cssText = 'background:var(--card-bg,#1e293b);color:var(--text,#e2e8f0);padding:24px;border-radius:12px;width:700px;max-width:100%;max-height:85vh;overflow:auto';
         const titulo = document.createElement('h2'); titulo.textContent = 'PDFs — ' + resultado.nome; box.appendChild(titulo);
         const info = document.createElement('p'); info.textContent = resultado.total + ' assentos · Revisão ' + resultado.revisao.slice(0, 12); box.appendChild(info);
+        if (resultado.mapaPersistido && window.MapasTeatroPdfStorage) {
+            const status = document.createElement('p'); status.id = 'mapa-pdfs-status-erp'; box.appendChild(status);
+            status.style.margin = '12px 0';
+            const links = document.createElement('div'); box.appendChild(links);
+            const enviar = document.createElement('button'); enviar.type = 'button'; enviar.className = 'btn btn-secondary';
+            enviar.id = 'mapa-pdfs-salvar-erp'; enviar.textContent = 'Salvar PDFs para o ERP'; box.appendChild(enviar);
+            function atualizarPersistencia() {
+                links.replaceChildren();
+                const pronto = resultado.persistencia?.estado === 'pronto';
+                status.textContent = pronto ? 'PDFs salvos para o ERP nesta revisão.'
+                    : 'PDFs disponíveis para download. Envio para o ERP pendente: ' + (resultado.persistencia?.mensagem || 'clique em Salvar PDFs para o ERP.');
+                enviar.hidden = pronto;
+                enviar.style.display = pronto ? 'none' : '';
+                if (pronto) for (const a of resultado.persistencia.arquivos) {
+                    const botao = document.createElement('button'); botao.type = 'button'; botao.className = 'btn btn-sm btn-secondary';
+                    botao.textContent = 'Copiar link ERP — ' + (a.tipo === 'mapa' ? 'Mapa completo' : a.nome_setor);
+                    botao.onclick = async () => {
+                        try { await navigator.clipboard.writeText(a.pdf_recurso); status.textContent = 'Link copiado. O ERP deve enviar sua autenticação ao consultar o PDF.'; }
+                        catch { status.textContent = 'Não foi possível copiar automaticamente. Use o campo do link.'; }
+                    };
+                    const campo = document.createElement('input'); campo.readOnly = true; campo.value = a.pdf_recurso;
+                    campo.setAttribute('aria-label', 'Link ERP do ' + (a.nome_setor || 'mapa completo'));
+                    campo.style.cssText = 'width:100%;box-sizing:border-box;background:var(--input-bg,#0f172a);color:inherit;border:1px solid #64748b55;border-radius:6px;padding:8px;margin:6px 0 12px;font-size:12px';
+                    links.appendChild(botao); links.appendChild(campo);
+                }
+            }
+            enviar.onclick = async () => {
+                enviar.disabled = true; status.textContent = 'Salvando os PDFs para o ERP...';
+                try { resultado.persistencia = await window.MapasTeatroPdfStorage.persistir(resultado.mapaPersistido, resultado); }
+                catch (e) { resultado.persistencia = { estado: 'pendente', mensagem: e.message }; }
+                finally { enviar.disabled = false; atualizarPersistencia(); }
+            };
+            atualizarPersistencia();
+        }
         const urls = [];
         function linha(nome, arquivo, bytes, detalhe) {
             const row = document.createElement('div'); row.style.cssText = 'padding:14px 0;border-top:1px solid #64748b55;display:flex;gap:14px;flex-wrap:wrap;align-items:center';

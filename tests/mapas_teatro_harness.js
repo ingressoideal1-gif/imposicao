@@ -113,6 +113,31 @@ async function teste(nome, fn) {
 }
 
 (async () => {
+    await teste('salvar confirma mapa antes de persistir PDFs e informa envio concluído', async () => {
+        const t = montar(); const b = clienteSimulado(t); let recebido;
+        t.c.MapasTeatroPdf = { async gerar() { return { revisao: 'sintetica' }; }, abrir() {} };
+        t.c.MapasTeatroPdfStorage = { async persistir(m) { recebido = copia(m); assert.deepEqual(recebido, b.rows.get('m1')); return { estado: 'pronto' }; } };
+        await t.c.salvarMapaTeatro();
+        assert.match(t.confirmacoes.at(-1).mensagem, /arquivos também foram salvos para o ERP/);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+    });
+    await teste('falha de upload mantém salvamento confirmado e PDFs locais', async () => {
+        const t = montar(); const b = clienteSimulado(t); let aberto;
+        t.c.MapasTeatroPdf = { async gerar() { return { revisao: 'sintetica' }; }, abrir(r) { aberto = r; } };
+        t.c.MapasTeatroPdfStorage = { async persistir() { throw Error('Upload interrompido'); } };
+        assert.equal(await t.c.salvarMapaTeatro(), true);
+        assert.match(t.confirmacoes.at(-1).mensagem, /envio dos PDFs para o ERP está pendente: Upload interrompido/);
+        assert.equal(aberto.persistencia.estado, 'pendente'); assert.equal(t.c.state.mapaAtual, null);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+    });
+    await teste('abrir PDFs consulta persistência sem iniciar upload nem regravar mapa', async () => {
+        const t = montar(); const b = clienteSimulado(t); let aberto, consultas = 0;
+        t.c.MapasTeatroPdf = { async gerar() { return { revisao: 'sintetica' }; }, abrir(r) { aberto = r; } };
+        t.c.MapasTeatroPdfStorage = { async consultar() { consultas++; return { estado: 'pendente' }; }, persistir() { throw Error('Upload indevido'); } };
+        await t.c.abrirPdfsMapaTeatro('m1');
+        assert.equal(consultas, 1); assert.equal(aberto.mapaPersistido.id, 'm1');
+        assert.equal(b.chamadas.filter(x => x.acao !== 'select').length, 0);
+    });
     await teste('salvar gera PDFs somente do mapa confirmado e oferece os arquivos', async () => {
         const t = montar(); const b = clienteSimulado(t); let origem, aberto = false;
         t.c.MapasTeatroPdf = { async gerar(m) { origem = copia(m); return { revisao: 'sintetica' }; }, abrir() { aberto = true; } };

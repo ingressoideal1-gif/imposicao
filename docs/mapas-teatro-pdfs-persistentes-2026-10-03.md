@@ -39,4 +39,8 @@ Limites do envio: 99 setores, 10 MB por arquivo, 30 MB para o formulário comple
 
 Migração aplicada e verificada em 03/10/2026 no projeto identificado. Confirmados: bucket privado de PDFs, tabela com RLS, leitura anônima negada, gravação/finalização direta por usuários negada, RPC executável pelo backend e política restritiva dedicada no Storage. O cadastro manteve um mapa; havia zero exportações e zero arquivos no bucket ao concluir a implantação do banco. Não houve envio de dados sintéticos à produção.
 
-Implantação da função e publicação frontend aguardam registro de execução. O primeiro envio de um mapa existente deve ser feito pela interface com a conta do operador autorizada.
+A função `mapas-teatro-pdfs` foi implantada e conferida como ACTIVE, versão 1, UUID `a77ee396-28e7-4843-b31b-713d0586f0a6`, `verify_jwt=true`, hash de implantação `7899c58115d9ceba296251b32a0ba7dd4449de4fcf3339721de0b1c4a167f382`. O preflight da origem operacional respondeu 204 com CORS correto; chamadas sem sessão e com a chave pública responderam 401. Essas consultas não enviaram arquivos nem gravaram mapas.
+
+O backend/SQL/documentação está registrado no commit local `fb3ff03f`. A revisão automática rejeitou o push e a integração em `origin/main`, por exigir autorização explícita para essa nova publicação Git. Não houve push desses commits. A tela pública permanece na v1002; os controles de persistência estão preparados e testados localmente, aguardando autorização de publicação.
+
+Após publicar a tela, o primeiro envio de um mapa existente deve ser feito pela interface com a conta do operador autorizada. Até a conferência do banco registrada acima, havia zero exportações; não declarar os PDFs desse mapa como já armazenados no servidor.

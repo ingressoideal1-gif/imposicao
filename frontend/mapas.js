@@ -317,6 +317,11 @@ window.abrirPdfsMapaTeatro = async function(id) {
         } else mapa = await apiMapa('GET', '/' + encodeURIComponent(id));
         if (!mapa || String(mapa.id) !== String(id)) throw Error('Não foi possível conferir o mapa salvo. Atualize a lista e tente novamente.');
         const resultado = await window.MapasTeatroPdf.gerar(mapa);
+        if (window.MapasTeatroPdfStorage) {
+            resultado.mapaPersistido = JSON.parse(JSON.stringify(mapa));
+            try { resultado.persistencia = await window.MapasTeatroPdfStorage.consultar(mapa, resultado); }
+            catch (e) { resultado.persistencia = { estado: 'pendente', mensagem: e.message }; }
+        }
         if (abertura === mapasPdfAberturaVersao) window.MapasTeatroPdf.abrir(resultado);
     } catch (e) {
         console.error('[Mapas] PDF não disponível:', e);
@@ -532,11 +537,19 @@ window.salvarMapaTeatro = async function() {
             try {
                 avisarMapa('Mapa salvo. Preparando os PDFs por setor...', 'info');
                 pdfs = await window.MapasTeatroPdf.gerar(salvo);
+                if (window.MapasTeatroPdfStorage) {
+                    pdfs.mapaPersistido = JSON.parse(JSON.stringify(salvo));
+                    avisarMapa('Mapa salvo. Salvando os PDFs para o ERP...', 'info');
+                    try { pdfs.persistencia = await window.MapasTeatroPdfStorage.persistir(salvo, pdfs); }
+                    catch (e) { pdfs.persistencia = { estado: 'pendente', mensagem: e.message }; }
+                }
             } catch (e) { console.error('[Mapas] Mapa salvo; geração do PDF pendente:', e); }
         }
         const verPdfs = await confirmarAcaoMapa({ titulo: 'Mapa salvo',
             mensagem: `O mapa <strong>${escaparMapaHtml(salvo.name)}</strong> foi salvo e os dados foram conferidos.<br><br>`
                 + (pdfs ? 'Os PDFs do mapa e de cada setor estão prontos. Eles também ficam disponíveis no botão PDFs da lista.'
+                    + (pdfs.persistencia ? (pdfs.persistencia.estado === 'pronto' ? '<br>Os arquivos também foram salvos para o ERP.'
+                        : '<br>O envio dos PDFs para o ERP está pendente: ' + escaparMapaHtml(pdfs.persistencia.mensagem || 'use o botão Salvar PDFs para o ERP.')) : '')
                     : 'Os PDFs ainda não estão prontos. Use o botão PDFs da lista para gerar novamente.'),
             textoOk: pdfs ? 'Ver PDFs' : 'Concluir', textoCancelar: 'Concluir', somenteOk: !pdfs });
         if (pdfs && verPdfs) window.MapasTeatroPdf.abrir(pdfs);

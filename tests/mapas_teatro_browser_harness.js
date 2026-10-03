@@ -38,7 +38,7 @@ const seletores = ['imp', 'ped'].map(p => `<select id="${p}-numeracao"><option v
     <select id="${p}-formato"></select><select id="${p}-saida"></select>
     <select id="${p}-schema"><option value="sequential">Sequencial</option></select>
     <input id="${p}-start" value="1"><input id="${p}-end" value="100"><div id="${p}-summary"></div>`).join('');
-const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.css"></head><body>
+const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="/style.css"></head><body>
     ${view}${html.slice(iniModal, fimModal)}${seletores}${pedMapa}
     <div id="imp-mapa-teatro-group"><select id="imp-mapa-teatro"><option value="">Selecione</option></select></div>
     <input id="mapa-salvar-label" hidden></body></html>`;
@@ -373,8 +373,70 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
         assert.deepEqual(varios.arquivos.map(a => a.id), ['setor-1', 'setor-2', 'setor-3', 'setor-4']);
         assert.equal(await page.$$eval('#mapa-pdfs-dialogo a[download]', els => els.length), 5);
         await page.click('#mapa-pdfs-dialogo button');
+        // Persistência via módulo real, com serviço inteiramente simulado.
+        await page.addScriptTag({ content: 'const VIBECODE_SUPABASE_URL = ' + JSON.stringify(origem) + ';' });
+        await page.evaluate(() => {
+            supabaseClient.auth = { async getSession() { return { data: { session: { access_token: 'token-sintetico' } }, error: null }; } };
+            window.enviosErp = []; window.exportacoesErp = new Map(); window.falharEnvioErp = false;
+            const fetchOriginal = window.fetch;
+            window.fetch = async (alvo, opcoes = {}) => {
+                const u = new URL(String(alvo));
+                if (!u.pathname.startsWith('/functions/v1/mapas-teatro-pdfs/')) return fetchOriginal(alvo, opcoes);
+                const id = decodeURIComponent(u.pathname.split('/').at(-2));
+                const rev = u.searchParams.get('revisao'), gerador = u.searchParams.get('gerador'), chave = id + ':' + rev;
+                if (opcoes.headers.Authorization !== 'Bearer token-sintetico') throw Error('Autenticação ausente');
+                if (opcoes.method === 'POST') {
+                    enviosErp.push(chave);
+                    if (falharEnvioErp) return Response.json({ detail: 'Upload interrompido no teste' }, { status: 502 });
+                    const form = opcoes.body, meta = JSON.parse(form.get('manifesto'));
+                    const m = registros.find(m => m.id === id);
+                    for (let i = 0; i < meta.length; i++) {
+                        const a = meta[i], bytes = new Uint8Array(await form.get('pdf_' + i).arrayBuffer());
+                        a.paginas = (await PDFLib.PDFDocument.load(bytes)).getPageCount();
+                        a.tamanho_bytes = bytes.length;
+                        a.nome_setor = i ? m.config.setores[i - 1].nome : null;
+                        const query = new URLSearchParams({ revisao: rev, gerador });
+                        if (a.setor_id !== null) query.set('setor', a.setor_id);
+                        a.pdf_recurso = u.origin + u.pathname.replace('/exportacao', '/arquivo') + '?' + query;
+                    }
+                    exportacoesErp.set(chave, { mapa_id: id, revisao_exportacao: rev, gerador_versao: gerador, estado: 'pronto', arquivos: meta });
+                }
+                return Response.json(exportacoesErp.get(chave) || { mapa_id: id, revisao_exportacao: rev, gerador_versao: gerador, estado: 'pendente', arquivos: [] });
+            };
+        });
+        await page.addScriptTag({ path: path.join(raiz, 'frontend/mapas-teatro-pdf-storage.js') });
+        assert.ok(html.includes('mapas-teatro-pdf-storage.js'));
+        await page.evaluate(() => abrirPdfsMapaTeatro('mapa-browser-1'));
+        await page.waitForSelector('#mapa-pdfs-salvar-erp', { visible: true });
+        assert.equal(await page.evaluate(() => enviosErp.length), 0, 'abrir mapa existente não publica automaticamente');
+        await page.click('#mapa-pdfs-salvar-erp');
+        await page.waitForFunction(() => document.getElementById('mapa-pdfs-status-erp').textContent === 'PDFs salvos para o ERP nesta revisão.');
+        assert.equal(await page.evaluate(() => enviosErp.length), 1);
+        assert.equal(await page.$$eval('#mapa-pdfs-dialogo input[readonly]', els => els.length), 2);
+        assert.equal(await page.$eval('#mapa-pdfs-salvar-erp', el => getComputedStyle(el).display), 'none');
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => abrirPdfsMapaTeatro('mapa-browser-1'));
+        await page.waitForSelector('#mapa-pdfs-dialogo', { visible: true });
+        assert.match(await page.$eval('#mapa-pdfs-status-erp', el => el.textContent), /PDFs salvos para o ERP/);
+        assert.equal(await page.evaluate(() => enviosErp.length), 1);
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => { editarMapaTeatro('mapa-browser-1'); falharEnvioErp = true; });
+        await page.$eval('#mapa-nome', el => { el.value = 'Mapa salvo upload interrompido'; });
+        await abrirConfirmacaoSalvar(); await page.click(dialogo + ' [data-role="ok"]');
+        await verificarDialogo('Mapa salvo');
+        assert.match(await page.$eval(dialogo, el => el.textContent), /envio dos PDFs para o ERP está pendente/);
+        assert.equal(await page.evaluate(() => registros.find(m => m.id === 'mapa-browser-1').name), 'Mapa salvo upload interrompido');
+        const escritasAntesRetry = await page.evaluate(() => gravacoes.length);
+        await page.click(dialogo + ' [data-role="ok"]');
+        await page.waitForSelector('#mapa-pdfs-dialogo', { visible: true });
+        await page.evaluate(() => { falharEnvioErp = false; });
+        await page.click('#mapa-pdfs-salvar-erp');
+        await page.waitForFunction(() => document.getElementById('mapa-pdfs-status-erp').textContent === 'PDFs salvos para o ERP nesta revisão.');
+        assert.equal(await page.evaluate(() => gravacoes.length), escritasAntesRetry);
+        await page.screenshot({ path: path.join(saida, 'lista-pdfs-erp-' + arquivoHtml + '.png') });
+        await page.keyboard.press('Escape');
         assert.deepEqual(erros, []);
-        console.log(`OK browser (${arquivoHtml}): salvar com name/config; confirmações e saída sem salvar; PDFs reais com logo, download, revisão atualizada, repetição após falha, quatro setores e 3000 assentos; rótulos e CSV preservados; zero erros JavaScript.`);
+        console.log(`OK browser (${arquivoHtml}): salvar e confirmar; PDFs reais com logo, download, quatro setores e 3000 assentos; persistência ERP, consulta, upload interrompido e repetição sem regravar mapa; rótulos e CSV preservados; zero erros JavaScript.`);
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));
