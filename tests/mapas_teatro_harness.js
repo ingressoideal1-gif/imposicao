@@ -146,6 +146,88 @@ async function teste(nome, fn) {
         assert.equal(Object.keys(t.c.state.mapaAtual.config.setores[0].cadeiras).length, 0);
         t.c.undoMapHistory(); assert.equal(Object.keys(t.c.state.mapaAtual.config.setores[0].cadeiras).length, 1);
     });
+    await teste('filas numéricas 1-4 com assentos A-D geram os dezesseis rótulos', () => {
+        const t = montar(); t.c.state.mapaAtual.config.setores[0].cadeiras = {};
+        for (const [k, v] of [['prefix', '1-4'], ['inicio', 'A'], ['fim', 'D'], ['padrao', 'sequencial']]) t.get('mapa-fileira-' + k).value = v;
+        t.c.gerarFileiraNoCanvas();
+        const cadeiras = Object.values(t.c.state.mapaAtual.config.setores[0].cadeiras);
+        assert.equal(cadeiras.length, 16);
+        assert.deepEqual(cadeiras.map(c => `${c.prefixo}:${c.num}`), ['1:A','1:B','1:C','1:D','2:A','2:B','2:C','2:D','3:A','3:B','3:C','3:D','4:A','4:B','4:C','4:D']);
+    });
+    for (const [fila, inicio, fim, prefixos, lugares] of [
+        ['A-C', '1', '3', ['A','B','C'], [1,2,3]],
+        ['1-4', '1', '3', ['1','2','3','4'], [1,2,3]],
+        ['A-C', 'A', 'D', ['A','B','C'], ['A','B','C','D']],
+        ['9-11', 'A', 'B', ['9','10','11'], ['A','B']],
+        ['AA-AC', 'Y', 'AB', ['AA','AB','AC'], ['Y','Z','AA','AB']],
+        ['C-A', '1', '2', ['C','B','A'], [1,2]],
+        ['4-1', 'A', 'B', ['4','3','2','1'], ['A','B']],
+        ['a-c', ' a ', ' d ', ['A','B','C'], ['A','B','C','D']]
+    ]) await teste(`faixa ${fila} / ${inicio}-${fim} preserva todos os prefixos e lugares`, () => {
+        const t = montar(); t.c.state.mapaAtual.config.setores[0].cadeiras = {};
+        for (const [k,v] of [['prefix',fila],['inicio',inicio],['fim',fim],['padrao','sequencial']]) t.get('mapa-fileira-'+k).value=v;
+        t.c.gerarFileiraNoCanvas();
+        const s=t.c.state.mapaAtual.config.setores[0];
+        assert.deepEqual(Object.values(s.cadeiras).map(c=>[c.prefixo,c.num]), prefixos.flatMap(p=>lugares.map(n=>[p,n])));
+        assert.equal(s.fileiras.length,prefixos.length);
+    });
+    for (const [inicio,fim] of [['A','3'],['1','D'],['D','A'],['0','3'],['','D'],['A1','D'],['A','!'],['1','999999999']]) {
+        await teste(`intervalo inválido ${inicio}-${fim} não altera configuração ou histórico`, () => {
+            const t=montar();t.get('mapa-fileira-prefix').value='A';t.get('mapa-fileira-inicio').value=inicio;t.get('mapa-fileira-fim').value=fim;
+            const antes=JSON.stringify(t.c.state.mapaAtual.config);t.c.gerarFileiraNoCanvas();
+            assert.equal(JSON.stringify(t.c.state.mapaAtual.config),antes);assert.equal(t.c.state.mapaHistory.length,0);assert.equal(t.avisos.at(-1).tipo,'warning');
+        });
+    }
+    await teste('assentos alfabéticos usam sequência completa e impedem duplicações sem confundir A com 1', () => {
+        const t=montar();for(const [k,v]of [['prefix','A'],['inicio','A'],['fim','D'],['padrao','impar']])t.get('mapa-fileira-'+k).value=v;
+        t.c.gerarFileiraNoCanvas();assert.equal(Object.keys(t.c.state.mapaAtual.config.setores[0].cadeiras).length,5);
+        assert.equal(t.get('mapa-fileira-padrao').value,'sequencial');assert.equal(t.get('mapa-fileira-padrao').disabled,true);
+        const antes=JSON.stringify(t.c.state.mapaAtual.config);t.c.gerarFileiraNoCanvas();assert.equal(JSON.stringify(t.c.state.mapaAtual.config),antes);
+        t.get('mapa-fileira-inicio').value='5';t.get('mapa-fileira-fim').value='6';t.c.atualizarPadraoDaFileira();assert.equal(t.get('mapa-fileira-padrao').disabled,false);
+    });
+    await teste('intervalos numéricos preservam os padrões par e ímpar após voltar de letras', () => {
+        for(const [padrao,esperado]of [['par',[2,4,6]],['impar',[1,3,5]]]){
+            const t=montar();t.c.state.mapaAtual.config.setores[0].cadeiras={};
+            t.get('mapa-fileira-inicio').value='A';t.get('mapa-fileira-fim').value='D';t.c.atualizarPadraoDaFileira();
+            t.get('mapa-fileira-inicio').value='1';t.get('mapa-fileira-fim').value='6';t.c.atualizarPadraoDaFileira();
+            t.get('mapa-fileira-prefix').value='1';t.get('mapa-fileira-padrao').value=padrao;t.c.gerarFileiraNoCanvas();
+            assert.deepEqual(Object.values(t.c.state.mapaAtual.config.setores[0].cadeiras).map(c=>c.num),esperado);
+            assert.equal(t.get('mapa-fileira-padrao').disabled,false);
+        }
+    });
+    await teste('filas sobrepostas rejeitam toda inclusão alfabética e desfazer restaura mapa', () => {
+        const t=montar();t.c.state.mapaAtual.config.setores[0].cadeiras={};
+        for(const[k,v]of [['prefix','A-C,B'],['inicio','A'],['fim','D'],['padrao','sequencial']])t.get('mapa-fileira-'+k).value=v;
+        t.c.gerarFileiraNoCanvas();assert.equal(Object.keys(t.c.state.mapaAtual.config.setores[0].cadeiras).length,0);assert.equal(t.c.state.mapaHistory.length,0);
+        t.get('mapa-fileira-prefix').value='1-4';t.c.gerarFileiraNoCanvas();assert.equal(Object.keys(t.c.state.mapaAtual.config.setores[0].cadeiras).length,16);
+        t.c.undoMapHistory();assert.equal(Object.keys(t.c.state.mapaAtual.config.setores[0].cadeiras).length,0);
+    });
+    await teste('seleção e arraste de assentos alfabéticos preenchem a próxima letra, inclusive Z-AA', () => {
+        const t=montar();t.c.state.mapaAtual.config.setores[0].cadeiras={'0,0':cadeira('Z','1'),'1,0':cadeira('AA','1')};t.grid();
+        t.c.onMapMouseDown({button:0,clientX:1,clientY:1});assert.equal(t.get('mapa-fileira-inicio').value,'AA');
+        t.c.onMapMouseMove({buttons:1,clientX:33,clientY:1});assert.equal(t.get('mapa-fileira-inicio').value,'AB');
+        assert.equal(t.get('mapa-fileira-prefix').value,'1');
+    });
+    await teste('restauração completa a lacuna alfabética e impede rótulo repetido', () => {
+        const t=montar();t.c.state.mapaAtual.config.setores[0].cadeiras={'0,0':cadeira('A'),'2,0':cadeira('C')};t.grid();t.c.setMapTool('restore');
+        t.c.onMapMouseDown({button:0,clientX:33,clientY:1});assert.equal(t.c.state.mapaAtual.config.setores[0].cadeiras['1,0'].num,'B');
+        t.c.state.mapaAtual.config.setores[0].cadeiras={'0,0':cadeira('A'),'5,0':cadeira('B')};
+        t.c.onMapMouseDown({button:0,clientX:33,clientY:1});assert.equal(t.c.state.mapaAtual.config.setores[0].cadeiras['1,0'],undefined);assert.match(t.avisos.at(-1).msg,/já existe/);
+    });
+    await teste('restauração antes de A não inventa rótulo e inclusão de letras não sobrescreve posição ocupada', () => {
+        const t=montar();t.c.state.mapaAtual.config.setores[0].cadeiras={'1,0':cadeira('A')};t.grid();t.c.setMapTool('restore');
+        t.c.onMapMouseDown({button:0,clientX:1,clientY:1});assert.equal(t.c.state.mapaAtual.config.setores[0].cadeiras['0,0'],undefined);
+        t.c.state.mapaAtual.config.setores[0].cadeiras={'0,0':cadeira('A'),'1,0':cadeira('X','Outro')};
+        for(const[k,v]of [['prefix','A'],['inicio','B'],['fim','C'],['padrao','sequencial']])t.get('mapa-fileira-'+k).value=v;
+        const antes=JSON.stringify(t.c.state.mapaAtual.config);t.c.gerarFileiraNoCanvas();assert.equal(JSON.stringify(t.c.state.mapaAtual.config),antes);
+    });
+    await teste('salvamento e reabertura preservam letras, filas numéricas e total real', async () => {
+        const t=montar();const b=clienteSimulado(t);t.c.state.mapaAtual.config.setores[0].cadeiras={};
+        for(const[k,v]of [['prefix','1-4'],['inicio','A'],['fim','D'],['padrao','sequencial']])t.get('mapa-fileira-'+k).value=v;
+        t.c.gerarFileiraNoCanvas();await t.c.salvarMapaTeatro();assert.equal(b.rows.get('m1').total_lugares,16);
+        assert.equal(b.rows.get('m1').config.setores[0].fileiras[0].inicio,'A');assert.equal(b.rows.get('m1').config.setores[0].fileiras[0].fim,'D');
+        t.c.editarMapaTeatro('m1');assert.deepEqual(Object.values(t.c.state.mapaAtual.config.setores[0].cadeiras).slice(0,4).map(c=>c.num),['A','B','C','D']);
+    });
     await teste('abrir mapa existente mostra propriedades do primeiro setor', () => {
         const t = montar(); t.c.editarMapaTeatro('m1');
         assert.equal(t.get('mapa-setor-props').style.display, 'flex'); assert.equal(t.get('mapa-setor-nome').value, 'Plateia');

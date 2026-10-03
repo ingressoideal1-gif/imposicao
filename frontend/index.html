@@ -4477,7 +4477,7 @@
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
     <script src="/banco-nao-responde.js?v=948"></script>
     <script src="/supabase-config.js?v=948"></script>
-    <script src="mapas.js?v=998"></script>
+    <script src="mapas.js?v=999"></script>
     <script src="cor-numeracao-do-modelo.js?v=961"></script>
     <script src="cor-margens.js?v=964"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
@@ -4567,24 +4567,25 @@
                                 <div style="display:flex; gap:4px;">
                                     <div class="form-group" style="flex:1; min-width:0;">
                                         <label>Fila</label>
-                                        <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A" style="min-width:0; width:100%;">
+                                        <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A-C ou 1-4" title="Uma fila ou várias: A-C, 1-4, A,B,C" style="min-width:0; width:100%;">
                                     </div>
                                     <div class="form-group" style="flex:1; min-width:0;">
                                         <label>Início</label>
-                                        <input type="number" id="mapa-fileira-inicio" class="form-control" value="1" style="min-width:0; width:100%;">
+                                        <input type="text" id="mapa-fileira-inicio" class="form-control" value="1" placeholder="1 ou A" autocapitalize="characters" oninput="atualizarPadraoDaFileira()" style="min-width:0; width:100%;">
                                     </div>
                                     <div class="form-group" style="flex:1; min-width:0;">
                                         <label>Fim</label>
-                                        <input type="number" id="mapa-fileira-fim" class="form-control" value="30" style="min-width:0; width:100%;">
+                                        <input type="text" id="mapa-fileira-fim" class="form-control" value="30" placeholder="3 ou D" autocapitalize="characters" oninput="atualizarPadraoDaFileira()" style="min-width:0; width:100%;">
                                     </div>
                                 </div>
                                 <div class="form-group">
                                     <label>Padrão Numeração</label>
                                     <select id="mapa-fileira-padrao" class="form-control">
-                                        <option value="sequencial">Sequencial (1,2,3)</option>
+                                        <option value="sequencial">Sequencial (1,2,3 / A,B,C)</option>
                                         <option value="impar">Ímpar (1,3,5)</option>
                                         <option value="par">Par (2,4,6)</option>
                                     </select>
+                                    <small style="color:var(--text-dim);">Início e fim: números ou letras. Ímpar/par se aplica apenas a números.</small>
                                 </div>
                                 <button class="btn btn-sm btn-primary" style="width:100%" onclick="gerarFileiraNoCanvas()">Adicionar Fileira no Mapa</button>
                             </div>

@@ -482,8 +482,7 @@ function abrirModalMapaTeatro() {
     if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
     if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
     if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'sequencial';
-
-
+    atualizarPadraoDaFileira();
     // Atualiza header do canvas com o nome do mapa
     const nomeEl = document.getElementById('mapa-header-nome-val');
     if (nomeEl) nomeEl.textContent = window.state.mapaAtual.name;
@@ -532,6 +531,7 @@ window.adicionarSetorMapa = function() {
     if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
     if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
     if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'sequencial';
+    atualizarPadraoDaFileira();
     const novoIdx = window.state.mapaAtual.config.setores.length;
     window.state.mapaAtual.config.setores.push({
         id: 'setor_' + novoIdx + '_' + Date.now(),
@@ -919,18 +919,25 @@ function onMapMouseDown(e) {
                 }
                 
                 // Tenta calcular o número com base no vizinho esquerdo ou direito
-                let refNum = parseInt(document.getElementById('mapa-fileira-inicio').value) || 1;
-                let padrao = document.getElementById('mapa-fileira-padrao').value;
-                let step = (padrao === 'par' || padrao === 'impar') ? 2 : 1;
-                
-                if (cadeiras[`${pos.gx - 1},${pos.gy}`]) {
-                    refNum = parseInt(cadeiras[`${pos.gx - 1},${pos.gy}`].num) + step;
-                } else if (cadeiras[`${pos.gx + 1},${pos.gy}`]) {
-                    refNum = parseInt(cadeiras[`${pos.gx + 1},${pos.gy}`].num) - step;
+                const padrao = document.getElementById('mapa-fileira-padrao').value;
+                const esquerdo = cadeiras[`${pos.gx - 1},${pos.gy}`];
+                const direito = cadeiras[`${pos.gx + 1},${pos.gy}`];
+                const referencia = lerEtiquetaDoMapa(esquerdo?.num ?? direito?.num
+                    ?? document.getElementById('mapa-fileira-inicio').value);
+                if (!referencia) {
+                    avisarMapa('Informe um início numérico ou alfabético válido antes de restaurar.', 'warning');
+                    return;
                 }
-                refNum = refNum > 0 ? refNum : 1;
+                const passo = referencia.tipo === 'numero' && (padrao === 'par' || padrao === 'impar') ? 2 : 1;
+                const valor = referencia.valor + (esquerdo ? passo : direito ? -passo : 0);
+                if (valor < 1 || !Number.isSafeInteger(valor)) {
+                    avisarMapa('Não há um rótulo válido antes deste assento. Ajuste o início antes de restaurar.', 'warning');
+                    return;
+                }
+                const refNum = referencia.tipo === 'letra' ? letrasDoMapa(valor) : valor;
                 if (Object.values(cadeiras).some(c => c && c.tipo !== 'Apagado' && !c.isErased
-                    && c.prefixo === refPrefixo && Number(c.num) === refNum)) {
+                    && String(c.prefixo ?? '') === String(refPrefixo)
+                    && chaveEtiquetaDoMapa(c.num) === chaveEtiquetaDoMapa(refNum))) {
                     avisarMapa(`O assento ${refPrefixo}${refNum} já existe. Ajuste o início ou o padrão antes de restaurar.`, 'warning');
                     return;
                 }
@@ -952,7 +959,8 @@ function onMapMouseDown(e) {
                 
                 // Preenche formulário para facilitar adição na mesma fila
                 document.getElementById('mapa-fileira-prefix').value = cadeiras[key].prefixo || '';
-                document.getElementById('mapa-fileira-inicio').value = parseInt(cadeiras[key].num || 0) + 1;
+                document.getElementById('mapa-fileira-inicio').value = proximaEtiquetaDoMapa(cadeiras[key].num);
+                atualizarPadraoDaFileira();
                 // cadeiras já pertencem ao setor ativo
             } else {
                 window.cadeirasSelecionadas.clear();
@@ -1002,7 +1010,8 @@ function onMapMouseMove(e) {
                 
                 // Preenche formulário para facilitar adição na mesma fila
                 document.getElementById('mapa-fileira-prefix').value = cadeiras[key].prefixo || '';
-                document.getElementById('mapa-fileira-inicio').value = parseInt(cadeiras[key].num || 0) + 1;
+                document.getElementById('mapa-fileira-inicio').value = proximaEtiquetaDoMapa(cadeiras[key].num);
+                atualizarPadraoDaFileira();
             }
         }
     }
@@ -1035,59 +1044,106 @@ function onMapWheel(e) {
 // ==========================================
 // FUNÇÕES DE CRIAÇÃO EM MASSA
 // ==========================================
+// Limite por operação para não travar o editor; não limita o total de um mapa.
+const MAX_ASSENTOS_POR_INCLUSAO_MAPA = 50000;
+
+function lerEtiquetaDoMapa(entrada, permitirZero = false) {
+    const texto = String(entrada ?? '').trim().toUpperCase();
+    if (/^\d+$/.test(texto)) {
+        const valor = Number(texto);
+        return Number.isSafeInteger(valor) && valor >= (permitirZero ? 0 : 1)
+            ? { tipo: 'numero', valor, texto: String(valor) } : null;
+    }
+    if (!/^[A-Z]+$/.test(texto)) return null;
+    let valor = 0;
+    for (const letra of texto) {
+        valor = valor * 26 + letra.charCodeAt(0) - 64;
+        if (!Number.isSafeInteger(valor)) return null;
+    }
+    return { tipo: 'letra', valor, texto };
+}
+
+function letrasDoMapa(valor) {
+    let texto = '';
+    while (valor > 0) {
+        valor--;
+        texto = String.fromCharCode(65 + valor % 26) + texto;
+        valor = Math.floor(valor / 26);
+    }
+    return texto;
+}
+
+function chaveEtiquetaDoMapa(entrada) {
+    const etiqueta = lerEtiquetaDoMapa(entrada);
+    return etiqueta ? `${etiqueta.tipo}:${etiqueta.valor}` : `texto:${String(entrada ?? '').trim()}`;
+}
+
+function proximaEtiquetaDoMapa(entrada) {
+    const etiqueta = lerEtiquetaDoMapa(entrada);
+    if (!etiqueta || !Number.isSafeInteger(etiqueta.valor + 1)) return '';
+    return etiqueta.tipo === 'letra' ? letrasDoMapa(etiqueta.valor + 1) : etiqueta.valor + 1;
+}
+
+function expandirFaixaDoMapa(primeiro, ultimo, permitirInvertida = false, permitirZero = false) {
+    const inicio = lerEtiquetaDoMapa(primeiro, permitirZero), fim = lerEtiquetaDoMapa(ultimo, permitirZero);
+    if (!inicio || !fim || inicio.tipo !== fim.tipo) {
+        throw new Error('Informe início e fim do mesmo tipo: números positivos (1 até 3) ou letras (A até D).');
+    }
+    if (!permitirInvertida && fim.valor < inicio.valor) {
+        throw new Error('O fim deve ser maior ou igual ao início, na ordem numérica ou alfabética.');
+    }
+    if (Math.abs(fim.valor - inicio.valor) + 1 > MAX_ASSENTOS_POR_INCLUSAO_MAPA) {
+        throw new Error('O intervalo é grande demais para uma inclusão. Divida a criação em intervalos menores.');
+    }
+    const passo = fim.valor >= inicio.valor ? 1 : -1, valores = [];
+    for (let valor = inicio.valor; passo > 0 ? valor <= fim.valor : valor >= fim.valor; valor += passo) {
+        valores.push(inicio.tipo === 'letra' ? letrasDoMapa(valor) : valor);
+    }
+    return { tipo: inicio.tipo, inicio: valores[0], fim: valores[valores.length - 1], valores };
+}
+
+function expandirFilasDoMapa(entrada) {
+    const prefixos = [];
+    for (const parte of String(entrada).split(',').map(p => p.trim()).filter(Boolean)) {
+        const faixa = parte.match(/^([A-Za-z]+)\s*-\s*([A-Za-z]+)$/) || parte.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (faixa) prefixos.push(...expandirFaixaDoMapa(faixa[1], faixa[2], true, true).valores.map(String));
+        else prefixos.push(/^[A-Za-z]$/.test(parte) ? parte.toUpperCase() : parte);
+        if (prefixos.length > MAX_ASSENTOS_POR_INCLUSAO_MAPA) throw new Error('Há filas demais para uma inclusão. Divida a criação em intervalos menores.');
+    }
+    return prefixos.length ? prefixos : ['A'];
+}
+
+window.atualizarPadraoDaFileira = function() {
+    const select = document.getElementById('mapa-fileira-padrao');
+    if (!select) return;
+    const alfabeto = ['inicio', 'fim'].some(campo => lerEtiquetaDoMapa(document.getElementById('mapa-fileira-' + campo)?.value)?.tipo === 'letra');
+    select.disabled = alfabeto || mapaSalvando;
+    if (alfabeto) select.value = 'sequencial';
+};
+
 window.gerarFileiraNoCanvas = function() {
     if (window.setorSelecionadoIdx === null) {
         alert("Selecione ou crie um Setor primeiro!");
         return;
     }
     
-    const prefixoRaw = document.getElementById('mapa-fileira-prefix').value || 'A';
-    const inicio = Number(document.getElementById('mapa-fileira-inicio').value);
-    const fim = Number(document.getElementById('mapa-fileira-fim').value);
-    if (!Number.isSafeInteger(inicio) || !Number.isSafeInteger(fim) || inicio < 1 || fim < inicio) {
-        avisarMapa('Informe um início positivo e um fim maior ou igual ao início.', 'warning');
+    let intervalo, prefixos;
+    try {
+        intervalo = expandirFaixaDoMapa(document.getElementById('mapa-fileira-inicio').value,
+            document.getElementById('mapa-fileira-fim').value);
+        prefixos = expandirFilasDoMapa(document.getElementById('mapa-fileira-prefix').value || 'A');
+    } catch (erro) {
+        avisarMapa(erro.message, 'warning');
         return;
     }
-    const padrao = document.getElementById('mapa-fileira-padrao').value;
-    
-    // Suporte para múltiplas fileiras separadas por vírgula (ex: A, B, C) e ranges (ex: B-H ou 1-5)
-    const parts = prefixoRaw.split(',').map(p => p.trim()).filter(p => p.length > 0);
-    const prefixos = [];
-    
-    parts.forEach(part => {
-        const rangeMatch = part.match(/^([A-Za-z0-9])\s*-\s*([A-Za-z0-9])$/);
-        if (rangeMatch) {
-            const startChar = rangeMatch[1];
-            const endChar = rangeMatch[2];
-            
-            // Se ambos são letras
-            if (/[a-zA-Z]/.test(startChar) && /[a-zA-Z]/.test(endChar)) {
-                const sCode = startChar.toUpperCase().charCodeAt(0);
-                const eCode = endChar.toUpperCase().charCodeAt(0);
-                if (sCode <= eCode) {
-                    for (let i = sCode; i <= eCode; i++) prefixos.push(String.fromCharCode(i));
-                } else {
-                    for (let i = sCode; i >= eCode; i--) prefixos.push(String.fromCharCode(i));
-                }
-            } 
-            // Se ambos são números (single digit apenas, mas é um bônus)
-            else if (/[0-9]/.test(startChar) && /[0-9]/.test(endChar)) {
-                const sNum = parseInt(startChar);
-                const eNum = parseInt(endChar);
-                if (sNum <= eNum) {
-                    for (let i = sNum; i <= eNum; i++) prefixos.push(i.toString());
-                } else {
-                    for (let i = sNum; i >= eNum; i--) prefixos.push(i.toString());
-                }
-            } else {
-                prefixos.push(part);
-            }
-        } else {
-            prefixos.push(part);
-        }
-    });
-    
-    if (prefixos.length === 0) prefixos.push('A');
+    atualizarPadraoDaFileira();
+    const { inicio, fim } = intervalo;
+    const padrao = intervalo.tipo === 'letra' ? 'sequencial' : document.getElementById('mapa-fileira-padrao').value;
+    const lugares = intervalo.valores.filter(i => (padrao !== 'impar' || i % 2 !== 0) && (padrao !== 'par' || i % 2 === 0));
+    if (prefixos.length * lugares.length > MAX_ASSENTOS_POR_INCLUSAO_MAPA) {
+        avisarMapa('Há assentos demais para uma inclusão. Divida a criação em intervalos menores.', 'warning');
+        return;
+    }
     
     const s = window.state.mapaAtual.config.setores[window.setorSelecionadoIdx];
     // Prepara a inclusão em uma cópia; uma colisão não pode deixar meia fileira aplicada.
@@ -1095,11 +1151,10 @@ window.gerarFileiraNoCanvas = function() {
     const fileiras = [...(s.fileiras || [])];
     // O rótulo Fila + Número identifica o assento dentro do setor.
     const rotulos = new Set(Object.values(cadeiras).filter(c => c && c.tipo !== 'Apagado' && !c.isErased)
-        .map(c => JSON.stringify([String(c.prefixo || ''), Number(c.num)])));
+        .map(c => JSON.stringify([String(c.prefixo ?? ''), chaveEtiquetaDoMapa(c.num)])));
     for (const prefixo of prefixos) {
-        for (let i = inicio; i <= fim; i++) {
-            if ((padrao === 'impar' && i % 2 === 0) || (padrao === 'par' && i % 2 !== 0)) continue;
-            const rotulo = JSON.stringify([prefixo, i]);
+        for (const i of lugares) {
+            const rotulo = JSON.stringify([prefixo, chaveEtiquetaDoMapa(i)]);
             if (rotulos.has(rotulo)) {
                 avisarMapa(`O assento ${prefixo}${i} já existe neste setor. Ajuste a fila ou o intervalo.`, 'warning');
                 return;
@@ -1108,12 +1163,7 @@ window.gerarFileiraNoCanvas = function() {
         }
     }
     
-    let numSeatsToAdd = 0;
-    for (let i = inicio; i <= fim; i++) {
-        if (padrao === 'impar' && i % 2 === 0) continue;
-        if (padrao === 'par' && i % 2 !== 0) continue;
-        numSeatsToAdd++;
-    }
+    const numSeatsToAdd = lugares.length;
     
     for (let pIdx = 0; pIdx < prefixos.length; pIdx++) {
         const prefixo = prefixos[pIdx];
@@ -1180,10 +1230,7 @@ window.gerarFileiraNoCanvas = function() {
             currentX = -15; 
         }
         
-        for (let i = inicio; i <= fim; i++) {
-            if (padrao === 'impar' && i % 2 === 0) continue;
-            if (padrao === 'par' && i % 2 !== 0) continue;
-            
+        for (const i of lugares) {
             let key = `${currentX},${startY}`;
             if (cadeiras[key]) {
                 avisarMapa('Há uma cadeira no espaço da nova fileira. Selecione uma cadeira para inserir a partir dela ou mova a cadeira existente.', 'warning');

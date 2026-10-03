@@ -58,7 +58,7 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
                     update(p) { acao = 'update'; payload = p; return q; }, insert(p) { acao = 'insert'; payload = p[0]; return q; },
                     async single() {
                         if (acao === 'update' && falharUpdate) return { data: null, error: { message: 'Falha simulada' } };
-                        if (acao === 'insert') { id = 'mapa-browser'; registros.push({ id, ...payload }); }
+                        if (acao === 'insert') { id = registros.length ? 'mapa-browser-' + registros.length : 'mapa-browser'; registros.push({ id, ...payload }); }
                         if (acao === 'update') registros[registros.findIndex(m => m.id === id)] = { id, ...payload };
                         return { data: JSON.parse(JSON.stringify(registros.find(m => m.id === id) || null)), error: null };
                     }
@@ -131,8 +131,61 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
                 if (/display:\s*none\s*!important/.test(el.getAttribute('style') || '')) throw Error('Seletor oculto por ancestral');
             }
         }, html);
+        // Digitação nos inputs reais: quatro filas numéricas, quatro lugares alfabéticos.
+        await page.click('#view-mapas button.btn-primary');
+        await page.waitForSelector('#modal-mapa-teatro', { visible: true });
+        await page.click('button[onclick="adicionarSetorMapa()"]');
+        assert.equal(await page.$eval('#mapa-fileira-inicio', el => el.type), 'text');
+        assert.equal(await page.$eval('#mapa-fileira-fim', el => el.type), 'text');
+        await page.select('#mapa-fileira-padrao', 'par');
+        for (const [campo, valor] of [['prefix','1-4'],['inicio','A'],['fim','D']]) {
+            const seletor = '#mapa-fileira-' + campo;
+            await page.click(seletor);
+            await page.keyboard.down('Control');
+            await page.keyboard.press('a');
+            await page.keyboard.up('Control');
+            await page.type(seletor, valor);
+        }
+        assert.equal(await page.$eval('#mapa-fileira-padrao', el => el.disabled), true);
+        assert.equal(await page.$eval('#mapa-fileira-padrao', el => el.value), 'sequencial');
+        await page.click('button[onclick="gerarFileiraNoCanvas()"]');
+        assert.deepEqual(await page.evaluate(() => Object.values(window.state.mapaAtual.config.setores[0].cadeiras).map(c => `${c.prefixo}:${c.num}`)),
+            ['1:A','1:B','1:C','1:D','2:A','2:B','2:C','2:D','3:A','3:B','3:C','3:D','4:A','4:B','4:C','4:D']);
+        const pontoAssento = async num => page.evaluate(valor => {
+            const s = window.state.mapaAtual.config.setores[0];
+            const [gx, gy] = Object.keys(s.cadeiras).find(k => s.cadeiras[k].prefixo === '1' && s.cadeiras[k].num === valor).split(',').map(Number);
+            const r = mapCanvas.getBoundingClientRect();
+            return {x:r.left+(camera.x+gx*32+12)*r.width/mapCanvas.width,y:r.top+(camera.y+gy*32+12)*r.height/mapCanvas.height};
+        }, num);
+        const a = await pontoAssento('A'), b = await pontoAssento('B');
+        await page.click('#tool-select'); await page.mouse.click(a.x, a.y);
+        assert.equal(await page.$eval('#mapa-fileira-inicio', el => el.value), 'B');
+        await page.click('#tool-erase'); await page.mouse.click(b.x, b.y);
+        assert.equal(await page.evaluate(() => Object.keys(window.state.mapaAtual.config.setores[0].cadeiras).length), 15);
+        await page.click('#tool-restore'); await page.mouse.click(b.x, b.y);
+        assert.equal(await page.evaluate(() => Object.keys(window.state.mapaAtual.config.setores[0].cadeiras).length), 16);
+        assert.equal(await page.evaluate(() => Object.values(window.state.mapaAtual.config.setores[0].cadeiras).filter(c => c.prefixo === '1' && c.num === 'B').length), 1);
+        const antes = await page.evaluate(() => JSON.stringify(window.state.mapaAtual.config));
+        await page.$eval('#mapa-fileira-fim', el => { el.value = '3'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+        await page.click('button[onclick="gerarFileiraNoCanvas()"]');
+        assert.equal(await page.evaluate(() => JSON.stringify(window.state.mapaAtual.config)), antes);
+        assert.ok(await page.evaluate(() => window.avisos.some(a => a.msg.includes('mesmo tipo'))));
+        await page.click('button[onclick="salvarMapaTeatro()"]');
+        await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
+        assert.equal(await page.evaluate(() => registros.find(m => m.id === 'mapa-browser-1').total_lugares), 16);
+        await page.evaluate(() => editarMapaTeatro('mapa-browser-1'));
+        await page.waitForSelector('#mapa-setor-props', { visible: true });
+        assert.equal(await page.evaluate(() => Object.values(window.state.mapaAtual.config.setores[0].cadeiras).filter(c => /^[A-D]$/.test(c.num)).length), 16);
+        for (const prefixo of ['imp', 'ped']) {
+            const linhas = await page.evaluate(async p => {
+                populateImpMapasTeatro(p); document.getElementById(p + '-mapa-teatro').value = 'mapa-browser-1';
+                await loadMapaTeatroData('mapa-browser-1', p);
+                return state.csvData.map(c => `${c.Fila}:${c.Numero}`);
+            }, prefixo);
+            assert.equal(linhas.length, 16); assert.equal(new Set(linhas).size, 16);
+        }
         assert.deepEqual(erros, []);
-        console.log('OK browser: editor real, 9 assentos, clique no canvas, colisão, falha/repetição de salvamento, seletores e resumos Imp/Pedido; zero erros JavaScript.');
+        console.log('OK browser: criação, edição, digitação de faixas, seleção e restauração de letras, salvamento/reabertura simulados, erro misto sem mutação e CSV das duas telas; zero erros JavaScript.');
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));
