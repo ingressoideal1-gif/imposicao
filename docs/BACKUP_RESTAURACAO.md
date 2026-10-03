@@ -132,6 +132,14 @@ somente `.iib` e manifesto genérico seguem ao Drive. A janela não é uma
 transação conjunta com o banco. A CLI instalada interpreta `C:` como protocolo;
 o destino de download usa caminho relativo e `cwd` privado.
 
+Para leituras com repetição controlada, usar `backup-storage.ps1 -Http`.
+Uma tentativa interrompida pode ser retomada com `-Http -PreCopiados` apontando
+para sua pasta privada `temporario-privado`. O script cria um pacote novo,
+consulta um inventário atual, completa somente arquivos ausentes e recusa
+objetos extras ou com tamanhos divergentes. Arquivos existentes não são
+sobrescritos. `-AgentPreCopiado` seleciona separadamente a estrutura produzida
+pela CLI; uma subpasta legítima com o nome do bucket nos GETs é preservada.
+
 O script registra somente buckets que têm objetos no inventário. Configurações
 de todos os buckets, inclusive vazios, precisam constar também do dump/metadados
 administrativos. Download em andamento ou manifesto sem `completed_at` não

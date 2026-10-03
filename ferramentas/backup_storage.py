@@ -46,7 +46,7 @@ def validar_objetos(bucket, objects):
             raise ValueError('Inventario de bucket divergente')
 
 
-def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False):
+def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False, pre_copiados=None):
     destino = Path(destino).resolve()
     if destino.exists():
         raise ValueError('Use um destino novo em pasta privada')
@@ -59,6 +59,7 @@ def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False):
     objects = linhas(result)[0]['objects'] or []
     if isinstance(objects,str):
         objects = json.loads(objects)
+    (private / 'inventario-objetos.json').write_text(json.dumps(objects), encoding='utf-8')
     # Nomes de objetos so ficam no inventario cifrado e na pasta local privada.
     buckets = sorted(set(x['bucket_id'] for x in objects))
     for bucket in buckets:
@@ -70,10 +71,25 @@ def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False):
     key = ler_chave(chave)
     for bucket in buckets:
         expected = [x for x in objects if x['bucket_id'] == bucket]
+        pasta_cli = not usar_http
         if bucket == 'agent-releases' and agent_pre_copiado is not None:
             folder = Path(agent_pre_copiado).resolve()
             if not folder.is_dir() or Path(agent_pre_copiado).is_symlink():
                 raise ValueError('Pasta pre-copiada invalida')
+            pasta_cli = True
+        elif pre_copiados is not None and (Path(pre_copiados) / bucket).is_dir():
+            if not usar_http:
+                raise ValueError('Retomada de objetos individuais exige downloads GET')
+            folder = (Path(pre_copiados) / bucket).resolve()
+            if Path(pre_copiados).is_symlink() or (Path(pre_copiados) / bucket).is_symlink():
+                raise ValueError('Pasta pre-copiada invalida')
+            existentes = list(folder.rglob('*'))
+            if any(p.is_symlink() or not p.resolve().is_relative_to(folder) for p in existentes):
+                raise ValueError('Arquivo copiado fora do destino privado')
+            nomes_existentes = {p.relative_to(folder).as_posix().casefold() for p in existentes if p.is_file()}
+            faltantes = [item for item in expected if item['name'].casefold() not in nomes_existentes]
+            if faltantes:
+                baixar_objetos(cli_path, PROJECT, bucket, faltantes, folder)
         else:
             folder = private / bucket
             folder.mkdir()
@@ -89,7 +105,7 @@ def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False):
             if p.is_symlink() or not p.resolve().is_relative_to(folder):
                 raise ValueError('Arquivo copiado fora do destino privado')
         # A CLI pode preservar o nome do bucket como nivel adicional.
-        if (folder / bucket).is_dir():
+        if pasta_cli and (folder / bucket).is_dir():
             extras = [p for p in files if not p.is_relative_to(folder / bucket)]
             if any(not p.is_relative_to(folder / 'supabase' / '.temp') for p in extras):
                 raise ValueError('Arquivos inesperados fora do bucket copiado')
@@ -99,21 +115,23 @@ def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False):
             files = [p for p in files if p.is_relative_to(source_root)]
         else:
             source_root = folder
-        actual = {p.relative_to(source_root).as_posix(): p for p in files}
-        expected_names = {x['name'] for x in expected}
-        if set(actual) != expected_names:
+        actual = {p.relative_to(source_root).as_posix().casefold(): p for p in files}
+        expected_names = {x['name'].casefold() for x in expected}
+        if len(actual) != len(files) or set(actual) != expected_names:
             raise ValueError('Objetos copiados nao correspondem ao inventario; preserve o resultado incompleto')
         metadata = []
         for item in expected:
-            p = actual[item['name']]
+            p = actual[item['name'].casefold()]
             if item['bytes'] is not None and p.stat().st_size != item['bytes']:
                 raise ValueError('Objeto alterado durante a copia; snapshot nao declarado completo')
             metadata.append({**item, 'sha256': sha256(p)})
         archive_path = private / (bucket + '.zip')
         with zipfile.ZipFile(archive_path, 'x', compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
             archive.writestr('inventario.json', json.dumps(metadata, ensure_ascii=False))
-            for name, p in actual.items():
-                archive.write(p, 'objetos/' + name)
+            for item in metadata:
+                # Preservar a grafia remota, mesmo quando pastas no Windows
+                # compartilham o nome com diferenca apenas de maiusculas.
+                archive.write(actual[item['name'].casefold()], 'objetos/' + item['name'])
         sealed = destino / (bucket + '.iib')
         cifrar(archive_path, sealed, key)
         checked = private / (bucket + '-conferido.zip')
@@ -142,9 +160,10 @@ if __name__ == '__main__':
     parser.add_argument('--chave', required=True)
     parser.add_argument('--agent-pre-copiado', help='Pasta privada de agent-releases copiada nesta janela; todos os objetos serao conferidos')
     parser.add_argument('--http', action='store_true', help='Downloads GET com repeticoes; credencial administrativa somente em memoria')
+    parser.add_argument('--pre-copiados', help='Pasta privada de objetos GET de tentativa anterior; conferir novo inventario e completar apenas ausentes')
     args = parser.parse_args()
     try:
-        print(json.dumps(copiar(args.cli, args.destino, args.chave, args.agent_pre_copiado, args.http)))
+        print(json.dumps(copiar(args.cli, args.destino, args.chave, args.agent_pre_copiado, args.http, args.pre_copiados)))
     except Exception as erro:
         print('Categoria: ' + type(erro).__name__, file=__import__('sys').stderr)
         print('Backup Storage incompleto. Nenhum arquivo original remoto foi modificado. Preserve a pasta privada para retomar.', file=__import__('sys').stderr)

@@ -89,3 +89,49 @@ def test_storage_retoma_bucket_conferido_e_nao_arquiva_cache_cli(tmp_path,monkey
     backup.decifrar(destino/'agent-releases.iib',aberto,chave.read_bytes())
     with zipfile.ZipFile(aberto) as z:
         assert z.namelist()==['inventario.json','objetos/arquivo.exe']
+
+
+def test_storage_http_preserva_subpasta_com_nome_do_bucket(tmp_path,monkeypatch):
+    objeto={'bucket_id':'teste','name':'teste/arquivo.pdf','bytes':4}
+    monkeypatch.setattr(storage,'cli',lambda *a,**k:{'rows':[{'objects':[objeto]}]})
+    def baixar(cli,project,bucket,objects,folder):
+        (folder/'teste').mkdir()
+        (folder/'teste/arquivo.pdf').write_bytes(b'test')
+    monkeypatch.setattr(storage,'baixar_objetos',baixar)
+    chave=tmp_path/'chave';chave.write_bytes(bytes(range(32)))
+    destino=tmp_path/'backup'
+    assert storage.copiar('sintetica',destino,chave,usar_http=True)['objects']==1
+    aberto=tmp_path/'aberto.zip'
+    backup.decifrar(destino/'teste.iib',aberto,chave.read_bytes())
+    with zipfile.ZipFile(aberto) as z:
+        assert 'objetos/teste/arquivo.pdf' in z.namelist()
+
+
+def test_storage_reaproveita_objetos_get_e_completa_somente_ausentes(tmp_path,monkeypatch):
+    origem=tmp_path/'objetos-previos';(origem/'teste'/'teste').mkdir(parents=True)
+    (origem/'teste'/'teste/primeiro.pdf').write_bytes(b'test')
+    objects=[{'bucket_id':'teste','name':'teste/'+name,'bytes':4} for name in ['primeiro.pdf','segundo.pdf']]
+    monkeypatch.setattr(storage,'cli',lambda *a,**k:{'rows':[{'objects':objects}]})
+    def baixar(cli,project,bucket,missing,folder):
+        assert [x['name'] for x in missing]==['teste/segundo.pdf']
+        (folder/'teste/segundo.pdf').write_bytes(b'test')
+    monkeypatch.setattr(storage,'baixar_objetos',baixar)
+    chave=tmp_path/'chave';chave.write_bytes(bytes(range(32)))
+    assert storage.copiar('sintetica',tmp_path/'backup',chave,usar_http=True,pre_copiados=origem)['objects']==2
+    assert (origem/'teste'/'teste/primeiro.pdf').read_bytes()==b'test'
+
+
+def test_storage_preserva_grafia_remota_das_pastas_no_zip(tmp_path,monkeypatch):
+    objects=[{'bucket_id':'teste','name':name,'bytes':4} for name in ['Pasta/um.pdf','pasta/dois.pdf']]
+    monkeypatch.setattr(storage,'cli',lambda *a,**k:{'rows':[{'objects':objects}]})
+    def baixar(cli,project,bucket,expected,folder):
+        for item in expected:
+            p=folder/item['name'];p.parent.mkdir(exist_ok=True);p.write_bytes(b'test')
+    monkeypatch.setattr(storage,'baixar_objetos',baixar)
+    chave=tmp_path/'chave';chave.write_bytes(bytes(range(32)))
+    destino=tmp_path/'backup'
+    storage.copiar('sintetica',destino,chave,usar_http=True)
+    aberto=tmp_path/'aberto.zip'
+    backup.decifrar(destino/'teste.iib',aberto,chave.read_bytes())
+    with zipfile.ZipFile(aberto) as z:
+        assert set(z.namelist())=={'inventario.json','objetos/Pasta/um.pdf','objetos/pasta/dois.pdf'}
