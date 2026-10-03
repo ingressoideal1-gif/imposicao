@@ -113,6 +113,40 @@ async function teste(nome, fn) {
 }
 
 (async () => {
+    await teste('salvar gera PDFs somente do mapa confirmado e oferece os arquivos', async () => {
+        const t = montar(); const b = clienteSimulado(t); let origem, aberto = false;
+        t.c.MapasTeatroPdf = { async gerar(m) { origem = copia(m); return { revisao: 'sintetica' }; }, abrir() { aberto = true; } };
+        t.get('mapa-nome').value = 'Mapa com PDF'; await t.c.salvarMapaTeatro();
+        assert.deepEqual(origem, b.rows.get('m1')); assert.ok(aberto);
+        assert.equal(t.confirmacoes.at(-1).textoOk, 'Ver PDFs');
+    });
+    await teste('falha de PDF mantém o mapa salvo e permite gerar novamente sem regravar', async () => {
+        const t = montar(); const b = clienteSimulado(t); let falhar = true, aberto = false;
+        t.c.MapasTeatroPdf = { async gerar() { if (falhar) throw Error('PDF indisponível'); return {}; }, abrir() { aberto = true; } };
+        assert.equal(await t.c.salvarMapaTeatro(), true); assert.equal(t.c.state.mapaAtual, null);
+        assert.match(t.confirmacoes.at(-1).mensagem, /PDFs ainda não estão prontos/);
+        falhar = false; await t.c.abrirPdfsMapaTeatro('m1'); assert.ok(aberto);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+    });
+    await teste('gravação negada não inicia geração de PDF', async () => {
+        const t = montar(); clienteSimulado(t, { falhar: 'update' }); let gerou = false;
+        t.c.MapasTeatroPdf = { async gerar() { gerou = true; } };
+        await t.c.salvarMapaTeatro(); assert.equal(gerou, false);
+    });
+    await teste('botão PDFs relê mapa existente e usa a versão atual do servidor', async () => {
+        const t = montar(); const b = clienteSimulado(t); b.rows.get('m1').name = 'Servidor atualizado'; let origem;
+        t.c.MapasTeatroPdf = { async gerar(m) { origem = m; return {}; }, abrir() {} };
+        t.c.renderTabelaMapas(); assert.equal(t.get('tbody-mapas').children[0]._botoes.length, 4);
+        await t.get('tbody-mapas').children[0]._botoes[3].onclick();
+        assert.equal(origem.name, 'Servidor atualizado'); assert.equal(b.chamadas.filter(x => x.acao !== 'select').length, 0);
+    });
+    await teste('PDF de rascunho ou leitura negada não usa cache antigo nem grava', async () => {
+        const t = montar(); const b = clienteSimulado(t, { falhar: 'select' }); let gerou = false;
+        t.c.MapasTeatroPdf = { async gerar() { gerou = true; } };
+        await t.c.abrirPdfsMapaTeatro('local_rascunho'); await t.c.abrirPdfsMapaTeatro('m1');
+        assert.equal(gerou, false); assert.equal(b.chamadas.filter(x => x.acao !== 'select').length, 0);
+        assert.equal(t.confirmacoes.at(-1).titulo, 'PDF não disponível');
+    });
     await teste('salvar funciona na tabela que possui somente name e config para gravação', async () => {
         const t = montar(); const b = clienteSimulado(t, { colunas: ['name', 'config'] });
         t.get('mapa-nome').value = 'Mapa gravado';
