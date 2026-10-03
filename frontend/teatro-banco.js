@@ -186,6 +186,9 @@
         if (!configurarMontagem(payload)) return;
         const numeracoes = payload.multi_artes?.length ? payload.multi_artes.map(a => a.numeracao) : [payload.numeracao];
         for (const num of numeracoes) {
+            if (num?.erro_mapa_teatro || num?.teatro_snapshot_erro) throw Error(num.erro_mapa_teatro || num.teatro_snapshot_erro);
+            if (num?.mapa_teatro_snapshot_erp && !num.csv_data?.length) throw Error('O snapshot do mapa não tem lugares para imprimir.');
+            if (num?.mapa_teatro_snapshot_erp && num.csv_data.length !== num.mapa_teatro_quantidade) throw Error('Use todos os lugares do snapshot do mapa, sem seleção parcial.');
             if (num?.teatro_modelo) {
                 const aviso = await root.TeatroSnapshot.conferir(num, async id => {
                     const cliente = typeof supabaseClient !== 'undefined' ? supabaseClient : root.supabaseClient;

@@ -31,6 +31,45 @@ def test_teatro_vertical_na_previa_e_na_validacao_de_pronto():
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
 
 
+@pytest.mark.parametrize("indice,quantidade,folhas", [(0, 82, 11), (1, 515, 65)])
+def test_snapshot_erp_convertido_no_frontend_imprime_todos_os_lugares(tmp_path, indice, quantidade, folhas):
+    js = """
+const {fixture}=require('./tests/mapa_teatro_snapshot_harness.js');
+const S=require('./frontend/teatro-snapshot.js');
+fixture().then(async f=>{
+    const numeracoes=f.modelos.map((m,i)=>S.resolver(f.nums[i],m));
+    for(const num of numeracoes) await S.conferir(num,async()=>f.mapa);
+    console.log(JSON.stringify({numeracoes,mapa:f.mapa}));
+});
+"""
+    r = subprocess.run(["node", "-e", js], cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    fonte = json.loads(r.stdout)
+    numeracao = fonte['numeracoes'][indice]
+    import teatro_snapshot
+    payload = {'modelo': numeracao['teatro_modelo']['id'], 'qtd': quantidade, 'numeracao': numeracao}
+    assert teatro_snapshot.aplicar(payload, lambda _: fonte['mapa']) == []
+    rows = numeracao["csv_data"]
+    assert len(rows) == quantidade
+    conjunto = rows[0]["Conjunto"]
+    numeracao["elements"] = [{"type": "TEATRO_COMBO", "x_mm": 50, "y_mm": 25, "font_size": 14,
+        "font_name": "helv", "prefix_fila": conjunto + ": ", "prefix_lugar": "Lugar: ", "layout": "1line"}]
+    cfg = ImpositionConfig(base_file="", out_pdf=str(tmp_path / "snapshot.pdf"),
+        formato={"width_mm": 100, "height_mm": 50, "cols": 2, "rows": 4,
+            "gap_h_mm": 0, "gap_v_mm": 0, "offset_h_mm": 0, "offset_v_mm": 0, "rotations": {}},
+        saida={"width_mm": 220, "height_mm": 230}, numeracao=numeracao, csv_data=rows,
+        seq_start=1, seq_end=quantidade, layout_schema="sequential", sheets_per_block=50)
+    ImpositionEngine(cfg).process()
+    arquivos = sorted(tmp_path.glob("*_02_miolo.pdf"))
+    assert len(arquivos) == 1
+    with fitz.open(arquivos[0]) as doc:
+        assert len(doc) == folhas
+        impressos = [linha.strip() for pagina in doc for linha in pagina.get_text().splitlines() if linha.strip()]
+    esperados = [f"{conjunto}: {row['Fila']} - Lugar: {row['Numero']}" for row in rows]
+    assert len(impressos) == quantidade
+    assert sorted(impressos) == sorted(esperados)
+
+
 def test_montagem_js_python_identica():
     modelos = [{"rows": linhas(str(s)), "items": list(range(9 * s, 9 * (s + 1)))} for s in range(4)]
     original = copy.deepcopy(modelos)

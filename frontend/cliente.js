@@ -2952,7 +2952,7 @@ function linhasComDadoDaNumeracao(rows, num) {
 /** A numeracao tem dado variavel vindo de CSV? */
 function temCsvVariavel(num) {
     return !!(num && num.csv_data && num.csv_data.length
-        && (num.elements || []).some(el => el && el.source === 'database'));
+        && (num.mapa_teatro_snapshot_erp || (num.elements || []).some(el => el && el.source === 'database')));
 }
 
 // Estado de renderização só desta abertura. Nenhum destes dados é persistido.

@@ -49,6 +49,18 @@
         if (atual.legadoLocal) return num;
         const m = registro(item);
         if (!m || m.erro) return null;
+        if (!escopo.TeatroSnapshot && (item?.mapa_teatro_id || item?.mapa_teatro_setor_id || item?.mapa_teatro_revisao || item?.mapa_teatro_snapshot)) return null;
+        if (escopo.TeatroSnapshot?.tem(item)) {
+            const chave = String(item.id);
+            const assinatura = JSON.stringify([item.mapa_teatro_id, item.mapa_teatro_setor_id, item.mapa_teatro_revisao,
+                item.mapa_teatro_snapshot, item.qtd ?? item.quantidade]);
+            const cache = atual.cache.get(chave);
+            if (cache?.num === num && cache.assinatura === assinatura) return cache.resolvida;
+            const resolvida = escopo.TeatroSnapshot.resolver(num, item);
+            if (resolvida) resolvida.elements = (resolvida.elements || []).map(el => el && { ...el });
+            atual.cache.set(chave, { num, assinatura, resolvida });
+            return resolvida;
+        }
         if (!m.banco) return num;
         if (!num || !escopo.BancoDoModelo) return null;
         const chave = String(item.id);
@@ -68,6 +80,8 @@
         if (atual.legadoLocal) return '';
         const m = registro(item);
         if (!m || m.erro) return 'O banco deste modelo não está disponível. Solicite a conferência à gráfica.';
+        if (!escopo.TeatroSnapshot && (item?.mapa_teatro_id || item?.mapa_teatro_setor_id || item?.mapa_teatro_revisao || item?.mapa_teatro_snapshot)) return 'Recarregue a página para carregar o mapa enviado pelo ERP.';
+        if (escopo.TeatroSnapshot?.tem(item)) return escopo.TeatroSnapshot.problema(item, num);
         if (!m.banco) return '';
         if (!num || !escopo.BancoDoModelo) return 'A numeração deste modelo não foi carregada. Tente novamente.';
         if (escopo.BancoDoModelo.elementosSemColunaNoBanco(num, m.banco, m.csv_mapa).length) {
@@ -81,7 +95,7 @@
         carregar, resolver, problema,
         numero: () => atual.numero,
         geracao: () => geracao,
-        temVinculo: item => !!(registro(item) && registro(item).banco),
+        temVinculo: item => !!(registro(item) && (registro(item).banco || escopo.TeatroSnapshot?.tem(item))),
         ativo: () => atual.status !== 'inativo'
     };
 })(typeof window !== 'undefined' ? window : globalThis);

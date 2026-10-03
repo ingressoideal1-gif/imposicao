@@ -1354,6 +1354,8 @@ window.pecaDoModelo = pecaDoModelo;
  * distribuicao quando bebem do MESMO poco.
  */
 function fonteDoModelo(item) {
+    // O snapshot é histórico e somente leitura; não abrir/distribuir CSV do catálogo.
+    if (window.TeatroSnapshot?.tem(item)) return null;
     const vinc = vinculoDeBancoDoModelo(item);
     const banco = window.BancoDoModelo
         ? window.BancoDoModelo.bancoDoModelo(vinc, state.bancosDoPedido || [])
@@ -19101,7 +19103,7 @@ function numeracaoDoModelo(item) {
 
     // ── O desvio do banco do pedido (27/08/2026) ────────────────────────────
     //
-    // Modelo sem vinculo sai por aqui com a MESMA numeracao de sempre, pela
+    // Modelo sem snapshot do ERP e sem vinculo sai com a MESMA numeracao, pela
     // mesma referencia. Tudo o que existia antes desta data cai neste return e
     // nao enxerga o caminho novo -- e e por isso que a mudanca nao altera
     // nenhum dos pedidos em andamento.
@@ -19122,14 +19124,13 @@ window.numeracaoDoModelo = numeracaoDoModelo;
  * o payload `multi_artes` da imposicao, que escolhe a numeracao pelo `num1_id`
  * da arte e nao pelo modelo. La a escolha nao pode mudar -- so a resolucao.
  *
- * Sem vinculo devolve o proprio `num`, pela mesma referencia.
+ * Sem snapshot do ERP e sem vinculo devolve o proprio `num`, pela mesma referencia.
  */
 function resolverNumeracaoParaModelo(num, item) {
-    if (num && window.TeatroSnapshot?.tem(item)) {
-        try {
-            const fonte = window.TeatroSnapshot.banco(item);
-            return { ...num, csv_data: fonte.csv_data, csv_headers: fonte.csv_headers, teatro_modelo: fonte.teatro_modelo };
-        } catch (e) { return { ...num, csv_data: [], teatro_snapshot_erro: e.message }; }
+    if (window.TeatroSnapshot?.tem(item)) return window.TeatroSnapshot.resolver(num, item);
+    if (item?.mapa_teatro_snapshot || item?.mapa_teatro_id || item?.mapa_teatro_setor_id || item?.mapa_teatro_revisao) {
+        return num && { ...num, tipo: 'TEATRO', csv_data: [], csv_headers: [], csv_url: '',
+            erro_mapa_teatro: 'Recarregue a página para carregar o mapa enviado pelo ERP.' };
     }
     const vinculo = vinculoDeBancoDoModelo(item);
     if (!num || !vinculo || !window.BancoDoModelo) return num;
@@ -19176,7 +19177,9 @@ window.abrirMapaTeatroDoPedido = function (osId) {
     const exigir = () => { if (!ativo()) throw Error('O pedido mudou. Reabra o mapa no pedido correto.'); };
     window.MapaTeatroDoPedido.abrir({
         idInt, ativo, itens: () => state.osItens[osId] || [],
-        bloqueio: item => bloqueioDeModeloAprovado(item, { csv_selecao: null })?.motivo,
+        bloqueio: item => window.TeatroSnapshot?.tem(item)
+            ? 'Este modelo usa o mapa salvo pelo ERP. Altere o vínculo no ERP para trocar o setor.'
+            : bloqueioDeModeloAprovado(item, { csv_selecao: null })?.motivo,
         async listarMapas() {
             const mapas = [];
             for (let de = 0; ; de += 500) {
@@ -19564,7 +19567,15 @@ window.removerDistribuicaoDoModelo = async function (idx, osId) {
  * ou tudo certo) e `{ motivo, texto }` quando há. Só lê; não escreve nada.
  */
 function bancoDeDadosIncompletoDoModelo(item) {
+    if (!window.TeatroSnapshot && (item?.mapa_teatro_snapshot || item?.mapa_teatro_id || item?.mapa_teatro_setor_id || item?.mapa_teatro_revisao)) {
+        return { motivo: 'mapa_teatro', texto: 'Recarregue a página para carregar o mapa enviado pelo ERP.' };
+    }
     const num = numeracaoDoModelo(item);
+    if (num?.erro_mapa_teatro) return { motivo: 'mapa_teatro', texto: num.erro_mapa_teatro };
+    if (window.TeatroSnapshot?.tem(item)) {
+        const texto = window.TeatroSnapshot.problema(item, num);
+        if (texto) return { motivo: 'mapa_teatro', texto };
+    }
     const teatro = bancoTeatroDoModelo(item);
     if (teatro) {
         try {
@@ -21907,6 +21918,10 @@ window.abrirCsvDoModelo = async function(idx, osId) {
     const item = (state.osItens[osId] || [])[idx];
 
     if (!item) return;
+
+    if (window.TeatroSnapshot?.tem(item)) {
+        return toast('Os lugares vêm do mapa salvo pelo ERP. Altere o vínculo no ERP; a seleção parcial não se aplica a este modelo.', 'info');
+    }
 
     const fonte = fonteDoModelo(item);
 
@@ -27944,7 +27959,7 @@ async function atualizarQuantidadesDoERP(osId, numero) {
     const itens = state.osItens[osId] || [];
     if (!itens.length) return;
     const { data, error } = await supabaseClient.from('pedidos_modelos')
-        .select('id,quantidade,numeracao_inicio,numeracao_fim')
+        .select('id,quantidade,numeracao_inicio,numeracao_fim,mapa_teatro_id,mapa_teatro_setor_id,mapa_teatro_revisao,mapa_teatro_snapshot')
         .eq('id_int', Number(numero));
     if (error) throw error;
     // Valida o conjunto antes de modificar o cache. Vazio não confirma tiragem.
@@ -27963,6 +27978,10 @@ async function atualizarQuantidadesDoERP(osId, numero) {
             destino.quantidade = Number(modelo.quantidade);
             destino.num_inicial = destino.numeracao_inicio = modelo.numeracao_inicio;
             destino.num_final = destino.numeracao_fim = modelo.numeracao_fim;
+            for (const campo of ['mapa_teatro_id', 'mapa_teatro_setor_id', 'mapa_teatro_revisao', 'mapa_teatro_snapshot']) {
+                if (Object.prototype.hasOwnProperty.call(modelo, campo)) destino[campo] = modelo[campo];
+            }
+            delete destino._mapa_teatro_aviso;
         };
         aplicar(item);
         for (const copia of (state.modelosGlobais?.[numero] || [])) {
@@ -28241,6 +28260,8 @@ async function loadOSItens(osId, opcoes = {}) {
 
         // Mesmo com artes/amostras em cache, a tiragem continua vindo do ERP.
         if (!needsFullLoad && os.numero) await atualizarQuantidadesDoERP(osId, os.numero);
+        if (typeof window !== 'undefined') await window.TeatroSnapshot?.conferirPedido(state.osItens[osId],
+            typeof supabaseClient === 'undefined' ? null : supabaseClient);
 
         // Buscar dados dinâmicos da arte (pedidos_artes) e mesclar nos itens
         if (typeof supabaseClient !== 'undefined' && supabaseClient && os.numero) {
@@ -35469,6 +35490,15 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                         : 'Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.'}</span>
                 </div>` : '';
 
+        const bancoSnapshotERP = window.TeatroSnapshot?.tem(item) ? bancoTeatroDoModelo(item) : null;
+        const origemSnapshotERP = bancoSnapshotERP?.csv_data[0];
+        const faixaMapaERP = origemSnapshotERP ? `
+                <div style="margin:0 0 10px;padding:9px 12px;border-radius:8px;background:rgba(20,184,166,.10);border:1px solid rgba(20,184,166,.35);font-size:.8rem;">
+                    <b>Mapa de Teatro do ERP:</b> ${escapeHtml(origemSnapshotERP.Mapa)}<br>
+                    Setor: ${escapeHtml(origemSnapshotERP.Setor)} · ${bancoSnapshotERP.csv_data.length} lugares · Versão salva no pedido
+                    ${item._mapa_teatro_aviso ? `<br><span style="color:#fbbf24;">${escapeHtml(item._mapa_teatro_aviso)}</span>` : ''}
+                </div>` : '';
+
         const faixaSemGlifo = travaDeGlifo ? `
                 <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
                     <span style="font-size: 1rem;">⚠️</span>
@@ -35747,6 +35777,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                         ${faixaDistribuicaoOrfa}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
+                        ${faixaMapaERP}
                         ${faixaSemGlifo}
                         ${faixaCelulasRepetidas}
                         </div>

@@ -516,7 +516,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         await page.click(dialogo + ' [data-role="ok"]');
         await page.waitForSelector('#modal-mapa-teatro', { hidden: true });
         assert.deepEqual(erros, []);
-        console.log(`OK browser (${arquivoHtml}): nome do conjunto editável, por setor, salvo/reaberto, acentos e revisão; PDFs reais com logo, quatro conjuntos e 3000 assentos; persistência ERP, repetição e saída sem salvar; rótulos e CSV preservados; zero erros JavaScript.`);
+        console.log(`OK: browser (${arquivoHtml}): nome do conjunto editável, por setor, salvo/reaberto, acentos e revisão; PDFs reais com logo, quatro conjuntos e 3000 assentos; persistência ERP, repetição e saída sem salvar; rótulos e CSV preservados; zero erros JavaScript.`);
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));

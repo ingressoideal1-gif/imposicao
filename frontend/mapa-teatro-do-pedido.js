@@ -112,7 +112,7 @@
                 mensagem.textContent = 'Conferindo o mapa antes de carregar…';
                 const atualizado = await deps.lerMapa(plano.id);
                 const rev = await root.TeatroBanco.revisao(atualizado); exigirAtivo();
-                if (rev !== plano.revisao) throw Error('O mapa foi alterado. Selecione-o novamente antes de carregar.');
+                if (rev !== plano.revisao || atualizado.name !== plano.nome) throw Error('O mapa foi alterado. Selecione-o novamente antes de carregar.');
                 const resultado = await root.TeatroBanco.importar(plano, associacoes, {
                     ...deps, exigirAtivo,
                     progresso(n, total) { carregados = n; mensagem.textContent = n + ' de ' + total + ' setores conferidos e associados.'; }
