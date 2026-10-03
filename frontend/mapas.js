@@ -283,12 +283,14 @@ function renderTabelaMapas(filtro) {
                 <button class="btn btn-sm">✏️ Editar</button>
                 <button class="btn btn-sm btn-secondary" title="Duplicar mapa com todas as configurações">📋 Copiar</button>
                 <button class="btn btn-sm">🗑️ Excluir</button>
+                <button class="btn btn-sm btn-secondary" title="Visualizar ou baixar o mapa completo e os PDFs por setor">📄 PDFs</button>
             </td>
         `;
         const botoes = tr.querySelectorAll('button');
         botoes[0].onclick = () => editarMapaTeatro(mapa.id);
         botoes[1].onclick = () => duplicarMapaTeatro(mapa.id);
         botoes[2].onclick = () => excluirMapaTeatro(mapa.id);
+        botoes[3].onclick = () => abrirPdfsMapaTeatro(mapa.id);
         tbody.appendChild(tr);
     });
 }
@@ -296,6 +298,36 @@ function renderTabelaMapas(filtro) {
 window.filtrarMapas = function(valor) {
     renderTabelaMapas(valor);
 }
+
+const mapasPdfAbrindo = new Set();
+let mapasPdfAberturaVersao = 0;
+window.abrirPdfsMapaTeatro = async function(id) {
+    if (mapasPdfAbrindo.has(id)) return;
+    mapasPdfAbrindo.add(id);
+    const abertura = ++mapasPdfAberturaVersao;
+    try {
+        if (String(id).startsWith('local_')) throw Error('Salve o mapa antes de gerar os PDFs.');
+        if (!window.MapasTeatroPdf) throw Error('Os recursos de PDF não carregaram. Atualize a página e tente novamente.');
+        avisarMapa('Preparando os PDFs do mapa...', 'info');
+        let mapa;
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+            const { data, error } = await supabaseClient.from('producao_mapas_teatro').select('*').eq('id', id).single();
+            if (error) throw error;
+            mapa = data;
+        } else mapa = await apiMapa('GET', '/' + encodeURIComponent(id));
+        if (!mapa || String(mapa.id) !== String(id)) throw Error('Não foi possível conferir o mapa salvo. Atualize a lista e tente novamente.');
+        const resultado = await window.MapasTeatroPdf.gerar(mapa);
+        if (window.MapasTeatroPdfStorage) {
+            resultado.mapaPersistido = JSON.parse(JSON.stringify(mapa));
+            try { resultado.persistencia = await window.MapasTeatroPdfStorage.consultar(mapa, resultado); }
+            catch (e) { resultado.persistencia = { estado: 'pendente', mensagem: e.message }; }
+        }
+        if (abertura === mapasPdfAberturaVersao) window.MapasTeatroPdf.abrir(resultado);
+    } catch (e) {
+        console.error('[Mapas] PDF não disponível:', e);
+        if (abertura === mapasPdfAberturaVersao) await confirmarAcaoMapa({ titulo: 'PDF não disponível', mensagem: escaparMapaHtml(e.message || 'Não foi possível gerar o PDF. Tente novamente.'), textoOk: 'Concluir', somenteOk: true });
+    } finally { mapasPdfAbrindo.delete(id); }
+};
 
 // ==========================================
 // AÇÕES CRUD BÁSICAS
@@ -500,9 +532,27 @@ window.salvarMapaTeatro = async function() {
     if (salvo) {
         encerrarEditorMapa();
         avisarMapa('Mapa salvo e confirmado.', 'success');
-        await confirmarAcaoMapa({ titulo: 'Mapa salvo',
-            mensagem: `O mapa <strong>${escaparMapaHtml(salvo.name)}</strong> foi salvo e os dados foram conferidos.`,
-            textoOk: 'Concluir', somenteOk: true });
+        let pdfs = null;
+        if (window.MapasTeatroPdf) {
+            try {
+                avisarMapa('Mapa salvo. Preparando os PDFs por setor...', 'info');
+                pdfs = await window.MapasTeatroPdf.gerar(salvo);
+                if (window.MapasTeatroPdfStorage) {
+                    pdfs.mapaPersistido = JSON.parse(JSON.stringify(salvo));
+                    avisarMapa('Mapa salvo. Salvando os PDFs para o ERP...', 'info');
+                    try { pdfs.persistencia = await window.MapasTeatroPdfStorage.persistir(salvo, pdfs); }
+                    catch (e) { pdfs.persistencia = { estado: 'pendente', mensagem: e.message }; }
+                }
+            } catch (e) { console.error('[Mapas] Mapa salvo; geração do PDF pendente:', e); }
+        }
+        const verPdfs = await confirmarAcaoMapa({ titulo: 'Mapa salvo',
+            mensagem: `O mapa <strong>${escaparMapaHtml(salvo.name)}</strong> foi salvo e os dados foram conferidos.<br><br>`
+                + (pdfs ? 'Os PDFs do mapa e de cada setor estão prontos. Eles também ficam disponíveis no botão PDFs da lista.'
+                    + (pdfs.persistencia ? (pdfs.persistencia.estado === 'pronto' ? '<br>Os arquivos também foram salvos para o ERP.'
+                        : '<br>O envio dos PDFs para o ERP está pendente: ' + escaparMapaHtml(pdfs.persistencia.mensagem || 'use o botão Salvar PDFs para o ERP.')) : '')
+                    : 'Os PDFs ainda não estão prontos. Use o botão PDFs da lista para gerar novamente.'),
+            textoOk: pdfs ? 'Ver PDFs' : 'Concluir', textoCancelar: 'Concluir', somenteOk: !pdfs });
+        if (pdfs && verPdfs) window.MapasTeatroPdf.abrir(pdfs);
         return true;
     }
     return false;
@@ -594,6 +644,7 @@ window.adicionarSetorMapa = function() {
     window.state.mapaAtual.config.setores.push({
         id: 'setor_' + novoIdx + '_' + Date.now(),
         nome: 'Novo Setor',
+        nomeConjunto: 'Fila',
         fileiras: [],
         cadeiras: {}
     });
@@ -752,7 +803,34 @@ function carregarSetorNoSidebar() {
     }
     props.style.display = 'flex';
     document.getElementById('mapa-setor-nome').value = s.nome || '';
+    const campo = document.getElementById('mapa-conjunto-nome');
+    if (campo) campo.value = nomeConjuntoDoMapa(s);
+    atualizarRotuloConjuntoMapa(s);
 }
+
+function nomeConjuntoDoMapa(setor) {
+    return String(setor?.nomeConjunto || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Fila';
+}
+
+function atualizarRotuloConjuntoMapa(setor) {
+    const nome = nomeConjuntoDoMapa(setor);
+    const botao = document.getElementById('mapa-adicionar-conjunto');
+    if (botao) botao.textContent = 'Adicionar ' + nome + ' no Mapa';
+    const prefixo = document.getElementById('mapa-fileira-prefix');
+    if (prefixo) prefixo.setAttribute('aria-label', 'Identificador de ' + nome);
+}
+
+window.atualizarNomeConjuntoMapa = function(normalizarCampo = false) {
+    const s = getSetorAtual(), campo = document.getElementById('mapa-conjunto-nome');
+    if (!s || !campo) return;
+    const nome = nomeConjuntoDoMapa({ nomeConjunto: campo.value });
+    if (nome !== nomeConjuntoDoMapa(s)) {
+        window.pushToMapHistory();
+        s.nomeConjunto = nome;
+    }
+    if (normalizarCampo) campo.value = nome;
+    atualizarRotuloConjuntoMapa(s);
+};
 
 window.atualizarSetorAtual = function() {
     if (window.setorSelecionadoIdx === null) return;
@@ -1166,7 +1244,7 @@ function expandirFilasDoMapa(entrada) {
         const faixa = parte.match(/^([A-Za-z]+)\s*-\s*([A-Za-z]+)$/) || parte.match(/^(\d+)\s*-\s*(\d+)$/);
         if (faixa) prefixos.push(...expandirFaixaDoMapa(faixa[1], faixa[2], true, true).valores.map(String));
         else prefixos.push(/^[A-Za-z]$/.test(parte) ? parte.toUpperCase() : parte);
-        if (prefixos.length > MAX_ASSENTOS_POR_INCLUSAO_MAPA) throw new Error('Há filas demais para uma inclusão. Divida a criação em intervalos menores.');
+        if (prefixos.length > MAX_ASSENTOS_POR_INCLUSAO_MAPA) throw new Error('Há conjuntos demais para uma inclusão. Divida a criação em intervalos menores.');
     }
     return prefixos.length ? prefixos : ['A'];
 }
@@ -1214,7 +1292,7 @@ window.gerarFileiraNoCanvas = function() {
         for (const i of lugares) {
             const rotulo = JSON.stringify([prefixo, chaveEtiquetaDoMapa(i)]);
             if (rotulos.has(rotulo)) {
-                avisarMapa(`O assento ${prefixo}${i} já existe neste setor. Ajuste a fila ou o intervalo.`, 'warning');
+                avisarMapa(`O assento ${prefixo}${i} já existe neste setor. Ajuste o identificador do conjunto ou o intervalo.`, 'warning');
                 return;
             }
             rotulos.add(rotulo);
@@ -1291,7 +1369,7 @@ window.gerarFileiraNoCanvas = function() {
         for (const i of lugares) {
             let key = `${currentX},${startY}`;
             if (cadeiras[key]) {
-                avisarMapa('Há uma cadeira no espaço da nova fileira. Selecione uma cadeira para inserir a partir dela ou mova a cadeira existente.', 'warning');
+                avisarMapa('Há uma cadeira no espaço do novo conjunto. Selecione uma cadeira para inserir a partir dela ou mova a cadeira existente.', 'warning');
                 return;
             }
             cadeiras[key] = {

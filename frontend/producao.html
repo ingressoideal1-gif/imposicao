@@ -2127,7 +2127,10 @@
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
     <script src="/banco-nao-responde.js?v=897"></script>
     <script src="/supabase-config.js?v=931"></script>
-    <script src="mapas.js?v=1001"></script>
+    <script src="mapas-teatro-logo.js?v=1002"></script>
+    <script src="mapas-teatro-pdf.js?v=1003"></script>
+    <script src="mapas-teatro-pdf-storage.js?v=1003"></script>
+    <script src="mapas.js?v=1003"></script>
     <script src="/cor-numeracao-do-modelo.js?v=961"></script>
     <script src="/cor-margens.js?v=964"></script>
     <script src="/logo-do-frete.js?v=897"></script>
@@ -2207,10 +2210,11 @@
                                     <label>Nome do Setor</label>
                                     <input type="text" id="mapa-setor-nome" class="form-control" oninput="atualizarSetorAtual()">
                                 </div>
-                                <div style="display:flex; gap:4px;">
+                                <div style="display:flex; gap:4px; align-items:flex-end;">
                                     <div class="form-group" style="flex:1; min-width:0;">
-                                        <label>Fila</label>
-                                        <input type="text" id="mapa-fileira-prefix" class="form-control" placeholder="A-C ou 1-4" title="Uma fila ou várias: A-C, 1-4, A,B,C" style="min-width:0; width:100%;">
+                                        <input type="text" id="mapa-conjunto-nome" class="form-control" value="Fila" maxlength="40" list="mapa-conjunto-opcoes" aria-label="Nome do conjunto de assentos" title="Edite o nome: Fila, Mesa, Camarote, Sala ou outro. Este nome aparece no PDF do setor." oninput="atualizarNomeConjuntoMapa()" onblur="atualizarNomeConjuntoMapa(true)" style="min-width:0; width:100%; padding:3px 5px; font-size:0.72rem; font-weight:600; color:var(--text-dim);">
+                                        <datalist id="mapa-conjunto-opcoes"><option value="Fila"></option><option value="Mesa"></option><option value="Camarote"></option><option value="Sala"></option></datalist>
+                                        <input type="text" id="mapa-fileira-prefix" class="form-control" aria-label="Identificador de Fila" placeholder="A-C ou 1-4" title="Um conjunto ou vários: A-C, 1-4, A,B,C" style="min-width:0; width:100%;">
                                     </div>
                                     <div class="form-group" style="flex:1; min-width:0;">
                                         <label>Início</label>
@@ -2230,7 +2234,8 @@
                                     </select>
                                     <small style="color:var(--text-dim);">Início e fim: números ou letras. Ímpar/par se aplica apenas a números.</small>
                                 </div>
-                                <button class="btn btn-sm btn-primary" style="width:100%" onclick="gerarFileiraNoCanvas()">Adicionar Fileira no Mapa</button>
+                                <small style="color:var(--text-dim);">O nome do conjunto acima é editável e aparece no PDF.</small>
+                                <button id="mapa-adicionar-conjunto" class="btn btn-sm btn-primary" style="width:100%" onclick="gerarFileiraNoCanvas()">Adicionar Fila no Mapa</button>
                             </div>
 
                             <div class="divider"></div>

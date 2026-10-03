@@ -113,6 +113,106 @@ async function teste(nome, fn) {
 }
 
 (async () => {
+    await teste('mapa antigo mostra Fila sem alterar configuração nem pedir salvamento', () => {
+        const t = montar(); t.c.editarMapaTeatro('m1');
+        const antes = copia(t.c.state.mapaAtual.config);
+        assert.equal(t.get('mapa-conjunto-nome').value, 'Fila');
+        t.c.atualizarNomeConjuntoMapa(true);
+        assert.deepEqual(copia(t.c.state.mapaAtual.config), antes);
+        assert.equal(t.c.mapaTemAlteracoes(), false);
+    });
+    await teste('nome do conjunto salva por setor e reaparece ao editar', async () => {
+        const t = montar(); const b = clienteSimulado(t); t.c.editarMapaTeatro('m1');
+        t.get('mapa-conjunto-nome').value = 'Mesa'; t.c.atualizarNomeConjuntoMapa();
+        assert.equal(t.get('mapa-adicionar-conjunto').textContent, 'Adicionar Mesa no Mapa');
+        assert.equal(t.c.mapaTemAlteracoes(), true);
+        t.c.adicionarSetorMapa();
+        assert.equal(t.get('mapa-conjunto-nome').value, 'Fila');
+        t.get('mapa-conjunto-nome').value = 'Sala'; t.c.atualizarNomeConjuntoMapa();
+        assert.equal(await t.c.salvarMapaTeatro(), true);
+        assert.deepEqual(b.rows.get('m1').config.setores.map(s => s.nomeConjunto), ['Mesa', 'Sala']);
+        t.c.editarMapaTeatro('m1');
+        assert.equal(t.get('mapa-conjunto-nome').value, 'Mesa');
+        t.c.setorSelecionadoIdx = 1; t.c.carregarSetorNoSidebar();
+        assert.equal(t.get('mapa-conjunto-nome').value, 'Sala');
+    });
+    await teste('desfazer nome restaura campo e preserva posições e numeração', () => {
+        const t = montar(); t.c.editarMapaTeatro('m1');
+        const antes = copia(t.c.state.mapaAtual.config);
+        t.get('mapa-conjunto-nome').value = 'Camarote'; t.c.atualizarNomeConjuntoMapa();
+        t.c.undoMapHistory();
+        assert.deepEqual(copia(t.c.state.mapaAtual.config), antes);
+        assert.equal(t.get('mapa-conjunto-nome').value, 'Fila');
+        assert.equal(t.get('mapa-adicionar-conjunto').textContent, 'Adicionar Fila no Mapa');
+    });
+    await teste('nome livre normaliza espaços e campo vazio retorna a Fila', () => {
+        const t = montar(); t.c.editarMapaTeatro('m1');
+        t.get('mapa-conjunto-nome').value = '  Área   VIP  '; t.c.atualizarNomeConjuntoMapa(true);
+        assert.equal(t.get('mapa-conjunto-nome').value, 'Área VIP');
+        assert.equal(t.c.state.mapaAtual.config.setores[0].nomeConjunto, 'Área VIP');
+        t.get('mapa-conjunto-nome').value = '   '; t.c.atualizarNomeConjuntoMapa(true);
+        assert.equal(t.get('mapa-conjunto-nome').value, 'Fila');
+        assert.equal(t.c.state.mapaAtual.config.setores[0].nomeConjunto, 'Fila');
+    });
+    await teste('salvar confirma mapa antes de persistir PDFs e informa envio concluído', async () => {
+        const t = montar(); const b = clienteSimulado(t); let recebido;
+        t.c.MapasTeatroPdf = { async gerar() { return { revisao: 'sintetica' }; }, abrir() {} };
+        t.c.MapasTeatroPdfStorage = { async persistir(m) { recebido = copia(m); assert.deepEqual(recebido, b.rows.get('m1')); return { estado: 'pronto' }; } };
+        await t.c.salvarMapaTeatro();
+        assert.match(t.confirmacoes.at(-1).mensagem, /arquivos também foram salvos para o ERP/);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+    });
+    await teste('falha de upload mantém salvamento confirmado e PDFs locais', async () => {
+        const t = montar(); const b = clienteSimulado(t); let aberto;
+        t.c.MapasTeatroPdf = { async gerar() { return { revisao: 'sintetica' }; }, abrir(r) { aberto = r; } };
+        t.c.MapasTeatroPdfStorage = { async persistir() { throw Error('Upload interrompido'); } };
+        assert.equal(await t.c.salvarMapaTeatro(), true);
+        assert.match(t.confirmacoes.at(-1).mensagem, /envio dos PDFs para o ERP está pendente: Upload interrompido/);
+        assert.equal(aberto.persistencia.estado, 'pendente'); assert.equal(t.c.state.mapaAtual, null);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+    });
+    await teste('abrir PDFs consulta persistência sem iniciar upload nem regravar mapa', async () => {
+        const t = montar(); const b = clienteSimulado(t); let aberto, consultas = 0;
+        t.c.MapasTeatroPdf = { async gerar() { return { revisao: 'sintetica' }; }, abrir(r) { aberto = r; } };
+        t.c.MapasTeatroPdfStorage = { async consultar() { consultas++; return { estado: 'pendente' }; }, persistir() { throw Error('Upload indevido'); } };
+        await t.c.abrirPdfsMapaTeatro('m1');
+        assert.equal(consultas, 1); assert.equal(aberto.mapaPersistido.id, 'm1');
+        assert.equal(b.chamadas.filter(x => x.acao !== 'select').length, 0);
+    });
+    await teste('salvar gera PDFs somente do mapa confirmado e oferece os arquivos', async () => {
+        const t = montar(); const b = clienteSimulado(t); let origem, aberto = false;
+        t.c.MapasTeatroPdf = { async gerar(m) { origem = copia(m); return { revisao: 'sintetica' }; }, abrir() { aberto = true; } };
+        t.get('mapa-nome').value = 'Mapa com PDF'; await t.c.salvarMapaTeatro();
+        assert.deepEqual(origem, b.rows.get('m1')); assert.ok(aberto);
+        assert.equal(t.confirmacoes.at(-1).textoOk, 'Ver PDFs');
+    });
+    await teste('falha de PDF mantém o mapa salvo e permite gerar novamente sem regravar', async () => {
+        const t = montar(); const b = clienteSimulado(t); let falhar = true, aberto = false;
+        t.c.MapasTeatroPdf = { async gerar() { if (falhar) throw Error('PDF indisponível'); return {}; }, abrir() { aberto = true; } };
+        assert.equal(await t.c.salvarMapaTeatro(), true); assert.equal(t.c.state.mapaAtual, null);
+        assert.match(t.confirmacoes.at(-1).mensagem, /PDFs ainda não estão prontos/);
+        falhar = false; await t.c.abrirPdfsMapaTeatro('m1'); assert.ok(aberto);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+    });
+    await teste('gravação negada não inicia geração de PDF', async () => {
+        const t = montar(); clienteSimulado(t, { falhar: 'update' }); let gerou = false;
+        t.c.MapasTeatroPdf = { async gerar() { gerou = true; } };
+        await t.c.salvarMapaTeatro(); assert.equal(gerou, false);
+    });
+    await teste('botão PDFs relê mapa existente e usa a versão atual do servidor', async () => {
+        const t = montar(); const b = clienteSimulado(t); b.rows.get('m1').name = 'Servidor atualizado'; let origem;
+        t.c.MapasTeatroPdf = { async gerar(m) { origem = m; return {}; }, abrir() {} };
+        t.c.renderTabelaMapas(); assert.equal(t.get('tbody-mapas').children[0]._botoes.length, 4);
+        await t.get('tbody-mapas').children[0]._botoes[3].onclick();
+        assert.equal(origem.name, 'Servidor atualizado'); assert.equal(b.chamadas.filter(x => x.acao !== 'select').length, 0);
+    });
+    await teste('PDF de rascunho ou leitura negada não usa cache antigo nem grava', async () => {
+        const t = montar(); const b = clienteSimulado(t, { falhar: 'select' }); let gerou = false;
+        t.c.MapasTeatroPdf = { async gerar() { gerou = true; } };
+        await t.c.abrirPdfsMapaTeatro('local_rascunho'); await t.c.abrirPdfsMapaTeatro('m1');
+        assert.equal(gerou, false); assert.equal(b.chamadas.filter(x => x.acao !== 'select').length, 0);
+        assert.equal(t.confirmacoes.at(-1).titulo, 'PDF não disponível');
+    });
     await teste('salvar funciona na tabela que possui somente name e config para gravação', async () => {
         const t = montar(); const b = clienteSimulado(t, { colunas: ['name', 'config'] });
         t.get('mapa-nome').value = 'Mapa gravado';

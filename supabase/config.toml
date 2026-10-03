@@ -535,3 +535,7 @@ verify_jwt = false
 # O cliente não tem sessão. A RPC exclusiva do servidor exige número + token ativo,
 # inclusive em cache. Chave Vibe nunca atravessa a Edge Function.
 verify_jwt = false
+
+# PDFs privados: JWT válido, RLS do mapa e ADM/Atendimento para publicação.
+[functions.mapas-teatro-pdfs]
+verify_jwt = true

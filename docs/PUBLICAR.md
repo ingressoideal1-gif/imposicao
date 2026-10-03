@@ -14,7 +14,7 @@ use `git add -A` numa pasta compartilhada. Revise `git status`, `git diff
 --check`, segredos e os testes pertinentes antes de integrar.
 
 ```powershell
-.\entrega-segura.ps1 verificar -Escopo Frontend -Simular
+.\entrega-segura.ps1 publicar -Escopo Frontend -Mensagem "fix(painel): descreva a alteração" -Simular
 ```
 
 Leia [ENTREGA_SEGURA.md](ENTREGA_SEGURA.md) e os parâmetros do script para o
@@ -53,8 +53,10 @@ Não substitua todo o frontend por uma tag antiga; não reescreva o histórico.
 
 Para NewProd, uma versão anterior precisa ser recompilada com número **maior**
 que o instalado, validada, distribuída e instalada. Download público e hash
-não comprovam instalação ou impressão física. Para banco e arquivos, siga
-[BACKUP_RESTAURACAO.md](BACKUP_RESTAURACAO.md).
+não comprovam instalação ou impressão física. Banco e Storage exigem procedimentos próprios de backup e restauração,
+com alvo autorizado e validação dos dados recuperados.
+
+Referência do fornecedor: [rollback no Cloudflare Pages](https://developers.cloudflare.com/pages/configuration/rollbacks/).
 
 ## Mudança de autenticação de outubro de 2026
 
@@ -64,5 +66,3 @@ compatível em todas as estações afetadas. Confirme acessos sincronizados e
 permissões de cada perfil. Uma instalação sem lista sincronizada fica bloqueada;
 a falta de rede não concede acesso. A entrega do código nesta branch não
 comprova essa implantação.
-
-Referência do fornecedor: [rollback no Cloudflare Pages](https://developers.cloudflare.com/pages/configuration/rollbacks/).

@@ -1,4 +1,7 @@
-<#
+﻿<#
+    LEGADO BLOQUEADO: use entrega-segura.ps1 e docs/PUBLICAR.md para Cloudflare Pages.
+    A descrição abaixo documenta o fluxo antigo, preservado para consulta.
+
 .SYNOPSIS
     Publica o site e as Edge Functions: confere, sobe a versao dos assets,
     commita, empurra, faz o deploy na Vercel e marca a versao com uma tag.

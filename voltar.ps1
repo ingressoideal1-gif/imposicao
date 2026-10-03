@@ -1,4 +1,7 @@
-<#
+﻿<#
+    LEGADO BLOQUEADO: use entrega-segura.ps1 e docs/PUBLICAR.md para Cloudflare Pages.
+    A descrição abaixo documenta o fluxo antigo, preservado para consulta.
+
 .SYNOPSIS
     Volta a aplicacao para uma versao anterior. Dois niveis.
 
