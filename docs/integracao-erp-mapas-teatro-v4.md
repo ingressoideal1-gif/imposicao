@@ -1,10 +1,10 @@
-> **Substituído pela versão 4:** consultar `integracao-erp-mapas-teatro-v4.md`. A exigência de blocar fisicamente por fila/conjunto nesta versão 3 diverge da regra TEATRO confirmada pelo usuário.
-
 # Integração ERP — Mapas de Teatro, setores, modelos e numeração
 
-**Versão 3 — 03/10/2026. Substitui integralmente a versão 2 de `integracao-erp-mapas-teatro.md`.**
+**Versão 4 — 03/10/2026. Substitui as versões 2 e 3, corrigindo a montagem TEATRO.**
 
-Este documento descreve o fluxo entregue no frontend **v1004** e no **NewProd 1.2.347**. A proposta anterior de quatro campos novos em `pedidos_modelos` foi substituída pelo uso dos bancos por modelo já existentes. Não aplicar uma migração com base na versão 2 para implementar este fluxo.
+A associação e as tabelas abaixo já pertencem ao fluxo publicado. A correção da montagem vertical foi preparada localmente; sua publicação web e distribuição no NewProd ainda estão pendentes. Não interpretar este contrato como prova de instalação na estação.
+
+O vínculo por bancos foi entregue no frontend **v1004** e no **NewProd 1.2.347**; a montagem por conjuntos dessa entrega diverge da regra TEATRO e está sendo substituída pelo preenchimento vertical descrito aqui. A proposta anterior de quatro campos novos em `pedidos_modelos` foi substituída pelo uso dos bancos por modelo já existentes. Não aplicar uma migração com base na versão 2 para implementar este fluxo.
 
 ## 1. Quantidade, início e lugares são informações diferentes
 
@@ -21,7 +21,18 @@ O ERP calcula e grava a quantidade comercial correta no modelo existente. A apli
 
 Os identificadores de conjunto e de lugar vêm do cadastro, podendo ser números ou letras. Por exemplo, Fila A com lugares 1, 3 e 4 contém três lugares; a importação conserva 1, 3 e 4, sem criar o lugar 2. Uma Mesa 1 pode ter lugares A, B, C e D. Não gerar uma sequência genérica de 1 até o total para substituir esses dados.
 
-Cada fila/conjunto constitui um bloco com sua quantidade exata. Se um setor tem A com 3 lugares, B com 4 e C com 2, o modelo desse setor tem quantidade 9 e três blocos de 3, 4 e 2. O campo comercial `bloco` do modelo não é recalculado pela importação.
+Para numerações do tipo **TEATRO**, a montagem é calculada por modelo:
+
+```text
+P = colunas do formato × linhas do formato
+Q = quantidade total de células físicas do modelo
+F = ceil(Q / P)
+índice do registro, começando em zero = posição × F + folha
+```
+
+Cada posição recebe os registros verticalmente através das F folhas; depois começa a posição seguinte. Uma mudança de fila, mesa, camarote ou sala não reinicia a pilha nem reserva outra posição. Registros após Q ficam vazios. Um setor com A:3, B:4 e C:2 tem Q=9; em duas posições são cinco folhas, com índices 0..4 na primeira posição e 5..8 na segunda. As etiquetas reais dos nove lugares permanecem intactas. O campo comercial `bloco` do modelo não é recalculado nem usado para limitar a altura dessa montagem.
+
+Exemplo com oito posições por folha: 82 lugares geram 11 folhas; 515 lugares geram 65 folhas. São folhas lógicas de miolo, por modelo; duplex gera frente e verso e capas são adicionais.
 
 ## 2. Localizar o mapa, setores e lugares
 
@@ -85,7 +96,7 @@ pedidos_modelos.id
         → csv_data[].Mapa_ID + csv_data[].Setor_ID + csv_data[].Revisao_Mapa
 ```
 
-Uma linha de `csv_data` representa um lugar e guarda `Mapa`, `Mapa_ID`, `Setor`, `Setor_ID`, `Revisao_Mapa`, `Conjunto`, `Fila`, `Numero`, `Lugar`, `Bloco`, `Tipo`, `Posicao_X`, `Posicao_Y`, `Origem` e `__id`. `Origem` vale `Mapa de Teatro`; `Bloco` é o identificador do conjunto, igual a `Fila`. `Numero` inclui o sufixo configurado do tipo de assento, quando houver; `Lugar` conserva a etiqueta sem sufixo. `__id` identifica mapa, setor e posição.
+Uma linha de `csv_data` representa um lugar e guarda `Mapa`, `Mapa_ID`, `Setor`, `Setor_ID`, `Revisao_Mapa`, `Conjunto`, `Fila`, `Numero`, `Lugar`, `Bloco`, `Tipo`, `Posicao_X`, `Posicao_Y`, `Origem` e `__id`. `Origem` vale `Mapa de Teatro`; `Bloco` é o identificador histórico do conjunto, igual a `Fila`; não representa uma divisão física da impressão TEATRO. `Numero` inclui o sufixo configurado do tipo de assento, quando houver; `Lugar` conserva a etiqueta sem sufixo. `__id` identifica mapa, setor e posição.
 
 **Não escrever** `mapa_teatro_id`, `mapa_teatro_setor_id`, `mapa_teatro_revisao` ou `mapa_teatro_snapshot` em `pedidos_modelos` para este fluxo: esses quatro campos foram apenas uma proposta anterior, não foram criados por esta entrega e não são lidos pelo botão publicado. O banco do setor conserva as linhas da revisão importada; ele não é um novo campo de snapshot do desenho completo no modelo.
 
@@ -96,7 +107,7 @@ O fluxo publicado não exige migração em `pedidos_modelos`. Também não alter
 1. O ERP consulta os mapas e setores, calcula a quantidade de lugares ativos e cria/sincroniza os modelos comerciais, preservando seus IDs. Para quatro setores a importar, disponibilizar quatro modelos existentes, com suas próprias artes/configurações e quantidades correspondentes.
 2. Na aplicação Ideal, o operador abre **Lista de Arte → edição do pedido → Gerenciamento de Bancos de Dados → Mapa de Teatro**, pesquisa/seleciona o mapa e associa cada setor com lugares ativos a um modelo salvo do mesmo pedido. Cada setor usa um modelo distinto; modelos aprovados não recebem essa associação.
 3. Ao concluir, a aplicação Ideal relê o mapa, verifica sua revisão e as quantidades, cria/reaproveita um banco por setor e grava a associação em `pedidos_modelos_banco`. Confere a criação e os vínculos por releituras das APIs existentes. Arte, formato, numeração escolhida e quantidade comercial não são substituídos.
-4. A numeração do modelo usa seus elementos de teatro `TEATRO_FILA`, `TEATRO_LUGAR` ou `TEATRO_COMBO`, lendo `Fila`/`Numero` do banco associado. Para produção, usar **Blocado → Montagem estrita** e, ao combinar modelos, **Folha própria**. Atualizar as estações para NewProd 1.2.347. A regra que proíbe combinar modelos com BLOCO comercial diferente permanece.
+4. A numeração do modelo usa seus elementos de teatro `TEATRO_FILA`, `TEATRO_LUGAR` ou `TEATRO_COMBO`, lendo `Fila`/`Numero` do banco associado. A numeração TEATRO determina automaticamente o preenchimento vertical por modelo, com `ceil(quantidade / posições)` folhas; o operador não precisa gravar um modo comercial para remover um bloqueio de PRONTO. Os modelos mantêm suas próprias pilhas. A estação deve disponibilizar `teatro_vertical_modelo_v1` em `/api/version`; NewProd 1.2.347 contém a montagem anterior e precisa receber a correção antes de usar esse contrato. A regra que proíbe combinar modelos com BLOCO comercial diferente permanece.
 
 Não é preciso o ERP gravar um novo campo de mapa no modelo para o operador usar esse botão. A associação automática diretamente pelo ERP, sem passar pelo popup, **não foi implementada nesta entrega**: se for desejada, alinhar separadamente o transporte e as validações, usando o vínculo real acima. Não tratar a consulta de mapas ou a proposta antiga como uma API nova de gravação já disponível.
 
@@ -154,7 +165,7 @@ GROUP BY b.id_int, v.modelo_id, b.id,
          lugar->>'Conjunto', lugar->>'Bloco';
 ```
 
-O resultado tem uma linha por conjunto/bloco. Somar os conjuntos para obter o total do banco/setor e compará-lo à quantidade do modelo associado. A ausência de vínculo não autoriza inferir um setor pelo nome do modelo. Ambas as consultas deste documento exigem a autorização de leitura existente; não foram executadas em produção nesta revisão.
+O resultado tem uma linha por conjunto cadastrado. A coluna `Bloco` identifica a fila/mesa no banco e não define blocos físicos da montagem TEATRO. Somar os conjuntos para obter o total do banco/setor e compará-lo à quantidade do modelo associado. A ausência de vínculo não autoriza inferir um setor pelo nome do modelo. Ambas as consultas deste documento exigem a autorização de leitura existente; não foram executadas em produção nesta revisão.
 
 ## 7. PDFs
 
@@ -164,6 +175,6 @@ Quando a exportação estiver pronta, a consulta retorna `estado = 'pronto'`, `m
 
 ## 8. Texto para substituir o prompt do parceiro
 
-> Criar/sincronizar um modelo comercial por setor, com quantidade igual aos lugares ativos daquele setor, excluindo cadeiras apagadas. Não inicializar a quantidade em 1 como regra. Preservar as etiquetas de conjuntos e lugares gravadas no mapa, inclusive letras, lacunas e quantidades diferentes por conjunto. O vínculo publicado usa `pedidos_modelos_banco.modelo_id → banco_id` e o banco em `pedidos_bancos`, cujas linhas identificam mapa, setor e revisão. Não criar nem gravar os quatro campos propostos anteriormente em `pedidos_modelos`. No fluxo entregue, o operador associa os setores aos modelos existentes pelo popup Mapa de Teatro. A revisão é calculada pelo Ideal e recebida pelo ERP via consulta autenticada ou pelas linhas do banco importado; o ERP não calcula um hash próprio. Conferir separadamente o vínculo ao duplicar pedido/modelo. Automatizar a associação pelo ERP exige alinhamento específico, pois essa automação não faz parte do popup entregue.
+> Para numeração TEATRO, calcular folhas por modelo como ceil(quantidade física / posições do formato) e preencher verticalmente até consumir todos os registros; filas e mesas não interrompem essa distribuição. Criar/sincronizar um modelo comercial por setor, com quantidade igual aos lugares ativos daquele setor, excluindo cadeiras apagadas. Não inicializar a quantidade em 1 como regra. Preservar as etiquetas de conjuntos e lugares gravadas no mapa, inclusive letras, lacunas e quantidades diferentes por conjunto. O vínculo publicado usa `pedidos_modelos_banco.modelo_id → banco_id` e o banco em `pedidos_bancos`, cujas linhas identificam mapa, setor e revisão. Não criar nem gravar os quatro campos propostos anteriormente em `pedidos_modelos`. No fluxo entregue, o operador associa os setores aos modelos existentes pelo popup Mapa de Teatro. A revisão é calculada pelo Ideal e recebida pelo ERP via consulta autenticada ou pelas linhas do banco importado; o ERP não calcula um hash próprio. Conferir separadamente o vínculo ao duplicar pedido/modelo. Automatizar a associação pelo ERP exige alinhamento específico, pois essa automação não faz parte do popup entregue.
 
-Esta revisão corrige documentação. Não modifica código, tabelas, dados reais, permissões ou a implementação do ERP parceiro.
+Esta revisão define a regra corrigida de montagem. Não exige novos campos, migração ou alteração de dados reais. A aplicação Ideal implementa a distribuição; o ERP conserva a quantidade, as identidades e os vínculos. Publicação e instalação da correção devem ser verificadas separadamente.

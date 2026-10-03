@@ -31,13 +31,17 @@ Cada linha de `csv_data` contém `Mapa`, `Mapa_ID`, `Revisao_Mapa`, `Setor`, `Se
 - `Numero` traz o identificador do lugar e seu sufixo configurado (por exemplo `1 Cad`); `Lugar` conserva o identificador sem sufixo.
 - `__id` é estável por mapa, setor e posição, evitando redistribuir identidades em uma repetição da importação.
 
-## Numeração e blocos com quantidades diferentes
+## Numeração TEATRO e montagem vertical por modelo
 
-O modelo utiliza sua numeração existente com elementos `TEATRO_FILA`, `TEATRO_LUGAR` ou `TEATRO_COMBO`. Cada elemento lê `Fila`/`Numero` do banco vinculado ao próprio modelo; o seletor legado que carregava o mapa inteiro deixa de ser exigido para esses modelos.
+O modelo usa sua numeração existente e seus elementos TEATRO_FILA, TEATRO_LUGAR ou TEATRO_COMBO, lendo o banco do próprio setor. A associação e a quantidade do ERP são preservadas.
 
-Para produzir o banco importado, selecionar **Blocado → Montagem estrita**; ao combinar modelos, usar **Folha própria**. Cada conjunto ocupa uma posição da folha e forma um bloco separado, mesmo com quantidades diferentes. Exemplo: Fila A com 3 lugares, B com 4 e C com 2, em duas posições por folha: primeiro conjunto de folhas com 4 folhas (A+B; a última posição de A fica vazia); segundo com 2 folhas (C e uma posição vazia). São 9 lugares impressos uma vez. Uma fila de 60 lugares permanece inteira mesmo se o BLOCO comercial do modelo for 50.
+A regra confirmada pelo usuário em 03/10/2026 é F=ceil(Q/P), sendo Q a quantidade física do modelo e P as posições do formato. Cada posição recebe os registros p*F+s, preenchidos verticalmente através das folhas. Mudar de fila ou mesa não cria outro bloco de impressão. Com A:3, B:4 e C:2 em duas posições, há cinco folhas: a primeira pilha contém A1,A2,A3,B1,B2; a segunda B3,B4,C1,C2 e uma posição vazia.
 
-A prévia do pedido, a contagem de folhas, o PDF, o Refazer Folhas e as capas seguem os mesmos conjuntos. As capas identificam o nome do conjunto, sua faixa de lugares e a quantidade real. O BLOCO comercial permanece sujeito à regra existente: modelos com valores diferentes de `bloco` não podem ser combinados. A quantidade física e a fórmula de numeração TICKET permanecem intactas.
+A prévia, o PDF e Refazer Folhas usam uma pilha por modelo. As capas indicam os limites reais de cada pilha, podendo começar e terminar em conjuntos diferentes. BLOCO comercial 50 não divide nem limita essa montagem. Continua proibida a combinação de modelos com BLOCO comercial diferente. TICKET e outros tipos seguem suas próprias regras.
+
+O reconhecimento é automático pelo tipo da numeração ou pela origem do banco importado. Não exigir do operador a gravação de Blocado/Montagem estrita para marcar PRONTO. A validação de quantidade, setor, revisão e elementos permanece. O executor interno reutiliza cut_stack/strict_assembly com os sets calculados por modelo; essa configuração interna não significa um bloco por fila.
+
+A versão publicada anteriormente aplicava a regra por conjuntos; a correção está local, pendente de publicação e distribuição. O frontend corrigido exige a capacidade teatro_vertical_modelo_v1 da estação antes de enviar um trabalho TEATRO.
 
 ## Confirmação e retomada
 
@@ -45,9 +49,11 @@ O mapa é relido antes da importação. Se sua revisão mudou desde a seleção,
 
 As APIs existentes não oferecem uma transação única para todos os setores. Uma falha pode deixar bancos/setores já gravados. O popup informa o erro e permite repetir: bancos com a mesma revisão, setor e conteúdo são reaproveitados; vínculos já confirmados não são recriados. Não há exclusão automática de bancos antigos ou de importações parciais. Fechar/trocar de pedido impede os passos seguintes; uma requisição já enviada pode terminar e será encontrada na releitura.
 
-## Entrega e validação
+## Validação da entrega anterior
 
-O frontend e o motor Python foram alterados em uma cópia isolada; o checkout operacional e os dados reais não foram modificados. Para impressão, o NewProd precisa incluir a capacidade `mapa_teatro_blocos_v1` em `/api/version`. O frontend recusa um motor antigo antes de enviar o trabalho, evitando que ele trate os lugares como blocos de tamanho fixo.
+Os resultados abaixo registram a entrega anterior por conjuntos e não comprovam a correção vertical. A evidência da correção está em `correcao-teatro-vertical-por-modelo-2026-10-03.md`.
+
+O frontend e o motor Python foram alterados em uma cópia isolada; o checkout operacional e os dados reais não foram modificados. Para esta correção, o NewProd precisa incluir a capacidade `teatro_vertical_modelo_v1` em `/api/version`. O frontend recusa um motor antigo antes de enviar o trabalho, evitando que ele trate os lugares como blocos de tamanho fixo.
 
 Testes usam mapas, bancos, pedidos e artes sintéticos. Foram exercitados quatro setores/modelos, busca e seleção no navegador, associação repetida indevida, falha parcial e retomada, releitura das gravações, conservação das artes/quantidades, fechamento durante leitura, paridade da montagem JavaScript/Python, PDF de conjuntos desiguais, quatro artes diferentes, fila de 60 lugares, Refazer Folhas e capas. Evidência visual: `tmp_teatro_pedido_evidencia/popup-associacao.png` na cópia de trabalho.
 

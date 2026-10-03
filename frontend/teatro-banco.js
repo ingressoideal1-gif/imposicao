@@ -8,6 +8,7 @@
     const assinatura = v => JSON.stringify(canonico(v));
     const texto = v => String(v ?? '');
     const linhaDeMapa = r => !!r && (r.Origem === ORIGEM || !!(r.Mapa_ID && r.Setor_ID && r.Revisao_Mapa));
+    const usa = num => num?.tipo === 'TEATRO' || (num?.csv_data || []).some(linhaDeMapa);
     function id(v) {
         if (typeof v !== 'string' || !v.trim() || v.startsWith('local_')) throw Error('O mapa e seus setores precisam ter IDs salvos.');
         return v;
@@ -84,32 +85,48 @@
     }
     function montarSets(modelos, poses) {
         const fontes = modelos.map(m => grupos(m.rows));
-        if (!fontes.some(Boolean)) return null;
-        if (fontes.some(f => !f)) throw Error('Combine o mapa de teatro somente com modelos que também leem setores de um mapa.');
+        const ativos = modelos.map((m, i) => m.tipo === 'TEATRO' || !!fontes[i]);
+        if (!ativos.some(Boolean)) return null;
+        if (ativos.some(f => !f)) throw Error('Combine os modelos de teatro somente com outros modelos de teatro.');
         if (!Number.isSafeInteger(poses) || poses < 1) throw Error('Quantidade de poses inválida.');
-        const blocos = [];
-        modelos.forEach((m, idx) => {
+        return modelos.map((m, idx) => {
             if (m.items.length !== m.rows.length) throw Error('A quantidade do modelo não corresponde aos lugares selecionados no banco do teatro.');
-            fontes[idx].blocos.forEach(b => blocos.push({ items: m.items.slice(b.inicio, b.inicio + b.quantidade), fila: b.fila, modelo: idx }));
-        });
-        const sets = [];
-        for (let inicio = 0; inicio < blocos.length; inicio += poses) {
-            const lote = blocos.slice(inicio, inicio + poses), folhas = Math.max(...lote.map(b => b.items.length));
-            const alocacoes = Array.from({ length: poses }, (_, i) => {
-                const items = lote[i]?.items || [];
+            if (!m.items.length) throw Error('O modelo de teatro não tem lugares para imprimir.');
+            const folhas = Math.ceil(m.items.length / poses);
+            const alocacoes = Array.from({ length: poses }, (_, p) => {
+                const items = m.items.slice(p * folhas, (p + 1) * folhas);
                 return items.concat(Array(folhas - items.length).fill(null));
             });
-            sets.push({ type: 'strict', num_sheets: folhas, cell_allocations: alocacoes, depth: 1, model_idx: null, teatro: true });
-        }
-        return sets;
+            return { type: 'strict', num_sheets: folhas, cell_allocations: alocacoes, depth: 1, model_idx: idx, teatro: true };
+        });
     }
-    function capa(rows, indice) {
+    function capa(rows, indice, folhas) {
         const fonte = grupos(rows);
         if (!fonte) return null;
-        const bloco = fonte.blocos.find(b => indice >= b.inicio && indice < b.inicio + b.quantidade);
-        if (!bloco) return null;
-        return { titulo: fonte.nomeConjunto + ' ' + bloco.fila,
-            detalhe: ' - ' + rows[bloco.inicio].Numero + ' a ' + rows[bloco.inicio + bloco.quantidade - 1].Numero + ' (' + bloco.quantidade + ' lugares)' };
+        if (!Number.isSafeInteger(folhas) || folhas < 1 || indice < 0 || indice >= rows.length) return null;
+        const inicio = Math.floor(indice / folhas) * folhas, fim = Math.min(inicio + folhas, rows.length) - 1;
+        const rotulo = r => (r.Conjunto || 'Fila') + ' ' + r.Fila + ' / ' + r.Numero;
+        return { titulo: fonte.nomeSetor || 'Teatro',
+            detalhe: ' - ' + rotulo(rows[inicio]) + ' a ' + rotulo(rows[fim]) + ' (' + (fim - inicio + 1) + ' lugares)' };
+    }
+    function configurarMontagem(payload) {
+        if (payload.schema === 'pdf_multiple') return false;
+        const numeracoes = payload.multi_artes?.length ? payload.multi_artes.map(a => a.numeracao) : [payload.numeracao];
+        const ativos = numeracoes.map(usa);
+        if (!ativos.some(Boolean)) return false;
+        if (ativos.some(f => !f)) throw Error('Combine os modelos de teatro somente com outros modelos de teatro.');
+        // TEATRO determina a montagem; BLOCO comercial e limites de fila não a dividem.
+        payload.schema = 'cut_stack';
+        payload.cut_stack_mode = 'strict_assembly';
+        return true;
+    }
+    function configurarTela(prefixo, numeracoes) {
+        if (!numeracoes.length || !numeracoes.every(usa)) return false;
+        for (const [campo, valor] of [['schema', 'cut_stack'], ['cutstack-mode', 'strict_assembly']]) {
+            const input = root.document?.getElementById(prefixo + '-' + campo);
+            if (input) input.value = valor;
+        }
+        return true;
     }
     function validarAssociacoes(plano, associacoes, itens, bloqueio) {
         const usados = new Set(), ativos = plano.setores.filter(s => s.quantidade);
@@ -166,19 +183,18 @@
     }
     async function conferirMotor(formData, baseUrl, signal) {
         const payload = JSON.parse(formData.get('payload'));
+        if (!configurarMontagem(payload)) return;
         const numeracoes = payload.multi_artes?.length ? payload.multi_artes.map(a => a.numeracao) : [payload.numeracao];
-        const fontes = numeracoes.map(n => grupos(n?.csv_data || []));
-        if (!fontes.some(Boolean)) return;
-        if (fontes.some(f => !f)) throw Error('Combine o mapa de teatro somente com modelos que também leem setores de um mapa.');
         for (const num of numeracoes) {
+            grupos(num?.csv_data || []);
             if (!(num?.elements || []).some(el => /^TEATRO_(FILA|LUGAR|COMBO)$/.test(el.type))) throw Error('Escolha uma numeração com elementos de teatro para este setor.');
         }
-        if (payload.schema !== 'cut_stack' || payload.cut_stack_mode !== 'strict_assembly') throw Error('O mapa exige modo Blocado com Montagem estrita.');
         const resposta = await root.fetch(baseUrl + '/api/version', { signal });
         const info = resposta.ok ? await resposta.json() : null;
-        if (!info?.capabilities?.includes('mapa_teatro_blocos_v1')) throw Error('Atualize o NewProd desta estação para imprimir os blocos do mapa de teatro com quantidades diferentes.');
+        if (!info?.capabilities?.includes('teatro_vertical_modelo_v1')) throw Error('Atualize o NewProd desta estação para imprimir TEATRO com preenchimento vertical por modelo.');
+        formData.set('payload', JSON.stringify(payload));
     }
-    const api = { HEADERS, ORIGEM, linhaDeMapa, revisao, preparar, grupos, montarSets, capa, validarAssociacoes, bancoIgual, importar, conferirMotor };
+    const api = { HEADERS, ORIGEM, linhaDeMapa, usa, revisao, preparar, grupos, montarSets, capa, configurarMontagem, configurarTela, validarAssociacoes, bancoIgual, importar, conferirMotor };
     root.TeatroBanco = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

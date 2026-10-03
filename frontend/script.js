@@ -10888,14 +10888,16 @@ function drawPreview() {
     }
     const raw_items = Math.max(1, end - start + 1);
     const bancoTeatro = bancoTeatroDoModelo(itemAtivoDoPedido());
-    const linhasTeatro = bancoTeatro ? bancoTeatro.csv_data : null;
+    const usaTeatro = schema !== 'pdf_multiple' && (window.TeatroBanco?.usa(num) || !!bancoTeatro);
+    const linhasTeatro = usaTeatro ? bancoTeatro?.csv_data || state.csvData || num?.csv_data || [] : null;
+    if (schema !== 'pdf_multiple' && usaTeatro && window.TeatroBanco.configurarTela('imp', [{ ...num, csv_data: linhasTeatro }])) schema = 'cut_stack';
     const total_items = linhasTeatro ? linhasTeatro.length : (num && num.tipo === "TICKET") ? Math.ceil(raw_items / ticket_qtd) : raw_items;
 
     const poses_per_sheet = cols * rows;
     let total_sheets = Math.ceil(total_items / poses_per_sheet);
     let setsTeatro = null;
-    if (linhasTeatro && schema === 'cut_stack' && document.getElementById('imp-cutstack-mode')?.value === 'strict_assembly') {
-        setsTeatro = window.TeatroBanco.montarSets([{ rows: linhasTeatro,
+    if (usaTeatro && linhasTeatro.length) {
+        setsTeatro = window.TeatroBanco.montarSets([{ rows: linhasTeatro, tipo: num?.tipo,
             items: linhasTeatro.map((_, i) => ({ global_index: i })) }], poses_per_sheet);
         total_sheets = setsTeatro.reduce((n, s) => n + s.num_sheets, 0);
     }
@@ -11378,7 +11380,7 @@ function drawPreview() {
                     const textY = -ch/2 + (yPdf * MM2PT * scale);
                     
                     // CAMAROTE: usar "Camarote XX - de 1 a L_CAM" com C_INI como início
-                    const capaTeatro = window.TeatroBanco?.capa(linhasTeatro || [], item_index);
+                    const capaTeatro = window.TeatroBanco?.capa(linhasTeatro || [], item_index, total_sheets);
                     if (capaTeatro) {
                         const largura = ctx.measureText(capaTeatro.titulo).width;
                         ctx.fillText(capaTeatro.titulo, textX, textY);
@@ -12394,7 +12396,7 @@ function onImpNumeracaoSelect() {
 }
 
 function updateImpSummary() {
-    const schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
+    let schema = document.getElementById('imp-schema')?.value || 'strict_assembly';
     const fmtSelect = document.getElementById('imp-formato');
     const numSelect = document.getElementById('imp-numeracao');
     const numSelect2 = document.getElementById('imp-numeracao-2');
@@ -12406,6 +12408,7 @@ function updateImpSummary() {
     
     const num = (state.numeracoes && numId) ? (state.numeracoes.find(n => String(n.id) === String(numId)) || null) : null;
     const num2 = (state.numeracoes && num2Id) ? (state.numeracoes.find(n => String(n.id) === String(num2Id)) || null) : null;
+    if (schema !== 'pdf_multiple' && window.TeatroBanco?.configurarTela('imp', [numeracaoDoModelo(itemAtivoDoPedido()) || num])) schema = 'cut_stack';
 
     const start = parseInt(document.getElementById('imp-start')?.value, 10) || 1;
     const end = parseInt(document.getElementById('imp-end')?.value, 10) || 100;
@@ -12759,9 +12762,9 @@ function updateImpSummary() {
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('imp-cutstack-mode')?.value;
-    if (schema === 'cut_stack' && cutstackMode === 'strict_assembly' && bancoTeatroDoModelo(itemAtivoDoPedido())) {
-        const rows = bancoTeatroDoModelo(itemAtivoDoPedido()).csv_data;
-        const sets = window.TeatroBanco.montarSets([{ rows, items: rows.map((_, i) => i) }], perSheet);
+    if (schema !== 'pdf_multiple' && window.TeatroBanco?.usa(numeracaoDoModelo(itemAtivoDoPedido()) || num)) {
+        const rows = bancoTeatroDoModelo(itemAtivoDoPedido())?.csv_data || state.csvData || num?.csv_data || [];
+        const sets = rows.length ? window.TeatroBanco.montarSets([{ rows, tipo: num?.tipo, items: rows.map((_, i) => i) }], perSheet) : [];
         sheets = sets.reduce((n, s) => n + s.num_sheets, 0);
     }
     if (schema === 'cut_stack') {
@@ -19560,7 +19563,6 @@ function bancoDeDadosIncompletoDoModelo(item) {
             if (quantidadeContratada(item) !== teatro.csv_data.length || item.csv_selecao
                 || teatro.csv_data.some(r => r.__ativo === false)
                 || linhasDoModeloNoPayload(item, num).length !== teatro.csv_data.length) throw Error('Use todos os lugares do setor e confira a quantidade do modelo no ERP.');
-            if (modoDeImpressaoDoModelo(item) !== 'blocado' || blocagemDoModelo(item).modo !== 'strict_assembly') throw Error('O mapa exige modo Blocado com Montagem estrita, para manter cada conjunto em um bloco.');
         } catch (e) { return { motivo: 'mapa_teatro', texto: e.message }; }
     }
     if (!num) return null;
@@ -20317,6 +20319,8 @@ function modoDeImpressaoDoModelo(item) {
 
     if (!item) return 'sequencial';
 
+    if (!item.modo_pdf && window.TeatroBanco?.usa(numeracaoDoModelo(item))) return 'blocado';
+
     const salvo = String(item.modo_impressao || '').toLowerCase();
 
     if (salvo === 'sequencial' || salvo === 'blocado') return salvo;
@@ -20341,7 +20345,7 @@ window.modoDeImpressaoDoModelo = modoDeImpressaoDoModelo;
 function blocagemDoModelo(item) {
 
     return {
-        modo: (item && item.cutstack_modo) || 'strict_assembly',
+        modo: window.TeatroBanco?.usa(numeracaoDoModelo(item)) ? 'strict_assembly' : (item && item.cutstack_modo) || 'strict_assembly',
         folhas: parseInt(item && item.cutstack_folhas) || parseInt(item && item.bloco) || 50
     };
 
@@ -20396,6 +20400,9 @@ window.blocagemDaSelecao = blocagemDaSelecao;
  * decide entre folha própria (cut_stack) e aproveitar a folha (multi_artes).
  */
 function esquemaDaSelecaoCombinada() {
+
+    const itensTeatro = itensDaImposicao(true);
+    if (itensTeatro.length && itensTeatro.every(it => window.TeatroBanco?.usa(numeracaoDoModelo(it)))) return 'cut_stack';
 
     if (modoDeImpressaoDaSelecao() === 'sequencial') return 'sequential';
 
@@ -20552,6 +20559,7 @@ function atualizarOpcoesDoModelo() {
     const modo = item ? modoDeImpressaoDoModelo(item) : 'sequencial';
 
     const travadoPorPdf = !!(item && item.modo_pdf);
+    const travadoPorTeatro = !travadoPorPdf && window.TeatroBanco?.usa(numeracaoDoModelo(item));
 
     const titulo = item ? ((item.modelo ? item.modelo + ' — ' : '') + rotuloDoModelo(item, 0)) : '';
 
@@ -20587,7 +20595,7 @@ function atualizarOpcoesDoModelo() {
 
             btn.setAttribute('aria-pressed', ativo ? 'true' : 'false');
 
-            btn.disabled = travadoPorPdf;
+            btn.disabled = travadoPorPdf || travadoPorTeatro;
 
         });
 
@@ -20605,9 +20613,9 @@ function atualizarOpcoesDoModelo() {
                     : pdfDuplicarParaVersoDoModelo(item)
                         ? '🔒 Modo PDF: cada página é uma peça e será repetida no verso. O PDF deve ter exatamente a quantidade de páginas do modelo.'
                         : '🔒 Modo PDF: cada página do arquivo é um ingresso, e a regra é imposta. Para mudar, desligue o Modo PDF na tela de arte do modelo.')
-                : '';
+                : travadoPorTeatro ? 'TEATRO: folhas = quantidade ÷ posições do formato, arredondando para cima. Os lugares são preenchidos verticalmente por modelo.' : '';
 
-            nota.style.display = travadoPorPdf ? 'block' : 'none';
+            nota.style.display = travadoPorPdf || travadoPorTeatro ? 'block' : 'none';
 
         }
 
@@ -35444,7 +35452,9 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     <span style="font-size: 1rem;">⚠️</span>
                     <span>A numeração usa banco de dados, mas ele não está completo — este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(bancoIncompleto.texto)}</span><br>
-                    Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.</span>
+                    ${bancoIncompleto.motivo === 'mapa_teatro'
+                        ? 'Confira o setor associado em <b>Mapa de Teatro</b>, sua quantidade no ERP e os elementos de teatro da numeração.'
+                        : 'Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.'}</span>
                 </div>` : '';
 
         const faixaSemGlifo = travaDeGlifo ? `

@@ -27,7 +27,7 @@
         const labelMapa = el('label', 'Mapa cadastrado');
         const select = el('select', undefined, labelMapa); select.id = 'mapa-teatro-pedido-select';
         const setores = el('div'); setores.id = 'mapa-teatro-pedido-setores';
-        const nota = el('p', 'O banco escolhido em “Vem de:” será substituído pelo banco do setor. Os bancos anteriores, as artes e as quantidades do pedido serão preservados. Configure os elementos de numeração de teatro e o modo Blocado / Montagem estrita antes de imprimir. Ao combinar modelos, use Folha própria.');
+        const nota = el('p', 'O banco escolhido em “Vem de:” será substituído pelo banco do setor. Configure os elementos de numeração de teatro. A montagem TEATRO calcula as folhas pela quantidade do modelo dividida pelas posições do formato e preenche os lugares verticalmente. Filas e mesas não dividem a pilha de impressão.');
         nota.style.cssText = 'color:var(--text-dim,#aab);font-size:.9rem';
         const mensagem = el('p', 'Carregando mapas…'); mensagem.setAttribute('role', 'status');
         mensagem.id = 'mapa-teatro-pedido-status'; mensagem.setAttribute('aria-live', 'polite');
