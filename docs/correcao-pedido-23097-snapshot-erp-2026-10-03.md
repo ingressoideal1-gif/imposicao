@@ -40,8 +40,8 @@ Não há mudança de Edge Function, schema ou permissões nesta entrega. JCS e p
 
 Evidência completa: [arquivo JSON](evidencia-pedido-23097-web-v1009-newprod351-2026-10-03.json). A ativação de `latest.json` ocorreu somente depois de baixar e conferir o MSI público.
 
-Na consulta local desta entrega, `127.0.0.1:9000/api/version` respondeu **NewProd 1.2.350**, com as duas capacidades de teatro; a porta 8000 não respondeu. Para receber o painel desta correção, executar **Atualizar agora**, confirmar 1.2.351 e reabrir o pedido 23097. O painel web requer recarregar a página. Nenhuma instalação ou impressão foi executada pelo agente nesta entrega.
+A primeira consulta local respondeu **NewProd 1.2.350**; a conferência final de `127.0.0.1:9000/api/version` respondeu **NewProd 1.2.351**, com as duas capacidades de teatro. Nove recursos em `/app/` tiveram hashes normalizados idênticos à fonte v1009, incluindo os HTMLs e os resolvedores de snapshot do painel e portal. A estação local está atualizada e seu painel foi conferido; nenhuma instalação foi iniciada pelo Codex. A porta 8000 não respondeu. Recarregar a tela e reabrir o pedido 23097. Outras estações devem usar **Atualizar agora** e conferir 1.2.351.
 
-Não houve escrita nos dados do pedido, aprovação, migração, envio ao parceiro, geração de PDFs de mapas no Storage ou impressão física. Disponibilizar o instalador não comprova instalação na estação.
+Não houve escrita nos dados do pedido, aprovação, migração, envio ao parceiro, geração de PDFs de mapas no Storage ou impressão física. A conferência local não comprova atualização de outras estações ou impressão física.
 
 Recuperação: alteração seletiva sobre a base atual; frontend e painel do agente devem permanecer compatíveis. Para agente, publicar versão maior, pois o atualizador não faz downgrade automático. Não converter snapshots nem apagar releases históricos.

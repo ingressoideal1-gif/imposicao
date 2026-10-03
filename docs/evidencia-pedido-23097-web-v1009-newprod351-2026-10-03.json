@@ -371,7 +371,77 @@
     "linhas_js_python_identicas_pedido": true,
     "dados_de_negocio_alterados": false,
     "edge_alterada_nesta_entrega": false,
-    "instalacao_executada": false,
-    "impressao_fisica": false
+    "impressao_fisica": false,
+    "instalacao_iniciada_pelo_codex": false,
+    "estacao_local_351_verificada": true
+  },
+  "estacao_local": {
+    "verificado_utc": "2026-10-03T23:06:35.6910494+00:00",
+    "recursos": [
+      {
+        "sha256_fonte": "02fdd258aea43760743c55967c79ec9678d9e6921dd205e460f3a1344bfa02a8",
+        "arquivo": "index.html",
+        "url": "http://127.0.0.1:9000/app/index.html?_entrega=1791068795096",
+        "sha256_local": "02fdd258aea43760743c55967c79ec9678d9e6921dd205e460f3a1344bfa02a8"
+      },
+      {
+        "sha256_fonte": "8ea8390ac3eace886f3631a030e671259d48fb8c477e7bb910e581abcb855243",
+        "arquivo": "producao.html",
+        "url": "http://127.0.0.1:9000/app/producao.html?_entrega=1791068795262",
+        "sha256_local": "8ea8390ac3eace886f3631a030e671259d48fb8c477e7bb910e581abcb855243"
+      },
+      {
+        "sha256_fonte": "9fec8b0ce61dbc507942fcefd18792b449810becf9ca8ca2eecff051b27bf096",
+        "arquivo": "script.js",
+        "url": "http://127.0.0.1:9000/app/script.js?_entrega=1791068795286",
+        "sha256_local": "9fec8b0ce61dbc507942fcefd18792b449810becf9ca8ca2eecff051b27bf096"
+      },
+      {
+        "sha256_fonte": "c0be7d7acf466e3f4450b96147417ef1a0b7b65dbda856185591d279fdd21703",
+        "arquivo": "teatro-banco.js",
+        "url": "http://127.0.0.1:9000/app/teatro-banco.js?_entrega=1791068795590",
+        "sha256_local": "c0be7d7acf466e3f4450b96147417ef1a0b7b65dbda856185591d279fdd21703"
+      },
+      {
+        "sha256_fonte": "0542952ecdff351cee23abce7783ff582ecbfb113e625dbe4cb59d2d133f96c2",
+        "arquivo": "teatro-snapshot.js",
+        "url": "http://127.0.0.1:9000/app/teatro-snapshot.js?_entrega=1791068795598",
+        "sha256_local": "0542952ecdff351cee23abce7783ff582ecbfb113e625dbe4cb59d2d133f96c2"
+      },
+      {
+        "sha256_fonte": "207a02d226bdcdbee537575c063242a838c4e170c742b958bfea5f1ac1cf2ccf",
+        "arquivo": "mapa-teatro-revisao.js",
+        "url": "http://127.0.0.1:9000/app/mapa-teatro-revisao.js?_entrega=1791068795606",
+        "sha256_local": "207a02d226bdcdbee537575c063242a838c4e170c742b958bfea5f1ac1cf2ccf"
+      },
+      {
+        "sha256_fonte": "19363c07bccabf4228dbc6caadc94c9c77faa2c65f3620b074487ee0bbf5024a",
+        "arquivo": "cliente.html",
+        "url": "http://127.0.0.1:9000/app/cliente.html?_entrega=1791068795611",
+        "sha256_local": "19363c07bccabf4228dbc6caadc94c9c77faa2c65f3620b074487ee0bbf5024a"
+      },
+      {
+        "sha256_fonte": "037551e8203f2f7ca0c058675fffeafa74456cb671099d94387dac74b0733ea6",
+        "arquivo": "cliente-bancos.js",
+        "url": "http://127.0.0.1:9000/app/cliente-bancos.js?_entrega=1791068795617",
+        "sha256_local": "037551e8203f2f7ca0c058675fffeafa74456cb671099d94387dac74b0733ea6"
+      },
+      {
+        "sha256_fonte": "7943d74c4cba7ede518e4d4bb8908083248ee7f4995e67bcbe7486f2184692f3",
+        "arquivo": "cliente.js",
+        "url": "http://127.0.0.1:9000/app/cliente.js?_entrega=1791068795623",
+        "sha256_local": "7943d74c4cba7ede518e4d4bb8908083248ee7f4995e67bcbe7486f2184692f3"
+      }
+    ],
+    "capabilities": [
+      "multi_artes_pdf_duplex_unico",
+      "integridade_impressao_v1",
+      "mapa_teatro_blocos_v1",
+      "teatro_vertical_modelo_v1",
+      "teatro_snapshot_v1"
+    ],
+    "impressao_fisica": false,
+    "version": "NewProd 1.2.351",
+    "instalacao_iniciada_pelo_codex": false
   }
 }
