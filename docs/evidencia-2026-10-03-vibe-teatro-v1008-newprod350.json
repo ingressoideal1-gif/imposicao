@@ -1,0 +1,295 @@
+{
+  "data_utc": "2026-10-03T22:33:14.724857+00:00",
+  "fonte": {
+    "frontend_commit": "ee4c973b",
+    "frontend_tag": "v1008",
+    "agente_commit": "3a1ecada987f9de7e9fed7b70045c405cbd52b55",
+    "agente_tag": "agente-v1.2.350",
+    "edge_commit": "335f3313a7add9685dfafc9ab28ba343e06df66a"
+  },
+  "frontend": {
+    "versao": "v1008",
+    "cloudflare_deployment": "2951e678-bc4b-4c8c-b254-0d8a7735d117",
+    "comparacoes": [
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/",
+        "url": "https://imposition.ai-ideal.com.br/?v=1008&t=1791066699804",
+        "local": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "publico": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/index.html",
+        "url": "https://imposition.ai-ideal.com.br/index.html?v=1008&t=1791066700221",
+        "local": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "publico": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/producao.html",
+        "url": "https://imposition.ai-ideal.com.br/producao.html?v=1008&t=1791066700969",
+        "local": "b6f690946ce6f3149a5b4cac875c5abb50305d36379fbf1be99badfb00f8fb5a",
+        "publico": "b6f690946ce6f3149a5b4cac875c5abb50305d36379fbf1be99badfb00f8fb5a",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/mapa-teatro-revisao.js",
+        "url": "https://imposition.ai-ideal.com.br/mapa-teatro-revisao.js?v=1008&t=1791066701408",
+        "local": "207a02d226bdcdbee537575c063242a838c4e170c742b958bfea5f1ac1cf2ccf",
+        "publico": "207a02d226bdcdbee537575c063242a838c4e170c742b958bfea5f1ac1cf2ccf",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/teatro-snapshot.js",
+        "url": "https://imposition.ai-ideal.com.br/teatro-snapshot.js?v=1008&t=1791066701558",
+        "local": "b6df532e0050b67dda7e9a30e247b42c33e6c68f1767fccd596be6692c81e899",
+        "publico": "b6df532e0050b67dda7e9a30e247b42c33e6c68f1767fccd596be6692c81e899",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/teatro-banco.js",
+        "url": "https://imposition.ai-ideal.com.br/teatro-banco.js?v=1008&t=1791066701762",
+        "local": "2a89c386880a4757b972484f1751fc193240c67b628575f3a9a4b32888c74824",
+        "publico": "2a89c386880a4757b972484f1751fc193240c67b628575f3a9a4b32888c74824",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/mapas-teatro-pdf.js",
+        "url": "https://imposition.ai-ideal.com.br/mapas-teatro-pdf.js?v=1008&t=1791066702156",
+        "local": "17d12376b8ff7b02ea4710f00a17d79f6c74ee95997bfcccd81de79df43701c4",
+        "publico": "17d12376b8ff7b02ea4710f00a17d79f6c74ee95997bfcccd81de79df43701c4",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposition.ai-ideal.com.br",
+        "caminho": "/script.js",
+        "url": "https://imposition.ai-ideal.com.br/script.js?v=1008&t=1791066702288",
+        "local": "720665c0b173d9b954ece04998a9cbb245ec6420ea1d579c935b3e9681e1edc7",
+        "publico": "720665c0b173d9b954ece04998a9cbb245ec6420ea1d579c935b3e9681e1edc7",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/",
+        "url": "https://imposicao.pages.dev/?v=1008&t=1791066703064",
+        "local": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "publico": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/index.html",
+        "url": "https://imposicao.pages.dev/index.html?v=1008&t=1791066703373",
+        "local": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "publico": "102d21de9fe2bc772d83b396949e22cbf41eb62c98c5d497047617c57fd2a86a",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/producao.html",
+        "url": "https://imposicao.pages.dev/producao.html?v=1008&t=1791066703673",
+        "local": "b6f690946ce6f3149a5b4cac875c5abb50305d36379fbf1be99badfb00f8fb5a",
+        "publico": "b6f690946ce6f3149a5b4cac875c5abb50305d36379fbf1be99badfb00f8fb5a",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/mapa-teatro-revisao.js",
+        "url": "https://imposicao.pages.dev/mapa-teatro-revisao.js?v=1008&t=1791066703880",
+        "local": "207a02d226bdcdbee537575c063242a838c4e170c742b958bfea5f1ac1cf2ccf",
+        "publico": "207a02d226bdcdbee537575c063242a838c4e170c742b958bfea5f1ac1cf2ccf",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/teatro-snapshot.js",
+        "url": "https://imposicao.pages.dev/teatro-snapshot.js?v=1008&t=1791066704000",
+        "local": "b6df532e0050b67dda7e9a30e247b42c33e6c68f1767fccd596be6692c81e899",
+        "publico": "b6df532e0050b67dda7e9a30e247b42c33e6c68f1767fccd596be6692c81e899",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/teatro-banco.js",
+        "url": "https://imposicao.pages.dev/teatro-banco.js?v=1008&t=1791066704160",
+        "local": "2a89c386880a4757b972484f1751fc193240c67b628575f3a9a4b32888c74824",
+        "publico": "2a89c386880a4757b972484f1751fc193240c67b628575f3a9a4b32888c74824",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/mapas-teatro-pdf.js",
+        "url": "https://imposicao.pages.dev/mapas-teatro-pdf.js?v=1008&t=1791066704314",
+        "local": "17d12376b8ff7b02ea4710f00a17d79f6c74ee95997bfcccd81de79df43701c4",
+        "publico": "17d12376b8ff7b02ea4710f00a17d79f6c74ee95997bfcccd81de79df43701c4",
+        "confere": true
+      },
+      {
+        "dominio": "https://imposicao.pages.dev",
+        "caminho": "/script.js",
+        "url": "https://imposicao.pages.dev/script.js?v=1008&t=1791066704475",
+        "local": "720665c0b173d9b954ece04998a9cbb245ec6420ea1d579c935b3e9681e1edc7",
+        "publico": "720665c0b173d9b954ece04998a9cbb245ec6420ea1d579c935b3e9681e1edc7",
+        "confere": true
+      }
+    ]
+  },
+  "edge": {
+    "id": "a77ee396-28e7-4843-b31b-713d0586f0a6",
+    "slug": "mapas-teatro-pdfs",
+    "status": "ACTIVE",
+    "version": 2,
+    "verify_jwt": true,
+    "updated_at": 1791066116978
+  },
+  "pacote": {
+    "versao": "1.2.350",
+    "msi_bytes": 156327936,
+    "msi_sha256": "94580e9a8273a0bdf70991600d9512840cd04ea11a1400e9f7e42cdea88a2189",
+    "exe_bytes": 141155279,
+    "exe_sha256": "94c409572f709500168fabf098b66386e13b721c21e445242cfd9f45376326ed",
+    "modulos_obrigatorios_presentes": [
+      "app",
+      "engine",
+      "teatro_banco",
+      "agent_version",
+      "acesso_segredo",
+      "teatro_snapshot"
+    ],
+    "capacidade": "teatro_snapshot_v1",
+    "dlls_presentes": [
+      "mfc140u.dll",
+      "VCRUNTIME140.dll",
+      "VCRUNTIME140_1.dll"
+    ],
+    "painel_conferido": [
+      {
+        "arquivo": "index.html",
+        "sha256": "90478d36db08ed5e628e63375e3b665fc60956850c57311acaa2125eec17e654"
+      },
+      {
+        "arquivo": "producao.html",
+        "sha256": "e0911119aab783c8ef07e3271d0404a6edf01dcba7aec40b99422773d47972b5"
+      },
+      {
+        "arquivo": "script.js",
+        "sha256": "47f227ec6293135d4c830872996948ef0176f7e9e84e4e12de085515e4b32c4e"
+      },
+      {
+        "arquivo": "pedido.js",
+        "sha256": "dadaca83beafa3b079deca8db0a926e8dcea3b1acf89e4480583add2894e862a"
+      },
+      {
+        "arquivo": "teatro-banco.js",
+        "sha256": "6ab16fcd7857c55b438b4ed788af09b1ee4db754954d49935c91b5d2c4b42fe6"
+      },
+      {
+        "arquivo": "mapa-teatro-do-pedido.js",
+        "sha256": "2e0224f4d3cb75a9e1ffc337106119f8e281f4b260e632273df7388a66bcb48f"
+      },
+      {
+        "arquivo": "mapa-teatro-revisao.js",
+        "sha256": "0f18fc748d53199d64fc6bb13487aa231bbc9e824fe200f41076af5841e1a3dd"
+      },
+      {
+        "arquivo": "teatro-snapshot.js",
+        "sha256": "0297a93fbe77fb36602883364271f335e12734b94eed83b5632ed0185a307085"
+      },
+      {
+        "arquivo": "mapas-teatro-pdf.js",
+        "sha256": "6507bdfd6e933df00de378c05d96399a2d28a5959e26d834bb3abb7f83bcb6cd"
+      }
+    ],
+    "limite": "Inspecao estatica; nao executou o agente nem imprimiu.",
+    "product_version": "1.2.350.0"
+  },
+  "publicacao_agente": {
+    "verificado_utc": "2026-10-03T22:31:29.2624214+00:00",
+    "commit": "3a1ecada987f9de7e9fed7b70045c405cbd52b55",
+    "versao": "1.2.350",
+    "tamanho_local": 156327936,
+    "tamanho_publico": 156327936,
+    "sha256_local": "94580e9a8273a0bdf70991600d9512840cd04ea11a1400e9f7e42cdea88a2189",
+    "sha256_publico": "94580e9a8273a0bdf70991600d9512840cd04ea11a1400e9f7e42cdea88a2189",
+    "manifesto_publico": {
+      "version": "1.2.350",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.350.msi",
+      "sha256": "94580e9a8273a0bdf70991600d9512840cd04ea11a1400e9f7e42cdea88a2189",
+      "size": 156327936,
+      "notes": "TEATRO: revisao JCS da config e geracao pelo snapshot historico Vibe; vinculo, lugares e quantidade validados."
+    },
+    "manifesto_anterior": {
+      "version": "1.2.349",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.349.msi",
+      "sha256": "0e925ab0b7242bf7e87b2df4ff1c91df328a99dc4a208e09ed55d0860515c033",
+      "size": 156327936,
+      "notes": "TEATRO: revisao JCS da config e geracao pelo snapshot historico Vibe; vinculo, lugares e quantidade validados."
+    },
+    "procedimento_sha256": "b3f121b189181536e210c3786bcddac38a445328662b1d98146631756b3e106e",
+    "product_version": "1.2.350.0",
+    "instalado_nas_estacoes": false,
+    "impressao_fisica": false
+  },
+  "mapas_canonicos": {
+    "contrato": "SHA-256(UTF-8(JCS(config))), RFC 8785",
+    "data_consulta": "2026-10-03",
+    "mapas": [
+      {
+        "mapa": "Master Hall - SÃ£o Paulo",
+        "mapa_id": "a1184de9-1dd8-4d1a-a668-bfe124000e6a",
+        "arquivo": "master-hall-sao-paulo.config.jcs.json",
+        "bytes": 33254,
+        "sha256": "a27a03ee856345a5d0eb26e67a53edf73f6c4442bcb30bd235fcbe53b7068d45"
+      },
+      {
+        "mapa": "LaÃ©rcio Boim",
+        "mapa_id": "aaa35d4c-3299-4caa-b672-ee06909ec5d6",
+        "arquivo": "laercio-boim.config.jcs.json",
+        "bytes": 14368,
+        "sha256": "37a8fed126ad67a38dcf5be2f2a452fea35a3a3b0b49d4f92357599828e7b78c"
+      }
+    ]
+  },
+  "testes": {
+    "python_focado": 122,
+    "deno_completo": 296,
+    "deno_teatro": 20,
+    "browser": [
+      "index.html",
+      "producao.html",
+      "popup pedido"
+    ],
+    "regressao_cliente_lexical": "reproduzido antes da correcao; passou depois",
+    "ordem_snapshot": "invertida conserva linhas",
+    "rotulos": [
+      "inteiro 1",
+      "texto Z",
+      "texto 01"
+    ],
+    "pdf_real_sintetico": [
+      "A - 1",
+      "A - 3 Cad",
+      "B - Z"
+    ]
+  },
+  "limites": [
+    "Sem alteracao de dados de negocio, migracao ou conversao historica",
+    "Instalacao nas estacoes nao comprovada",
+    "Impressao fisica nao realizada",
+    "Nenhuma mensagem enviada ao parceiro",
+    "Download de fonte Edge recusado pela protecao de caminhos da CLI; nao contornada"
+  ],
+  "intermediarias": {
+    "web": "v1007",
+    "agente": "1.2.349",
+    "substituidas_por": "v1008 / 1.2.350",
+    "motivo": "correcao do cliente Supabase lexical na conferencia do snapshot"
+  }
+}

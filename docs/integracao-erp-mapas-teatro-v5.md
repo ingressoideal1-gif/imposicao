@@ -60,7 +60,7 @@ Não converter `Revisao_Mapa` ou `revisao_exportacao` antigos. A consulta explí
 
 Leitura atual, somente GET, em `e-deal / vwbtitjlpelrcnsytzqw`: dois mapas; modelos 1001961/1001962 com bancos legados de 82/515 lugares, ambos `PENDENTE`; modelo 1001963 com snapshot v1 de Laércio Boim, quantidade 273 e `PENDENTE`; zero exportações de PDF armazenadas. Portanto não foram encontrados modelos aprovados nem PDFs armazenados com a revisão antiga dentro dos vínculos de teatro consultados. Isso não comprova a ausência de PDFs locais externos a esse cadastro.
 
-Não houve gravação remota, migração, alteração de permissões, aprovação, envio ao parceiro, instalação na estação ou impressão física nesta implementação. A publicação do código e a distribuição do agente são verificadas separadamente. O fluxo Duplicar do ERP continua precisando preservar os quatro campos e criar IDs novos; não foi alterado pelo Ideal nesta tarefa.
+Não houve alteração de dados de negócio no banco, migração, alteração de permissões, aprovação, envio ao parceiro, instalação na estação ou impressão física nesta implementação. A publicação do código e a distribuição do agente são verificadas separadamente. O fluxo Duplicar do ERP continua precisando preservar os quatro campos e criar IDs novos; não foi alterado pelo Ideal nesta tarefa.
 
 ## Resposta às três confirmações do parceiro
 
