@@ -137,5 +137,25 @@ de todos os buckets, inclusive vazios, precisam constar também do dump/metadado
 administrativos. Download em andamento ou manifesto sem `completed_at` não
 comprova backup do projeto completo.
 
+Para restaurar um bucket no disco, escolha uma pasta nova sob um pai privado:
+
+```powershell
+.\ferramentas\restaurar-storage.ps1 -Pacote C:\ProjectBackups\IdealImpositionProtegido\storage-AAAAMMDD-HHMMSS\BUCKET.iib -Destino C:\ProjectBackups\IdealImpositionProtegido\ensaio-BUCKET-NOVO -Chave C:\ProjectBackups\IdealImpositionChave\recuperacao.key
+```
+
+O procedimento autentica o pacote antes da extração e confere cada objeto com
+o SHA-256 do inventário cifrado. Recusa sobrescrita, caminhos fora da pasta e
+entradas duplicadas. Só grava `evidencia-restauracao.json` ao concluir todos os
+objetos. Não envia nada ao Supabase; reconstruir buckets e permissões em outro
+projeto exige primeiro o ensaio do banco e um destino separado aprovado.
+
+Na recuperação do banco, conferir separadamente customizações dos schemas
+gerenciados `auth` e `storage`, configurações de serviços, Edge Functions e
+histórico de migrações. Um dump padrão não comprova essa cobertura. Havendo
+Vault ou criptografia de colunas, a restauração lógica também depende da chave
+raiz do projeto, distinta da chave AES destes backups; seguir o procedimento
+do administrador e do provedor, sem expor chaves em comandos ou logs.
+Referência: [restauração administrativa Supabase](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore).
+
 Referências: [backups Supabase](https://supabase.com/docs/guides/platform/backups)
 e [proteção DPAPI](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata).
