@@ -21,7 +21,7 @@ Comparação de rótulos distingue números de letras. Uma repetição ou colis�
 
 ## Arquivos e validação
 
-- `frontend/index.html`: inputs e orientação de uso.
+- `frontend/index.html` e `frontend/producao.html`: inputs e orientação de uso.
 - `frontend/mapas.js`: expansão das faixas, validação, seleção e restauração.
 - `tests/mapas_teatro_harness.js`: regressões do editor, persistência simulada e consumidores.
 - `tests/mapas_teatro_browser_harness.js`: digitação nos inputs reais e fluxo do editor em Chromium.
@@ -34,6 +34,14 @@ Verificações de sintaxe dos três arquivos JavaScript alterados e `git diff --
 
 ## Limites
 
-Alterações locais: sem commit, push, publicação, modificação de Python, schema ou acesso ao banco compartilhado nesta tarefa. Salvamento/reabertura foram validados com transporte simulado, não no banco real. Motor PDF e impressão física não foram executados; a conferência dos consumidores verificou a preservação dos rótulos alfabéticos no CSV, sem comprovar ordenação final do motor.
+Na validação inicial, as alterações eram locais. Salvamento/reabertura foram validados com transporte simulado, não no banco real. Motor PDF e impressão física não foram executados; a conferência dos consumidores verificou a preservação dos rótulos alfabéticos no CSV, sem comprovar ordenação final do motor. Não houve modificação de Python, schema ou acesso ao banco compartilhado nesta tarefa.
 
 A incompatibilidade de `total_lugares`/`lugares_por_setor` com o banco, identificada na exportação de 02/10/2026, não foi alterada nem reconsultada nesta tarefa. A leitura e geração restrita por setor/modelo e os PDFs automáticos continuam sendo tarefas próprias.
+
+## Publicação autorizada
+
+O pedido "publicar" autorizou a entrega web. A v999, commit `08968fed1cbd9a311b5a758e55ed692f15593cfd`, foi integrada e publicada pelo Cloudflare (deployment `00e0d486-423c-484d-9f7b-8423871dea7d`). O script verificou os três arquivos públicos no domínio principal.
+
+A conferência final identificou que `producao.html` também contém uma cópia do modal: seus campos ainda eram numéricos. O teste ampliado reproduziu a falha (`number` em vez de `text`). A correção aplica os mesmos inputs à página Produção; o teste de navegador agora percorre os dois HTMLs. Essa complementação segue no mesmo escopo autorizado, com nova simulação e publicação pelo fluxo seguro.
+
+Recuperação da funcionalidade anterior: usar a base v998 (`a6eab1ccb60cb7f765ad3d03a0f6c23220dd41a6`) como referência para uma reversão revisada dos arquivos da tarefa; não descartar o checkout operacional nem reescrever histórico. Não há alteração de banco para reverter.

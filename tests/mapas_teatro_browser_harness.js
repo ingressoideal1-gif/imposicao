@@ -4,13 +4,26 @@ const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
 const puppeteer = require('puppeteer');
+const { spawnSync } = require('node:child_process');
+if (!process.env.MAPA_TESTE_HTML) {
+    for (const arquivo of ['index.html', 'producao.html']) {
+        const resultado = spawnSync(process.execPath, [__filename], {
+            env: { ...process.env, MAPA_TESTE_HTML: arquivo }, stdio: 'inherit'
+        });
+        if (resultado.error) throw resultado.error;
+        if (resultado.status !== 0) process.exit(resultado.status || 1);
+    }
+    process.exit(0);
+}
+const arquivoHtml = process.env.MAPA_TESTE_HTML;
+assert.ok(['index.html', 'producao.html'].includes(arquivoHtml));
 const raiz = path.join(__dirname, '..');
-const html = fs.readFileSync(path.join(raiz, 'frontend/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(raiz, 'frontend', arquivoHtml), 'utf8');
 const script = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8');
 const pedido = fs.readFileSync(path.join(raiz, 'frontend/pedido.js'), 'utf8');
 const mapas = fs.readFileSync(path.join(raiz, 'frontend/mapas.js'), 'utf8');
 const iniModal = html.indexOf('<div id="modal-mapa-teatro"');
-const fimModal = html.indexOf('<!-- ── View: Criador', iniModal);
+const fimModal = arquivoHtml === 'index.html' ? html.indexOf('<!-- ── View: Criador', iniModal) : html.indexOf('<script>', iniModal);
 const iniView = html.indexOf('<section id="view-mapas"');
 const view = html.slice(iniView, html.indexOf('</section>', iniView) + 10);
 assert.ok(iniModal > 0 && fimModal > iniModal);
@@ -185,7 +198,7 @@ const pagina = `<!doctype html><html><head><link rel="stylesheet" href="/style.c
             assert.equal(linhas.length, 16); assert.equal(new Set(linhas).size, 16);
         }
         assert.deepEqual(erros, []);
-        console.log('OK browser: criação, edição, digitação de faixas, seleção e restauração de letras, salvamento/reabertura simulados, erro misto sem mutação e CSV das duas telas; zero erros JavaScript.');
+        console.log(`OK browser (${arquivoHtml}): criação, edição, digitação de faixas, seleção e restauração de letras, salvamento/reabertura simulados, erro misto sem mutação e CSV das duas telas; zero erros JavaScript.`);
     } finally {
         if (browser) await browser.close();
         await new Promise(resolve => server.close(resolve));
