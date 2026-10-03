@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Volta a aplicacao para uma versao anterior. Dois niveis.
 
@@ -31,6 +31,8 @@ param(
 
     [switch]$Agora
 )
+
+throw 'Fluxo Vercel legado bloqueado: a operacao usa Cloudflare Pages. Consulte docs/PUBLICAR.md e use entrega-segura.ps1; nenhuma publicacao ou reversao foi executada.'
 
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $MyInvocation.MyCommand.Path

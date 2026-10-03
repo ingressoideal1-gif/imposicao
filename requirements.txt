@@ -15,3 +15,6 @@ reportlab>=4.0.0
 # Obrigatoria para ler a balanca Urano CP POP na porta serial (balanca.py).
 # Sem ela o botao da balanca no Painel do Acabamento nao acha porta nenhuma.
 pyserial>=3.5
+requests>=2.31.0
+pystray>=0.19.5; sys_platform == 'win32'
+pywin32>=306; sys_platform == 'win32'

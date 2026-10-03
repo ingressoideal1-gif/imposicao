@@ -42,6 +42,12 @@ Describe "ConvertFrom-JwtPayload" {
 # o proprio freio. Sem esta declaracao, o arquivo que testa o detector
 # dispararia o detector e travaria a publicacao sempre que fosse editado.
 Describe "Find-SegredoNoTexto" {
+    It "a marca de exemplo nao dispensa um JWT com projeto nem um PAT" {
+        $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"role":"service_role","ref":"projeto-sintetico"}')).TrimEnd('=')
+        $jwt = 'eyJhbGciOiJIUzI1NiJ9.' + $payload + '.assinatura'
+        Find-SegredoNoTexto ("# SEGREDO-DE-MENTIRA`n" + $jwt) | Should Not Be ''
+        Find-SegredoNoTexto ('# SEGREDO-DE-MENTIRA ' + 'sbp_' + ('a' * 40)) | Should Not Be ''
+    }
     It "barra um JWT cujo papel e service_role" {
         $jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.assinatura'
         Find-SegredoNoTexto "SUPABASE_SERVICE_KEY=$jwt" | Should Not Be ''
@@ -95,6 +101,15 @@ Describe "Find-SegredoNoTexto" {
     }
     It "deixa passar texto comum" {
         Find-SegredoNoTexto 'def imposicao(): pass' | Should Be ''
+    }
+    It "barra as novas chaves secretas do Supabase" {
+        Find-SegredoNoTexto ('sb_' + 'secret_' + ('A' * 32)) | Should Not Be ''
+    }
+    It "barra tokens privados do GitHub mesmo com marcador falso" {
+        Find-SegredoNoTexto ('gh' + 'p_' + ('A' * 36) + ' CHAVE_FALSA_PARA_TESTE') | Should Not Be ''
+    }
+    It "barra chaves privadas em PEM" {
+        Find-SegredoNoTexto ('-----BEGIN ' + 'PRIVATE KEY-----') | Should Not Be ''
     }
 }
 

@@ -1,12 +1,12 @@
 # Arquitetura atual
 
-Este documento descreve a arquitetura pretendida do Ideal Imposition na branch `main`. A configuração efetiva da Vercel, do Supabase e das estações deve ser conferida quando a pergunta envolver o que está realmente publicado.
+Este documento descreve a arquitetura pretendida do Ideal Imposition na branch `main`. A configuração efetiva da Cloudflare Pages, do Supabase e das estações deve ser conferida quando a pergunta envolver o que está realmente publicado.
 
 ## Visão geral
 
 ```mermaid
 flowchart TD
-    U["Usuário"] --> W["Frontend Vercel"]
+    U["Usuário"] --> W["Frontend Cloudflare Pages"]
     W --> A["Supabase Auth"]
     W <--> D["PostgreSQL e Storage"]
     W --> E["Edge Functions"]
@@ -20,7 +20,7 @@ flowchart TD
 
 ### Frontend web
 
-O painel é uma aplicação HTML, CSS e JavaScript publicada pela Vercel. O domínio principal confirmado para o projeto é [ideal-imposition.vercel.app](https://ideal-imposition.vercel.app).
+O painel é uma aplicação HTML, CSS e JavaScript publicada pela Cloudflare Pages. O domínio principal confirmado para o projeto é [imposition.ai-ideal.com.br](https://imposition.ai-ideal.com.br).
 
 O frontend:
 
@@ -30,7 +30,7 @@ O frontend:
 - chama Edge Functions nas operações de nuvem protegidas;
 - usa o motor local quando a operação exige imposição ou impressão na estação.
 
-O nome do projeto Vercel e o nome do repositório GitHub não precisam ser iguais.
+A entrega operacional usa o check Cloudflare Pages e compara os arquivos publicados com a fonte validada.
 
 ### Supabase
 
@@ -91,6 +91,14 @@ O modo local/offline deve ser descrito como fluxo próprio:
 - autenticação online e autorização offline não devem ser apresentadas como o mesmo mecanismo;
 - uma operação que dependa da nuvem deve informar claramente quando não estiver disponível.
 
+O login local em `frontend/acesso-estacao.js` recebe um token temporario da
+API da estacao. `autorizacao_local.py` confere identidade e permissoes em cada
+operacao; novas rotas exigem autorizacao por padrao. O navegador nao guarda o
+codigo permanente. Sem acesso sincronizado, a estacao nao concede entrada.
+SMTP e a lista de acessos usam DPAPI da conta Windows ao serem gravados; uma
+configuracao legada somente e convertida em um salvamento explicitamente
+solicitado. Veja [backup e recuperacao](BACKUP_RESTAURACAO.md).
+
 ## Fluxos principais
 
 ### Login
@@ -131,7 +139,7 @@ Existem estados diferentes que não devem ser misturados:
 | Versão declarada no código | `agent_version.py` e arquivos de build correspondentes |
 | Versão instalada | estação Windows |
 | Versão publicada para atualização | manifesto e Storage de releases |
-| Versão do frontend | implantação efetiva da Vercel |
+| Versão do frontend | implantação efetiva da Cloudflare Pages |
 | Código principal | commit da branch `main` |
 
 `STATUS_PROJETO.md` é um registro útil, mas não comprova sozinho nenhuma dessas versões.

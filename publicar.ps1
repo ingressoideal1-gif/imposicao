@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Publica o site e as Edge Functions: confere, sobe a versao dos assets,
     commita, empurra, faz o deploy na Vercel e marca a versao com uma tag.
@@ -59,6 +59,8 @@ param(
 
     [string[]]$Somente
 )
+
+throw 'Fluxo Vercel legado bloqueado: a operacao usa Cloudflare Pages. Consulte docs/PUBLICAR.md e use entrega-segura.ps1; nenhuma publicacao ou reversao foi executada.'
 
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $MyInvocation.MyCommand.Path

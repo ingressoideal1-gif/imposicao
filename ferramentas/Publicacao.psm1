@@ -1,4 +1,4 @@
-﻿# Funcoes puras de decisao usadas pelos scripts de publicacao.
+# Funcoes puras de decisao usadas pelos scripts de publicacao.
 #
 # Puras de proposito: nenhuma toca git, rede ou disco. E o que permite
 # exercitar os freios com Pester sem publicar nada.
@@ -73,19 +73,8 @@ function ConvertFrom-JwtPayload {
     }
 }
 
-# Declaracao de que as chaves de um arquivo sao fabricadas. Existe para os
-# arquivos que PRECISAM conter uma chave falsa: o proprio teste do freio, e os
-# documentos que explicam a regra. Sem isso, o arquivo que testa o detector
-# dispara o detector, e a publicacao trava sempre que ele for editado.
-#
-# E uma porta com placa, nao um buraco: quem a usa esta declarando por escrito
-# que a chave e de mentira, e a declaracao aparece no diff da revisao.
-#
-# CUIDADO AO DOCUMENTAR: a comparacao e por substring, entao escrever o texto
-# da marca em QUALQUER arquivo isenta aquele arquivo inteiro da checagem. Ao
-# explicar a regra em documentacao, cite esta constante pelo nome
-# (MarcaSegredoFalso) em vez de reproduzir o valor — foi assim que o
-# CHANGELOG.md quase se isentou sozinho ao descrever o proprio freio.
+# A marca identifica fixtures exatas de exemplo; nunca isenta um arquivo.
+# Credenciais de verdade continuam bloqueadas mesmo junto de exemplos.
 $script:MarcaSegredoFalso = 'SEGREDO-DE-MENTIRA'
 
 function Find-SegredoNoTexto {
@@ -103,26 +92,38 @@ function Find-SegredoNoTexto {
         Barrar qualquer um dos dois faria o alarme tocar em toda publicacao,
         e um alarme que sempre toca e um alarme que se aprende a ignorar.
 
-        Um arquivo que contenha a marca SEGREDO-DE-MENTIRA e dispensado da
-        checagem — ver o comentario da constante acima.
+        A marca de exemplo dispensa apenas fixtures exatas, nunca o arquivo.
     #>
     [CmdletBinding()]
     [OutputType([string])]
     param([Parameter(Mandatory)][AllowEmptyString()][string]$Texto)
 
     if ([string]::IsNullOrEmpty($Texto)) { return '' }
-    if ($Texto -match $script:MarcaSegredoFalso) { return '' }
+    $declaraExemplos = $Texto -match $script:MarcaSegredoFalso
 
     $jwts = [regex]::Matches($Texto, 'eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+')
     foreach ($m in $jwts) {
         $payload = ConvertFrom-JwtPayload $m.Value
+        # Somente o JWT exato de demonstracao pode ser dispensado. A marca
+        # nunca dispensa PATs, outros JWTs ou o restante do arquivo.
+        $payloadDemonstrativo = '^\{"role":' + '"service_role"\}$'
+        if ($declaraExemplos -and $payload -match $payloadDemonstrativo -and
+            ($m.Value -split '\.')[-1] -in @('assinatura', 'x')) { continue }
         if ($payload -and $payload -match '"role"\s*:\s*"service_role"') {
             return 'chave service_role do Supabase (JWT) — da controle total do banco'
         }
     }
 
+    # Retira apenas objetos demonstrativos incapazes de autenticar. Outros
+    # objetos e credenciais continuam examinados, mesmo no arquivo de testes.
+    $textoSemExemplos = $Texto
+    if ($declaraExemplos) {
+        $textoSemExemplos = $textoSemExemplos -replace '\{\s*"role"\s*:\s*"service_role"\s*(,\s*"key"\s*:\s*"x"\s*|,\s*"ref"\s*:\s*"projeto-sintetico"\s*)?\}', '[objeto sintetico]'
+        $campoDemonstrativo = '`"role":' + '"service_role"`'
+        $textoSemExemplos = $textoSemExemplos -replace $campoDemonstrativo, '[campo demonstrativo]'
+    }
     # Credencial colada em JSON/YAML sem ser um JWT completo.
-    if ($Texto -match '"role"\s*:\s*"service_role"') {
+    if ($textoSemExemplos -match '"role"\s*:\s*"service_role"') {
         return 'service_role em texto claro'
     }
 
@@ -146,6 +147,10 @@ function Find-SegredoNoTexto {
     if ($Texto -match 'sbp_[0-9a-f]{40}') {
         return 'Personal Access Token do Supabase (sbp_) — alcanca a conta inteira e nao expira'
     }
+
+    if ($Texto -match 'sb_secret_[A-Za-z0-9_-]{20,}') { return 'chave secreta do Supabase (sb_secret_)' }
+    if ($Texto -match '(gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})') { return 'token privado do GitHub' }
+    if ($Texto -match '-----BEGIN (RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----') { return 'chave privada' }
 
     return ''
 }
