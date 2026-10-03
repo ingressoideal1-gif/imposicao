@@ -33,7 +33,14 @@ Não há mudança de Edge Function, schema ou permissões nesta entrega. JCS e p
 
 ## Publicação
 
-Publicação e pacote em preparação. A evidência final será registrada após comparar recursos públicos nos dois domínios, auditar o MSI e conferir download e manifesto públicos.
+- Web **v1009**, commit `42d52106cffbf6b6d5a9f215a9272c0005581875`, tag `v1009`. Cloudflare concluído; 24 comparações de hashes normalizados conferem nos dois domínios. Incluem os três HTMLs, os resolvedores do painel/portal e o módulo de snapshot. Deploy: `https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/b789f14c-95db-424c-819f-8e71551f7902`.
+- NewProd **1.2.351**, commit `ddc4a17e63dc94e4470b3310d8f2d283f825953b`, tag `agente-v1.2.351`. MSI público: 156,323,840 bytes; ProductVersion **1.2.351.0**. Download público e manifesto conferidos; SHA-256 `0d2bff6cff6617d478f9390a4510ce79b85b2f4e157bdcf522218bf61292151d`.
+- O pacote contém `teatro_snapshot`, as capacidades `teatro_vertical_modelo_v1` e `teatro_snapshot_v1`, as três DLLs exigidas e 11 arquivos do painel idênticos à fonte publicada. Auditoria estática; não executou o agente empacotado.
+- A primeira comparação pública após o sucesso do Cloudflare encontrou recursos anteriores. A conferência posterior comprovou a propagação; não houve nova publicação para contornar cache.
+
+Evidência completa: [arquivo JSON](evidencia-pedido-23097-web-v1009-newprod351-2026-10-03.json). A ativação de `latest.json` ocorreu somente depois de baixar e conferir o MSI público.
+
+Na consulta local desta entrega, `127.0.0.1:9000/api/version` respondeu **NewProd 1.2.350**, com as duas capacidades de teatro; a porta 8000 não respondeu. Para receber o painel desta correção, executar **Atualizar agora**, confirmar 1.2.351 e reabrir o pedido 23097. O painel web requer recarregar a página. Nenhuma instalação ou impressão foi executada pelo agente nesta entrega.
 
 Não houve escrita nos dados do pedido, aprovação, migração, envio ao parceiro, geração de PDFs de mapas no Storage ou impressão física. Disponibilizar o instalador não comprova instalação na estação.
 
