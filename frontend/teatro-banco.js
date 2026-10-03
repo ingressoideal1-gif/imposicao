@@ -188,8 +188,9 @@
         for (const num of numeracoes) {
             if (num?.teatro_modelo) {
                 const aviso = await root.TeatroSnapshot.conferir(num, async id => {
-                    if (root.supabaseClient) {
-                        const { data, error } = await root.supabaseClient.from('producao_mapas_teatro').select('id,config').eq('id', id).single();
+                    const cliente = typeof supabaseClient !== 'undefined' ? supabaseClient : root.supabaseClient;
+                    if (cliente) {
+                        const { data, error } = await cliente.from('producao_mapas_teatro').select('id,config').eq('id', id).single();
                         if (error) throw Error('Não foi possível conferir o mapa atual antes da geração.');
                         return data;
                     }

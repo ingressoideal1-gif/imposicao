@@ -10,6 +10,21 @@ function modelo() {
                 { chave: '0,1', prefixo: 'B', num: 'Z', tipo: 'Normal' }, { chave: '2,0', tipo: 'Apagado' },
                 { chave: '3,0', prefixo: 'A', num: 99, isErased: true } ] } };
 }
+async function conferirClienteLexical() {
+    const m=modelo(),b=S.banco(m), atual={id:'mapa1',config:{setores:[{id:'s1',cadeiras:{}}]}};
+    let leituras=0; const caps=['teatro_vertical_modelo_v1','teatro_snapshot_v1'];
+    const ctx={MapaTeatroRevisao:J,TeatroSnapshot:S,
+        __client:{from(t){assert.equal(t,'producao_mapas_teatro'); return {select(){return this;},eq(k,id){assert.equal(id,'mapa1');return this;},async single(){leituras++;return {data:atual,error:null};}};}},
+        api(){throw Error('A leitura caiu no fallback local apesar do cliente lexical');},
+        fetch:async()=>({ok:true,json:async()=>({capabilities:caps})}),toast(){}};
+    ctx.window=ctx;vm.createContext(ctx);vm.runInContext('let supabaseClient = __client;',ctx);
+    assert.equal(Object.hasOwn(ctx,'supabaseClient'),false);
+    vm.runInContext(fs.readFileSync('frontend/teatro-banco.js','utf8'),ctx);
+    const form=new FormData();form.set('payload',JSON.stringify({schema:'cut_stack',modelo:'m1',numeracao:{tipo:'TEATRO',elements:[{type:'TEATRO_COMBO'}],csv_data:b.csv_data,teatro_modelo:b.teatro_modelo}}));
+    await ctx.TeatroBanco.conferirMotor(form,'http://motor');
+    assert.equal(leituras,1);assert.equal(JSON.parse(form.get('payload')).numeracao.teatro_modelo.revisao_atual,await J.revisao(atual.config));
+    caps.pop();await assert.rejects(()=>ctx.TeatroBanco.conferirMotor(form,'http://motor'),/snapshots do ERP/);
+}
 async function executar() {
     const m = modelo(), copia = structuredClone(m), fonte = S.banco(m);
     assert.deepEqual(fonte.csv_data.map(r => [r.Fila, r.Lugar, r.Numero]), [['A','1','1'],['A','3','3 Cad'],['B','Z','Z']]);
@@ -45,6 +60,7 @@ async function executar() {
     assert.equal(resolvida.csv_data.length,3); assert.equal(resolvida.teatro_modelo.id,m.id);
     assert.equal(c.bancoTeatroDoModelo({...m,quantidade:4}).csv_data.length,0);
     assert.match(c.bancoTeatroDoModelo({...m,quantidade:4}).erro,/quantidade/);
+    await conferirClienteLexical();
     console.log('OK: snapshot v1, prioridade sobre banco, etiquetas, apagadas, quantidade, revisão histórica e fonte completa');
 }
 if(process.argv.includes('--payload')) {
