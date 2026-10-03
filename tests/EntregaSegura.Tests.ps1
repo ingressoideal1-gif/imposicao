@@ -32,6 +32,9 @@ Describe 'Nome e escopo da entrega segura' {
         Test-CaminhoNoEscopo 'tests/script_harness.js' 'Frontend' | Should Be $true
         Test-CaminhoNoEscopo 'supabase/functions/painel/index.ts' 'Frontend' | Should Be $false
         Test-CaminhoNoEscopo 'entrega-segura.ps1' 'Operacional' | Should Be $true
+        Test-CaminhoNoEscopo 'ferramentas/sincronizar_git.py' 'Operacional' | Should Be $true
+        Test-CaminhoNoEscopo 'ferramentas/outro_backend.py' 'Operacional' | Should Be $false
+        Get-EscopoEntrega @('entrega-segura.ps1', 'ferramentas/sincronizar_git.py') | Should Be 'Operacional'
     }
 
     It 'barra artefatos de build' {
@@ -204,8 +207,8 @@ Describe 'Ensaio em repositorio temporario' {
             (Join-Path $isolada 'entrega-segura.ps1') publicar -Escopo Documentacao `
             -Mensagem 'Documenta teste' -Integracao Direta -Sim -Detalhar 2>&1)
         if ($LASTEXITCODE -ne 0) { Write-Host ($publicacao -join "`n") }
-        $LASTEXITCODE | Should Be 0
-        ($publicacao -join "`n") | Should Match 'ESTADO: PUBLICADA_E_VERIFICADA'
+        $LASTEXITCODE | Should Be 2
+        ($publicacao -join "`n") | Should Match 'ESTADO: PUBLICADA_E_VERIFICADA_SINCRONIA_PENDENTE'
         (& git -C $principal rev-parse origin/main) | Should Not Be $antes
         (& git -C $remoto rev-parse main) | Should Be (& git -C $isolada rev-parse HEAD)
         Test-Path (Join-Path $principal 'mudanca-local.txt') | Should Be $true
