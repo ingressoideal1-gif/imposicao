@@ -112,6 +112,8 @@ def test_lista_gravada_guarda_so_o_que_o_login_usa(tmp_path):
         "criado_em": "2026-08-11T00:00:00Z",
     }])
     (gravado,) = acesso_local.carregar_lista()
+    from pathlib import Path
+    assert 'NEW123' not in Path(acesso_local.ARQUIVO).read_text(encoding='utf-8')
     assert gravado == {
         "codigo": "NEW123", "nome": "Maria", "role": "impressor",
         "permissoes": PERMS_IMPRESSOR, "ativo": True,

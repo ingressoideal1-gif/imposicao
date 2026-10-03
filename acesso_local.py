@@ -7,9 +7,8 @@ operador e exatamente o que o agente existe para evitar. Entao a lista de
 codigos e baixada de tempos em tempos pelo agent_worker e guardada aqui; o
 login confere contra este arquivo, em memoria, sem sair da maquina.
 
-O codigo fica em texto claro. Isso e requisito: o administrador precisa ler o
-codigo na tela para entregar ao operador. O que se constroi aqui e uma tranca de
-estacao, nao uma barreira criptografica.
+Novas sincronizacoes usam DPAPI da conta Windows. A lista antiga permanece
+legivel para compatibilidade, sem migracao de credenciais durante a leitura.
 """
 
 import json
@@ -48,10 +47,9 @@ def salvar_lista(acessos) -> bool:
             "ativo": a.get("ativo") is not False,
         })
     try:
-        temporario = ARQUIVO + ".novo"
-        with open(temporario, "w", encoding="utf-8") as f:
-            json.dump({"acessos": enxuto}, f, ensure_ascii=False, indent=2)
-        os.replace(temporario, ARQUIVO)
+        from segredos_estacao import proteger_texto
+        from persistencia_local import gravar_json_atomico
+        gravar_json_atomico(ARQUIVO, proteger_texto(json.dumps({'acessos': enxuto}), 'acessos-locais'))
         return True
     except Exception as e:
         print(f"[acesso_local] Nao foi possivel gravar a lista: {e}")
@@ -63,6 +61,9 @@ def carregar_lista():
     try:
         with open(ARQUIVO, "r", encoding="utf-8") as f:
             dados = json.load(f)
+        if isinstance(dados, dict) and dados.get('protecao') == 'windows-dpapi-v1':
+            from segredos_estacao import recuperar_texto
+            dados = json.loads(recuperar_texto(dados, 'acessos-locais'))
         return dados.get("acessos") or []
     except FileNotFoundError:
         return []

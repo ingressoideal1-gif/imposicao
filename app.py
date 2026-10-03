@@ -54,6 +54,19 @@ app.add_middleware(ProtegerProducaoMiddleware)
 from propostas_api import router as propostas_router
 app.include_router(propostas_router)
 
+@app.middleware('http')
+async def proteger_api_local(request: Request, call_next):
+    from autorizacao_local import autenticar, autorizar, exige_identidade
+    from starlette.concurrency import run_in_threadpool
+    if exige_identidade(request.method, request.url.path):
+        try:
+            operador = await run_in_threadpool(autenticar, request.headers)
+            autorizar(operador, request.method, request.url.path)
+            request.state.operador = operador
+        except HTTPException as erro:
+            return JSONResponse(status_code=erro.status_code, content={'detail': erro.detail})
+    return await call_next(request)
+
 import security_config
 # alias: dentro de _embed_system_fonts ja existe um dict local chamado font_cache
 import font_cache as font_cache_local
@@ -89,8 +102,8 @@ else:
 # estação. A segunda devolvia a grade de permissões inteira, e o `POST` dela
 # deixaria qualquer um se dar `admin`.
 #
-# A causa é que `get_current_user` (mais abaixo) é um carimbo: devolve admin para
-# todo mundo, sem conferir nada. Isso nunca foi um problema na estação, que vive
+# A causa antiga era `get_current_user` devolver admin para
+# todo mundo, sem conferir nada. O middleware atual valida tambem a estacao, que vive
 # na LAN da gráfica atrás da trava do código local — mas o MESMO `app.py` rodava
 # também numa cópia hospedada, num endereço público.
 #
@@ -100,8 +113,8 @@ else:
 # ## A regra
 #
 # Na NUVEM, toda escrita e toda leitura de dado sensível exige uma sessão de
-# verdade do Supabase. Na ESTAÇÃO nada muda: exigir sessão ali quebraria o
-# operador que entrou pelo código local, offline, que é justamente o caso para o
+# verdade do Supabase. Na ESTACAO, a identidade local preserva o
+# operador que entrou pelo codigo local, offline, sem conceder admin anonimo. E o caso para o
 # qual o `acesso_local` existe.
 #
 # O `/api/acesso/*` fica de fora porque já tem trava própria, e mais forte: token
@@ -418,9 +431,15 @@ from fastapi import Depends
 
 security_scheme = HTTPBearer(auto_error=False)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
-    # Sem auth por enquanto (Supabase RLS disabled)
-    return {"uid": "local-fallback-user", "email": "local@ideal.com", "admin": True, "editor": True}
+async def get_current_user(request: Request):
+    operador = getattr(request.state, 'operador', None)
+    if operador is not None:
+        return operador
+    # Os catalogos publicos do portal nao concedem identidade nem escrita.
+    from autorizacao_local import exige_identidade
+    if not exige_identidade(request.method, request.url.path):
+        return {'uid': None, 'admin': False, 'editor': False}
+    raise HTTPException(401, 'Identifique o operador para esta operacao.')
 
 async def check_admin(user: dict = Depends(get_current_user)):
     if not user.get("admin", False):
@@ -695,7 +714,7 @@ async def bancos_do_pedido_pela_estacao(
         dados = await request.json()
     except Exception:
         raise HTTPException(status_code=422, detail="Corpo invalido: esperava JSON")
-    codigo = request.headers.get("x-operador-codigo") or ""
+    codigo = user.get('codigo') or request.headers.get("x-operador-codigo") or ""
     try:
         return db.operar_bancos_pedido(acao, dados, codigo)
     except Exception as e:
@@ -2198,30 +2217,48 @@ async def excluir_acesso_local_endpoint(acesso_id: str):
 
 @app.get("/api/local/login/estado")
 async def estado_login_local():
-    """Ha lista sincronizada nesta estacao?
-
-    Sem lista — instalacao nova, ou maquina que nunca alcancou a nuvem — o painel
-    entra como fazia antes. Parar a producao por falta de rede seria pior do que
-    o problema que a tranca resolve.
-    """
+    """A ausencia de uma lista nao concede acesso; sincronize antes de entrar."""
     import acesso_local
-    return {"ok": True, "exigir_codigo": acesso_local.ha_lista()}
+    return {"ok": True, "exigir_codigo": True, "configurado": acesso_local.ha_lista(), "protocolo_sessao": 1}
 
 
 @app.post("/api/local/login")
 async def login_local(request: Request):
     import acesso_local
-    data = await request.json()
+    try:
+        data = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Codigo invalido")
+    if not isinstance(data, dict) or not isinstance(data.get('codigo'), str) or len(data['codigo']) > 64:
+        raise HTTPException(status_code=401, detail="Codigo invalido")
     acesso = acesso_local.validar(data.get("codigo"))
     if not acesso:
         # Mensagem unica: nao dizer se o codigo existe mas esta inativo.
         raise HTTPException(status_code=401, detail="Codigo invalido")
+    from autorizacao_local import criar_sessao, permissoes_efetivas
+    acesso = permissoes_efetivas(acesso)
     return {
         "ok": True,
         "nome": acesso.get("nome") or "Operador",
         "role": acesso.get("role") or "",
         "permissoes": acesso.get("permissoes") or {},
+        "token": criar_sessao(acesso),
     }
+
+
+@app.get('/api/local/sessao')
+async def conferir_sessao_local(request: Request):
+    acesso = request.state.operador
+    return {'ok': True, 'nome': acesso.get('nome') or 'Operador',
+            'role': acesso['role'], 'permissoes': acesso['permissoes'],
+            'token': request.headers.get('x-newprod-sessao')}
+
+
+@app.post('/api/local/logout')
+async def sair_da_estacao(request: Request):
+    from autorizacao_local import revogar_sessao
+    revogar_sessao(request.headers.get('x-newprod-sessao'))
+    return {'ok': True}
 
 # ─── DISPARO DE E-MAILS & CONFIGURAÇÕES SMTP ─────────────────────────────────
 

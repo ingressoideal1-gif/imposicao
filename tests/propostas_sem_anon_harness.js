@@ -32,10 +32,10 @@ async function main() {
         assert(r.error); assert.equal(r.data, null); assert.equal(chamadas.length, 0);
     }
     {
-        const { c, chamadas } = contexto({ token: null, nuvem: false, operador: { codigo: 'ABC123' } });
+        const { c, chamadas } = contexto({ token: null, nuvem: false, operador: { token: 'sessao-sintetica' } });
         await c.consultarPropostas({ tipo: 'lista' });
         assert.equal(chamadas[0].url, '/api/propostas/consultar');
-        assert.equal(chamadas[0].headers['X-Operador-Codigo'], 'ABC123');
+        assert.equal(chamadas[0].headers['X-NewProd-Sessao'], 'sessao-sintetica');
         assert.equal(chamadas[0].headers['X-Agente-Segredo'], undefined);
     }
     {
@@ -75,10 +75,10 @@ async function main() {
         assert.equal(chamadas[0].headers.Authorization, 'Bearer jwt-sintetico');
     }
     {
-        const { c, chamadas } = contexto({ token: null, nuvem: false, operador: { codigo: 'ABC123' } });
+        const { c, chamadas } = contexto({ token: null, nuvem: false, operador: { token: 'sessao-sintetica' } });
         await c.requisitarFundo('remover');
         assert.equal(chamadas[0].url, '/api/fundo/remover');
-        assert.equal(chamadas[0].headers['X-Operador-Codigo'], 'ABC123');
+        assert.equal(chamadas[0].headers['X-NewProd-Sessao'], 'sessao-sintetica');
     }
     {
         const { c, chamadas } = contexto({ token: null });

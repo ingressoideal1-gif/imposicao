@@ -30,7 +30,7 @@ const fs = require('fs');
 const path = require('path');
 
 const RAIZ = path.join(__dirname, '..');
-const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8') + '\n' + fs.readFileSync(path.join(RAIZ, 'frontend', 'acesso-estacao.js'), 'utf8');
 
 let falhas = 0;
 let total = 0;
