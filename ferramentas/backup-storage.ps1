@@ -4,7 +4,8 @@ param(
  [string]$Chave = 'C:\ProjectBackups\IdealImpositionChave\recuperacao.key',
  [string]$Drive = 'G:\Meu Drive\Ideal Imposition - Backups protegidos',
  [string]$Python = (Join-Path (Split-Path -Parent $PSScriptRoot) '.venv\Scripts\python.exe'),
- [string]$AgentPreCopiado
+ [string]$AgentPreCopiado,
+ [switch]$Http
 )
 $ErrorActionPreference = 'Stop'
 $area = [IO.Path]::GetFullPath($AreaBackup)
@@ -13,6 +14,7 @@ $nome = 'storage-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 $destino = Join-Path $area $nome
 $argumentosStorage = @((Join-Path $PSScriptRoot 'backup_storage.py'), '--cli', $Cli, '--destino', $destino, '--chave', $Chave)
 if ($AgentPreCopiado) { $argumentosStorage += @('--agent-pre-copiado', $AgentPreCopiado) }
+if ($Http) { $argumentosStorage += '--http' }
 & $Python @argumentosStorage
 if ($LASTEXITCODE -ne 0) { throw 'Backup Storage incompleto; nao sera enviado ao Drive.' }
 if (-not (Test-Path -LiteralPath $Drive)) { Write-Warning 'Copia externa pendente; Drive Desktop indisponivel.'; return }

@@ -8,6 +8,7 @@ from pathlib import Path
 import zipfile
 
 from backup_portatil import cifrar, decifrar, ler_chave, sha256
+from storage_somente_leitura import baixar_objetos
 
 PROJECT = 'vwbtitjlpelrcnsytzqw'
 
@@ -45,7 +46,7 @@ def validar_objetos(bucket, objects):
             raise ValueError('Inventario de bucket divergente')
 
 
-def copiar(cli_path, destino, chave, agent_pre_copiado=None):
+def copiar(cli_path, destino, chave, agent_pre_copiado=None, usar_http=False):
     destino = Path(destino).resolve()
     if destino.exists():
         raise ValueError('Use um destino novo em pasta privada')
@@ -78,8 +79,11 @@ def copiar(cli_path, destino, chave, agent_pre_copiado=None):
             folder.mkdir()
             # A CLI interpreta C: como protocolo remoto. Destino relativo e
             # cwd privado mantem a operacao no disco e evitam essa ambiguidade.
-            cli(cli_path, 'storage', 'cp', '--recursive', '--jobs', '4', '--linked', '--project-ref', PROJECT,
-                '--experimental', 'ss:///' + bucket + '/', '.', cwd=folder)
+            if usar_http:
+                baixar_objetos(cli_path, PROJECT, bucket, expected, folder)
+            else:
+                cli(cli_path, 'storage', 'cp', '--recursive', '--jobs', '4', '--linked', '--project-ref', PROJECT,
+                    '--experimental', 'ss:///' + bucket + '/', '.', cwd=folder)
         files = sorted(p for p in folder.rglob('*') if p.is_file())
         for p in files:
             if p.is_symlink() or not p.resolve().is_relative_to(folder):
@@ -137,9 +141,11 @@ if __name__ == '__main__':
     parser.add_argument('--destino', required=True)
     parser.add_argument('--chave', required=True)
     parser.add_argument('--agent-pre-copiado', help='Pasta privada de agent-releases copiada nesta janela; todos os objetos serao conferidos')
+    parser.add_argument('--http', action='store_true', help='Downloads GET com repeticoes; credencial administrativa somente em memoria')
     args = parser.parse_args()
     try:
-        print(json.dumps(copiar(args.cli, args.destino, args.chave, args.agent_pre_copiado)))
-    except Exception:
+        print(json.dumps(copiar(args.cli, args.destino, args.chave, args.agent_pre_copiado, args.http)))
+    except Exception as erro:
+        print('Categoria: ' + type(erro).__name__, file=__import__('sys').stderr)
         print('Backup Storage incompleto. Nenhum arquivo original remoto foi modificado. Preserve a pasta privada para retomar.', file=__import__('sys').stderr)
         raise SystemExit(1)
