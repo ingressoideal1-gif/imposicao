@@ -1,4 +1,4 @@
-"""Blocos de lugares importados do mapa; não acessa banco ou arquivos."""
+"""Montagem TEATRO vertical por modelo; não acessa banco ou arquivos."""
 import re
 
 
@@ -28,26 +28,25 @@ def grupos(rows):
 
 def montar_sets(modelos, poses):
     fontes = [grupos(m["rows"]) for m in modelos]
-    if not any(fontes):
+    ativos = [m.get("tipo") == "TEATRO" or bool(f) for m, f in zip(modelos, fontes)]
+    if not any(ativos):
         return None
-    if not all(fontes):
-        raise ValueError("Combine o mapa de teatro somente com modelos que também leem setores de um mapa.")
+    if not all(ativos):
+        raise ValueError("Combine os modelos de teatro somente com outros modelos de teatro.")
     if not isinstance(poses, int) or isinstance(poses, bool) or poses < 1:
         raise ValueError("Quantidade de poses inválida.")
-    blocos = []
-    for modelo, fonte in zip(modelos, fontes):
+    sets = []
+    for idx, modelo in enumerate(modelos):
         if len(modelo["items"]) != len(modelo["rows"]):
             raise ValueError("A quantidade do modelo não corresponde aos lugares selecionados no banco do teatro.")
-        for bloco in fonte:
-            inicio = bloco["inicio"]
-            blocos.append(modelo["items"][inicio:inicio + bloco["quantidade"]])
-    sets = []
-    for inicio in range(0, len(blocos), poses):
-        lote = blocos[inicio:inicio + poses]
-        folhas = max(map(len, lote))
-        alocacoes = [b + [None] * (folhas - len(b)) for b in lote]
-        alocacoes += [[None] * folhas for _ in range(poses - len(lote))]
+        if not modelo["items"]:
+            raise ValueError("O modelo de teatro não tem lugares para imprimir.")
+        folhas = (len(modelo["items"]) + poses - 1) // poses
+        alocacoes = []
+        for p in range(poses):
+            items = modelo["items"][p * folhas:(p + 1) * folhas]
+            alocacoes.append(items + [None] * (folhas - len(items)))
         sets.append({"type": "strict", "num_sheets": folhas,
                      "cell_allocations": alocacoes, "depth": 1,
-                     "model_idx": None, "teatro": True})
+                     "model_idx": idx, "teatro": True})
     return sets

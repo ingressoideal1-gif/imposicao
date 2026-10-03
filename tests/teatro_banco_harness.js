@@ -17,7 +17,7 @@ async function executar() {
     assert.equal(plano.setores[0].rows[0].Numero,'1 Cad');
     assert.equal(plano.setores[0].rows[0].Mapa_ID,'mapa-ideal');
     assert.equal(plano.setores[2].rows[0].Conjunto,'Mesa');
-    assert.deepEqual(T.capa(plano.setores[2].rows,3),{titulo:'Mesa B',detalhe:' - 1 a 4 (4 lugares)'});
+    assert.deepEqual(T.capa(plano.setores[2].rows,3,5),{titulo:'Mesas',detalhe:' - Mesa A / 1 Cad a Mesa B / 2 (5 lugares)'});
     assert.equal(new Set(plano.setores.flatMap(s=>s.rows.map(r=>r.__id))).size,36);
     original.config.setores[0].cadeiras['8,0']={tipo:'Apagado'};
     assert.equal(T.preparar(original,rev).quantidade,36);
@@ -31,12 +31,12 @@ async function executar() {
     assert.throws(()=>T.grupos(rows.map(r=>({...r,Origem:''}))),/incompleto/);
     const modelos=plano.setores.map(s=>({rows:s.rows,items:s.rows.map((r,i)=>({id:r.__id,local_index:i}))}));
     const sets=T.montarSets(modelos,2);
-    assert.deepEqual(sets.map(s=>s.num_sheets),[4,3,4,4,3,4]);
+    assert.deepEqual(sets.map(s=>s.num_sheets),[5,5,5,5]);
     const impressos=sets.flatMap(s=>s.cell_allocations.flat()).filter(Boolean);
     assert.equal(impressos.length,36); assert.equal(new Set(impressos.map(i=>i.id)).size,36);
     for(const set of sets) for(const pose of set.cell_allocations) {
-        const grupos=pose.filter(Boolean).map(i=>plano.setores.flatMap(s=>s.rows).find(r=>r.__id===i.id).Bloco);
-        assert.ok(new Set(grupos).size<=1);
+        const locais=pose.filter(Boolean).map(i=>i.local_index);
+        assert.deepEqual(locais,Array.from({length:locais.length},(_,i)=>locais[0]+i));
     }
     assert.equal(T.montarSets([{rows:[],items:[1,2]}],2),null);
     assert.throws(()=>T.montarSets([modelos[0],{rows:[],items:[1]}],2),/Combine/);
@@ -68,6 +68,8 @@ async function executar() {
     const fetchAntigo=global.fetch;global.fetch=async()=>({ok:true,json:async()=>({capabilities:[]})});
     await assert.rejects(T.conferirMotor(fd,'http://estacao'),/Atualize/);
     global.fetch=async()=>({ok:true,json:async()=>({capabilities:['mapa_teatro_blocos_v1']})});
+    await assert.rejects(T.conferirMotor(fd,'http://estacao'),/Atualize/);
+    global.fetch=async()=>({ok:true,json:async()=>({capabilities:['teatro_vertical_modelo_v1']})});
     await T.conferirMotor(fd,'http://estacao'); global.fetch=fetchAntigo;
     // Executa a função real da prévia, com os mesmos modelos e bancos enviados ao motor.
     const fonte=fs.readFileSync('frontend/pedido.js','utf8'), inicio=fonte.indexOf('\nfunction buildStrictAssemblySets('),fim=fonte.indexOf('\n}',inicio)+2;
@@ -76,7 +78,12 @@ async function executar() {
     const artes=plano.setores.map(s=>({qtd:s.quantidade,numeracao:{csv_data:s.rows}}));
     const previa=contexto.buildStrictAssemblySets(artes,true,36,50,2);
     assert.deepEqual(JSON.parse(JSON.stringify(previa.map(s=>s.num_sheets))),sets.map(s=>s.num_sheets));
-    console.log('OK: conversão, 4 setores, blocos desiguais, vínculo existente, releitura, retomada e prévia.');
+    const legado={tipo:'TEATRO',rows:Array.from({length:12},(_,i)=>({Fila:i<6?'A':'B',Numero:String(i+1)})),items:Array.from({length:12},(_,i)=>i)};
+    assert.deepEqual(T.montarSets([legado],4)[0].cell_allocations,[[0,1,2],[3,4,5],[6,7,8],[9,10,11]]);
+    const payload={schema:'sequential',cut_stack_mode:'independent',numeracao:{tipo:'TEATRO',csv_data:legado.rows}};
+    assert.equal(T.configurarMontagem(payload),true);
+    assert.equal(payload.schema,'cut_stack');assert.equal(payload.cut_stack_mode,'strict_assembly');
+    console.log('OK: conversão, 4 setores, montagem vertical por modelo, vínculo existente, releitura, retomada e prévia.');
 }
 if(require.main===module) executar().catch(e=>{console.error(e);process.exitCode=1});
 module.exports={mapa};

@@ -25,6 +25,12 @@ def test_importacao_e_previa_js():
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
 
 
+def test_teatro_vertical_na_previa_e_na_validacao_de_pronto():
+    resultado = subprocess.run(["node", "tests/teatro_vertical_modelo_harness.js"], cwd=ROOT,
+                              capture_output=True, text=True, timeout=60)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+
 def test_montagem_js_python_identica():
     modelos = [{"rows": linhas(str(s)), "items": list(range(9 * s, 9 * (s + 1)))} for s in range(4)]
     original = copy.deepcopy(modelos)
@@ -72,42 +78,40 @@ def conteudos(paths):
     return saida
 
 
-def test_pdf_mantem_fila_em_uma_pose_e_nao_inventa_lugares(tmp_path):
+def test_pdf_preenche_verticalmente_e_continua_ao_trocar_fila(tmp_path):
     arquivos = impor(tmp_path)
-    assert len(arquivos) == 2
+    assert len(arquivos) == 1
     with fitz.open(arquivos[0]) as doc:
-        assert len(doc) == 4
+        assert len(doc) == 5
+        left = [("A", 1), ("A", 2), ("A", 3), ("B", 1), ("B", 2)]
+        right = [("B", 3), ("B", 4), ("C", 1), ("C", 2), None]
         for i, p in enumerate(doc):
             tokens = p.get_text("words")
             esquerda = [w[4] for w in tokens if w[0] < 110 * 72 / 25.4]
             direita = [w[4] for w in tokens if w[0] >= 110 * 72 / 25.4]
-            assert esquerda == (["A", "-", str(i + 1)] if i < 3 else [])
-            assert direita == ["B", "-", str(i + 1)]
-    with fitz.open(arquivos[1]) as doc:
-        assert len(doc) == 2
-        assert [p.get_text().strip() for p in doc] == ["C - 1", "C - 2"]
+            assert esquerda == [left[i][0], "-", str(left[i][1])]
+            assert direita == ([right[i][0], "-", str(right[i][1])] if right[i] else [])
 
 
-def test_refazer_set_2_preserva_os_lugares_da_fila_c(tmp_path):
-    assert conteudos(impor(tmp_path, refazer_set=2, refazer_de=1, refazer_ate=1)) == [[["C", "-", "1"]]]
+def test_refazer_ultima_folha_preserva_sua_posicao_vertical(tmp_path):
+    assert conteudos(impor(tmp_path, refazer_set=1, refazer_de=5, refazer_ate=5)) == [[["B", "-", "2"]]]
 
 
-def test_sequencial_recusa_banco_com_blocos(tmp_path):
-    with pytest.raises(ValueError, match="Montagem estrita"):
-        impor(tmp_path, layout_schema="sequential")
+def test_tipo_teatro_prevalece_sobre_modo_sequencial_salvo(tmp_path):
+    assert conteudos(impor(tmp_path, layout_schema="sequential")) == conteudos(impor(tmp_path))
 
 
-def test_fila_maior_que_bloco_do_erp_nao_e_truncada(tmp_path):
+def test_bloco_do_erp_nao_divide_a_montagem_teatro(tmp_path):
     arquivos = impor(tmp_path, csv_data=linhas(tamanhos=(60, 2)))
     assert len(arquivos) == 1
     with fitz.open(arquivos[0]) as doc:
-        assert len(doc) == 60
-        assert doc[-1].get_text().strip() == "A - 60"
+        assert len(doc) == 31
+        assert doc[-1].get_text().strip().splitlines() == ["A - 31", "B - 2"]
 
 
-def test_refazer_folha_60_do_conjunto_maior(tmp_path):
-    arquivos = impor(tmp_path, csv_data=linhas(tamanhos=(60, 2)), refazer_set=1, refazer_de=60, refazer_ate=60)
-    assert conteudos(arquivos) == [[["A", "-", "60"]]]
+def test_refazer_folha_31_de_62_lugares(tmp_path):
+    arquivos = impor(tmp_path, csv_data=linhas(tamanhos=(60, 2)), refazer_set=1, refazer_de=31, refazer_ate=31)
+    assert conteudos(arquivos) == [[["A", "-", "31", "B", "-", "2"]]]
 
 
 def test_quatro_artes_leem_apenas_os_lugares_do_proprio_setor(tmp_path):
@@ -142,8 +146,7 @@ def test_quatro_artes_leem_apenas_os_lugares_do_proprio_setor(tmp_path):
     assert sorted(vistos) == [(i, n) for i, q in enumerate((3, 4, 2, 5)) for n in range(1, q + 1)]
 
 
-def test_capa_identifica_conjunto_e_quantidade_exata(tmp_path):
-    # A capa identifica o conjunto real, mesmo com BLOCO comercial de 50.
+def test_capa_identifica_os_limites_reais_de_cada_pilha(tmp_path):
     cfg = ImpositionConfig(base_file="", out_pdf=str(tmp_path / "capas.pdf"),
         formato={"width_mm":100,"height_mm":50,"cols":2,"rows":1,"has_cover":True,"cover_font_y":20},
         saida={"width_mm":220,"height_mm":150},
@@ -153,7 +156,48 @@ def test_capa_identifica_conjunto_e_quantidade_exata(tmp_path):
     textos = []
     for path in sorted(tmp_path.glob("*_01_capa.pdf")):
         with fitz.open(path) as doc: textos.extend(p.get_text() for p in doc)
-    assert len(textos) == 2
-    assert "Fila A" in textos[0] and "(3 lugares)" in textos[0]
-    assert "Fila B" in textos[0] and "(4 lugares)" in textos[0]
-    assert "Fila C" in textos[1] and "(2 lugares)" in textos[1]
+    assert len(textos) == 1
+    assert "Fila A / 1 a Fila B / 2 (5 lugares)" in textos[0]
+    assert "Fila B / 3 a Fila C / 2 (4 lugares)" in textos[0]
+
+
+@pytest.mark.parametrize("qtd,folhas", [(82, 11), (515, 65), (12, 2), (1, 1)])
+def test_quantidades_por_modelo_na_grade_de_oito(qtd, folhas):
+    rows = linhas(tamanhos=(qtd // 2, qtd - qtd // 2))
+    s = teatro_banco.montar_sets([{"rows": rows, "items": list(range(qtd))}], 8)[0]
+    assert s["num_sheets"] == folhas
+    for p, coluna in enumerate(s["cell_allocations"]):
+        assert coluna == [i if i < qtd else None for i in range(p * folhas, (p + 1) * folhas)]
+
+
+def test_teatro_legado_sem_marcadores_do_mapa_tambem_e_vertical(tmp_path):
+    rows = [{"Fila": r["Fila"], "Numero": r["Numero"]} for r in linhas()]
+    arquivos = impor(tmp_path, csv_data=rows, layout_schema="sequential")
+    assert len(arquivos) == 1
+    with fitz.open(arquivos[0]) as doc:
+        assert len(doc) == 5
+        assert doc[0].get_text().strip().splitlines() == ["A - 1", "B - 3"]
+
+
+@pytest.mark.parametrize("qtd,folhas", [(82, 11), (515, 65)])
+def test_pdf_real_em_oito_poses_tem_a_ordem_vertical_completa(tmp_path, qtd, folhas):
+    rows = linhas(tamanhos=(qtd // 2, qtd - qtd // 2))
+    cfg = ImpositionConfig(base_file="", out_pdf=str(tmp_path / "oito.pdf"),
+        formato={"width_mm": 100, "height_mm": 25, "cols": 2, "rows": 4},
+        saida={"width_mm": 220, "height_mm": 150}, csv_data=rows,
+        numeracao={"tipo": "TEATRO", "elements": [{"type": "TEATRO_COMBO", "x_mm": 12,
+            "y_mm": 20, "font_size": 10, "font_name": "helv", "color": "#000000"}]},
+        layout_schema="sequential", cut_stack_mode="independent", sheets_per_block=50)
+    engine = ImpositionEngine(cfg)
+    engine.process()
+    arquivos = sorted(tmp_path.glob("*_02_miolo.pdf"))
+    assert len(arquivos) == 1
+    with fitz.open(arquivos[0]) as doc:
+        assert len(doc) == folhas
+        for s, page in enumerate(doc):
+            for p in range(8):
+                x, y = 10 + (p % 2) * 100, 25 + (p // 2) * 25
+                clip = fitz.Rect(x * 72 / 25.4, y * 72 / 25.4, (x + 100) * 72 / 25.4, (y + 25) * 72 / 25.4)
+                indice = p * folhas + s
+                esperado = f"{rows[indice]['Fila']} - {rows[indice]['Numero']}" if indice < qtd else ""
+                assert page.get_text(clip=clip).strip() == esperado

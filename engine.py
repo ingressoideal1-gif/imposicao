@@ -2761,6 +2761,21 @@ class ImpositionEngine:
 
     def _process(self):
         cfg = self.cfg
+        fontes_teatro = [a.get("numeracao") or {} for a in cfg.multi_artes] if cfg.multi_artes else [
+            {"tipo": cfg.num_tipo, "csv_data": cfg.csv_data or [], "elements": cfg.elements}]
+        bancos_teatro = [n.get("csv_data") or [] for n in fontes_teatro]
+        importados_teatro = [teatro_banco.grupos(rows) for rows in bancos_teatro]
+        ativos_teatro = [n.get("tipo") == "TEATRO" or bool(g)
+                        for n, g in zip(fontes_teatro, importados_teatro)]
+        tem_banco_teatro = any(importados_teatro)
+        tem_montagem_teatro = cfg.layout_schema != "pdf_multiple" and any(ativos_teatro)
+        if tem_montagem_teatro:
+            if not all(ativos_teatro):
+                raise ValueError("Combine os modelos de teatro somente com outros modelos de teatro.")
+            # Usa o executor de pilhas, com ceil(qtd/poses) folhas por modelo.
+            # TEATRO prevalece sobre opções salvas de blocos comerciais/fila.
+            cfg.layout_schema = "cut_stack"
+            cfg.cut_stack_mode = "strict_assembly"
         # Fotos primeiro: acusa as linhas sem foto e baixa o lote em paralelo,
         # antes de qualquer papel. Sem elemento FOTO, sai na primeira linha.
         self._conferir_e_aquecer_fotos()
@@ -2923,12 +2938,6 @@ class ImpositionEngine:
         versos_mesclados = {}
 
         is_strict_assembly = (cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict_assembly")
-        bancos_teatro = [cfg.csv_data or []] + [
-            (a.get("numeracao") or {}).get("csv_data") or [] for a in (cfg.multi_artes or [])
-        ]
-        tem_banco_teatro = any([teatro_banco.grupos(rows) for rows in bancos_teatro])
-        if tem_banco_teatro and not is_strict_assembly:
-            raise ValueError("O mapa exige modo Blocado com Montagem estrita, para manter cada conjunto em um bloco.")
         if tem_banco_teatro:
             fontes = [a.get("numeracao") or {} for a in cfg.multi_artes] if cfg.multi_artes else [{"elements": cfg.elements}]
             if any(not any(el.get("type") in ("TEATRO_FILA", "TEATRO_LUGAR", "TEATRO_COMBO")
@@ -3117,7 +3126,7 @@ class ImpositionEngine:
                 # tem o seu; sem isto o motor lia o banco do trabalho inteiro e
                 # dava a linha do vizinho a quem nao era dela.
                 art_csv = (num1_obj or {}).get("csv_data") or None
-                if tem_banco_teatro and not cfg.multi_artes:
+                if tem_montagem_teatro and not cfg.multi_artes:
                     art_csv = cfg.csv_data
                 if art_csv:
                     art_csv = [r for r in art_csv if r.get("__ativo", True) is not False]
@@ -3291,12 +3300,12 @@ class ImpositionEngine:
                 
             stack_size = cfg.sheets_per_block  # Itens por bloco (ex: 50)
             sets_teatro = teatro_banco.montar_sets([
-                {"items": items, "rows": [r for r in (
+                {"items": items, "tipo": (sorted_artes[i].get("numeracao") or {}).get("tipo"), "rows": [r for r in (
                     ((sorted_artes[i].get("numeracao") or {}).get("csv_data") or [])
                     if cfg.multi_artes else (cfg.csv_data or [])
                 ) if r.get("__ativo", True) is not False]}
                 for i, items in enumerate(models_items)
-            ], poses_per_sheet) if tem_banco_teatro else None
+            ], poses_per_sheet) if tem_montagem_teatro else None
             
             # 2. Dividir cada modelo em blocos completos de stack_size
             complete_blocks = []  # lista de (model_idx, [itens do bloco])
@@ -4565,8 +4574,10 @@ class ImpositionEngine:
         if (item_start.get("csv_row") or {}).get("Origem") == "Mapa de Teatro":
             row_start, row_end = item_start["csv_row"], item_end["csv_row"]
             qtd = item_end["local_idx"] - item_start["local_idx"] + 1
-            bloco_str = f"{row_start.get('Conjunto', 'Fila')} {row_start['Fila']}"
-            sufixo_str = f" - {row_start['Numero']} a {row_end['Numero']} ({qtd} lugares)"
+            bloco_str = row_start.get("Setor") or "Teatro"
+            def rotulo(row):
+                return f"{row.get('Conjunto', 'Fila')} {row['Fila']} / {row['Numero']}"
+            sufixo_str = f" - {rotulo(row_start)} a {rotulo(row_end)} ({qtd} lugares)"
         elif getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
             camarote_num = cfg.c_ini + (bloco_num - 1)
             bloco_str = f"Camarote {camarote_num:02d}"
