@@ -1,4 +1,5 @@
 import { Recusa } from "../_compartilhado/sessao.ts";
+import "../../../frontend/mapa-teatro-revisao.js";
 
 export const BUCKET = "mapas-teatro-pdfs";
 export const GERADOR = "a3-v1-20261003";
@@ -17,7 +18,8 @@ export async function sha256(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, "0")).join("");
 }
 export async function revisao(m: Mapa): Promise<string> {
-  return await sha256(new TextEncoder().encode(JSON.stringify(canonico({ id: m.id, name: m.name, config: m.config }))));
+  try { return await (globalThis as any).MapaTeatroRevisao.revisao(m.config); }
+  catch { throw new Recusa(422, "A configuração do mapa não é válida para JCS/RFC 8785."); }
 }
 export function textoId(v: unknown): string {
   if (typeof v !== "string" || !v.trim() || v.length > 200 || /[\x00-\x1f]/.test(v)) throw new Recusa(422, "Identificador inválido.");

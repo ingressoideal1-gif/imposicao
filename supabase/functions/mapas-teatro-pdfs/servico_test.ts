@@ -1,5 +1,5 @@
 import { atender, Dependencias } from "./servico.ts";
-import { canonico, GERADOR, MAX_TOTAL, Mapa, revisao, sha256, setores } from "./puro.ts";
+import { caminho, canonico, GERADOR, MAX_TOTAL, Mapa, revisao, sha256, setores } from "./puro.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
 
 const PDF = (globalThis as any).PDFLib;
@@ -93,7 +93,7 @@ Deno.test("mapa alterado durante upload não finaliza revisão antiga", async ()
   assert.equal(f.row, null);
 });
 Deno.test("revisão desatualizada recusa antes do upload", async () => {
-  const f = fixture(), form = await formulario(f.mapa); f.mapa.name = "Novo nome";
+  const f = fixture(), form = await formulario(f.mapa); f.mapa.config.setores[0].nome = "Novo nome";
   await assert.rejects(() => atender(post(form), f.deps), recusa(409));
   assert.equal(f.objetos.size, 0);
 });
@@ -142,10 +142,54 @@ Deno.test("limite declarado do envio recusa sem upload", async () => {
 });
 Deno.test("revisão antiga é explícita e consulta atual fica pendente", async () => {
   const f = fixture(); const old = await (await atender(post(await formulario(f.mapa)), f.deps)).json();
-  f.mapa.name = "Nome novo";
+  f.mapa.config.setores[0].cadeiras["9,0"] = { prefixo: "A", num: 10, tipo: "Normal" };
   const atual = await (await atender(get(), f.deps)).json(); assert.equal(atual.estado, "pendente");
   const antiga = await (await atender(new Request(base + "exportacao?revisao=" + old.revisao_exportacao, { headers: { Authorization: auth } }), f.deps)).json();
   assert.equal(antiga.estado, "pronto"); assert.equal(antiga.revisao_atual, false);
+});
+Deno.test("renomear o mapa conserva revisão e exportação; nome do setor integra config", async () => {
+  const f = fixture(), antes = await revisao(f.mapa);
+  await atender(post(await formulario(f.mapa)), f.deps);
+  f.mapa.name = "Mapa renomeado";
+  assert.equal(await revisao(f.mapa), antes);
+  const r = await (await atender(get(), f.deps)).json();
+  assert.equal(r.estado, "pronto"); assert.equal(r.revisao_exportacao, antes);
+  assert.equal(r.nome_mapa, "Teatro sintético"); // Nome histórico do PDF armazenado.
+  f.mapa.config.setores[0].nome = "Setor renomeado";
+  assert.ok(await revisao(f.mapa) !== antes);
+});
+Deno.test("histórico com hash de id/name/config conserva registro e bytes após mudança para JCS", async () => {
+  const f = fixture();
+  await atender(post(await formulario(f.mapa)), f.deps);
+  const legado = await sha256(new TextEncoder().encode(JSON.stringify(canonico(f.mapa))));
+  assert.ok(legado !== await revisao(f.mapa));
+  f.row.revisao_exportacao = legado;
+  for (const a of f.row.arquivos) {
+    const anterior = a.storage_path;
+    a.storage_path = caminho(f.mapa.id, legado, a.setor_id, a.sha256_arquivo);
+    f.objetos.set(a.storage_path, f.objetos.get(anterior)!); f.objetos.delete(anterior);
+  }
+  const preservado = structuredClone(f.row);
+  const atual = await (await atender(get(), f.deps)).json(); assert.equal(atual.estado, "pendente");
+  const antiga = await (await atender(get("exportacao?revisao=" + legado), f.deps)).json();
+  assert.equal(antiga.revisao_exportacao, legado); assert.equal(antiga.revisao_atual, false);
+  const download = await atender(new Request(antiga.arquivos[0].pdf_recurso, { headers: { Authorization: auth } }), f.deps);
+  assert.equal(await sha256(new Uint8Array(await download.arrayBuffer())), f.row.arquivos[0].sha256_arquivo);
+  assert.deepEqual(f.row, preservado);
+});
+Deno.test("revisão histórica ausente não é substituída pela atual", async () => {
+  const f = fixture(), historica = "a".repeat(64);
+  const r = await (await atender(get("exportacao?revisao=" + historica), f.deps)).json();
+  assert.equal(r.estado, "pendente"); assert.equal(r.revisao_exportacao, historica); assert.equal(r.revisao_atual, false);
+  assert.equal(f.chamadas.includes("upload"), false);
+});
+Deno.test("Edge Function usa os mesmos bytes JCS do painel e rejeita dados inválidos", async () => {
+  const m = fixture().mapa;
+  m.config = { "2": 2, "10": 10, unicode: "ação 😀", numeros: [1e30, 1e-7, -0] };
+  const esperado = '{"10":10,"2":2,"numeros":[1e+30,1e-7,0],"unicode":"ação 😀"}';
+  assert.equal(await revisao(m), await sha256(new TextEncoder().encode(esperado)));
+  m.config = { texto: "\ud800" };
+  await assert.rejects(() => revisao(m), recusa(422));
 });
 Deno.test("download não aceita caminho adulterado ou bytes trocados", async () => {
   const f = fixture(), r = await (await atender(post(await formulario(f.mapa)), f.deps)).json();

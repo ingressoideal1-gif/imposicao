@@ -66,8 +66,9 @@ export const producao: Dependencias = {
     return new Uint8Array(await r.arrayBuffer());
   },
 };
-function resposta(row: any, mapa: Mapa, atual: string, base: string) {
-  if (!row) return { mapa_id: mapa.id, nome_mapa: mapa.name, revisao_exportacao: atual, gerador_versao: GERADOR, estado: "pendente", arquivos: [] };
+function resposta(row: any, mapa: Mapa, atual: string, base: string, consultada = atual) {
+  if (!row) return { mapa_id: mapa.id, nome_mapa: mapa.name, revisao_exportacao: consultada, revisao_atual: consultada === atual,
+    gerador_versao: GERADOR, estado: "pendente", arquivos: [] };
   return { exportacao_id: row.id, mapa_id: row.mapa_id, nome_mapa: row.nome_mapa, revisao_exportacao: row.revisao_exportacao,
     gerador_versao: row.gerador_versao, estado: "pronto", revisao_atual: row.revisao_exportacao === atual,
     criado_em: row.criado_em, arquivos: row.arquivos.map((a: Arquivo) => ({ ...a, pdf_recurso: recurso(base, mapa.id, row.revisao_exportacao, a.setor_id) })) };
@@ -106,7 +107,7 @@ export async function atender(req: Request, deps: Dependencias = producao): Prom
     const rev = url.searchParams.get("revisao") || atual, versao = url.searchParams.get("gerador") || GERADOR;
     if (!/^[a-f0-9]{64}$/.test(rev) || versao !== GERADOR) throw new Recusa(422, "Revisão ou gerador inválido.");
     const row = await deps.exportacao(id, rev, versao);
-    if (acao === "exportacao") return Response.json(resposta(row, mapa, atual, base), { headers: { "Cache-Control": "no-store" } });
+    if (acao === "exportacao") return Response.json(resposta(row, mapa, atual, base, rev), { headers: { "Cache-Control": "no-store" } });
     const setor = url.searchParams.get("setor");
     const a: Arquivo | undefined = row?.arquivos.find((a: Arquivo) => a.setor_id === setor && a.tipo === (setor === null ? "mapa" : "setor"));
     if (!a) throw new Recusa(404, "PDF não publicado para esse mapa, setor e revisão.");
