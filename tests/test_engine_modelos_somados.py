@@ -25,6 +25,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from engine import ImpositionConfig, ImpositionEngine, _linha_do_banco
 
+@pytest.fixture(autouse=True)
+def base_sintetica(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with fitz.open() as doc:
+        doc.new_page(width=105 * 72 / 25.4, height=148 * 72 / 25.4)
+        doc.save(tmp_path / 'base_ticket.pdf')
+
 FORMATO = {
     "name": "Credencial 90x140",
     "width_mm": 105,

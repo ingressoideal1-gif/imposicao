@@ -1,0 +1,60 @@
+import { Recusa } from './sessao.ts';
+import { operadorLocalPropostas } from './propostas.ts';
+import { conferirPiloto } from './piloto_local.ts';
+import { listarPiloto } from './piloto_catalogo.ts';
+import { banco } from './banco.ts';
+
+export async function conferirVinculoPiloto(operador: Record<string, unknown>, estacao: string,
+  empresa: string | undefined, consultar = banco): Promise<Record<string, unknown>> {
+  const id = operador.piloto_usuario_id;
+  if (id === undefined) return operador; // Operadores existentes sem vínculo explícito.
+  if (typeof id !== 'string' || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)
+      || operador.piloto_estacao !== estacao || !empresa || operador.piloto_empresa !== empresa) {
+    throw new Recusa(403, 'vinculo do piloto divergente');
+  }
+  let rows;
+  try { rows = await consultar('GET', `imposition_user_permissions?user_id=eq.${id}&select=*&limit=2`); }
+  catch { throw new Recusa(503, 'vinculo do piloto indisponivel'); }
+  if (!Array.isArray(rows) || rows.length !== 1) throw new Recusa(403, 'responsavel do piloto indisponivel');
+  const conta = rows[0];
+  if (conta.user_id !== id || conta.perm_producao_view !== true || conta.perm_imprimir !== true) {
+    throw new Recusa(403, 'responsavel sem permissao do piloto');
+  }
+  const empresaConta = conta.empresa_id ?? conta.id_empresa;
+  const empresaOperador = operador.empresa_id ?? operador.id_empresa;
+  if (empresaConta != null && empresaOperador != null && String(empresaConta) !== String(empresaOperador)) {
+    throw new Recusa(403, 'empresa do responsavel divergente');
+  }
+  // Conserva as restrições locais; nunca amplia permissões a partir do perfil admin.
+  return {...operador, ...(empresaConta != null ? {empresa_id:empresaConta} : {})};
+}
+
+export async function operarPilotoEstacao(acao: string, req: Request,
+  autenticar: (req: Request) => Promise<void>) {
+  await autenticar(req);
+  const estacao = Deno.env.get('PILOTO_LOCAL_ESTACAO');
+  const codigo = Deno.env.get('PILOTO_LOCAL_OPERADOR');
+  if (!estacao || !codigo) throw new Recusa(503, 'coleta autonoma nao habilitada');
+  const leitor = req.body?.getReader(), partes: Uint8Array[] = [];
+  let tamanho = 0;
+  if (leitor) try {
+    while (true) {
+      const {value,done} = await leitor.read();
+      if (done) break;
+      tamanho += value.length;
+      if (tamanho > 262144) { await leitor.cancel(); throw new Recusa(413, 'solicitacao excede limite'); }
+      partes.push(value);
+    }
+  } finally { leitor.releaseLock(); }
+  const bytes = new Uint8Array(tamanho); let offset = 0;
+  for (const parte of partes) { bytes.set(parte,offset); offset += parte.length; }
+  let corpo;
+  try { corpo = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new Recusa(422,'JSON invalido'); }
+  if (!corpo || corpo.estacao !== estacao) throw new Recusa(403,'estacao fora do piloto');
+  delete corpo.estacao;
+  const operador = await conferirVinculoPiloto(await operadorLocalPropostas(codigo), estacao,
+    Deno.env.get('PILOTO_LOCAL_EMPRESA'));
+  if (acao === 'listar') return await listarPiloto(corpo, operador);
+  if (acao === 'conferir') return await conferirPiloto(corpo, operador, banco, Deno.env.get('PILOTO_LOCAL_EMPRESA'), Deno.env.get('PILOTO_LOCAL_EMPRESA_ID'), true);
+  throw new Recusa(404,'operacao inexistente');
+}

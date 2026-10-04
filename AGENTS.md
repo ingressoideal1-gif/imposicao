@@ -95,6 +95,17 @@ Não oculte erros nem repita verificações sem motivo. Informe falhas preexiste
 
 ## 8. Entrega
 
+### NewProd de producao e Piloto
+
+Existem dois canais da mesma fonte: producao em 9000/NewProd.exe e Piloto em
+9001/NewProdPiloto.exe. Leia docs/newprod-producao-e-piloto.md ao alterar frontend,
+motor, agente, seguranca ou entrega. Correcao compartilhada exige validacao nos
+dois canais com ferramentas/conferir_duas_versoes.py e pacote atualizado do
+Piloto. Funcao exclusiva do Piloto deve permanecer opt-in e preservar o padrao.
+Instalacao, identidade, dados, caches e atualizacoes sao separados; nunca usar
+o MSI, executavel, manifesto ou inicializador da producao para instalar o Piloto.
+Uma entrega web tambem precisa atualizar o pacote do painel experimental.
+
 Revise o diff e os arquivos não rastreados, confira escopo e ausência de segredos. Relate de forma breve: resultado, arquivos alterados, validações/resultados e pendências reais. Não declare publicação, migração aplicada, envio real ou notificação agendada sem confirmação da execução. Uma entrega local pode estar concluída enquanto implantação ou configuração externa permanece pendente, desde que isso fique explícito.
 
 Fontes desta consolidação (06/09/2026): `agente.md`, `.agents/AGENTS.md`, `package.json`, `requirements.txt`, `pytest.ini`, `app.py`, `db.py`, `frontend/script.js`, `frontend/cliente-orcamento.js`, `frontend/cliente-dados.js`, `sql/link_cliente_pedido.sql`, `supabase/functions/`, `tests/test_as_funcoes_passam_no_deno.py`, scripts de build e `design/README.md`.

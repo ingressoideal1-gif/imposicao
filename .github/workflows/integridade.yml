@@ -9,7 +9,46 @@ concurrency:
   group: integridade-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  compatibilidade-dois-canais:
+    name: NewProd e Piloto - ${{ matrix.canal }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        canal: [producao, piloto]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+      - name: Dependencias fixadas
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-windows.lock
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Contratos comuns e recursos do Piloto
+        shell: pwsh
+        run: python ferramentas/conferir_duas_versoes.py ${{ matrix.canal }}
+  consulta-piloto:
+    name: Piloto - consulta autenticada sem escrita
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+      - shell: pwsh
+        run: npm ci --ignore-scripts
+      - name: Autorizacao, empresa, origem e revisao
+        shell: pwsh
+        run: ./node_modules/@deno/win32-x64/deno.exe test --no-config --node-modules-dir=none --allow-env --allow-read --quiet supabase/functions/_compartilhado/piloto_catalogo_test.ts supabase/functions/_compartilhado/piloto_estacao_test.ts supabase/functions/_compartilhado/piloto_local_test.ts supabase/functions/_compartilhado/piloto_vinculo_test.ts
   validacao-local:
+    needs: [compatibilidade-dois-canais, consulta-piloto]
     name: Windows - seguranca e recuperacao
     runs-on: windows-latest
     timeout-minutes: 15

@@ -24,7 +24,8 @@ import hotfolder
 # uma linha nova em print_agents. Uma unica maquina chegou a acumular 21
 # registros, todos com status "online", porque nada nunca os remove.
 _APPDATA = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-_CONFIG_DIR = os.path.join(_APPDATA, "NewProd Agent")
+from canais_newprod import PILOTO, pasta_local
+_CONFIG_DIR = str(pasta_local())
 try:
     os.makedirs(_CONFIG_DIR, exist_ok=True)
 except Exception:
@@ -182,6 +183,8 @@ def _acesso_base() -> str:
 
 
 def sync_heartbeat():
+    if PILOTO:
+        return
     try:
         printers = print_service.get_printers()
         capabilities = {}
@@ -355,6 +358,8 @@ def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
 
 
 def process_queue():
+    if PILOTO:
+        return
     job_id = None
     reivindicado = False
     reserva = None
@@ -690,6 +695,8 @@ def sincronizar_painel():
     """
     import security_config
     from controle_producao import controle
+    if PILOTO:
+        return False
     if controle.ocupado():
         return False
     from agent_version import AGENT_VERSION
@@ -715,6 +722,7 @@ def sincronizar_painel():
                 conteudo = resp.read()
             if not conteudo:
                 raise RuntimeError(f"{nome} veio vazio")
+            os.makedirs(os.path.dirname(os.path.join(temp, nome)), exist_ok=True)
             with open(os.path.join(temp, nome), "wb") as f:
                 f.write(conteudo)
 
@@ -922,6 +930,10 @@ def consultar_manifesto() -> dict:
     import security_config
     from agent_version import AGENT_VERSION, como_tupla
 
+    if PILOTO:
+        return {"versao_atual": AGENT_VERSION, "versao_disponivel": AGENT_VERSION,
+                "ha_atualizacao": False, "erro": None, "canal": "piloto",
+                "notas": "Atualização pelo pacote próprio do Piloto."}
     resultado = {"versao_atual": AGENT_VERSION, "versao_disponivel": None,
                  "ha_atualizacao": False, "erro": None}
     try:
@@ -942,6 +954,8 @@ def consultar_manifesto() -> dict:
 
 
 def verificar_atualizacao(forcado: bool = False):
+    if PILOTO:
+        return
     from controle_producao import controle
     if not controle.download_lock.acquire(blocking=False):
         return

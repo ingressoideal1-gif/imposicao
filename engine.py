@@ -1451,8 +1451,10 @@ def _folhas_por_set_da_tela(set_definitions, bloco):
 
 
 class ImpositionEngine:
-    def __init__(self, config: ImpositionConfig, on_file_generated=None):
+    def __init__(self, config: ImpositionConfig, on_file_generated=None, *, resolver_recurso=None):
         self.cfg = config
+        # Piloto: resolução explícita, sem fallback de rede em caso de ausência.
+        self._resolver_recurso = resolver_recurso
         from integridade_impressao import RecursosDoTrabalho
         self._url_cache = RecursosDoTrabalho()
         self.on_file_generated = on_file_generated
@@ -1470,11 +1472,19 @@ class ImpositionEngine:
     def _preparar_elementos_obrigatorios(self):
         """Valida todos os recursos antes da primeira folha, inclusive de modelos tardios."""
         cfg = self.cfg
-        grupos = [(cfg.elements, cfg.csv_data or [], cfg.total_items, not cfg.multi_artes)]
+        grupos = [] if cfg.multi_artes else [(cfg.elements, cfg.csv_data or [], cfg.total_items, True)]
+        inicio = 0
         for arte in cfg.multi_artes:
+            quantidade = int(arte.get('qtd', 0))
+            banco = (arte.get('numeracao') or {}).get('csv_data') or []
+            banco = [r for r in banco if r.get('__ativo', True) is not False]
+            # O render usa o banco próprio ou a fatia global com offset deste
+            # modelo. Elementos globais não são renderizados em Multi-Artes.
+            linhas = banco if banco else (cfg.csv_data or [])[inicio:inicio + quantidade]
             for chave in ("numeracao", "numeracao_2"):
                 num = arte.get(chave) or {}
-                grupos.append((num.get("elements") or [], (arte.get("numeracao") or {}).get("csv_data") or [], int(arte.get("qtd", 0)), True))
+                grupos.append((num.get("elements") or [], linhas, quantidade, True))
+            inicio += quantidade
         for elementos, linhas, quantidade, conferir_teatro in grupos:
             linhas = [r for r in linhas if r.get("__ativo", True) is not False]
             for el in elementos:
@@ -1492,7 +1502,7 @@ class ImpositionEngine:
                 if el.get("source") == "database" and not el.get("fixed"):
                     coluna = el.get("csv_column")
                     if not coluna or len(linhas) < quantidade:
-                        raise ValueError("Banco obrigatório ausente, coluna não definida ou quantidade de linhas insuficiente")
+                        raise ValueError("Banco obrigatório ausente, coluna não definida ou quantidade de linhas insuficiente: " + str(el.get('id') or tipo)[:80])
                     if tipo != "FOTO" and any(coluna not in r for r in linhas[:quantidade]):
                         raise ValueError("Coluna obrigatória ausente em uma linha do banco")
                 if tipo in ("SVG", "PDF") and not el.get("svg_content" if tipo == "SVG" else "pdf_content"):
@@ -1566,6 +1576,10 @@ class ImpositionEngine:
             return self._url_cache[url]
         if getattr(self, "_recursos_confirmados", False):
             raise ValueError("Recurso não preparado antes da impressão")
+        if getattr(self, "_resolver_recurso", None) is not None:
+            data = self._resolver_recurso(url)
+            self._url_cache[url] = data
+            return data
         import urllib.request
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=30) as response:
@@ -1584,7 +1598,9 @@ class ImpositionEngine:
         if origem in self._url_cache:
             return self._url_cache[origem]
 
-        if origem.startswith("data:"):
+        if getattr(self, "_resolver_recurso", None) is not None and not origem.startswith("data:"):
+            dados = self._resolver_recurso(origem)
+        elif origem.startswith("data:"):
             dados = base64.b64decode(origem.split(",", 1)[-1])
         elif origem.startswith("http"):
             dados = self._get_url_bytes(origem)
@@ -1667,7 +1683,9 @@ class ImpositionEngine:
                     # Modo BarTender: o caminho tem de existir NESTA estacao. Conferir
                     # agora e a diferenca entre uma lista de pendencias e uma tiragem
                     # que morre no meio.
-                    if not origem.lower().startswith(("http", "data:")) and not os.path.exists(origem):
+                    if (not origem.lower().startswith(("http", "data:"))
+                            and getattr(self, "_resolver_recurso", None) is None
+                            and not os.path.exists(origem)):
                         # Cortar pelo COMECO: num caminho longo o que identifica a
                         # pendencia e o nome do arquivo, que fica no fim.
                         curto = origem if len(origem) <= 80 else "..." + origem[-80:]
@@ -2259,6 +2277,8 @@ class ImpositionEngine:
             # 2. Tentar baixar a fonte do Catálogo Web se URL fornecida
             if not font_file:
                 font_url = el.get("arquivo_url") or el.get("font_url")
+                if font_url and getattr(self, "_resolver_recurso", None) is not None:
+                    raise ValueError("Fonte local não preparada antes da geração")
                 if font_url:
                     try:
                         import hashlib
@@ -3024,7 +3044,10 @@ class ImpositionEngine:
                             return pdf_cache[file_path]
                         
                         pdf_bytes = None
-                        retries = 3
+                        resolver = getattr(self, "_resolver_recurso", None)
+                        retries = 0 if resolver is not None else 3
+                        if resolver is not None:
+                            pdf_bytes = resolver(file_path)
                         delay = 1.0
                         req = urllib.request.Request(file_path, headers={'User-Agent': 'Mozilla/5.0'})
                         for attempt in range(retries):

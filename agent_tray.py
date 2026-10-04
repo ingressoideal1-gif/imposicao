@@ -49,6 +49,8 @@ else:
     EXE_DIR = BASE_DIR
     os.chdir(BASE_DIR)
 
+from canais_newprod import PILOTO, PORTA, NOME, CHAVE_INICIO, pasta_local, url_painel
+from canais_newprod import PILOTO, PORTA, NOME, CHAVE_INICIO, pasta_local, url_painel
 import agent_worker
 
 server_thread = None
@@ -97,7 +99,7 @@ def run_server():
     # 127.0.0.1 e não 0.0.0.0: cada operador imprime apenas na própria máquina,
     # então o agente não precisa aceitar conexões da LAN. Isso remove de uma vez
     # a exposição de /api/update, /api/proxy e dos endpoints de impressão para a rede.
-    config = uvicorn.Config(app, host="127.0.0.1", port=9000, log_level="warning", loop="asyncio")
+    config = uvicorn.Config(app, host="127.0.0.1", port=PORTA, log_level="warning", loop="asyncio")
     server = uvicorn.Server(config)
     loop.run_until_complete(server.serve())
 
@@ -112,7 +114,7 @@ def start_server_thread():
     _deadline = time.time() + 30
     while time.time() < _deadline:
         try:
-            with socket.create_connection(("127.0.0.1", 9000), timeout=1):
+            with socket.create_connection(("127.0.0.1", PORTA), timeout=1):
                 break
         except OSError:
             time.sleep(0.5)
@@ -121,7 +123,7 @@ def start_server_thread():
 
 def open_panel(icon=None, item=None):
     # Abre a interface local - 100% offline, sem depender da internet
-    webbrowser.open("http://127.0.0.1:9000/app/")
+    webbrowser.open(url_painel())
 
 
 def add_to_startup(icon=None, item=None):
@@ -133,7 +135,11 @@ def add_to_startup(icon=None, item=None):
             r"Software\Microsoft\Windows\CurrentVersion\Run",
             0, winreg.KEY_SET_VALUE
         )
-        winreg.SetValueEx(key, "NewProdAgent", 0, winreg.REG_SZ, f'"{exe_path}"')
+        command = f'"{exe_path}"'
+        if PILOTO:
+            launcher = pasta_local() / 'iniciar-piloto.ps1'
+            command = f'powershell.exe -NoProfile -WindowStyle Hidden -File "{launcher}"'
+        winreg.SetValueEx(key, CHAVE_INICIO, 0, winreg.REG_SZ, command)
         winreg.CloseKey(key)
         import ctypes
         ctypes.windll.user32.MessageBoxW(0, "Adicionado ao inicio do Windows com sucesso!", "NewProd Agent", 0)
@@ -151,7 +157,7 @@ def remove_from_startup(icon=None, item=None):
             0, winreg.KEY_SET_VALUE
         )
         try:
-            winreg.DeleteValue(key, "NewProdAgent")
+            winreg.DeleteValue(key, CHAVE_INICIO)
         except FileNotFoundError:
             pass
         winreg.CloseKey(key)
@@ -169,7 +175,7 @@ def setup_tray(icon):
     icon.visible = True
 
 
-def is_port_in_use(port=9000):
+def is_port_in_use(port=PORTA):
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
@@ -193,13 +199,14 @@ def remove_firewall_rule():
         pass
 
 def main():
-    if is_port_in_use(9000):
+    if is_port_in_use(PORTA):
         print("[agent] Agente ja esta rodando na porta 9000. Abrindo painel no navegador e encerrando esta nova instancia.")
-        webbrowser.open("http://127.0.0.1:9000/app/index.html")
+        webbrowser.open(url_painel())
         sys.exit(0)
 
     # Limpa a regra de firewall das versões antigas — o agente é local-only agora
-    remove_firewall_rule()
+    if not PILOTO:
+        remove_firewall_rule()
 
     try:
         import pystray
@@ -259,7 +266,7 @@ def main():
         threading.Thread(target=tarefa, daemon=True, name="AtualizaAgora").start()
 
     menu = pystray.Menu(
-        pystray.MenuItem(f"NewProd Agent {AGENT_VERSION}", None, enabled=False),
+        pystray.MenuItem(f"{NOME} {AGENT_VERSION}", None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(f"Ativo - Cloud Relay", None, enabled=False),
         pystray.Menu.SEPARATOR,
@@ -275,9 +282,9 @@ def main():
     )
 
     icon = pystray.Icon(
-        name="NewProdAgent",
+        name=CHAVE_INICIO,
         icon=tray_image,
-        title="NewProd Agent - Ativo",
+        title=f"{NOME} - Ativo",
         menu=menu,
     )
 

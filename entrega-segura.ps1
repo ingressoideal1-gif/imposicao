@@ -547,6 +547,16 @@ function Invoke-Publicar {
         Invoke-Git @('commit', '-m', $mensagemCommit) | ForEach-Object { Write-Host "  $_" }
     }
 
+    if ($plano.Escopo -eq 'Frontend') {
+        $pythonCanais = @((Join-Path $script:Raiz '.venv\Scripts\python.exe'),
+                         (Join-Path $script:Raiz 'venv\Scripts\python.exe')) |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+        if (-not $pythonCanais) { throw 'Python do projeto necessario para validar as duas variantes.' }
+        & $pythonCanais (Join-Path $script:Raiz 'ferramentas\conferir_duas_versoes.py')
+        if ($LASTEXITCODE -ne 0) { throw 'Entrega bloqueada por regressao na producao ou Piloto.' }
+        & (Join-Path $script:Raiz 'ferramentas\compilar-piloto.ps1') -Python $pythonCanais
+        if ($LASTEXITCODE -ne 0) { throw 'Pacote atualizado do Piloto nao foi gerado.' }
+    }
     if ($plano.Escopo -eq 'EdgeFunctions') { Invoke-DeployEdge -Arquivos $arquivos }
 
     $branch = Get-BranchAtual

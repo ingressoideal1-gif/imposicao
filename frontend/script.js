@@ -12786,6 +12786,8 @@ function updateImpSummary() {
 
         
 
+        const faixa = faixaNumeracaoDoModelo(itemAtivoDoPedido(), num, state.csvData.length);
+
         // Travar e preencher campos
 
         const impStart = document.getElementById('imp-start');
@@ -12794,7 +12796,7 @@ function updateImpSummary() {
 
         if (impStart) {
 
-            impStart.value = 1;
+            impStart.value = faixa.inicio;
 
             impStart.setAttribute('disabled', 'true');
 
@@ -12802,7 +12804,7 @@ function updateImpSummary() {
 
         if (impEnd) {
 
-            impEnd.value = state.csvData.length;   // ja e a fatia, ja sem canceladas
+            impEnd.value = faixa.fim;
 
             impEnd.setAttribute('disabled', 'true');
 
@@ -14007,8 +14009,8 @@ window.runImposition = async function (mode, returnBlob = false) {
 
         if (!localApiActive) {
             // Testa / e /api/status para compatibilidade com todas as versoes do exe
-            const agentBases = [window.location.origin, "http://127.0.0.1:9000", "http://localhost:9000"];
-            if (window._activeAgentData && window._activeAgentData.printers_json && window._activeAgentData.printers_json.local_ip) {
+            const agentBases = (window.location.port === "9001" ? [window.location.origin] : [window.location.origin, "http://127.0.0.1:9000", "http://localhost:9000"]);
+            if (window.location.port !== "9001" && window._activeAgentData && window._activeAgentData.printers_json && window._activeAgentData.printers_json.local_ip) {
                 const rip = `http://${window._activeAgentData.printers_json.local_ip}:9000`;
                 if (!agentBases.includes(rip)) {
                     agentBases.push(rip);
@@ -17069,6 +17071,21 @@ function _abrirEditorCsvDaNumeracao(headers, rows, filename, destacar) {
 // muda por modelo é a fatia, guardada em `pedidos_modelos.csv_selecao`. Ver
 // docs/editor_de_csv.md.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** CSV identifica registros; seu índice não substitui a numeração do modelo. */
+function faixaNumeracaoDoModelo(item, num, quantidade) {
+    const preenchido = v => v !== null && v !== undefined && v !== '';
+    const inicio = item?.numeracao_inicio ?? item?.num_inicial;
+    const fim = item?.numeracao_fim ?? item?.num_final;
+    const ni = preenchido(inicio) ? Number(inicio) : 1;
+    const vias = String(num?.tipo || '').toUpperCase() === 'TICKET'
+        ? Math.max(1, Number(num.ticket_qtd) || 1) : 1;
+    const nf = preenchido(fim) ? Number(fim) : ni + quantidade * vias - 1;
+    if (!Number.isSafeInteger(ni) || !Number.isSafeInteger(nf) || nf < ni) {
+        throw new Error('Faixa de numeração inválida no modelo. Confira o cadastro.');
+    }
+    return { inicio: ni, fim: nf };
+}
 
 /** O item do pedido carregado na Imposição agora, ou null. */
 function itemAtivoDoPedido() {
@@ -27529,7 +27546,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 || String(state.pedidoAberto?.osId || '') === String(os.id)
                 || String(state.activeOSItem?.osId || '') === String(os.id)
                 || (state.selectedOSItems || []).some(alvo => String(alvo.osId) === String(os.id));
-            if (!state.osItens[os.id] || (!modelosEmUso && !state._loadingOSItens?.[os.id])) {
+            if (!state.osItens[os.id] || (!modelosEmUso && !state._loadingOSItens?.[os.id] && !state.osItens[os.id].every(i => i._pedidoModeloId != null))) {
                 state.osItens[os.id] = (os._itens_raw || []).map(p => mapVibecodeProdutoToOSItem(p, os.id));
             }
             delete os._itens_raw; // limpar dados brutos
@@ -27930,7 +27947,13 @@ async function loadOSItens(osId, opcoes = {}) {
     const ordem = typeof findOSInState === 'function' ? findOSInState(osId) : null;
     osId = ordem?.id || osId;
     const cargas = state._loadingOSItens || (state._loadingOSItens = {});
-    if (!cargas[osId]) cargas[osId] = Promise.resolve().then(async () => {
+    if (cargas[osId] && ((opcoes.atualizar && !cargas[osId].opcoes?.atualizar)
+            || (opcoes.exigirModelos && !cargas[osId].opcoes?.exigirModelos))) {
+        await cargas[osId];
+        return loadOSItens(osId, opcoes);
+    }
+    if (!cargas[osId]) {
+      cargas[osId] = Promise.resolve().then(async () => {
       const anteriores = state.osItens[osId];
       try {
 
@@ -27941,7 +27964,7 @@ async function loadOSItens(osId, opcoes = {}) {
         const targetId = os.id || osId;
 
         // Se não carregado ainda, ou se tem apenas o cache básico do Vibecode, busca a fonte de dados principal
-        const needsFullLoad = !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
+        const needsFullLoad = opcoes.atualizar || !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
         if (needsFullLoad) {
             if (typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const queryNum = parseInt(os.numero);
@@ -27952,6 +27975,10 @@ async function loadOSItens(osId, opcoes = {}) {
                 ]);
                 const { data, error } = modelosResult;
                 if (error) throw error;
+                if (produtosResult.error) throw produtosResult.error;
+                if (opcoes.exigirModelos && !data?.length) {
+                    throw new Error('Não foi possível confirmar os modelos de produção deste pedido. Tente atualizar novamente.');
+                }
                 
                 // Buscar nome do produto original da proposta e os IDs de cor/numeração salvos pelo parceiro
                 const { data: propData, error: produtosError } = produtosResult;
@@ -28033,6 +28060,7 @@ async function loadOSItens(osId, opcoes = {}) {
 
                         const mapped = {
                             ...item,
+                            _modeloOnline: JSON.parse(JSON.stringify(item)),
                             produto: item.nome_modelo || 'Modelo',
                             nome_produto_real: prop ? prop.nome_produto : null,
                             id_produto: prop ? prop.id_produto : (item.id_produto || null),
@@ -28184,6 +28212,7 @@ async function loadOSItens(osId, opcoes = {}) {
                     state.osItens[osId] = [];
                 }
             } else {
+                if (opcoes.exigirModelos) throw new Error('Conexão com os modelos de produção indisponível.');
                 state.osItens[osId] = await lerDadosLista(async signal => {
                     const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`, { signal });
                     if (!res.ok) throw new Error('Não foi possível carregar os modelos.');
@@ -28259,6 +28288,8 @@ async function loadOSItens(osId, opcoes = {}) {
         cargas[osId] = false;
       }
     });
+      cargas[osId].opcoes = opcoes;
+    }
     const resultado = await cargas[osId];
     if (!resultado.ok && opcoes.obrigatorio) throw resultado.erro;
     return resultado.ok;
@@ -33281,7 +33312,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
             const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
             const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
             
-            await fetch(arteUrl)
+            await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(arteUrl) : fetch(arteUrl))
                 .then(res => {
                     if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                     const ct = res.headers.get('content-type') || '';
@@ -33312,7 +33343,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
             state.impArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
-                await fetch(item.verso_arte_url)
+                await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(item.verso_arte_url) : fetch(item.verso_arte_url))
                     .then(res => {
                         if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                         const ct = res.headers.get('content-type') || '';
@@ -33434,8 +33465,9 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     if (!podeAbrirView('view-pedido')) return;
     const aindaAtual = window.NavegacaoPainel?.iniciarAcao() || (() => true);
     // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
-    await loadOSItens(osId);
-    if (!aindaAtual()) return;
+    const exigirModelos = findOSInState(osId)?._source === 'vibecode' || String(osId).startsWith('vibe_');
+    const carregado = await loadOSItens(osId, { atualizar: true, exigirModelos });
+    if (!aindaAtual() || carregado === false) return;
     // Enxuto: quem abre o pedido cai no primeiro modelo pelo `enviarParaPedido`
     // logo abaixo, e e ele quem desce o banco do modelo aberto. Ver a linha
     // gemea no `enviarParaImposicao`.
@@ -33449,6 +33481,10 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
         || state.osItens[realOsId] || state.osItens[osId] || [];
     if (!itens.length) {
         return toast('Esta OS não possui itens.', 'error');
+    }
+
+    if (exigirModelos && itens.some(i => i._pedidoModeloId == null || i._dbLoaded !== true)) {
+        return toast('Os modelos de produção não foram confirmados. Atualize o pedido antes de abrir.', 'error');
     }
 
     // Limpar seleções múltiplas de artes anteriores, e variáveis de arte

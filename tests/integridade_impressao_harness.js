@@ -37,10 +37,41 @@ async function casos() {
             executar() { return confirmarIntegridadeDoTrabalho(fd, 'http://localhost', estado, cliente); } };
     }
     {
+        const c = montar();
+        Object.assign(c.modelo, { numeracao_inicio: 1001, numeracao_fim: 11000 });
+        Object.assign(c.estado.osItens.os[0], c.modelo, { _modeloOnline: structuredClone(c.modelo) });
+        const dados = JSON.parse(c.fd.get('payload'));
+        Object.assign(dados, { seq_start: 1, seq_end: 10000 });
+        c.fd.set('payload', JSON.stringify(dados));
+        let leituras = 0;
+        globalThis.PilotoSelecao = { lerUrl: async () => { leituras++; return { ok: true, blob: async () => arte }; } };
+        try {
+            await recusa(() => c.executar(), 'fora da faixa');
+            Object.assign(dados, { seq_start: 1001, seq_end: 11000 });
+            c.fd.set('payload', JSON.stringify(dados));
+            await c.executar();
+            ok(leituras === 2, 'piloto confirma frente e verso por leitura local');
+            c.modelo.padrao = 'cor alterada';
+            await recusa(() => c.executar(), 'dados do modelo mudaram');
+            delete c.modelo.padrao;
+            c.estado.osItens.os[0].num_inicial = 1;
+            await recusa(() => c.executar(), 'Campo divergente');
+        } finally { delete globalThis.PilotoSelecao; }
+    }
+    {
         const c = montar(); await c.executar();
         const p = JSON.parse(c.fd.get('payload'));
         ok(p.integridade.faces[0].front && p.integridade.faces[0].back, 'ambas as artes confirmadas');
         ok(p.integridade.arquivos.file.sha256.length === 64, 'hash vincula os bytes');
+    }
+    {
+        const c = montar();
+        globalThis.PacotesLocais = { capturarEntrada() { throw Error('Falha sintética da extensão'); } };
+        try {
+            await c.executar();
+            ok(JSON.parse(c.fd.get('payload')).integridade.version === 1,
+                'falha da captura opcional não invalida trabalho conferido');
+        } finally { delete globalThis.PacotesLocais; }
     }
     {
         const c = montar({ modo: 'pdf_duplicate_back' });

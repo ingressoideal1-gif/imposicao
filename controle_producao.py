@@ -1,5 +1,6 @@
 """Exclusão entre produção local e instalação; sem rede ou arquivos no import."""
 import threading
+import time
 
 
 class Reserva:
@@ -11,11 +12,14 @@ class Reserva:
         with self._controle._lock:
             if not self._liberada:
                 self._controle._ativos -= 1
+                self._controle._ultima_atividade = self._controle._relogio()
                 self._liberada = True
 
 
 class ControleProducao:
-    def __init__(self):
+    def __init__(self, *, relogio=time.monotonic):
+        self._relogio = relogio
+        self._ultima_atividade = relogio()
         self._lock = threading.Lock()
         self._ativos = 0
         self._atualizando = False
@@ -26,7 +30,12 @@ class ControleProducao:
             if self._atualizando:
                 return None
             self._ativos += 1
+            self._ultima_atividade = self._relogio()
             return Reserva(self)
+
+    def segundos_ociosos(self):
+        with self._lock:
+            return 0 if self._ativos or self._atualizando else self._relogio() - self._ultima_atividade
 
     def ocupado(self):
         with self._lock:
