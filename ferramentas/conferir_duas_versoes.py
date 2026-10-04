@@ -6,6 +6,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
+    'test_hotfolder_dialogo.py',
     'test_canais_newprod.py','test_seguranca_estacao.py','test_integridade_impressao.py',
     'test_numeracao_compatibilidade.py',
     'test_engine_pdf_mesclar.py','test_engine_modelos_somados.py','test_engine_banco_nunca_vira_sequencial.py',

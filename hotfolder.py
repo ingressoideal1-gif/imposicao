@@ -38,6 +38,7 @@ _RESERVADOS = {
 # Um seletor de pasta por vez. Sem isso, dois cliques no botao abrem dois
 # dialogos, e o segundo nasce atras do primeiro — o operador ve a tela travada.
 _lock_dialogo = threading.Lock()
+_dialogo_ativo = None
 
 # A escolha do nome livre e o rename precisam ser um passo so dentro do agente,
 # senao dois envios simultaneos escolhem o mesmo nome.
@@ -399,10 +400,45 @@ def conferir(caminhos) -> list:
 
 # ─── Seletor nativo de pasta ──────────────────────────────────────────────────
 #
-# SHBrowseForFolderW por ctypes, e nao o filedialog do tkinter: o tkinter esta
-# em `excludes` no agent_tray.spec e nao existe dentro do executavel. O ctypes
-# nao acrescenta dependencia nenhuma e a caixa de edicao da janela aceita um
-# caminho UNC colado.
+# Seletor nativo de pasta, com ponteiros declarados para Windows 32 e 64 bits.
+# ctypes dispensa tkinter (excluido do executavel) e novas dependencias.
+
+def _conferir_hresult(hr):
+    if hr < 0:
+        raise OSError(f"Windows recusou o seletor de pasta (0x{hr & 0xffffffff:08X})")
+
+
+def _focar_dialogo(thread_id):
+    """Recupera somente a janela do seletor na thread STA deste processo."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    callback_tipo = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumThreadWindows.argtypes = [wintypes.DWORD, callback_tipo, wintypes.LPARAM]
+    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,
+                                  ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.FlashWindow.argtypes = [wintypes.HWND, wintypes.BOOL]
+    encontrado = False
+
+    @callback_tipo
+    def callback(hwnd, _):
+        nonlocal encontrado
+        classe = ctypes.create_unicode_buffer(80)
+        user32.GetClassNameW(hwnd, classe, len(classe))
+        if classe.value == '#32770':
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x43)  # TOPMOST, SHOWWINDOW
+            if not user32.SetForegroundWindow(hwnd):
+                user32.FlashWindow(hwnd, True)
+            encontrado = True
+        return True
+
+    user32.EnumThreadWindows(thread_id, callback, 0)
+    return encontrado
+
 
 def _abrir_dialogo(inicial: str = "") -> str:
     import ctypes
@@ -420,6 +456,14 @@ def _abrir_dialogo(inicial: str = "") -> str:
     shell32 = ctypes.windll.shell32
     ole32 = ctypes.windll.ole32
     user32 = ctypes.windll.user32
+    user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,
+                                   ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    user32.SendMessageW.restype = wintypes.LPARAM
+    ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+    ole32.CoTaskMemFree.restype = None
+    caminho_inicial = ctypes.create_unicode_buffer(inicial) if inicial else None
 
     BFFCALLBACK = ctypes.WINFUNCTYPE(
         ctypes.c_int, wintypes.HWND, wintypes.UINT, wintypes.LPARAM, wintypes.LPARAM)
@@ -442,14 +486,14 @@ def _abrir_dialogo(inicial: str = "") -> str:
             # do ponto de vista do operador, o botao simplesmente nao fez nada.
             try:
                 user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                                    SWP_NOMOVE | SWP_NOSIZE)
+                                    SWP_NOMOVE | SWP_NOSIZE | 0x0040)
                 user32.SetForegroundWindow(hwnd)
             except Exception:
                 pass
             if inicial:
                 try:
                     user32.SendMessageW(hwnd, BFFM_SETSELECTIONW, 1,
-                                        ctypes.c_wchar_p(inicial))
+                                        ctypes.addressof(caminho_inicial))
                 except Exception:
                     pass
         return 0
@@ -485,52 +529,71 @@ def _abrir_dialogo(inicial: str = "") -> str:
             return ""   # pasta virtual (Este Computador, Rede), sem caminho real
         return caminho.value
     finally:
-        try:
-            ole32.CoTaskMemFree(pidl)
-        except Exception:
-            pass
+        ole32.CoTaskMemFree(pidl)
 
 
 def escolher_pasta(inicial: str = "") -> str:
-    """Abre o seletor nativo na estacao. Devolve "" se cancelado.
-
-    Roda numa thread propria com COM em STA. O endpoint do FastAPI e servido por
-    uma thread do pool, que pode ja estar em MTA — e o BIF_NEWDIALOGSTYLE exige
-    STA. Numa thread nova o modo e nosso.
-    """
+    """Uma janela STA por estacao. Chamadas repetidas recuperam a mesma escolha."""
+    global _dialogo_ativo
     if sys.platform != "win32":
         raise RuntimeError("o seletor de pasta so existe no Windows")
-
-    if not _lock_dialogo.acquire(blocking=False):
-        raise RuntimeError("ja existe um seletor de pasta aberto nesta estacao")
-
-    resultado = {"caminho": "", "erro": None}
+    with _lock_dialogo:
+        nova = _dialogo_ativo is None
+        if nova:
+            _dialogo_ativo = {'caminho': '', 'erro': None, 'thread': None,
+                              'pronto': threading.Event(), 'fim': threading.Event()}
+        resultado = _dialogo_ativo
 
     def tarefa():
         import ctypes
         ole32 = ctypes.windll.ole32
+        ole32.CoInitialize.argtypes = [ctypes.c_void_p]
+        ole32.CoInitialize.restype = ctypes.c_int32
+        ole32.CoUninitialize.argtypes = []
+        ole32.CoUninitialize.restype = None
         iniciado = False
         try:
-            # S_OK (0) e S_FALSE (1) sao sucesso; so quem inicializou desinicializa.
             hr = ole32.CoInitialize(None)
-            iniciado = hr in (0, 1)
-            resultado["caminho"] = _abrir_dialogo(inicial)
+            _conferir_hresult(hr)
+            iniciado = True
+            resultado['thread'] = threading.get_native_id()
+            resultado['pronto'].set()
+            resultado['caminho'] = _abrir_dialogo(inicial)
         except Exception as e:
-            resultado["erro"] = e
+            resultado['erro'] = e
         finally:
-            if iniciado:
-                try:
+            try:
+                if iniciado:
                     ole32.CoUninitialize()
-                except Exception:
-                    pass
+            except Exception as e:
+                resultado['erro'] = resultado['erro'] or e
+            finally:
+                resultado['pronto'].set()
+                with _lock_dialogo:
+                    global _dialogo_ativo
+                    if _dialogo_ativo is resultado:
+                        _dialogo_ativo = None
+                    resultado['fim'].set()
 
-    try:
-        t = threading.Thread(target=tarefa, name="HotFolderDialogo", daemon=True)
-        t.start()
-        t.join()
-    finally:
-        _lock_dialogo.release()
-
-    if resultado["erro"]:
-        raise resultado["erro"]
-    return resultado["caminho"]
+    if nova:
+        try:
+            threading.Thread(target=tarefa, name="HotFolderDialogo", daemon=True).start()
+        except Exception as e:
+            with _lock_dialogo:
+                resultado['erro'] = e
+                _dialogo_ativo = None
+                resultado['pronto'].set()
+                resultado['fim'].set()
+            raise
+    resultado['pronto'].wait()
+    # A janela aparece depois de Show. A espera curta nao bloqueia sua thread STA.
+    for _ in range(40):
+        if resultado['fim'].is_set():
+            break
+        if resultado['thread'] and _focar_dialogo(resultado['thread']):
+            break
+        resultado['fim'].wait(.05)
+    resultado['fim'].wait()
+    if resultado['erro']:
+        raise resultado['erro']
+    return resultado['caminho']
