@@ -17,7 +17,8 @@ TESTES = [
 HARNESSES = ['modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
              'selecao_piloto_harness.js','integridade_impressao_harness.js',
              'token_estacao_harness.js','ticket_condicoes_harness.js',
-             'ticket_previas_harness.js','numeracao_compatibilidade_harness.js']
+             'ticket_previas_harness.js','numeracao_compatibilidade_harness.js',
+             'mapas_teatro_harness.js','mapas_teatro_browser_harness.js']
 
 def conferir(canais=('producao','piloto')):
     for canal in canais:
