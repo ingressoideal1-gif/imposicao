@@ -175,6 +175,46 @@ async function teste(nome, fn) {
         assert.equal(aberto.persistencia.estado, 'pendente'); assert.equal(t.c.state.mapaAtual, null);
         assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
     });
+    await teste('duplicar publica os PDFs da cópia confirmada automaticamente', async () => {
+        const t = montar(); const b = clienteSimulado(t); let recebido;
+        t.c.MapasTeatroPdf = { async gerar(m) { return { revisao: 'copia', nome: m.name }; } };
+        t.c.MapasTeatroPdfStorage = { async persistir(m) { recebido = copia(m); return { estado: 'pronto' }; } };
+        await t.c.duplicarMapaTeatro('m1');
+        assert.ok(recebido, 'A duplicação deve publicar sem outro clique.');
+        assert.deepEqual(recebido, b.rows.get(recebido.id));
+        assert.notEqual(recebido.id, 'm1');
+        assert.match(t.avisos.at(-1).msg, /PDFs publicados para o ERP/);
+    });
+    await teste('módulo de publicação ausente deixa aviso explícito ao salvar', async () => {
+        const t = montar(); clienteSimulado(t);
+        t.c.MapasTeatroPdf = { async gerar() { return {}; }, abrir() {} };
+        await t.c.salvarMapaTeatro();
+        assert.equal(t.confirmacoes.at(-1).titulo, 'Mapa salvo; publicação pendente');
+        assert.match(t.confirmacoes.at(-1).mensagem, /envio dos PDFs para o ERP está pendente/);
+    });
+    await teste('salvamento permanece protegido durante a publicação dos PDFs', async () => {
+        const t = montar(); const b = clienteSimulado(t); let resolver, iniciou;
+        const inicio = new Promise(resolve => { iniciou = resolve; });
+        t.c.MapasTeatroPdf = { async gerar() { return {}; }, abrir() {} };
+        t.c.MapasTeatroPdfStorage = { persistir() { iniciou(); return new Promise(resolve => { resolver = resolve; }); } };
+        const salvamento = t.c.salvarMapaTeatro(); await inicio;
+        assert.equal(t.get('botao-salvar').disabled, true);
+        assert.equal(await t.c.salvarMapaTeatro(), false);
+        assert.ok(!t.avisos.some(a => a.tipo === 'success'), 'Não anunciar conclusão antes da publicação.');
+        resolver({ estado: 'pronto' }); await salvamento;
+        assert.equal(t.get('botao-salvar').disabled, false);
+        assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
+    });
+    await teste('falha de publicação na cópia preserva um único mapa e sinaliza pendência', async () => {
+        const t = montar(); const b = clienteSimulado(t);
+        t.c.MapasTeatroPdf = { async gerar() { return {}; } };
+        t.c.MapasTeatroPdfStorage = { async persistir() { throw Error('Sessão necessária'); } };
+        await t.c.duplicarMapaTeatro('m1');
+        assert.equal(b.chamadas.filter(x => x.acao === 'insert').length, 1);
+        assert.equal(t.c.state.mapas.length, 2);
+        assert.equal(t.avisos.at(-1).tipo, 'warning');
+        assert.match(t.avisos.at(-1).msg, /Sessão necessária/);
+    });
     await teste('abrir PDFs consulta persistência sem iniciar upload nem regravar mapa', async () => {
         const t = montar(); const b = clienteSimulado(t); let aberto, consultas = 0;
         t.c.MapasTeatroPdf = { async gerar() { return { revisao: 'sintetica' }; }, abrir(r) { aberto = r; } };
@@ -240,7 +280,7 @@ async function teste(nome, fn) {
         assert.equal(b.chamadas.length, 0); assert.equal(t.confirmacoes.length, 1);
         responder(true); assert.equal(await salvamento, true);
         assert.equal(b.chamadas.filter(x => x.acao === 'update').length, 1);
-        assert.equal(t.confirmacoes.at(-1).titulo, 'Mapa salvo');
+        assert.equal(t.confirmacoes.at(-1).titulo, 'Mapa salvo; publicação pendente');
     });
     await teste('fechar mapa existente sem alterações dispensa confirmação', async () => {
         const t = montar(); t.c.editarMapaTeatro('m1');
