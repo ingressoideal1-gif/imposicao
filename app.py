@@ -1015,7 +1015,7 @@ def _chaves_de_fonte(family: str, bold: bool, italic: bool, instaladas: dict) ->
     return chaves
 
 
-def _embed_system_fonts(numeracao_obj):
+def _embed_system_fonts(numeracao_obj, *, resolver_recurso=None):
     """Embute o binário das fontes do sistema nos elementos para garantir
     que funcionem independentemente do ambiente de deploy."""
     if not numeracao_obj or "elements" not in numeracao_obj:
@@ -1071,7 +1071,8 @@ def _embed_system_fonts(numeracao_obj):
                 print(f"[impose] INFO: Fonte '{family}' não encontrada no catálogo do backend, mas arquivo_url do frontend presente: {fallback_url}")
                 # Usar a URL do frontend para embutir
                 try:
-                    font_bytes = base64.b64encode(font_cache_local.obter_bytes(fallback_url)).decode("ascii")
+                    dados_fonte = resolver_recurso(fallback_url) if resolver_recurso is not None else font_cache_local.obter_bytes(fallback_url)
+                    font_bytes = base64.b64encode(dados_fonte).decode("ascii")
                     el["_font_data"] = font_bytes
                     font_cache[fallback_url] = font_bytes
                     print(f"[impose] Fonte embutida via fallback frontend: {family} -> {fallback_url} ({len(font_bytes)} chars b64)")
@@ -1093,7 +1094,9 @@ def _embed_system_fonts(numeracao_obj):
             continue
             
         try:
-            if url.startswith("/"):
+            if resolver_recurso is not None and url.startswith(('http://', 'https://')):
+                font_bytes = base64.b64encode(resolver_recurso(url)).decode('ascii')
+            elif url.startswith("/"):
                 import os
                 # Caminho relativo (legado): fonte empacotada junto do agente.
                 local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", url.lstrip("/"))
@@ -1296,6 +1299,15 @@ async def impose_file(
             print("[teatro] " + aviso_teatro, flush=True)
         from integridade_impressao import validar_uploads
         await validar_uploads(data, await request.form())
+        resolver_local = None
+        if data.get('piloto_recursos') is not None:
+            if piloto_pacotes is None:
+                raise ValueError('Recursos do Piloto exigem o canal Piloto.')
+            from motor_piloto import resolver_do_pedido
+            if {str(r.get('modelo')) for r in data['piloto_recursos'] if isinstance(r, dict)} != {
+                    str(m) for m in data['integridade']['modelos']}:
+                raise ValueError('Pacotes locais não correspondem aos modelos do trabalho.')
+            resolver_local = resolver_do_pedido(piloto_pacotes, data['piloto_recursos'])
         log_diag(f"[integridade] job={data['integridade']['job_id']} modelos={data['integridade']['modelos']} etapa=uploads_confirmados")
 
         formato = data.get("formato") or db.get_formato(data.get("formato_id"))
@@ -1304,8 +1316,8 @@ async def impose_file(
         numeracao_2 = data.get("numeracao_2") or (db.get_numeracao(data.get("numeracao_2_id")) if data.get("numeracao_2_id") else None)
 
         # Embutir fontes do sistema nos elementos para deploy cross-platform
-        _embed_system_fonts(numeracao)
-        _embed_system_fonts(numeracao_2)
+        _embed_system_fonts(numeracao, resolver_recurso=resolver_local)
+        _embed_system_fonts(numeracao_2, resolver_recurso=resolver_local)
 
         # ── O trabalho pediu numeração e ela não chegou? Para aqui. ──────────
         #
@@ -1586,8 +1598,8 @@ async def impose_file(
 
         # Embutir fontes do sistema nos elementos de multi_artes
         for ma in multi_artes_list:
-            _embed_system_fonts(ma.get("numeracao"))
-            _embed_system_fonts(ma.get("numeracao_2"))
+            _embed_system_fonts(ma.get("numeracao"), resolver_recurso=resolver_local)
+            _embed_system_fonts(ma.get("numeracao_2"), resolver_recurso=resolver_local)
 
         # Forçar print_mode para duplex se qualquer item em multi_artes tiver verso.
         #
@@ -1651,16 +1663,6 @@ async def impose_file(
             arte_escala_h=data.get("arte_escala_h", 100),
             arte_escala_v=data.get("arte_escala_v", 100)
         )
-
-        resolver_local = None
-        if data.get('piloto_recursos') is not None:
-            if piloto_pacotes is None:
-                raise ValueError('Recursos do Piloto exigem o canal Piloto.')
-            from motor_piloto import resolver_do_pedido
-            if {str(r.get('modelo')) for r in data['piloto_recursos'] if isinstance(r, dict)} != {
-                    str(m) for m in data['integridade']['modelos']}:
-                raise ValueError('Pacotes locais não correspondem aos modelos do trabalho.')
-            resolver_local = resolver_do_pedido(piloto_pacotes, data['piloto_recursos'])
 
         wants_stream = data.get("stream", False)
 

@@ -44,3 +44,21 @@ def test_corrupcao_nao_busca_copia_na_rede(pacote, tmp_path):
 def test_referencia_invalida_e_pacote_ausente_bloqueiam(pacote,tmp_path,refs):
     s, _ = preparar(pacote,tmp_path)
     with pytest.raises(ValueError): resolver_do_pedido(s,refs)
+
+
+@pytest.mark.parametrize('catalogada', [False, True])
+def test_api_embute_fonte_preparada_sem_consultar_cache_web(pacote,tmp_path,catalogada):
+    import ast
+    import base64
+    from pathlib import Path
+    s, refs = preparar(pacote,tmp_path)
+    arvore = ast.parse((Path(__file__).resolve().parents[1]/'app.py').read_text(encoding='utf-8-sig'))
+    fn = next(n for n in arvore.body if isinstance(n,ast.FunctionDef) and n.name == '_embed_system_fonts')
+    def proibido(*args): pytest.fail('A fonte preparada não deve ser buscada na rede')
+    escopo = {'db':SimpleNamespace(get_catalogo_fontes=lambda:[{'font_family':'Teste','arquivo_url':FONTE}] if catalogada else []),
+              '_fontes_instaladas':lambda:[], '_chaves_de_fonte':lambda *args:['teste'],
+              'font_cache_local':SimpleNamespace(obter_bytes=proibido)}
+    exec(compile(ast.Module(body=[fn],type_ignores=[]),'fonte_api_isolada','exec'),escopo)
+    num = {'elements':[{'font_name':'Teste','font_url':FONTE}]}
+    escopo['_embed_system_fonts'](num,resolver_recurso=resolver_do_pedido(s,refs))
+    assert base64.b64decode(num['elements'][0]['_font_data']) == s.local.ler_recurso('teste','1','d'*64,'fonte')
