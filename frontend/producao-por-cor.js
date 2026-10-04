@@ -326,7 +326,7 @@
             return `
                 <tr class="ppc-model-row ${open ? 'open' : ''}" data-item-id="${esc(record.modelId)}" data-os-id="${esc(record.osId)}">
                     <td class="ppc-order">#${esc(record.orderNumber)}</td>
-                    <td class="ppc-model-name">${esc(record.modelLabel)}</td>
+                    <td class="ppc-model-name" data-pacote-modelo="${esc(record.modelId)}">${esc(record.modelLabel)}</td>
                     <td class="ppc-muted">${esc(record.client)}</td><td>${esc(record.quantity)}</td>
                     <td>${esc(record.numbering)}</td><td>${esc(record.back)}</td><td>${formatDate(record.deadline)}</td>
                     <td><select class="ppc-status" ${local.statusBusy.has(String(record.modelId)) ? 'disabled' : ''} data-status-item="${esc(record.modelId)}" data-status-os="${esc(record.osId)}">

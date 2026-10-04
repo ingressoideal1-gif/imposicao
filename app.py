@@ -46,19 +46,39 @@ async def lifespan(app: FastAPI):
         print("[app] Print worker thread (Cloud Relay) iniciada com sucesso.")
     except Exception as e:
         print(f"[app] Erro ao inicializar worker de impressão: {e}")
-    yield
+    if piloto_pacotes is not None:
+        piloto_pacotes.iniciar()
+    try:
+        yield
+    finally:
+        if piloto_pacotes is not None:
+            import asyncio
+            await asyncio.to_thread(piloto_pacotes.encerrar)
 
 app = FastAPI(title="Ideal Imposition API", description="Sistema de Imposição Gráfica com Dados Variáveis", lifespan=lifespan)
 from controle_producao import ProtegerProducaoMiddleware
 app.add_middleware(ProtegerProducaoMiddleware)
+from controle_producao import controle as controle_producao_local
+piloto_pacotes = None
+if os.environ.get('NEWPROD_PILOTO_LOCAL') == '1':
+    from pacotes_api import configurar_piloto
+    piloto_pacotes = configurar_piloto(app, ocupado=controle_producao_local.ocupado)
 from propostas_api import router as propostas_router
 app.include_router(propostas_router)
 
 @app.middleware('http')
 async def proteger_api_local(request: Request, call_next):
+    import os
     from autorizacao_local import autenticar, autorizar, exige_identidade
     from starlette.concurrency import run_in_threadpool
-    if exige_identidade(request.method, request.url.path):
+    from canais_newprod import PILOTO
+    import secrets
+    token_piloto = os.environ.get('NEWPROD_PILOTO_TOKEN', '')
+    rotas_cli_piloto = {'/api/pacotes-locais/estado', '/api/pacotes-locais/pausa/true', '/api/pacotes-locais/pausa/false'}
+    token_valido = (PILOTO and request.url.path in rotas_cli_piloto and len(token_piloto) >= 32 and
+                    secrets.compare_digest(request.headers.get('x-newprod-piloto', ''), token_piloto))
+    script_piloto = PILOTO and request.method == 'GET' and request.url.path == '/api/pacotes-locais/painel.js'
+    if exige_identidade(request.method, request.url.path) and not script_piloto and not token_valido:
         try:
             operador = await run_in_threadpool(autenticar, request.headers)
             autorizar(operador, request.method, request.url.path)
@@ -359,7 +379,9 @@ def read_root():
     passar por agente. Não é configurável de fora de propósito: quem controlasse
     a configuração poderia fazer a nuvem se declarar estação de novo.
     """
-    return {"status": "running", "message": "NewProd Agent ativo", "version": LOCAL_AGENT_VERSION,
+    from canais_newprod import CANAL, NOME, PORTA
+    return {"status": "running", "message": NOME + " ativo", "version": LOCAL_AGENT_VERSION,
+            "canal": CANAL, "porta": PORTA,
             "sessao_local_protocolo": 1,
             "agent_id": _agent_id_local(), "capabilities": ["impose", "print"],
             "onde": "nuvem" if security_config.is_cloud_runtime() else "local"}
@@ -367,7 +389,8 @@ def read_root():
 @app.get("/api/version")
 def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
-    return {"version": LOCAL_AGENT_VERSION, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
+    from canais_newprod import CANAL
+    return {"version": LOCAL_AGENT_VERSION, "canal": CANAL, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
             "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_snapshot_v1"]}
 
 @app.get("/api/update/check")

@@ -539,3 +539,7 @@ verify_jwt = false
 # PDFs privados: JWT válido, RLS do mapa e ADM/Atendimento para publicação.
 [functions.mapas-teatro-pdfs]
 verify_jwt = true
+
+[functions.piloto-local]
+# Funcao separada, somente leitura: segredo do agente ou Auth valida a sessao.
+verify_jwt = false

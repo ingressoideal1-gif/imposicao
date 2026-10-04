@@ -130,8 +130,13 @@
                 if (!aindaAtual()) return;
                 const os = window.findOSInState(rota.osId);
                 if (!os) throw new Error('O pedido não está disponível.');
-                await window.loadOSItens(os.id);
+                const producao = rota.view === 'view-pedido';
+                const exigirModelos = producao && (os._source === 'vibecode' || String(os.id).startsWith('vibe_'));
+                const carregado = await window.loadOSItens(os.id, producao ? { atualizar: true, exigirModelos } : {});
                 if (!aindaAtual()) return;
+                if (carregado === false || (exigirModelos && !(window.getOSItens(os.id) || []).every(i => i._pedidoModeloId != null && i._dbLoaded === true))) {
+                    throw new Error('Não foi possível confirmar os modelos deste pedido.');
+                }
                 if (rota.view === 'view-amostras') {
                     s.amostrasOSAtivo = os.id;
                     exibir(rota.view, aindaAtual);

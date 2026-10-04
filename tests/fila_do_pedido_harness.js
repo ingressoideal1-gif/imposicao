@@ -532,6 +532,30 @@ function cenario(quantos, comCamarote) {
     ok(atualizacao.preservouModelo, 'exibir o modo nao altera campos do modelo', atualizacao);
     ok(atualizacao.conteudo <= atualizacao.largura + 1, 'o nome longo do modo PDF cabe na coluna', atualizacao);
 
+    // Dois produtos e três modelos: não agrupar os dois modelos do crachá
+    // numa única linha, nem perder o status das duas unidades já impressas.
+    const dividido = cenario(3, false);
+    dividido.produtosGlobais.push({ ...dividido.produtosGlobais[0], id_produto: 'p2', nomeReal: 'Crachá sintético' });
+    dividido.osItens['1'].forEach((item, i) => {
+        item._vibe_id_produto = i === 0 ? 'p1' : 'p2';
+        item.qtd = [12, 10, 2][i];
+        item.produto = i === 1 ? 'NOMINAIS' : 'PADRÃO';
+        item.status_impressao = i === 2 ? 'IMPRESSO' : 'Aguardando';
+    });
+    await desenhar(dividido);
+    const divisao = await aba.evaluate(() => ({
+        caixas: document.querySelectorAll('#ped-os-queue-body table').length,
+        linhas: [...document.querySelectorAll('#ped-os-queue-body tbody tr')].map(tr => ({
+            id: tr.id,
+            qtd: tr.querySelector('td[title="Quantidade"] input').value,
+            status: tr.querySelector('td[title="Status de Produção"] select').value
+        })),
+        texto: document.getElementById('ped-os-queue-body').textContent.replace(/\s+/g, ' ')
+    }));
+    ok(divisao.caixas === 2 && divisao.linhas.length === 3, 'dois produtos mantêm três modelos separados', divisao);
+    ok(JSON.stringify(divisao.linhas.map(l => l.qtd)) === '["12","10","2"]', 'tiragens 12, 10 e 2 preservadas no DOM', divisao);
+    ok(divisao.linhas[2].status.toUpperCase() === 'IMPRESSO', 'modelo de duas unidades continua impresso', divisao);
+
     await navegador.close();
 
     if (falhas) {
