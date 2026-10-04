@@ -6,14 +6,31 @@ const code = source.slice(source.indexOf('(function () {', source.indexOf('// â”
 function context(origin, localToken='token-local-sintetico', bearer='jwt-sintetico') {
     const calls=[], events=[];
     const win={location:new URL(origin), dispatchEvent:e=>events.push(e.type),
-        fetch: async (url,options={})=>{ calls.push({url,headers:new Headers(options.headers)}); return {status:String(url).includes('recusado')?401:200}; }};
+        fetch: async (url,options={})=>{ calls.push({url,headers:new Headers(options.headers)}); return {ok:true,status:String(url).includes('recusado')?401:200,json:async()=>({cancelado:true})}; }};
     const c={window:win, sessionStorage:{getItem:()=>JSON.stringify({token:localToken})},
         Headers, Request, URL, Event, API_PAINEL:'https://projeto.supabase.co/functions/v1/painel',
         supabaseClient:{auth:{getSession:async()=>({data:{session:{access_token:bearer}}})}}};
     vm.createContext(c); vm.runInContext(code,c);
-    return {fetch:win.fetch,calls,events};
+    return {fetch:win.fetch,calls,events,c};
 }
 (async()=>{
+    const panel=fs.readFileSync('frontend/script.js','utf8');
+    const base=panel.match(/const AGENTE_LOCAL_URL = [\s\S]*?;/)[0];
+    const chooser=panel.slice(panel.indexOf('async function escolherHotFolder()'),panel.indexOf('// Plano B do seletor'));
+    for (const origin of ['http://127.0.0.1:9001','http://localhost:9001','http://localhost:9000','http://127.0.0.1:8080']) {
+        const station=context(origin+'/', 'token-local-sintetico', null);
+        Object.assign(station.c,{document:{getElementById:()=>null},_hotFolderPath:()=>'',_hotFolderStatus:()=>{}});
+        vm.runInContext(base+chooser,station.c);
+        station.c.fetch=station.c.window.fetch;
+        await station.c.escolherHotFolder();
+        assert.equal(station.calls.length,1);
+        assert.equal(station.calls[0].url,origin+'/api/hotfolder/escolher');
+        assert.equal(station.calls[0].headers.get('X-NewProd-Sessao'),'token-local-sintetico');
+        assert.equal(station.calls[0].headers.get('Authorization'),null);
+    }
+    const remote=context('https://imposition.ai-ideal.com.br/');
+    vm.runInContext(base+'globalThis.destino=AGENTE_LOCAL_URL;',remote.c);
+    assert.equal(remote.c.destino,'http://127.0.0.1:9000');
     const local=context('http://127.0.0.1:9000/');
     await local.fetch('/api/print/submit');
     assert.equal(local.calls.at(-1).headers.get('X-NewProd-Sessao'),'token-local-sintetico');

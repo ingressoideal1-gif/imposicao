@@ -78,7 +78,7 @@ def test_pacote_recusa_coleta_sem_componente_dinamico_do_spool(monkeypatch):
                                  'segredos_estacao', 'migracao_estacao')}
     pacote = SimpleNamespace(toc={'PYZ.pyz': None},
                              open_embedded_archive=lambda _: SimpleNamespace(toc=modulos))
-    monkeypatch.setattr(guard, 'CArchiveReader', lambda _: pacote)
+    monkeypatch.setattr(guard, 'abrir_executavel', lambda _: pacote)
     with pytest.raises(ValueError, match='spool'):
         guard.conferir_exe('pacote-sintetico.exe')
     modulos['win32timezone'] = None

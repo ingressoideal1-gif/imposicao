@@ -71,6 +71,10 @@ O painel em http://127.0.0.1:9001/app/ apresenta o selo visivel
 "NewProd Piloto - porta 9001", inclusive na entrada. Na tela de impressao,
 "Gerenciamento Local" mostra a coleta e os arquivos da estacao. Esse recurso
 atua somente na porta 9001; o painel normal da porta 9000 permanece preservado.
+As chamadas de Hot Folder e configuracao de impressao usam a mesma origem
+do painel da estacao, incluindo hostname e porta. O Piloto nao deve consultar
+ou registrar pastas no agente da porta 9000. A sessao local acompanha apenas
+as chamadas da propria origem; nenhuma permissao e ampliada por essa escolha.
 O CI reproduz a renderizacao em navegador nos dois enderecos com dados sinteticos.
 
 Para rollback, encerrar somente NewProdPiloto.exe quando estiver ocioso e apontar

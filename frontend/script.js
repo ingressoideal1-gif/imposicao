@@ -46000,7 +46000,9 @@ function _updateSaveButtonLabel() {
 // fisica DESTA maquina -- impressora, bandeja, papel --, entao nao pode vir de
 // caminho relativo (que na nuvem nao chega a lugar nenhum) nem do Supabase, que e
 // compartilhado por todas as estacoes.
-const AGENTE_LOCAL_URL = 'http://127.0.0.1:9000';
+const AGENTE_LOCAL_URL = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+    && ['9000', '9001', '8080'].includes(window.location.port)
+    ? window.location.origin : 'http://127.0.0.1:9000';
 
 async function savePrintConfigForProduct() {
     const info = _getActiveProductInfo();
