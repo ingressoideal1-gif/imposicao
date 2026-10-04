@@ -3,6 +3,8 @@ import base64
 import copy
 import io
 import socket
+import subprocess
+from pathlib import Path
 
 import fitz
 from PIL import Image
@@ -10,6 +12,14 @@ import pytest
 
 import newprod_temp
 from engine import ImpositionConfig, ImpositionEngine, MM2PT
+
+
+@pytest.mark.parametrize('harness', ['ticket_condicoes_harness.js', 'ticket_previas_harness.js'])
+def test_condicoes_ticket_no_frontend(harness):
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(['node', str(root / 'tests' / harness)], cwd=root,
+        capture_output=True, text=True, encoding='utf-8', timeout=90)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +66,7 @@ def elementos(familia):
     return result
 
 
-def config(tmp_path, tipo, modo, els, rows=None):
+def config(tmp_path, tipo, modo, els, rows=None, ticket_qtd=3):
     base = tmp_path / 'base.pdf'
     with fitz.open() as doc:
         for label in ['BASE FRONT', 'BASE BACK']:
@@ -65,7 +75,7 @@ def config(tmp_path, tipo, modo, els, rows=None):
         doc.save(base)
     return ImpositionConfig(str(base), str(tmp_path / 'out.pdf'),
         dict(width_mm=180, height_mm=100, cols=1, rows=1, rotations={}),
-        dict(tipo=tipo, print_mode=modo, elements=copy.deepcopy(els)),
+        dict(tipo=tipo, print_mode=modo, ticket_qtd=ticket_qtd, elements=copy.deepcopy(els)),
         dict(width_mm=180, height_mm=100, file_format='pdf'),
         seq_start=10, seq_end=13, csv_data=rows, print_mode=modo,
         c_ini=7, q_cam=2, l_cam=2, pedido='99999', modelo='9999999', pool_qr=PoolSintetico())
@@ -118,3 +128,81 @@ def test_teatro_recusa_celula_vazia_em_linha_tardia(tmp_path, valor, coluna):
     with pytest.raises(ValueError, match='Teatro.*banco'):
         ImpositionEngine(cfg).process()
     assert not list(tmp_path.glob('*miolo.pdf'))
+
+
+@pytest.mark.parametrize('modo', ['front', 'duplex', 'duplex_unico'])
+def test_ticket_comuns_graficos_e_banco_compartilhado(tmp_path, modo):
+    foto = io.BytesIO()
+    Image.new('RGB', (40, 50), 'green').save(foto, format='PNG')
+    photo = 'data:image/png;base64,' + base64.b64encode(foto.getvalue()).decode('ascii')
+    rows = [dict(Nome=f'PESSOA{i}', Outro=f'OUTRO{i}', Codigo=f'1234567890{i:02}', Foto=photo) for i in range(2)]
+    els = elementos('SEQUENCIAL')
+    # Posições históricas de Banco/fixos/gráficos não participam da sequência.
+    for el in els:
+        if el.get('source') == 'database' or el['type'] in ['FIXED', 'SVG', 'PDF', 'PICOTE']:
+            el['ticket_pos'] = 'ignorado'
+    for pos in range(1, 4):
+        for type_index, tipo in enumerate(['TEXT', 'QR', 'BARCODE', 'QR_IDEAL']):
+            els.append(dict(id=f'{tipo}{pos}', type=tipo, ticket_pos=pos, face='both',
+                x_mm=30+pos*35, y_mm=25+type_index*17, font_size=6, font_name='helv',
+                pad=0, prefix=f'T{pos}:' if tipo == 'TEXT' else '', size_mm=8,
+                width_mm=20, height_mm=8, barcode_format='code128'))
+    els.append(dict(id='outro', type='TEXT', source='database', database_text=True,
+        csv_column='Outro', ticket_pos=3, face='both', x_mm=25, y_mm=85, font_size=6))
+    cfg = config(tmp_path, 'TICKET', modo, els, rows)
+    engine = ImpositionEngine(cfg)
+    captured = []
+    original = engine._render_element
+    def capture(page, el, x, y, val, row=None):
+        captured.append((el.get('id'), val, el.get('_qr_ideal_conteudo')))
+        return original(page, el, x, y, val, row)
+    engine._render_element = capture
+    engine.process()
+    texts = []
+    for output in engine.generated_files:
+        with fitz.open(output['path']) as doc:
+            texts.extend(page.get_text().splitlines() for page in doc)
+    faces = 1 if modo == 'front' else 2
+    assert cfg.total_items == 2 and len(texts) == 2 * faces
+    for page_index, lines in enumerate(texts):
+        cell = page_index // faces
+        for pos in range(1, 4):
+            assert f'T{pos}:{10+cell*3+pos-1}' in lines
+        assert f'PESSOA{cell}' in lines and f'OUTRO{cell}' in lines
+        assert 'FIXO' in lines and 'GRAPHIC' in lines
+    for tipo in ['TEXT', 'QR', 'BARCODE', 'QR_IDEAL']:
+        for pos in range(1, 4):
+            entries = [entry for entry in captured if entry[0] == f'{tipo}{pos}']
+            expected = [10+cell*3+pos-1 for cell in range(2) for _ in range(faces)]
+            assert [entry[1] for entry in entries] == expected
+            if tipo == 'QR_IDEAL':
+                assert [entry[2] for entry in entries] == [f'SYNTHETIC-99999-9999999-{v}' for v in expected]
+
+
+@pytest.mark.parametrize('tipo', ['TEXT', 'QR', 'BARCODE', 'QR_IDEAL'])
+@pytest.mark.parametrize('posicao', [0, -1, 3, 1.5, 'abc', None, True])
+def test_ticket_recusa_posicao_invalida_antes_do_pdf(tmp_path, tipo, posicao):
+    with pytest.raises(ValueError, match='TICKET.*posição inválida'):
+        config(tmp_path, 'TICKET', 'duplex', [dict(type=tipo, ticket_pos=posicao)], ticket_qtd=2)
+    assert not (tmp_path / 'out.pdf').exists()
+
+
+@pytest.mark.parametrize('quantidade', [0, -1, 1.5, 'abc', None, True])
+def test_ticket_recusa_quantidade_invalida(tmp_path, quantidade):
+    with pytest.raises(ValueError, match='TICKET.*quantidade inteira'):
+        config(tmp_path, 'TICKET', 'front', [], ticket_qtd=quantidade)
+
+
+@pytest.mark.parametrize('tipo', ['TEATRO_FILA', 'TEATRO_LUGAR', 'TEATRO_COMBO', 'CAMAROTE_LOCAL', 'CAMAROTE_PESSOA', 'CAMAROTE_PESSOA_TOTAL'])
+def test_ticket_recusa_elementos_especializados(tmp_path, tipo):
+    with pytest.raises(ValueError, match='TICKET.*Teatro ou Camarote'):
+        config(tmp_path, 'TICKET', 'front', [dict(type=tipo)])
+
+
+@pytest.mark.parametrize('destino', ['numeracao', 'numeracao_2'])
+def test_ticket_valida_modelo_tardio_de_multi_artes_antes_de_abrir_recursos(tmp_path, destino):
+    num = dict(tipo='TICKET', ticket_qtd=2, elements=[dict(type='TEXT', ticket_pos=3)])
+    with pytest.raises(ValueError, match='TICKET.*posição inválida'):
+        ImpositionConfig('', str(tmp_path / 'out.pdf'), {}, None, {}, multi_artes=[
+            dict(qtd=1), dict(qtd=1, **{destino:num})])
+    assert not (tmp_path / 'out.pdf').exists()

@@ -33,7 +33,7 @@ function assignment(name) {
                 function selectElId(id) {state.selectedElIds = [id]; state.selectedElId = id;}
                 function avisarElementoTravado() {}
                 function renderElementsList() {atualizarCompatibilidadeDosElementos();}
-                ${['familiaDoElementoDeNumeracao', 'familiasDaNumeracao', 'atualizarCompatibilidadeDosElementos', 'prepararTipoParaNovoElemento'].map(extract).join('\n')}
+                ${['familiaDoElementoDeNumeracao', 'familiasDaNumeracao', 'elementoUsaPosicaoTicket', 'erroDaNumeracaoTicket', 'atualizarCompatibilidadeDosElementos', 'prepararTipoParaNovoElemento'].map(extract).join('\n')}
                 ${['onTipoSelect', 'addElement', 'addDatabaseTextElement', 'deleteSelectedElements', 'duplicateSelectedElements', 'saveNumHistory', 'undoNumHistory', 'redoNumHistory'].map(assignment).join('\n')}
                 window.testState = state;
             ` });
