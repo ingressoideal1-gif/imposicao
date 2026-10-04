@@ -75,6 +75,9 @@ As chamadas de Hot Folder e configuracao de impressao usam a mesma origem
 do painel da estacao, incluindo hostname e porta. O Piloto nao deve consultar
 ou registrar pastas no agente da porta 9000. A sessao local acompanha apenas
 as chamadas da propria origem; nenhuma permissao e ampliada por essa escolha.
+O rodape e a identidade da estacao na porta 9001 mostram o proprio Piloto.
+Seu botao de atualizacao informa a versao instalada e o uso de pacote proprio;
+nao chama o atualizador nem compara com o manifesto de producao.
 O CI reproduz a renderizacao em navegador nos dois enderecos com dados sinteticos.
 
 Para rollback, encerrar somente NewProdPiloto.exe quando estiver ocioso e apontar

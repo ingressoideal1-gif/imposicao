@@ -31,6 +31,33 @@ function context(origin, localToken='token-local-sintetico', bearer='jwt-sinteti
     const remote=context('https://imposition.ai-ideal.com.br/');
     vm.runInContext(base+'globalThis.destino=AGENTE_LOCAL_URL;',remote.c);
     assert.equal(remote.c.destino,'http://127.0.0.1:9000');
+    const extract=name=>{
+        const start=panel.indexOf('function '+name+'(');
+        assert(start>=0);
+        const end=panel.indexOf('\n}',start)+2;
+        const asyncStart=panel.slice(start-6,start)==='async '?start-6:start;
+        return panel.slice(asyncStart,end);
+    };
+    for(const origin of ['http://127.0.0.1:9001','http://localhost:9001']) {
+        const calls=[],notices=[],footer={style:{}},w={location:new URL(origin)};
+        const pilot={window:w,URL,AbortController,setTimeout:()=>1,clearTimeout:()=>{},
+            document:{getElementById:()=>footer},toast:m=>notices.push(m),
+            getEstacaoEscolhida:()=>assert.fail('Piloto nao usa estacao de producao salva'),
+            _agentIdLocalCache:null,_agentIdLocalEm:0,
+            fetch:async url=>{calls.push(url);return {ok:true,json:async()=>({version:'NewProd 1.2.355-piloto-local.16',agent_id:'piloto-sintetico',onde:'local'})};}};
+        vm.createContext(pilot);
+        vm.runInContext(base+['showAgentUpdateWarning','_baseDoAgenteAgora','atualizarVersaoAgenteRodape','descobrirAgentIdLocal','verificarAtualizacaoAgente'].map(extract).join('\n'),pilot);
+        pilot.showAgentUpdateWarning('http://127.0.0.1:9000','99.0');
+        assert.equal(await pilot._baseDoAgenteAgora('http://127.0.0.1:9000'),origin);
+        await pilot.atualizarVersaoAgenteRodape();
+        assert.match(footer.textContent,/piloto-local/);
+        assert.equal(await pilot.descobrirAgentIdLocal(),'piloto-sintetico');
+        await pilot.verificarAtualizacaoAgente(false);
+        await pilot.verificarAtualizacaoAgente(true);
+        assert(notices.every(m=>m.includes('pacote próprio')));
+        assert.equal(notices.length,2);
+        assert(calls.every(u=>u===origin+'/api/status'));
+    }
     const local=context('http://127.0.0.1:9000/');
     await local.fetch('/api/print/submit');
     assert.equal(local.calls.at(-1).headers.get('X-NewProd-Sessao'),'token-local-sintetico');

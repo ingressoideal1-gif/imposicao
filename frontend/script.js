@@ -47312,6 +47312,8 @@ window.updateBoxSaida = async function(osId, prodId, saidaId) {
 };
 
 function showAgentUpdateWarning(baseUrl, latestVersion) {
+    // O manifesto de producao nao distribui o pacote independente do Piloto.
+    if (window.location.port === '9001') return;
     // Evitar múltiplos banners
     if (document.getElementById('agent-update-banner')) return;
     
@@ -47409,7 +47411,9 @@ function showAgentUpdateWarning(baseUrl, latestVersion) {
  * que NAO e' a nuvem. Agente da nuvem nao se atualiza -- nem existe mais.
  */
 async function _baseDoAgenteAgora(preferido) {
-    const bases = [preferido, 'http://127.0.0.1:9000', 'http://localhost:9000']
+    const bases = (/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+        && ['9000', '9001', '8080'].includes(window.location.port)
+        ? [window.location.origin] : [preferido, 'http://127.0.0.1:9000', 'http://localhost:9000'])
         .filter(b => b && /^https?:\/\/(127\.0\.0\.1|localhost)[:\/]/.test(b));
 
     for (const base of bases) {
@@ -47706,7 +47710,7 @@ async function atualizarVersaoAgenteRodape() {
 
     let versaoLocal = null;
     let baseAgente = null;
-    for (const base of ['http://127.0.0.1:9000', 'http://localhost:9000']) {
+    for (const base of (window.location.port === '9001' ? [window.location.origin] : ['http://127.0.0.1:9000', 'http://localhost:9000'])) {
         try {
             const ctrl = new AbortController();
             const prazo = setTimeout(() => ctrl.abort(), 2000);
@@ -47732,6 +47736,7 @@ async function atualizarVersaoAgenteRodape() {
         return;
     }
 
+    if (window.location.port === '9001') return;
     // Avisar sobre versão nova. Antes isto usava fetch('/api/version') com URL
     // relativa: no painel servido pelo próprio agente, ele comparava a versão
     // dele com a dele mesma — dava sempre igual e o banner nunca aparecia.
@@ -47987,7 +47992,7 @@ async function descobrirAgentIdLocal() {
 
     // 1. Escolha do operador, salva neste navegador. Vem primeiro porque é o
     //    único caminho que funciona com o painel vindo da nuvem.
-    const escolhida = getEstacaoEscolhida();
+    const escolhida = window.location.port === '9001' ? null : getEstacaoEscolhida();
     if (escolhida) {
         _agentIdLocalCache = escolhida;
         _agentIdLocalEm = Date.now();
@@ -47996,7 +48001,7 @@ async function descobrirAgentIdLocal() {
 
     // 2. Auto-detecção: dispensa o operador de escolher quando o painel está
     //    na própria máquina (localhost) ou o navegador não aplica a política.
-    for (const base of ['http://127.0.0.1:9000', 'http://localhost:9000']) {
+    for (const base of (window.location.port === '9001' ? [window.location.origin] : ['http://127.0.0.1:9000', 'http://localhost:9000'])) {
         try {
             const ctrl = new AbortController();
             const prazo = setTimeout(() => ctrl.abort(), 2000);
@@ -48021,8 +48026,17 @@ async function descobrirAgentIdLocal() {
 // Duas operações separadas de propósito: consultar é barato e informa; instalar
 // baixa ~47 MB e reinicia o agente. O operador decide entre uma e outra.
 async function verificarAtualizacaoAgente(instalar = false) {
-    const base = 'http://127.0.0.1:9000';
+    const base = AGENTE_LOCAL_URL;
     const aviso = (msg, tipo) => (typeof toast === 'function' ? toast(msg, tipo) : alert(msg));
+    if (window.location.port === '9001') {
+        try {
+            const resp = await fetch(`${base}/api/status`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const info = await resp.json();
+            aviso(`${info.version}. Atualizações do Piloto usam o pacote próprio do Piloto.`, 'info');
+        } catch (_) { aviso('O Piloto não respondeu nesta estação.', 'error'); }
+        return;
+    }
 
     let info;
     try {
