@@ -32,6 +32,8 @@ Resultado final: 244 testes Python/navegador/sintaxe passaram (execução serial
 
 ## Entrega e recuperação
 
+Retomada em 04/10/2026: o PR #75 estava aberto, com os checks aprovados, e o MSI recompilado passou na auditoria e em 68 testes do motor empacotado. Antes de publicar, a base avancou para `020476e1`, integrando o Piloto independente. A entrega preserva essa base; o conflito de `agent_version.py` foi resolvido mantendo 1.2.356 e o sufixo exclusivo do Piloto. Os dois canais recebem validacao sintetica e executaveis separados; nenhuma instalacao local ou escrita comercial integra esta entrega.
+
 O fluxo separa a integração por PR, a confirmação da hospedagem e dos arquivos web nas duas URLs operacionais, e a publicação do instalador com conferência de tamanho/SHA-256 pelo download público antes de ativar `latest.json`. O pacote precisa conter o frontend desta entrega, o motor corrigido e as DLLs de impressão, sem arquivos privados.
 
 As evidências de execução serão guardadas em arquivos `tmp_ticket_356_*.json` na cópia de entrega (ignorados pelo Git). Testes e download público não comprovam instalação nas estações ou impressão física. A aplicação das novas validações do motor depende de NewProd 1.2.356 instalado.

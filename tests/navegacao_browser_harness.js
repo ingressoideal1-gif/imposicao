@@ -47,7 +47,7 @@ async function loadOrdens() {
 }
 async function loadOSItens(id) {
     if (window.bloqueio) await window.bloqueio;
-    state.osItens[id] = sessionStorage.getItem('semModelo') ? [] : [{ id: 'modelo-1' }];
+    state.osItens[id] = sessionStorage.getItem('semModelo') ? [] : [{ id: 'modelo-1', _pedidoModeloId: 'modelo-1', _dbLoaded: true }];
 }
 async function recarregarNumeracoesDoPedido() { if (window.bloqueioNumeracoes) await window.bloqueioNumeracoes; }
 async function loadAll() { NavegacaoPainel.dadosProntos(); }

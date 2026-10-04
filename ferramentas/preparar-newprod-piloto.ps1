@@ -5,6 +5,7 @@ param(
     [string]$Saida = ('C:\ProjectBackups\IdealImpositionProtegido\newprod-piloto-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 )
 $ErrorActionPreference = 'Stop'
+throw 'Fluxo antigo desativado: compartilhava o MSI da producao e incluia o pool privado. Use compilar-piloto.ps1 e a instalacao independente documentada.'
 $raiz = Split-Path -Parent $PSScriptRoot
 $usuario = [Security.Principal.WindowsIdentity]::GetCurrent()
 if ($usuario.Name -match 'CodexSandbox') { throw 'Execute sob a conta Windows do operador.' }

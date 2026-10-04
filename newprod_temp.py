@@ -27,7 +27,8 @@ _diagnostico = {"estado": "aguardando coleta"}
 
 def pasta_raiz():
     base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    return Path(base) / "NewProd Agent" / "temporarios" / "v1"
+    from canais_newprod import pasta_local
+    return pasta_local() / "temporarios" / "v1"
 
 
 def _sem_links(path):
@@ -235,7 +236,8 @@ def medir_pasta(raiz, limite_arquivos=100000, limite_segundos=5):
 
 
 def coletar_diagnostico():
-    local = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir())
+    from canais_newprod import pasta_local
+    local = pasta_local().parent
     temp = Path(tempfile.gettempdir())
     disco = shutil.disk_usage(temp)
     return {
@@ -245,7 +247,7 @@ def coletar_diagnostico():
         "retencao_abandonados_horas": 24,
         "gerenciados": medir_pasta(pasta_raiz()),
         "temp_usuario": medir_pasta(temp),
-        "cache_fontes": medir_pasta(local / "NewProd Agent" / "fonts_cache"),
+        "cache_fontes": medir_pasta(pasta_local() / "fonts_cache"),
         "cache_fotos": medir_pasta(local / "NewProd" / "cache" / "fotos"),
         "temp_geral_somente_leitura": True,
     }

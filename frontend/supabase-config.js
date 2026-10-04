@@ -28,7 +28,8 @@ if (typeof supabase !== 'undefined' && !forceOffline && !offlineModeSaved) {
 // A estação serve o painel pela porta 9000 (o agente) ou pela 8080 (o motor em
 // desenvolvimento). `file:` fica de fora porque abrir o HTML pelo disco não é
 // estação nenhuma — é uma página sem servidor atrás.
-const isPort9000 = window.location.port === "9000";
+const isPort9000 = ["9000", "9001"].includes(window.location.port);
+const NEWPROD_PILOTO = isLocalhost && window.location.port === "9001";
 const SERVIDA_PELA_NUVEM = !((isLocalhost || isPort9000)
     && window.location.protocol !== 'file:');
 
@@ -258,7 +259,7 @@ async function definirStatusProposta(pedido, status) {
             try {
                 const destino = new URL(u);
                 return destino.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/.test(destino.hostname)
-                    && ['9000', '8080'].includes(destino.port) && destino.pathname.startsWith('/api/');
+                    && ['9000', '9001', '8080'].includes(destino.port) && destino.pathname.startsWith('/api/');
             } catch (_) { return false; }
         }
         // Caminho RELATIVO: quem serviu a página é quem responde. Na estação,

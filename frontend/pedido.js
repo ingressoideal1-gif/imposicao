@@ -3429,6 +3429,8 @@ function updatePedSummary() {
 
         
 
+        const faixa = faixaNumeracaoDoModelo(itemAtivoDoPedido(), num, state.csvData.length);
+
         // Travar e preencher campos
 
         const impStart = document.getElementById('ped-start');
@@ -3437,7 +3439,7 @@ function updatePedSummary() {
 
         if (impStart) {
 
-            impStart.value = 1;
+            impStart.value = faixa.inicio;
 
             impStart.setAttribute('disabled', 'true');
 
@@ -3445,7 +3447,7 @@ function updatePedSummary() {
 
         if (impEnd) {
 
-            impEnd.value = state.csvData.length;   // ja e a fatia, ja sem canceladas
+            impEnd.value = faixa.fim;
 
             impEnd.setAttribute('disabled', 'true');
 
@@ -4282,8 +4284,12 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
     const atual = () => state.pedidoSelecaoCarregando === carga && anterior();
     state.pedidoSelecaoCarregando = carga;
     state.pedidoSelecaoErro = null;
+    if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
     try {
-        await carregarModeloParaPedido(itemId, osId, { ...contexto, aindaAtual: atual });
+        const pacoteLocal = window.PilotoSelecao
+            ? await window.PilotoSelecao.conferir(itemId, osId, atual) : null;
+        if (!atual()) return;
+        await carregarModeloParaPedido(itemId, osId, { ...contexto, pacoteLocal, aindaAtual: atual });
     } catch (erro) {
         if (atual()) {
             state.pedidoSelecaoErro = 'Não foi possível carregar o modelo. Reabra antes de gerar: ' + erro.message;
@@ -4292,6 +4298,7 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
         throw erro;
     } finally {
         if (state.pedidoSelecaoCarregando === carga) state.pedidoSelecaoCarregando = null;
+        if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
     }
 }
 
@@ -4535,7 +4542,7 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
             const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
             const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
             
-            await fetch(arteUrl)
+            await (contexto.pacoteLocal ? window.PilotoSelecao.lerArte(contexto.pacoteLocal, 'frente', arteUrl) : fetch(arteUrl))
                 .then(res => {
                     if (!res.ok) throw new Error('Download da arte recusado: HTTP ' + res.status);
                     const ct = res.headers.get('content-type') || '';
@@ -4556,7 +4563,7 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
                     
                     const pedInfo = document.getElementById('ped-file-info');
                     if (pedInfo) {
-                        pedInfo.textContent = `✅ ${filename} (Carregado do Pedido)`;
+                        pedInfo.textContent = `✅ ${filename} (${contexto.pacoteLocal ? 'Disco local · revisão ' + contexto.pacoteLocal.revisao.slice(0, 12) : 'Carregado do Pedido'})`;
                         pedInfo.style.display = 'block';
                     }
                     agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 600);
@@ -4569,7 +4576,7 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
             state.pedArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
-                await fetch(item.verso_arte_url)
+                await (contexto.pacoteLocal ? window.PilotoSelecao.lerArte(contexto.pacoteLocal, 'verso', item.verso_arte_url) : fetch(item.verso_arte_url))
                     .then(res => {
                         if (!res.ok) throw new Error('Download do verso recusado: HTTP ' + res.status);
                         const ct = res.headers.get('content-type') || '';
@@ -4673,6 +4680,18 @@ window.enviarParaPedido = enviarParaPedido;
 window.togglePedItemSelection = async function(itemId, osId) {
     if (window.isImposing || window._preparacaoImpressao) return toast('Aguarde a geração terminar para mudar a seleção.', 'info');
     if (!state.selectedOSItems) state.selectedOSItems = [];
+    if (window.PilotoSelecao && !state.selectedOSItems.some(s => String(s.itemId) === String(itemId) && String(s.osId) === String(osId))) {
+        const carga = {};
+        state.pedidoSelecaoCarregando = carga;
+        const atual = () => state.pedidoSelecaoCarregando === carga;
+        try {
+            await window.PilotoSelecao.conferir(itemId, osId, atual);
+            if (!atual()) return;
+        } catch (erro) {
+            if (atual()) { state.pedidoSelecaoErro = erro.message; toast(erro.message, 'error'); }
+            return;
+        } finally { if (atual()) state.pedidoSelecaoCarregando = null; }
+    }
     
     const itens = state.osItens[osId] || [];
     const item = itens.find(i => String(i.id) === String(itemId));
@@ -5613,9 +5632,11 @@ function updatePedImprimirButtonsVisibility() {
 
     if (btnImposePrint) {
         btnImposePrint.style.display = escondeImprimir ? 'none' : 'flex';
+        btnImposePrint.disabled = !!(state.pedidoSelecaoCarregando || state.pedidoSelecaoErro);
     }
     if (btnPreviewPrint) {
         btnPreviewPrint.style.display = escondeImprimir ? 'none' : 'flex';
+        btnPreviewPrint.disabled = !!(state.pedidoSelecaoCarregando || state.pedidoSelecaoErro);
     }
 
     // Trocar de modelo zera a caixa "Refazer" — uma faixa de folhas do modelo
@@ -5853,7 +5874,7 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
-        fetch(itemArteUrl).then(r => r.arrayBuffer()).then(buf => {
+        (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(itemArteUrl) : fetch(itemArteUrl)).then(r => r.arrayBuffer()).then(buf => {
             return pdfjsLib.getDocument({ data: buf }).promise;
         }).then(doc => {
             state.multiArtesPdfCache[itemArteUrl] = doc;
@@ -5873,7 +5894,7 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
-        fetch(itemArteVersoUrl).then(r => r.arrayBuffer()).then(buf => {
+        (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(itemArteVersoUrl) : fetch(itemArteVersoUrl)).then(r => r.arrayBuffer()).then(buf => {
             return pdfjsLib.getDocument({ data: buf }).promise;
         }).then(doc => {
             state.multiArtesPdfCache[itemArteVersoUrl] = doc;
@@ -5962,7 +5983,7 @@ function carregarPdfsDaCombinacaoPaginada(selecao) {
     }
     return Promise.all([...urls].map(async url => {
         if (state.multiArtesPdfCache[url]) return;
-        const resposta = await fetch(url);
+        const resposta = await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(url) : fetch(url));
         if (!resposta.ok) throw new Error('Não foi possível carregar uma arte da combinação paginada.');
         const doc = await pdfjsLib.getDocument({ data: await resposta.arrayBuffer() }).promise;
         if (!doc.numPages) throw new Error('PDF sem páginas na combinação.');
@@ -6103,6 +6124,7 @@ async function executarPedImposition(mode, isRefazer) {
     const ativoInicial = JSON.stringify(state.activeOSItem || null);
     // A confirmação pertence aos modelos capturados antes dos carregamentos.
     const alvosDoTrabalho = (isRefazer || folha1 ? [] : alvosDaImpressao((state.selectedOSItems || []).length > 1));
+    if (window.PilotoSelecao) window.PilotoSelecao.validarTrabalho(isRefazer || folha1 ? [state.activeOSItem].filter(Boolean) : alvosDoTrabalho);
     const selecaoAindaAtual = () => selecaoInicial === JSON.stringify(state.selectedOSItems || [])
         && ativoInicial === JSON.stringify(state.activeOSItem || null);
     const validarContexto = window.PedidoJanelaExterna?.validarGeracao?.();
@@ -6848,7 +6870,7 @@ async function executarPedImposition(mode, isRefazer) {
 
         if (!localApiActive) {
             // Testa / e /api/status para compatibilidade com todas as versoes do exe
-            const agentBases = [window.location.origin, "http://127.0.0.1:9000", "http://localhost:9000"];
+            const agentBases = (window.location.port === "9001" ? [window.location.origin] : [window.location.origin, "http://127.0.0.1:9000", "http://localhost:9000"]);
             outerLoop:
             for (const base of agentBases) {
                 for (const path of ["/api/status", "/"]) {

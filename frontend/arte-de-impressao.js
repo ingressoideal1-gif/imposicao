@@ -109,7 +109,7 @@
         const controle = new AbortController();
         const limite = setTimeout(() => controle.abort(), 30000);
         try {
-            const resposta = await fetch(url, { signal: controle.signal });
+            const resposta = await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(url) : fetch(url, { signal: controle.signal }));
             if (!resposta.ok) throw new Error('Download recusado');
             const blob = await resposta.blob();
             if (!blob.size || /text\/html|application\/json/i.test(blob.type)) {
@@ -284,7 +284,9 @@
             const downloads = new Map();
             async function baixar(url, chave) {
                 if (!downloads.has(url)) downloads.set(url, (async () => {
-                    const res = await fetch(url, { signal: controle.signal, cache: 'no-store' });
+                    const res = raiz.PilotoSelecao
+                        ? await raiz.PilotoSelecao.lerUrl(url, { signal: controle.signal })
+                        : await fetch(url, { signal: controle.signal, cache: 'no-store' });
                     if (!res.ok) throw new Error('Falha ao carregar a arte obrigatória: ' + chave);
                     return res.blob();
                 })());
@@ -305,6 +307,29 @@
                 if (modelo) {
                     const local = Object.values(estado.osItens || {}).flat().find(m => String(m.id) === String(modelo.id));
                     if (!local) throw new Error('Modelo não carregado. Reabra o pedido.');
+                    if (raiz.PilotoSelecao) {
+                        // Compara todas as colunas originais, não apenas uma lista parcial.
+                        if (!local._modeloOnline || !iguais(local._modeloOnline, modelo)) {
+                            throw new Error('Os dados do modelo mudaram. Selecione novamente antes de gerar.');
+                        }
+                        const aliases = { qtd: 'quantidade', num_inicial: 'numeracao_inicio', num_final: 'numeracao_fim' };
+                        for (const [alias, campo] of Object.entries(aliases)) {
+                            if (local[alias] != null && modelo[campo] != null && Number(local[alias]) !== Number(modelo[campo])) {
+                                throw new Error('Campo divergente no modelo: ' + campo + '. Selecione novamente.');
+                            }
+                        }
+                        if (!modelo.modo_pdf && modelo.numeracao_inicio != null && modelo.numeracao_fim != null) {
+                            const ni = Number(artes.length ? alvo.start : alvo.seq_start);
+                            const vias = String(alvo.numeracao?.tipo || '').toUpperCase() === 'TICKET'
+                                ? Math.max(1, Number(alvo.numeracao.ticket_qtd) || 1) : 1;
+                            const nf = artes.length ? ni + Number(alvo.qtd) * vias - 1 : Number(alvo.seq_end);
+                            if (!Number.isSafeInteger(ni) || !Number.isSafeInteger(nf) || ni > nf
+                                || ni < Number(modelo.numeracao_inicio) || nf > Number(modelo.numeracao_fim)) {
+                                throw new Error('A numeração enviada está fora da faixa cadastrada no modelo. Selecione novamente.');
+                            }
+                        }
+                    }
+
                     const arteFrente = m => arteDeImpressao(m.arte_url || m.url_arquivo_arte || m.url_arquivo);
                     const arteVerso = m => arteDeImpressao(m.verso_arte_url || m.url_arquivo_arte_verso || m.verso_url_arquivo);
                     if ((!local._produto_prateleira && arteFrente(local) !== arteFrente(modelo)) || arteVerso(local) !== arteVerso(modelo)
@@ -379,6 +404,16 @@
                     front: fd.has(artes.length ? 'ma_file_' + i : 'file'),
                     back: fd.has(artes.length ? 'ma_verso_' + i : 'file_verso') })) };
             fd.set('payload', JSON.stringify(dados));
+            // Captura opcional do piloto recebe uma cópia; não altera o trabalho
+            // nem atrasa a resposta da preparação/impressão atual.
+            if (typeof raiz.PacotesLocais?.capturarEntrada === 'function') {
+                try {
+                    raiz.PacotesLocais.capturarEntrada(fd, { modelos, numeracoes: nums, cadastros, bancos: bancosLidos,
+                        agendamento: raiz.PacoteEntrada?.agendamento(modelos, estado) });
+                } catch (_) {
+                    raiz.console?.warn('Piloto: captura opcional não iniciada; integridade do trabalho preservada.');
+                }
+            }
             return dados.integridade;
         } finally {
             clearTimeout(limite);

@@ -242,6 +242,10 @@ foreach ($alvo in $alvos) {
 }
 
 # ─── 4. Compilar ─────────────────────────────────────────────────────────────
+& $python ferramentas/conferir_duas_versoes.py
+if ($LASTEXITCODE -ne 0) { Abortar 'Regressao na producao ou no Piloto. Nenhuma distribuicao autorizada.' }
+& "$raiz\ferramentas\compilar-piloto.ps1" -Python $python
+if ($LASTEXITCODE -ne 0) { Abortar 'Pacote independente do Piloto nao foi gerado.' }
 # Sem `2>&1`: o PyInstaller escreve em stderr mesmo com sucesso e, no PS 5.1,
 # a redirecao transforma cada linha em erro terminante, abortando o build.
 # A credencial e o pool permanecem privados na estacao.

@@ -87,7 +87,7 @@ if _faltando:
   maquina de compilacao e rode de novo.""")
 
 a = Analysis(
-    ['agent_tray.py'],
+    ['agent_piloto.py' if os.environ.get('NEWPROD_BUILD_PILOTO') == '1' else 'agent_tray.py'],
     pathex=['.'],
     binaries=_binarios,
     # ('ppds', 'ppds') foi removido em 2026-08-09, e nao deve voltar.
@@ -181,6 +181,10 @@ a = Analysis(
         'integridade_impressao',
         'controle_producao',
         'agent_version',
+        'canais_newprod',
+        'pacotes_api',
+        'estatisticas_piloto',
+        'selecao_piloto',
         'balanca',
         # A balanca Urano da estacao, na porta serial. O 'serial.serialwin32' e o
         # backend do Windows, escolhido em tempo de execucao -- o PyInstaller nao
@@ -221,7 +225,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='NewProd',
+    name='NewProdPiloto' if os.environ.get('NEWPROD_BUILD_PILOTO') == '1' else 'NewProd',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -27,11 +27,12 @@ def _pasta_cache() -> str:
     rebaixar a mesma fonte durante a vida do processo.
     """
     base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    caminho = os.path.join(base, "NewProd Agent", "fonts_cache")
+    from canais_newprod import pasta_local
+    caminho = str(pasta_local() / "fonts_cache")
     try:
         os.makedirs(caminho, exist_ok=True)
     except Exception:
-        caminho = os.path.join(tempfile.gettempdir(), "newprod_fonts_cache")
+        caminho = os.path.join(tempfile.gettempdir(), "newprod_piloto_fonts_cache" if __import__("canais_newprod").PILOTO else "newprod_fonts_cache")
         os.makedirs(caminho, exist_ok=True)
     return caminho
 
