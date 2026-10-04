@@ -4308,7 +4308,9 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
     state.pedidoSelecaoErro = null;
     const aindaAtual = contexto.aindaAtual || window.NavegacaoPainel?.iniciarAcao() || (() => true);
     const tarefas = [];
+    const etapasLocais = [];
     const agendar = (fn, ms) => {
+        if (contexto.pacoteLocal) { etapasLocais.push({fn, ms}); return Promise.resolve(); }
         const tarefa = new Promise((resolve, reject) => setTimeout(async () => {
             try { if (aindaAtual()) await fn(); resolve(); } catch (error) { reject(error); }
         }, ms));
@@ -4674,6 +4676,10 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
     }, 700);
     // Drenar também tarefas agendadas por outras tarefas antes de liberar.
     for (let i = 0; i < tarefas.length; i++) await tarefas[i];
+    while (etapasLocais.length) {
+        etapasLocais.sort((a, b) => a.ms - b.ms);
+        if (aindaAtual()) await etapasLocais.shift().fn(); else break;
+    }
 }
 window.enviarParaPedido = enviarParaPedido;
 
@@ -6711,6 +6717,8 @@ async function executarPedImposition(mode, isRefazer) {
 
 
 
+    if (window.PilotoSelecao) payload.piloto_recursos = window.PilotoSelecao.referencias(
+        isRefazer || folha1 ? [state.activeOSItem].filter(Boolean) : alvosDoTrabalho);
     formData.append('payload', JSON.stringify(payload, (key, value) => {
 
         // Filtrar propriedades internas do frontend (não-serializáveis ou irrelevantes ao backend)

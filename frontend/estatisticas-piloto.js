@@ -37,7 +37,7 @@
         const abrir = function(osId, numeroOS, ...resto) {
             const fonte = typeof state !== 'undefined' ? state : null;
             const pedido = String(fonte?.ordens?.find(os => String(os.id) === String(osId))?.numero || numeroOS || '');
-            if (/^[1-9][0-9]{0,14}$/.test(pedido)) {
+            if (/^[1-9][0-9]{0,14}$/.test(pedido) && !window.PilotoSelecao) {
                 fetch('/api/pacotes-locais/controle-painel', {
                     method:'POST',headers:{'Content-Type':'application/json','X-Piloto-Painel':'1'},
                     body:JSON.stringify({acao:'abrir',pedido}),signal:AbortSignal.timeout(10000)
@@ -187,6 +187,11 @@
         catch (_) { dados = null; ultima = 0; }
         finally { pintar(); setTimeout(atualizar, 15000); }
     }
-    new MutationObserver(pintar).observe(document.body, {childList:true, subtree:true});
+    let repintura = null;
+    new MutationObserver(mudancas => {
+        if (repintura || !mudancas.some(m => m.target === document.body
+            || m.target.closest?.('#table-impressao, .prod-table-card, #filter-container-status'))) return;
+        repintura = setTimeout(() => { repintura = null; pintar(); }, 100);
+    }).observe(document.body, {childList:true, subtree:true});
     atualizar();
 })();

@@ -134,7 +134,8 @@
 
     function injetarFontFaceDoCatalogo(lista) {
         const servidoPeloAgente = typeof window !== 'undefined'
-            && window.location && window.location.port === '9000';
+            && window.location && (window.location.port === '9000'
+                || window.location.port === '9001' && ['127.0.0.1', 'localhost'].includes(window.location.hostname));
         const cssText = cssDoCatalogo(lista, servidoPeloAgente);
         if (typeof document === 'undefined') return cssText;
 

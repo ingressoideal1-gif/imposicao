@@ -17,10 +17,29 @@ antiga de outro checkout.
 | Atualizacao | Manifesto padrao e sincronismo web | Pacote proprio completo; nao usa o manifesto nem sincronismo padrao |
 | Consulta de pacotes | Fluxo normal existente | Edge Function independente piloto-local, somente leitura |
 
-O Piloto verifica a revisao em cada selecao e preserva os dados completos do
+O Piloto verifica a revisao ao abrir ou reabrir o pedido e preserva os dados completos do
 modelo, NI/NF, bancos, TICKET e regras de Multi-Artes. Ainda existem dependencias
 online; nao afirmar processamento integral offline. Conferencia visual e
 impressao fisica devem ser registradas separadamente dos testes sinteticos.
+
+O Piloto .21 prepara os modelos do pedido em uma listagem paginada, prepara ate quatro modelos em paralelo e consulta
+as numeracoes completas em lote. Alternar modelos desse pedido reutiliza a
+conferencia, sem repetir consultas nem atualizar ETags. Reabrir o pedido inicia
+nova conferencia, inclusive de URLs cujos bytes mudaram. Mudanca no modelo
+completo exige reabrir; respostas de aberturas abandonadas nao liberam modelos.
+Modelos sem arte ou fora do catalogo aprovado continuam visiveis, mas nao sao liberados para impressao local. O limite por abertura e 128
+modelos; pedidos maiores exigem ampliar o mecanismo antes de sua utilizacao.
+
+As etapas da janela no Piloto usam dependencias e ordem de execucao, sem as
+pausas fixas da interface normal. O resumo local le o catalogo em lote, com
+uma conexao SQLite; mudancas fora da tabela de pedidos nao repintam seus selos.
+Fontes servidas pela estacao tambem reconhecem a porta 9001. Fotos catalogadas
+usam leitura autenticada e cache por revisao. O motor de PDF, tanto sincrono
+quanto streaming, recebe referencias imutaveis dos pacotes conferidos e usa
+seus recursos locais. Tamanho e SHA-256 continuam obrigatorios em cada leitura.
+Recursos fora desse catalogo ainda podem exigir rede na preparacao anterior
+ao primeiro PDF; nao declarar que todas as dependencias estao antecipadas.
+O contrato de uploads, campos, bancos, NI/NF, TICKET e Multi-Artes permanece.
 
 ## Atualizar as duas variantes
 

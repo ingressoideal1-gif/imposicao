@@ -22,7 +22,8 @@ def ambiente(tmp_path):
     s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste', abrir=abrir)
     item = candidato(); item['pedido'] = '99'
     def listar(cursor, pedido):
-        assert cursor == 9 and pedido == '99'
+        estado['listagens'] = estado.get('listagens', 0) + 1
+        assert cursor in (0, 9) and pedido == '99'
         return {'itens': [] if estado.get('removido') else [item]}
     def conferir(i):
         estado['conferencias'] += 1
@@ -71,3 +72,81 @@ def test_origem_limites_e_integridade_da_rota(tmp_path):
         assert c.get(recurso, headers=headers).content == BYTES
         objeto = next(s.local.raiz.rglob('objetos/*')); objeto.write_bytes(b'corrompido')
         assert c.get(recurso, headers=headers).status_code == 409
+
+
+def test_prepara_pedido_uma_listagem_e_reabertura_revalida_bytes(tmp_path):
+    s, estado, dados = ambiente(tmp_path)
+    p = SelecaoPiloto(s)
+    pedido = {'pedido':'99', 'modelos':[{'modelo':'10', 'digest':dados['digest']}]}
+    r = p.preparar_pedido(pedido)
+    assert r['pedido'] == '99' and len(r['pacotes']) == 1
+    assert estado['listagens'] == 1 and estado['conferencias'] == 2
+    downloads = estado['downloads']
+    for _ in range(3):
+        assert p.ler('10', r['pacotes'][0]['revisao'], 'frente') == BYTES
+    assert estado['downloads'] == downloads and estado['conferencias'] == 2
+    estado['bytes'] += b'\n% alterado'
+    novo = p.preparar_pedido(pedido)
+    assert novo['pacotes'][0]['revisao'] != r['pacotes'][0]['revisao']
+
+
+def test_preparacao_pedido_exige_origem_limites_e_digest(tmp_path):
+    s, estado, dados = ambiente(tmp_path)
+    app = FastAPI(); app.include_router(criar_router_estatisticas(s))
+    headers = {'Origin':f'http://127.0.0.1:{PORTA}','Sec-Fetch-Site':'same-origin','X-Piloto-Painel':'1'}
+    pedido = {'pedido':'99', 'modelos':[{'modelo':'10', 'digest':dados['digest']}]}
+    with TestClient(app, base_url=f'http://127.0.0.1:{PORTA}', client=('127.0.0.1',55)) as c:
+        path = '/api/pacotes-locais/preparar-pedido-painel'
+        assert c.post(path, json=pedido).status_code == 403
+        assert c.post(path, headers=headers, content=b'x'*65537).status_code == 413
+        assert c.post(path, headers=headers, json=pedido).status_code == 200
+        pedido['modelos'][0]['digest'] = 'b'*64
+        assert c.post(path, headers=headers, json=pedido).status_code == 409
+        pedido['modelos'] *= 129
+        assert c.post(path, headers=headers, json=pedido).status_code == 422
+
+
+def test_modelos_independentes_preparam_em_paralelo_com_limite(tmp_path):
+    import copy
+    import threading
+    contagem = {'ativos':0, 'pico':0, 'chamadas':0}; lock = threading.Lock()
+    barreira = threading.Barrier(4)
+    def abrir(*args, **kwargs):
+        with lock:
+            contagem['ativos'] += 1
+            contagem['pico'] = max(contagem['pico'], contagem['ativos'])
+            contagem['chamadas'] += 1
+            primeira_rodada = contagem['chamadas'] <= 4
+        if primeira_rodada: barreira.wait(timeout=15)
+        with lock: contagem['ativos'] -= 1
+        return io.BytesIO(BYTES)
+    s = ServicoPacotes(tmp_path,host='test.invalid',empresa='teste',abrir=abrir)
+    itens = []
+    for n in range(10, 16):
+        item = copy.deepcopy(candidato()); item.update(modelo=str(n), pedido='99'); itens.append(item)
+    s.coleta_autonoma = SimpleNamespace(cliente=SimpleNamespace(
+        listar=lambda cursor,pedido:{'itens':itens,'fim':True}, conferir=lambda item:'2026-09-27T12:00:00+00:00'))
+    r = SelecaoPiloto(s).preparar_pedido({'pedido':'99','modelos':[
+        {'modelo':i['modelo'],'digest':i['observacao']['digest']} for i in itens]})
+    assert 1 < contagem['pico'] <= 4
+    assert [p['modelo'] for p in r['pacotes']] == [i['modelo'] for i in itens]
+    for p in r['pacotes']:
+        assert s.local.ler_recurso('teste',p['modelo'],p['revisao'],'frente') == BYTES
+
+
+def test_modelo_fora_do_catalogo_nao_bloqueia_outros_nem_fica_liberado(tmp_path):
+    s, _, dados = ambiente(tmp_path)
+    r = SelecaoPiloto(s).preparar_pedido({'pedido':'99','modelos':[
+        {'modelo':'10','digest':dados['digest']},{'modelo':'11','digest':'b'*64}]})
+    assert [p['modelo'] for p in r['pacotes']] == ['10'] and r['sem_arte'] == ['11']
+
+
+def test_paginas_progridem_ate_o_modelo_solicitado(tmp_path):
+    s, _, dados = ambiente(tmp_path)
+    item = candidato(); item['pedido'] = '99'; cursores = []
+    def listar(cursor,pedido):
+        cursores.append(cursor)
+        return {'itens':[],'proximo':9,'fim':False} if cursor == 0 else {'itens':[item],'proximo':0,'fim':True}
+    s.coleta_autonoma.cliente.listar = listar
+    assert len(SelecaoPiloto(s).preparar_pedido({'pedido':'99','modelos':[{'modelo':'10','digest':dados['digest']} ]})['pacotes']) == 1
+    assert cursores == [0,9]

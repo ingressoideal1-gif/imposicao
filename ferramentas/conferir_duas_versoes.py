@@ -6,7 +6,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
-    'test_hotfolder_dialogo.py',
+    'test_hotfolder_dialogo.py','test_motor_piloto.py',
     'test_canais_newprod.py','test_seguranca_estacao.py','test_integridade_impressao.py',
     'test_numeracao_compatibilidade.py',
     'test_engine_pdf_mesclar.py','test_engine_modelos_somados.py','test_engine_banco_nunca_vira_sequencial.py',
@@ -16,6 +16,7 @@ TESTES = [
     'test_diario_local.py','test_pacotes_api.py','test_selecao_piloto.py',
     'test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
 HARNESSES = ['modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
+             'foto_piloto_harness.js','foto_lib_harness.js',
              'selecao_piloto_harness.js','integridade_impressao_harness.js',
              'token_estacao_harness.js','ticket_condicoes_harness.js',
              'ticket_previas_harness.js','numeracao_compatibilidade_harness.js',

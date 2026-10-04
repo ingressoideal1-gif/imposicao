@@ -12,11 +12,21 @@ from pacotes_locais import _sem_links
 
 def resumo(servico):
     modelos = []
-    for modelo, revisao in servico.identidades():
-        estado = servico.estado_modelo(modelo, revisao)
-        modelos.append({'modelo': modelo, 'estado': estado['estado'],
-                        'copia_local_presente': estado.get('copia_local_presente', False),
-                        'conferencia_online_pendente': estado.get('conferencia_online_pendente', True)})
+    # Resumo de presença: uma conexão e uma visita por modelo, sem reabrir
+    # SQLite nem verificar todas as revisões antigas para cada linha do painel.
+    con = servico._db()
+    try:
+        coletas = {}
+        for modelo, manifesto in con.execute('SELECT modelo, manifesto FROM coletas'):
+            coletas.setdefault(modelo, []).append(json.loads(manifesto))
+        presenca = {m:bool(servico.copias_presentes(m, _manifestos=ms)) for m, ms in coletas.items()}
+        for modelo, revisao in con.execute('SELECT modelo, revisao FROM catalogo').fetchall():
+            estado = servico.estado_modelo(modelo, revisao, _con=con, _copia_local_presente=presenca.get(modelo, False))
+            modelos.append({'modelo': modelo, 'estado': estado['estado'],
+                            'copia_local_presente': estado.get('copia_local_presente', False),
+                            'conferencia_online_pendente': estado.get('conferencia_online_pendente', True)})
+    finally:
+        con.close()
     arquivos = tamanho = livre = None
     try:
         objetos = servico.local._pasta(servico.empresa) / 'objetos'
@@ -131,6 +141,24 @@ def criar_router_estatisticas(servico):
             raise HTTPException(422, 'Seleção ou pacote local incompatível.') from None
         except OSError:
             raise HTTPException(507, 'Não foi possível preparar os arquivos locais.') from None
+
+    @router.post('/api/pacotes-locais/preparar-pedido-painel')
+    async def preparar_pedido(request: Request):
+        exigir_painel(request, escrita=True)
+        corpo = bytearray()
+        async for parte in request.stream():
+            corpo.extend(parte)
+            if len(corpo) > 65536:
+                raise HTTPException(413, 'Pedido excede limite de preparação.')
+        try:
+            resultado = await run_in_threadpool(selecao.preparar_pedido, json.loads(corpo))
+            return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
+        except ConferenciaIndisponivel:
+            raise HTTPException(409, 'Pedido não conferido. Reabra e tente novamente.') from None
+        except (ValueError, KeyError, TypeError, StopIteration):
+            raise HTTPException(422, 'Pedido ou pacote local incompatível.') from None
+        except OSError:
+            raise HTTPException(507, 'Não foi possível preparar os arquivos do pedido.') from None
 
     @router.get('/api/pacotes-locais/recurso-painel/{modelo}/{revisao}/{nome}')
     def recurso_painel(modelo: str, revisao: str, nome: str, request: Request):
