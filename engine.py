@@ -1470,17 +1470,25 @@ class ImpositionEngine:
     def _preparar_elementos_obrigatorios(self):
         """Valida todos os recursos antes da primeira folha, inclusive de modelos tardios."""
         cfg = self.cfg
-        grupos = [(cfg.elements, cfg.csv_data or [], cfg.total_items)]
+        grupos = [(cfg.elements, cfg.csv_data or [], cfg.total_items, not cfg.multi_artes)]
         for arte in cfg.multi_artes:
             for chave in ("numeracao", "numeracao_2"):
                 num = arte.get(chave) or {}
-                grupos.append((num.get("elements") or [], (arte.get("numeracao") or {}).get("csv_data") or [], int(arte.get("qtd", 0))))
-        for elementos, linhas, quantidade in grupos:
+                grupos.append((num.get("elements") or [], (arte.get("numeracao") or {}).get("csv_data") or [], int(arte.get("qtd", 0)), True))
+        for elementos, linhas, quantidade, conferir_teatro in grupos:
             linhas = [r for r in linhas if r.get("__ativo", True) is not False]
             for el in elementos:
                 if _so_layout(el) or el.get("type") == "METADATA":
                     continue
                 tipo = el.get("type")
+                # Multi-Artes usa o banco de cada modelo, não o banco da configuração geral.
+                if conferir_teatro and tipo in ("TEATRO_FILA", "TEATRO_LUGAR", "TEATRO_COMBO"):
+                    colunas = ("Fila", "Numero") if tipo == "TEATRO_COMBO" else ("Fila",) if tipo == "TEATRO_FILA" else ("Numero",)
+                    if len(linhas) < quantidade or any(
+                        r.get(coluna) is None or not str(r.get(coluna)).strip()
+                        for r in linhas[:quantidade] for coluna in colunas
+                    ):
+                        raise ValueError("Elementos de Teatro exigem banco com " + " e ".join(colunas) + " preenchidos em todas as linhas do trabalho")
                 if el.get("source") == "database" and not el.get("fixed"):
                     coluna = el.get("csv_column")
                     if not coluna or len(linhas) < quantidade:
@@ -3972,7 +3980,7 @@ class ImpositionEngine:
                             if "width_mm" in el and el["type"] == "SVG":
                                 rotated_el["width_mm"] = el["width_mm"]
                                 rotated_el["height_mm"] = el.get("height_mm", 20)
-                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_"):
+                            if el["type"] in ("TEXT", "FIXED") or el["type"].startswith("TEATRO_") or el["type"].startswith("CAMAROTE_"):
                                 rotated_el["font_size"] = el.get("font_size", 12)
                                 rotated_el["font_name"] = el.get("font_name", "helv")
 
@@ -3982,6 +3990,10 @@ class ImpositionEngine:
                                 pos = int(rotated_el.get("ticket_pos", 1))
                                 N = item_ticket_qtd
                                 current_val = item_start_base + (item_local_idx * N) + (pos - 1)
+
+                            if cfg.num_tipo == "CAMAROTE" and rotated_el["type"].startswith("CAMAROTE_"):
+                                c_idx, c_l_cam, c_c_ini, c_start = self._get_camarote_params(item_index, multi_map if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) else None)
+                                current_val = self._resolve_camarote_val(rotated_el, c_idx, current_val, c_l_cam, c_c_ini, c_start)
 
                             self._injetar_qr_ideal(rotated_el, current_val, item_index=item_index, item_data=arte_data)
                             self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)

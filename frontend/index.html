@@ -534,7 +534,7 @@
                         <div class="num-type-fields">
                             <div class="form-group num-type-select">
                                 <label>Tipo de Numeração</label>
-                                <select class="form-control" id="num-tipo" onchange="onTipoSelect()">
+                                <select class="form-control" id="num-tipo" onchange="onTipoSelect(true)">
                                 <option value="SEQUENCIAL" selected>SEQUENCIAL</option>
                                 <option value="TICKET">TICKET</option>
                                 <option value="FICHAS">FICHAS</option>
@@ -590,6 +590,7 @@
                             </div>
                         </div>
                         </div>
+                        <small id="num-compatibilidade-info" style="display:block; margin-top:12px; color:var(--text-dim);" role="status"></small>
                         <div id="num-teatro-elements-container" class="num-element-group" data-family="teatro" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🎭</span> Elementos de Teatro</span>
                             <div class="add-elements-bar">
@@ -4499,7 +4500,7 @@
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
-    <script src="script.js?v=1013"></script>
+    <script src="script.js?v=1015"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=978"></script>
     <script src="qr-evento-envio.js?v=948"></script>

@@ -4957,8 +4957,64 @@ window.cancelNumEdit = cancelNumEdit;
 
 
 
-window.onTipoSelect = function() {
-    const tipo = document.getElementById('num-tipo').value;
+function familiaDoElementoDeNumeracao(type) {
+    if (String(type).startsWith('TEATRO_')) return 'TEATRO';
+    if (String(type).startsWith('CAMAROTE_')) return 'CAMAROTE';
+    return null;
+}
+
+function familiasDaNumeracao(elementos) {
+    return [...new Set((elementos || []).map(el => familiaDoElementoDeNumeracao(el.type)).filter(Boolean))];
+}
+
+function atualizarCompatibilidadeDosElementos() {
+    const familias = familiasDaNumeracao(state.numElements);
+    for (const familia of ['TEATRO', 'CAMAROTE']) {
+        const container = document.getElementById(familia === 'TEATRO' ? 'num-teatro-elements-container' : 'num-camarote-elements-container');
+        if (!container) continue;
+        const outra = familia === 'TEATRO' ? 'CAMAROTE' : 'TEATRO';
+        for (const btn of container.querySelectorAll('button[onclick]')) {
+            if (btn.dataset.tituloOriginal === undefined) btn.dataset.tituloOriginal = btn.title;
+            btn.disabled = familias.includes(outra);
+            btn.title = btn.disabled ? `Remova os elementos de ${outra === 'TEATRO' ? 'Teatro' : 'Camarote'} antes de adicionar ${familia === 'TEATRO' ? 'Teatro' : 'Camarote'}.` : btn.dataset.tituloOriginal;
+        }
+    }
+    const info = document.getElementById('num-compatibilidade-info');
+    if (info) info.textContent = familias.length > 1
+        ? 'Numeração existente com Teatro e Camarote. Remova uma das famílias para adicionar elementos especializados.'
+        : familias.length === 1
+            ? `Elementos de ${familias[0] === 'TEATRO' ? 'Teatro' : 'Camarote'} definem o tipo. Elementos comuns, Gráficos e Banco continuam disponíveis.`
+            : 'O primeiro elemento de Teatro ou Camarote define o tipo. Os demais elementos são comuns.';
+}
+
+function prepararTipoParaNovoElemento(type) {
+    const familia = familiaDoElementoDeNumeracao(type);
+    if (!familia) return true;
+    if (familiasDaNumeracao(state.numElements).some(atual => atual !== familia)) {
+        toast('Teatro e Camarote não podem ser adicionados à mesma numeração. Remova os elementos da outra família primeiro.', 'warning');
+        return false;
+    }
+    const select = document.getElementById('num-tipo');
+    if (select && select.value !== familia) {
+        select.value = familia;
+        if (window.onTipoSelect) window.onTipoSelect();
+        toast(`Tipo alterado para ${familia === 'TEATRO' ? 'Teatro' : 'Camarote'}.`, 'info');
+    }
+    return true;
+}
+
+window.onTipoSelect = function(manual) {
+    const select = document.getElementById('num-tipo');
+    if (manual) {
+        const familias = familiasDaNumeracao(state.numElements);
+        if (familias.length && (familias.length > 1 || select.value !== familias[0])) {
+            select.value = select.dataset.tipoAnterior || familias[0];
+            toast('Remova os elementos especializados antes de trocar o tipo de numeração.', 'warning');
+            return;
+        }
+    }
+    const tipo = select.value;
+    select.dataset.tipoAnterior = tipo;
     const ticketSettings = document.getElementById('num-ticket-settings');
     const teatroSettings = document.getElementById('num-teatro-elements-container');
     const camaroteSettings = document.getElementById('num-camarote-elements-container');
@@ -7845,6 +7901,8 @@ window.addDatabaseTextElement = function () {
 
 window.addElement = function (type, extras) {
 
+    if (typeof prepararTipoParaNovoElemento === 'function' && !prepararTipoParaNovoElemento(extras?.type || type)) return null;
+
     state.numElCounter++;
 
     const id = `el_${state.numElCounter}`;
@@ -8016,6 +8074,7 @@ function atualizarSelecaoVisualDaNumeracao() {
 
 function renderElementsList() {
 
+    if (typeof atualizarCompatibilidadeDosElementos === 'function') atualizarCompatibilidadeDosElementos();
     const container = document.getElementById('elements-list');
     if (typeof renderNavegacaoDosElementosDaNumeracao === 'function') renderNavegacaoDosElementosDaNumeracao();
 
@@ -9110,6 +9169,10 @@ window.duplicateSelectedElements = function () {
         }
     });
 
+    const especializado = state.numElements.find(el => idsToDupe.has(el.id) &&
+        typeof familiaDoElementoDeNumeracao === 'function' && familiaDoElementoDeNumeracao(el.type));
+    if (especializado && typeof prepararTipoParaNovoElemento === 'function' && !prepararTipoParaNovoElemento(especializado.type)) return;
+
     saveNumHistory();
     
     const groupMap = {};
@@ -9199,6 +9262,7 @@ window.saveNumHistory = function () {
     }
     state.numHistory.push({
         numElements: JSON.parse(JSON.stringify(state.numElements)),
+        numTipo: document.getElementById('num-tipo')?.value,
         numElCounter: state.numElCounter,
         selectedElIds: [...(state.selectedElIds || [])]
     });
@@ -9209,6 +9273,10 @@ window.undoNumHistory = function () {
     if (state.numHistoryIndex > 0) {
         state.numHistoryIndex--;
         const snapshot = state.numHistory[state.numHistoryIndex];
+        if (snapshot.numTipo && document.getElementById('num-tipo')) {
+            document.getElementById('num-tipo').value = snapshot.numTipo;
+            if (window.onTipoSelect) window.onTipoSelect();
+        }
         state.numElements = JSON.parse(JSON.stringify(snapshot.numElements));
         state.numElCounter = snapshot.numElCounter;
         state.selectedElIds = [...snapshot.selectedElIds];
@@ -9222,6 +9290,10 @@ window.redoNumHistory = function () {
     if (state.numHistoryIndex < state.numHistory.length - 1) {
         state.numHistoryIndex++;
         const snapshot = state.numHistory[state.numHistoryIndex];
+        if (snapshot.numTipo && document.getElementById('num-tipo')) {
+            document.getElementById('num-tipo').value = snapshot.numTipo;
+            if (window.onTipoSelect) window.onTipoSelect();
+        }
         state.numElements = JSON.parse(JSON.stringify(snapshot.numElements));
         state.numElCounter = snapshot.numElCounter;
         state.selectedElIds = [...snapshot.selectedElIds];
