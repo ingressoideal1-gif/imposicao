@@ -1067,6 +1067,37 @@ def verso_unico(print_mode) -> bool:
     return str(print_mode or "front").strip().lower() == "duplex_unico"
 
 
+def _elemento_usa_posicao_ticket(el):
+    return el.get("type") == "QR_IDEAL" or (el.get("type") in ("TEXT", "QR", "BARCODE")
+        and not el.get("fixed") and el.get("source") != "database" and not el.get("database_text"))
+
+
+def _validar_numeracao_ticket(numeracao):
+    """Recusa posições inválidas antes de gerar arquivos, sem converter registros."""
+    if not numeracao or numeracao.get("tipo") != "TICKET":
+        return
+
+    def inteiro_positivo(valor):
+        try:
+            n = int(valor)
+            return not isinstance(valor, bool) and n >= 1 and float(valor) == n
+        except (TypeError, ValueError, OverflowError):
+            return False
+
+    quantidade = numeracao.get("ticket_qtd", 1)
+    if not inteiro_positivo(quantidade):
+        raise ValueError("TICKET exige quantidade inteira de Tickets por célula, maior que zero")
+    for el in numeracao.get("elements") or []:
+        if _so_layout(el) or el.get("type") == "METADATA":
+            continue
+        tipo = str(el.get("type", ""))
+        if tipo.startswith(("TEATRO_", "CAMAROTE_")):
+            raise ValueError("TICKET não permite elementos de Teatro ou Camarote")
+        posicao = el.get("ticket_pos", 1)
+        if _elemento_usa_posicao_ticket(el) and (not inteiro_positivo(posicao) or int(posicao) > int(quantidade)):
+            raise ValueError(f"TICKET: posição inválida no elemento {el.get('id') or tipo}; use de 1 a {int(quantidade)}")
+
+
 class ImpositionConfig:
     def __init__(self,
                  base_file: str,
@@ -1102,6 +1133,12 @@ class ImpositionConfig:
                  arte_escala_v: float = 100.0,
                  base_file_verso: str = None,
                  pdf_expected_items: int | None = None):
+
+        _validar_numeracao_ticket(numeracao)
+        _validar_numeracao_ticket(numeracao_2)
+        for arte in multi_artes or []:
+            _validar_numeracao_ticket(arte.get("numeracao"))
+            _validar_numeracao_ticket(arte.get("numeracao_2"))
 
         self.base_file = base_file
         # Arte separada do verso: anexada no `_load_base_as_pdf` quando preciso.
@@ -3766,7 +3803,7 @@ class ImpositionEngine:
                                 rotated_el["font_size"] = el.get("font_size", 12)
                                 rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
-                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1 and _elemento_usa_posicao_ticket(rotated_el):
                                 pos = int(rotated_el.get("ticket_pos", 1))
                                 N = item_ticket_qtd
                                 current_val = item_start_base + (item_local_idx * N) + (pos - 1)
@@ -3819,7 +3856,7 @@ class ImpositionEngine:
                                 rotated_el["font_size"] = el.get("font_size", 12)
                                 rotated_el["font_name"] = el.get("font_name", "helv")
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
-                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1 and _elemento_usa_posicao_ticket(rotated_el):
                                 pos = int(rotated_el.get("ticket_pos", 1))
                                 N = item_ticket_qtd
                                 current_val = item_start_base + (item_local_idx * N) + (pos - 1)
@@ -4009,7 +4046,7 @@ class ImpositionEngine:
 
                             current_val = val if rotated_el.get("_num_source", 1) == 1 else val2
 
-                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1:
+                            if item_num_tipo == "TICKET" and rotated_el.get("_num_source", 1) == 1 and _elemento_usa_posicao_ticket(rotated_el):
                                 pos = int(rotated_el.get("ticket_pos", 1))
                                 N = item_ticket_qtd
                                 current_val = item_start_base + (item_local_idx * N) + (pos - 1)
@@ -4304,7 +4341,7 @@ class ImpositionEngine:
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
                 
                 item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
-                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1 and _elemento_usa_posicao_ticket(el):
                     pos = int(el.get("ticket_pos", 1))
                     N = int(item_data.get("ticket_qtd", 1))
                     current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
@@ -4351,7 +4388,7 @@ class ImpositionEngine:
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
                 
                 item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
-                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1 and _elemento_usa_posicao_ticket(el):
                     pos = int(el.get("ticket_pos", 1))
                     N = int(item_data.get("ticket_qtd", 1))
                     current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
@@ -4454,7 +4491,7 @@ class ImpositionEngine:
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
                 
                 item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
-                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1 and _elemento_usa_posicao_ticket(el):
                     pos = int(el.get("ticket_pos", 1))
                     N = int(item_data.get("ticket_qtd", 1))
                     current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)
@@ -4501,7 +4538,7 @@ class ImpositionEngine:
                 current_val = val2 if el.get("_num_source", 1) == 2 else val
                 
                 item_num_tipo = item_data.get("num_tipo", "SEQUENCIAL")
-                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1:
+                if item_num_tipo == "TICKET" and el.get("_num_source", 1) == 1 and _elemento_usa_posicao_ticket(el):
                     pos = int(el.get("ticket_pos", 1))
                     N = int(item_data.get("ticket_qtd", 1))
                     current_val = item_data.get("start_base", 1) + (item_data.get("local_idx", 0) * N) + (pos - 1)

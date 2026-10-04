@@ -4967,20 +4967,42 @@ function familiasDaNumeracao(elementos) {
     return [...new Set((elementos || []).map(el => familiaDoElementoDeNumeracao(el.type)).filter(Boolean))];
 }
 
+function elementoUsaPosicaoTicket(el) {
+    return el.type === 'QR_IDEAL' || (['TEXT', 'QR', 'BARCODE'].includes(el.type)
+        && !el.fixed && el.source !== 'database' && !el.database_text);
+}
+
+function erroDaNumeracaoTicket(tipo, quantidade, elementos) {
+    if (tipo !== 'TICKET') return '';
+    const qtd = Number(quantidade);
+    if (typeof quantidade === 'boolean' || !Number.isSafeInteger(qtd) || qtd < 1) return 'Informe uma quantidade inteira de Tickets por célula, maior que zero.';
+    if (familiasDaNumeracao(elementos).length) return 'Remova os elementos de Teatro ou Camarote antes de usar o tipo Ticket.';
+    const invalidos = (elementos || []).filter(el => {
+        const pos = el.ticket_pos === undefined ? 1 : el.ticket_pos;
+        return elementoUsaPosicaoTicket(el) && (typeof pos === 'boolean'
+            || !Number.isSafeInteger(Number(pos)) || Number(pos) < 1 || Number(pos) > qtd);
+    });
+    return invalidos.length ? `Corrija a posição do Ticket nos elementos: ${invalidos.map(el => el.name || el.id || el.type).join(', ')}. As posições devem estar entre 1 e ${qtd}.` : '';
+}
+
 function atualizarCompatibilidadeDosElementos() {
     const familias = familiasDaNumeracao(state.numElements);
+    const ticket = document.getElementById('num-tipo')?.value === 'TICKET';
     for (const familia of ['TEATRO', 'CAMAROTE']) {
         const container = document.getElementById(familia === 'TEATRO' ? 'num-teatro-elements-container' : 'num-camarote-elements-container');
         if (!container) continue;
         const outra = familia === 'TEATRO' ? 'CAMAROTE' : 'TEATRO';
         for (const btn of container.querySelectorAll('button[onclick]')) {
             if (btn.dataset.tituloOriginal === undefined) btn.dataset.tituloOriginal = btn.title;
-            btn.disabled = familias.includes(outra);
-            btn.title = btn.disabled ? `Remova os elementos de ${outra === 'TEATRO' ? 'Teatro' : 'Camarote'} antes de adicionar ${familia === 'TEATRO' ? 'Teatro' : 'Camarote'}.` : btn.dataset.tituloOriginal;
+            btn.disabled = ticket || familias.includes(outra);
+            btn.title = ticket ? 'Elementos de Teatro e Camarote não estão disponíveis no tipo Ticket.'
+                : btn.disabled ? `Remova os elementos de ${outra === 'TEATRO' ? 'Teatro' : 'Camarote'} antes de adicionar ${familia === 'TEATRO' ? 'Teatro' : 'Camarote'}.` : btn.dataset.tituloOriginal;
         }
     }
     const info = document.getElementById('num-compatibilidade-info');
-    if (info) info.textContent = familias.length > 1
+    if (info) info.textContent = ticket
+        ? 'Ticket: comuns, Gráficos e Banco disponíveis. Banco compartilha a linha da célula entre as vias.'
+        : familias.length > 1
         ? 'Numeração existente com Teatro e Camarote. Remova uma das famílias para adicionar elementos especializados.'
         : familias.length === 1
             ? `Elementos de ${familias[0] === 'TEATRO' ? 'Teatro' : 'Camarote'} definem o tipo. Elementos comuns, Gráficos e Banco continuam disponíveis.`
@@ -4990,6 +5012,10 @@ function atualizarCompatibilidadeDosElementos() {
 function prepararTipoParaNovoElemento(type) {
     const familia = familiaDoElementoDeNumeracao(type);
     if (!familia) return true;
+    if (document.getElementById('num-tipo')?.value === 'TICKET') {
+        toast('Elementos de Teatro e Camarote não estão disponíveis no tipo Ticket. Troque o tipo antes de adicioná-los.', 'warning');
+        return false;
+    }
     if (familiasDaNumeracao(state.numElements).some(atual => atual !== familia)) {
         toast('Teatro e Camarote não podem ser adicionados à mesma numeração. Remova os elementos da outra família primeiro.', 'warning');
         return false;
@@ -5015,6 +5041,8 @@ window.onTipoSelect = function(manual) {
     }
     const tipo = select.value;
     select.dataset.tipoAnterior = tipo;
+    const qtdInput = document.getElementById('num-ticket-qtd');
+    if (qtdInput) qtdInput.dataset.qtdAnterior = qtdInput.value;
     const ticketSettings = document.getElementById('num-ticket-settings');
     const teatroSettings = document.getElementById('num-teatro-elements-container');
     const camaroteSettings = document.getElementById('num-camarote-elements-container');
@@ -5035,7 +5063,18 @@ window.onTipoSelect = function(manual) {
 };
 
 window.onTicketQtdChange = function() {
+    const input = document.getElementById('num-ticket-qtd');
+    const erro = erroDaNumeracaoTicket('TICKET', input.value,
+        state.numElements.filter(el => !familiaDoElementoDeNumeracao(el.type)));
+    if (erro) {
+        input.value = input.dataset.qtdAnterior || '1';
+        toast(erro, 'warning');
+    } else {
+        input.dataset.qtdAnterior = input.value;
+        saveNumHistory();
+    }
     renderElementsList();
+    drawCanvas();
 };
 
 function atualizarResumoDosFormatosCompativeis() {
@@ -8041,7 +8080,7 @@ function renderNavegacaoDosElementosDaNumeracao() {
         nome.textContent = (el.name || rotulo) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
         const detalhe = document.createElement('small');
         const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
-        detalhe.textContent = rotulo + ' · ' + face + (tipo === 'TICKET' && ['TEXT', 'QR', 'QR_IDEAL', 'BARCODE'].includes(el.type) ? ' · Ticket ' + (el.ticket_pos || 1) : '');
+        detalhe.textContent = rotulo + ' · ' + face + (tipo === 'TICKET' && elementoUsaPosicaoTicket(el) ? ' · Ticket ' + (el.ticket_pos ?? 1) : '');
         texto.append(nome, detalhe);
         botao.append(ponto, texto);
         botao.onclick = event => selectEl(el.id, event);
@@ -8064,8 +8103,8 @@ function atualizarSelecaoVisualDaNumeracao() {
         if (el) {
             botao.querySelector('strong').textContent = (el.name || botao.dataset.elementLabel) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
             const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
-            const ticket = document.getElementById('num-tipo')?.value === 'TICKET' && ['TEXT', 'QR', 'QR_IDEAL', 'BARCODE'].includes(el.type);
-            botao.querySelector('small').textContent = botao.dataset.elementLabel + ' · ' + face + (ticket ? ' · Ticket ' + (el.ticket_pos || 1) : '');
+            const ticket = document.getElementById('num-tipo')?.value === 'TICKET' && elementoUsaPosicaoTicket(el);
+            botao.querySelector('small').textContent = botao.dataset.elementLabel + ' · ' + face + (ticket ? ' · Ticket ' + (el.ticket_pos ?? 1) : '');
         }
     });
     const vazio = document.getElementById('num-properties-empty');
@@ -8477,11 +8516,13 @@ function renderElementsList() {
         
         let ticketPosHTML = '';
         const numTipoSelect = document.getElementById('num-tipo');
-        if (numTipoSelect && numTipoSelect.value === 'TICKET' && ['TEXT', 'QR', 'QR_IDEAL', 'BARCODE'].includes(el.type)) {
+        if (numTipoSelect && numTipoSelect.value === 'TICKET' && elementoUsaPosicaoTicket(el)) {
             const ticketQtd = parseInt(document.getElementById('num-ticket-qtd').value) || 1;
-            let options = '';
+            const pos = Number(el.ticket_pos === undefined ? 1 : el.ticket_pos);
+            let options = typeof el.ticket_pos !== 'boolean' && Number.isSafeInteger(pos) && pos >= 1 && pos <= ticketQtd ? ''
+                : '<option value="" selected disabled>Posição inválida — selecione um Ticket</option>';
             for (let i = 1; i <= ticketQtd; i++) {
-                options += `<option value="${i}" ${(el.ticket_pos || 1) == i ? 'selected' : ''}>Ticket ${i}</option>`;
+                options += `<option value="${i}" ${pos === i ? 'selected' : ''}>Ticket ${i}</option>`;
             }
             ticketPosHTML = `
                 <div class="form-group el-full">
@@ -8491,6 +8532,8 @@ function renderElementsList() {
                     </select>
                 </div>
             `;
+        } else if (numTipoSelect?.value === 'TICKET' && (el.source === 'database' || el.database_text || el.type === 'FOTO')) {
+            ticketPosHTML = '<div class="form-group el-full"><small>Banco: uma linha por célula, compartilhada entre os Tickets. Para dados diferentes nas vias, selecione colunas diferentes da mesma linha.</small></div>';
         }
 
         return `
@@ -8974,6 +9017,10 @@ window.updateEl = function (id, field, value) {
     const el = state.numElements.find(e => e.id === id);
     if (!el) return;
 
+    if (field === 'ticket_pos' && document.getElementById('num-tipo')?.value === 'TICKET') {
+        const erro = erroDaNumeracaoTicket('TICKET', document.getElementById('num-ticket-qtd').value, [{...el, ticket_pos:value}]);
+        if (erro) { toast(erro, 'warning'); return; }
+    }
     el[field] = value;
     saveNumHistory();
 
@@ -9263,6 +9310,7 @@ window.saveNumHistory = function () {
     state.numHistory.push({
         numElements: JSON.parse(JSON.stringify(state.numElements)),
         numTipo: document.getElementById('num-tipo')?.value,
+        ticketQtd: document.getElementById('num-ticket-qtd')?.value,
         numElCounter: state.numElCounter,
         selectedElIds: [...(state.selectedElIds || [])]
     });
@@ -9273,6 +9321,7 @@ window.undoNumHistory = function () {
     if (state.numHistoryIndex > 0) {
         state.numHistoryIndex--;
         const snapshot = state.numHistory[state.numHistoryIndex];
+        if (snapshot.ticketQtd !== undefined && document.getElementById('num-ticket-qtd')) document.getElementById('num-ticket-qtd').value = snapshot.ticketQtd;
         if (snapshot.numTipo && document.getElementById('num-tipo')) {
             document.getElementById('num-tipo').value = snapshot.numTipo;
             if (window.onTipoSelect) window.onTipoSelect();
@@ -9290,6 +9339,7 @@ window.redoNumHistory = function () {
     if (state.numHistoryIndex < state.numHistory.length - 1) {
         state.numHistoryIndex++;
         const snapshot = state.numHistory[state.numHistoryIndex];
+        if (snapshot.ticketQtd !== undefined && document.getElementById('num-ticket-qtd')) document.getElementById('num-ticket-qtd').value = snapshot.ticketQtd;
         if (snapshot.numTipo && document.getElementById('num-tipo')) {
             document.getElementById('num-tipo').value = snapshot.numTipo;
             if (window.onTipoSelect) window.onTipoSelect();
@@ -9819,6 +9869,9 @@ window.saveNumeracao = async function () {
     if (!name) return toast('Informe um nome para a numeração.', 'error');
 
     if (!fmtId) return toast('Selecione um formato.', 'error');
+
+    const erroTicket = erroDaNumeracaoTicket(tipo, document.getElementById('num-ticket-qtd').value, state.numElements);
+    if (erroTicket) return toast(erroTicket, 'warning');
 
     // O id de destino precisa ser conhecido ANTES do upload: o preview vai para o
     // Storage com o nome do registro. São três caminhos de gravação — editar,
@@ -27842,6 +27895,8 @@ function camposPendentesDoModelo(item) {
     const numId = item.amostra_num_id || item.numeracao_id;
     const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
     if (!num) faltam.push('Numeração');
+    const erroTicket = erroDaNumeracaoTicket(num?.tipo, num?.ticket_qtd ?? 1, num?.elements);
+    if (erroTicket) faltam.push(erroTicket);
     const corId = item.amostra_cor_id || item.cor_id || item.id_cor;
     const cor = (state.cores || []).find(c => String(c.id) === String(corId));
     if (!cor) faltam.push('Cor');
@@ -38444,6 +38499,9 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
                 let current_val = seqStart + (pageNum - 1);
+                if (num && num.tipo === 'TICKET') {
+                    current_val = seqStart + ((pageNum - 1) * (parseInt(num.ticket_qtd) || 1)) + ((parseInt(el.ticket_pos) || 1) - 1);
+                }
                 const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
                 qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
@@ -38469,7 +38527,9 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 }
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
-                const current_val = seqStart + (pageNum - 1);
+                const current_val = num && num.tipo === 'TICKET'
+                    ? seqStart + ((pageNum - 1) * (parseInt(num.ticket_qtd) || 1)) + ((parseInt(el.ticket_pos) || 1) - 1)
+                    : seqStart + (pageNum - 1);
                 const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
                 bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }

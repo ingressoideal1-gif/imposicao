@@ -4360,6 +4360,9 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
                 let current_val = seqStart + (pageNum - 1);
+                if (num && num.tipo === 'TICKET') {
+                    current_val = seqStart + ((pageNum - 1) * (parseInt(num.ticket_qtd) || 1)) + ((parseInt(el.ticket_pos) || 1) - 1);
+                }
                 const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
                 qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
@@ -4383,7 +4386,9 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 }
             } else {
                 const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
-                const current_val = seqStart + (pageNum - 1);
+                const current_val = num && num.tipo === 'TICKET'
+                    ? seqStart + ((pageNum - 1) * (parseInt(num.ticket_qtd) || 1)) + ((parseInt(el.ticket_pos) || 1) - 1)
+                    : seqStart + (pageNum - 1);
                 const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
                 bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
