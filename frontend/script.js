@@ -33165,7 +33165,9 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
         else disparar();
     };
     const tarefas = [];
+    const etapasLocais = [];
     const agendar = (fn, ms) => {
+        if (contexto.pacoteLocal) { etapasLocais.push({fn, ms}); return Promise.resolve(); }
         const tarefa = new Promise((resolve, reject) => setTimeout(async () => {
             try { if (aindaAtual()) await fn(); resolve(); } catch (e) { reject(e); }
         }, ms));
@@ -33198,7 +33200,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
     // combinada), que desce logo abaixo -- uma numeracao, nao quarenta e nove.
     // As demais continuam chegando pela tela de Amostras, em segundo plano, e
     // a mescla preserva o que ja desceu.
-    await recarregarNumeracoesDoPedido(osId, { comBanco: false, obrigatorio: true });
+    if (!contexto.pacoteLocal) await recarregarNumeracoesDoPedido(osId, { comBanco: false, obrigatorio: true });
     if (!aindaAtual()) return;
 
     // O banco das numeracoes DESTE trabalho, antes de qualquer conta da tela.
@@ -33501,6 +33503,10 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
         }
     }, 700);
     for (let i = 0; i < tarefas.length; i++) await tarefas[i];
+    while (etapasLocais.length) {
+        etapasLocais.sort((a, b) => a.ms - b.ms);
+        if (aindaAtual()) await etapasLocais.shift().fn(); else break;
+    }
 }
 
 // -------------------------------------------------------------------------------
@@ -33519,6 +33525,7 @@ window.voltarAoPainelDeProducao = voltarAoPainelDeProducao;
 async function abrirImposicaoDoPedido(osId, numeroOS) {
     if (!podeAbrirView('view-pedido')) return;
     const aindaAtual = window.NavegacaoPainel?.iniciarAcao() || (() => true);
+    const contextoLocal = window.PilotoSelecao?.iniciarPedido(osId);
     // Garante que todos os itens reais (pedidos_modelos) da OS sejam carregados antes de abrir
     const exigirModelos = findOSInState(osId)?._source === 'vibecode' || String(osId).startsWith('vibe_');
     const carregado = await loadOSItens(osId, { atualizar: true, exigirModelos });
@@ -33540,6 +33547,16 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
 
     if (exigirModelos && itens.some(i => i._pedidoModeloId == null || i._dbLoaded !== true)) {
         return toast('Os modelos de produção não foram confirmados. Atualize o pedido antes de abrir.', 'error');
+    }
+
+    if (window.PilotoSelecao) {
+        try {
+            await window.PilotoSelecao.conferirPedido(osId, aindaAtual, contextoLocal);
+            if (!aindaAtual()) return;
+        } catch (erro) {
+            if (aindaAtual()) toast(erro.message, 'error');
+            return;
+        }
     }
 
     // Limpar seleções múltiplas de artes anteriores, e variáveis de arte

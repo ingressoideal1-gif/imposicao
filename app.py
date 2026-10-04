@@ -1652,6 +1652,16 @@ async def impose_file(
             arte_escala_v=data.get("arte_escala_v", 100)
         )
 
+        resolver_local = None
+        if data.get('piloto_recursos') is not None:
+            if piloto_pacotes is None:
+                raise ValueError('Recursos do Piloto exigem o canal Piloto.')
+            from motor_piloto import resolver_do_pedido
+            if {str(r.get('modelo')) for r in data['piloto_recursos'] if isinstance(r, dict)} != {
+                    str(m) for m in data['integridade']['modelos']}:
+                raise ValueError('Pacotes locais não correspondem aos modelos do trabalho.')
+            resolver_local = resolver_do_pedido(piloto_pacotes, data['piloto_recursos'])
+
         wants_stream = data.get("stream", False)
 
         if wants_stream:
@@ -1730,7 +1740,7 @@ async def impose_file(
                         "folhas_no_trabalho": file_info.get("folhas_no_trabalho"),
                     })
 
-            engine = ImpositionEngine(config, on_file_generated=on_file_gen)
+            engine = ImpositionEngine(config, on_file_generated=on_file_gen, resolver_recurso=resolver_local)
             print(f"[DIAG impose stream] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r}")
 
             def processar_e_limpar():
@@ -1797,7 +1807,7 @@ async def impose_file(
             )
 
         # Fluxo síncrono original (fallback)
-        engine = ImpositionEngine(config)
+        engine = ImpositionEngine(config, resolver_recurso=resolver_local)
         print(f"[DIAG impose] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r} sheets_per_block={data.get('sheets_per_block')!r} multi_artes_count={len(multi_artes_list)} has_cover={formato.get('has_cover')}")
         engine.process()
         _publicar_faixa_qr_ideal(config, data)

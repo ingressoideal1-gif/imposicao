@@ -22,7 +22,8 @@ def ambiente(tmp_path):
     s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste', abrir=abrir)
     item = candidato(); item['pedido'] = '99'
     def listar(cursor, pedido):
-        assert cursor == 9 and pedido == '99'
+        estado['listagens'] = estado.get('listagens', 0) + 1
+        assert cursor in (0, 9) and pedido == '99'
         return {'itens': [] if estado.get('removido') else [item]}
     def conferir(i):
         estado['conferencias'] += 1
@@ -71,3 +72,35 @@ def test_origem_limites_e_integridade_da_rota(tmp_path):
         assert c.get(recurso, headers=headers).content == BYTES
         objeto = next(s.local.raiz.rglob('objetos/*')); objeto.write_bytes(b'corrompido')
         assert c.get(recurso, headers=headers).status_code == 409
+
+
+def test_prepara_pedido_uma_listagem_e_reabertura_revalida_bytes(tmp_path):
+    s, estado, dados = ambiente(tmp_path)
+    p = SelecaoPiloto(s)
+    pedido = {'pedido':'99', 'modelos':[{'modelo':'10', 'digest':dados['digest']}]}
+    r = p.preparar_pedido(pedido)
+    assert r['pedido'] == '99' and len(r['pacotes']) == 1
+    assert estado['listagens'] == 1 and estado['conferencias'] == 2
+    downloads = estado['downloads']
+    for _ in range(3):
+        assert p.ler('10', r['pacotes'][0]['revisao'], 'frente') == BYTES
+    assert estado['downloads'] == downloads and estado['conferencias'] == 2
+    estado['bytes'] += b'\n% alterado'
+    novo = p.preparar_pedido(pedido)
+    assert novo['pacotes'][0]['revisao'] != r['pacotes'][0]['revisao']
+
+
+def test_preparacao_pedido_exige_origem_limites_e_digest(tmp_path):
+    s, estado, dados = ambiente(tmp_path)
+    app = FastAPI(); app.include_router(criar_router_estatisticas(s))
+    headers = {'Origin':f'http://127.0.0.1:{PORTA}','Sec-Fetch-Site':'same-origin','X-Piloto-Painel':'1'}
+    pedido = {'pedido':'99', 'modelos':[{'modelo':'10', 'digest':dados['digest']}]}
+    with TestClient(app, base_url=f'http://127.0.0.1:{PORTA}', client=('127.0.0.1',55)) as c:
+        path = '/api/pacotes-locais/preparar-pedido-painel'
+        assert c.post(path, json=pedido).status_code == 403
+        assert c.post(path, headers=headers, content=b'x'*65537).status_code == 413
+        assert c.post(path, headers=headers, json=pedido).status_code == 200
+        pedido['modelos'][0]['digest'] = 'b'*64
+        assert c.post(path, headers=headers, json=pedido).status_code == 409
+        pedido['modelos'] *= 129
+        assert c.post(path, headers=headers, json=pedido).status_code == 422

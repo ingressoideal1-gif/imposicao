@@ -148,13 +148,16 @@ class ServicoPacotes:
             raise
         return con
 
-    def copias_presentes(self, modelo):
+    def copias_presentes(self, modelo, *, _manifestos=None):
         # Presença persistida, sem confundir com uma nova validação de integridade.
-        con = self._db()
-        try:
-            manifestos = [json.loads(r[0]) for r in con.execute('SELECT manifesto FROM coletas WHERE modelo=?', (modelo,))]
-        finally:
-            con.close()
+        if _manifestos is None:
+            con = self._db()
+            try:
+                manifestos = [json.loads(r[0]) for r in con.execute('SELECT manifesto FROM coletas WHERE modelo=?', (modelo,))]
+            finally:
+                con.close()
+        else:
+            manifestos = _manifestos
         presentes = []
         for m in manifestos:
             try:
@@ -465,26 +468,27 @@ class ServicoPacotes:
             for caminho in criados:
                 if caminho.exists(): caminho.unlink()
 
-    def estado_modelo(self, modelo, revisao):
+    def estado_modelo(self, modelo, revisao, *, _con=None, _copia_local_presente=None):
         resultado = self.preparador.estado(self.empresa, modelo, revisao)
-        resultado['copia_local_presente'] = bool(self.copias_presentes(modelo))
-        con = self._db()
+        resultado['copia_local_presente'] = bool(self.copias_presentes(modelo)) if _copia_local_presente is None else _copia_local_presente
+        con = _con if _con is not None else self._db()
         try:
             registro = con.execute('SELECT quando FROM conferencias WHERE modelo=? AND revisao=?', (modelo, revisao)).fetchone()
             if registro:
                 resultado['origem_conferida_em'] = registro[0]
                 resultado['conferencia_online_pendente'] = not _conferencia_recente(registro[0])
         finally:
-            con.close()
+            if _con is None: con.close()
         if resultado.get('antecipacao'):
             if resultado['estado'] == 'local_validado':
                 resultado['estado'] = 'recursos_antecipados'
             resultado['aprovacao_versionada'] = False
         if resultado['estado'] == 'local_validado':
-            con = self._db()
+            con = _con if _con is not None else self._db()
             try:
                 row = con.execute('SELECT tipo FROM origens WHERE modelo=? AND revisao=?', (modelo, revisao)).fetchone()
-            finally: con.close()
+            finally:
+                if _con is None: con.close()
             if row and row[0] == 'entrada_online':
                 resultado['estado'] = 'fotos_fontes_locais' if resultado.get('coleta_fotos_fontes') else 'dependencias_pendentes'
                 resultado['arquivos_de_entrada_validados'] = True

@@ -14,11 +14,11 @@ function montar() {
     c.toast=s=>c.mensagens.push(s);
     c.fetch=async(url,opts)=>{
         c.chamadas.push(url);
-        if(url.endsWith('selecionar-painel')){
+        if(url.endsWith('preparar-pedido-painel')){
             const body=JSON.parse(opts.body); if(c.esperar)await c.esperar;
             if(c.falha)return {ok:false};
-            return {ok:true,json:async()=>({modelo:'10',digest:body.digest,revisao:'b'.repeat(64),origem:'local',atualizado:true,
-                fontes:{frente:item.arte_url},recursos:{frente:'/api/pacotes-locais/recurso-painel/10/'+'b'.repeat(64)+'/frente'}})};
+            return {ok:true,json:async()=>({pedido:'99',sem_arte:[],pacotes:[{modelo:'10',digest:body.modelos[0].digest,revisao:'b'.repeat(64),origem:'local',atualizado:true,
+                fontes:{frente:item.arte_url},recursos:{frente:'/api/pacotes-locais/recurso-painel/10/'+'b'.repeat(64)+'/frente'}}]})};
         }
         assert.ok(url.startsWith('/api/pacotes-locais/recurso-painel/'));
         return {ok:true,headers:{get:()=> 'local'}};
@@ -32,9 +32,9 @@ function montar() {
 }
 (async()=>{
     const c=montar();let liberar;c.esperar=new Promise(r=>liberar=r);
-    const p=c.enviarParaPedido(10,'vibe_99');await new Promise(r=>setImmediate(r));
-    assert.ok(c.state.pedidoSelecaoCarregando);assert.equal(c.cargas.length,0);
-    liberar();await p;assert.equal(c.cargas.length,1);assert.equal(c.state.pedidoSelecaoCarregando,null);
+    const p=c.PilotoSelecao.conferirPedido('vibe_99',()=>true);await new Promise(r=>setImmediate(r));
+    await assert.rejects(c.enviarParaPedido(10,'vibe_99'));assert.equal(c.cargas.length,0);
+    liberar();await p;await c.enviarParaPedido(10,'vibe_99');assert.equal(c.cargas.length,1);assert.equal(c.state.pedidoSelecaoCarregando,null);
     c.state.activeOSItem={itemId:10,osId:'vibe_99'};
     c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]);
     await c.PilotoSelecao.lerUrl('https://test.invalid/a.pdf');
@@ -43,11 +43,14 @@ function montar() {
     assert.throws(()=>c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]));
     delete c.getOSItens()[0]._modeloOnline.quantidade;
     assert.ok(c.chamadas.every(u=>u.startsWith('/api/pacotes-locais/')));
-    await c.enviarParaPedido(10,'vibe_99');assert.equal(c.chamadas.filter(u=>u.endsWith('selecionar-painel')).length,2);
-    c.falha=true;await assert.rejects(c.enviarParaPedido(10,'vibe_99'));assert.ok(c.state.pedidoSelecaoErro);assert.equal(c.cargas.length,2);
+    await c.enviarParaPedido(10,'vibe_99');assert.equal(c.chamadas.filter(u=>u.endsWith('preparar-pedido-painel')).length,1);
+    assert.equal(c.PilotoSelecao.referencias([c.state.activeOSItem])[0].modelo,'10');
+    c.falha=true;await assert.rejects(c.PilotoSelecao.conferirPedido('vibe_99',()=>true));
+    await assert.rejects(c.enviarParaPedido(10,'vibe_99'));assert.ok(c.state.pedidoSelecaoErro);assert.equal(c.cargas.length,2);
     assert.throws(()=>c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]));
-    const d=montar();let fim;d.esperar=new Promise(r=>fim=r);const antigo=d.enviarParaPedido(10,'vibe_99');
-    await new Promise(r=>setImmediate(r));d.state.pedidoSelecaoCarregando={};fim();await antigo;assert.equal(d.cargas.length,0);
+    const d=montar();let fim;d.esperar=new Promise(r=>fim=r);const antigo=d.PilotoSelecao.conferirPedido('vibe_99',()=>true);
+    await new Promise(r=>setImmediate(r));d.PilotoSelecao.iniciarPedido('outro');fim();await antigo;
+    await assert.rejects(d.enviarParaPedido(10,'vibe_99'));assert.equal(d.cargas.length,0);
     await assert.rejects(d.PilotoSelecao.lerArte({modelo:'10',revisao:'b'.repeat(64),fontes:{frente:'outra'},recursos:{}},'frente','https://test.invalid/a.pdf'));
-    console.log('OK: bloqueio, rechecagem por seleção, atualização local, erro, resposta abandonada e URL divergente.');
+    console.log('OK: conferência por pedido, troca sem rede, reabertura, bloqueio, revisão alterada e resposta abandonada.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

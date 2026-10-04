@@ -478,8 +478,10 @@
         return reg.disparar;
     }
 
+    function chaveDaFoto(url) { return raiz.PilotoSelecao?.chaveRecurso(url) || url; }
     function registro(url) {
-        var reg = cache.get(url);
+        var chaveLocal = chaveDaFoto(url);
+        var reg = cache.get(chaveLocal);
         if (reg) return reg;
 
         var img = (typeof Image !== 'undefined' && urlCarregavel(url)) ? new Image() : null;
@@ -503,9 +505,19 @@
             };
             img.onload = function () { reg.pronta = true; fim(); };
             img.onerror = function () { reg.falhou = true; fim(); };
-            img.src = url;
+            if (chaveLocal !== url) {
+                // fetch acompanha a sessão local; Image.src não envia o
+                // cabeçalho de autenticação do painel. Não usar a URL web
+                // como fallback se uma revisão preparada falhar.
+                raiz.PilotoSelecao.lerUrl(url).then(r => r.blob()).then(blob => {
+                    var objeto = URL.createObjectURL(blob);
+                    img.addEventListener('load', () => URL.revokeObjectURL(objeto), {once:true});
+                    img.addEventListener('error', () => URL.revokeObjectURL(objeto), {once:true});
+                    img.src = objeto;
+                }).catch(() => { reg.falhou = true; fim(); });
+            } else img.src = url;
         });
-        cache.set(url, reg);
+        cache.set(chaveLocal, reg);
         return reg;
     }
 
@@ -523,7 +535,7 @@
 
     /** Tamanho em pixels da foto já carregada, ou null se ainda não chegou. */
     function dimensoesDaFoto(url) {
-        var reg = url ? cache.get(url) : null;
+        var reg = url ? cache.get(chaveDaFoto(url)) : null;
         if (!reg || !reg.pronta || !reg.img) return null;
         return { w: reg.img.naturalWidth || reg.img.width, h: reg.img.naturalHeight || reg.img.height };
     }
@@ -536,8 +548,9 @@
     /** Nova tentativa explícita: só remove falhas das URLs informadas. */
     function repetirFotosQueFalharam(urls) {
         (urls || []).forEach(function (url) {
-            var reg = cache.get(url);
-            if (reg && reg.falhou) cache.delete(url);
+            var chave = chaveDaFoto(url);
+            var reg = cache.get(chave);
+            if (reg && reg.falhou) cache.delete(chave);
         });
     }
 
@@ -566,7 +579,7 @@
             els.forEach(function (el) {
                 var m = fotoDaLinha(el, linha);
                 if (!m || !m.url || !urlCarregavel(m.url)) return;
-                var reg = cache.get(m.url);
+                var reg = cache.get(chaveDaFoto(m.url));
                 if ((!reg || (!reg.pronta && !reg.falhou)) && falta.indexOf(m.url) === -1) falta.push(m.url);
             });
         });

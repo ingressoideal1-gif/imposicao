@@ -22,6 +22,21 @@ def test_cache_conta_hash_unico_sem_confundir_modelos(tmp_path):
     assert 'fontes' not in str(r) and 'token' not in str(r)
 
 
+def test_resumo_consulta_catalogo_sem_reabrir_sqlite_por_modelo(tmp_path, monkeypatch):
+    s = ServicoPacotes(tmp_path,host='test.invalid',empresa='teste')
+    for n in range(1, 12):
+        dados = item(); dados['manifesto']['modelo'] = str(n); s.cadastrar(dados)
+    original = s._db
+    chamadas = []
+    def abrir():
+        chamadas.append(1); return original()
+    monkeypatch.setattr(s, '_db', abrir)
+    r = resumo(s)
+    assert len(r['modelos']) == 11
+    # Catálogo e preferências: custo independente da quantidade de modelos.
+    assert len(chamadas) <= 2
+
+
 def test_resumo_exige_origem_local_e_nao_expoe_chave(tmp_path):
     app=FastAPI();s=ServicoPacotes(tmp_path,host='test.invalid',empresa='teste')
     app.include_router(criar_router_estatisticas(s))
