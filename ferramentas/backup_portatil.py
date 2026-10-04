@@ -144,8 +144,19 @@ def criar(root, destino, key_path, runtime=()):
             source = Path(nome).resolve()
             if source == Path(key_path).resolve() or not source.is_file() or Path(nome).is_symlink():
                 raise ValueError('Arquivo de runtime invalido')
-            archive.write(source, f'runtime/{index:03d}/{source.name}')
-            runtime_info.append({'source': str(source), 'sha256': sha256(source)})
+            data = source.read_bytes()
+            archive.writestr(f'runtime/{index:03d}/{source.name}', data)
+            entry = {'source': str(source), 'sha256': hashlib.sha256(data).hexdigest()}
+            if __package__:
+                from .runtime_portatil import recuperar_para_aes
+            else:
+                from runtime_portatil import recuperar_para_aes
+            recovery = recuperar_para_aes(source.name, data)
+            if recovery is not None:
+                recovery_name = f'recuperacao-portatil/{index:03d}/{source.name}'
+                archive.writestr(recovery_name, recovery)
+                entry['portable'] = {'file':recovery_name, 'sha256':hashlib.sha256(recovery).hexdigest()}
+            runtime_info.append(entry)
         refs = git(root, 'for-each-ref', '--format=%(refname) %(objectname)').decode('utf-8')
         archive.writestr('refs.txt', refs)
         archive.writestr('inventory.json', json.dumps({'worktrees': inventory, 'runtime': runtime_info}, ensure_ascii=False))
@@ -212,6 +223,9 @@ def verificar_restauracao(destino):
         restored = destino / 'runtime' / f'{index:03d}' / Path(item['source']).name
         if sha256(restored) != item['sha256']:
             raise ValueError('Arquivo de runtime diferente na restauracao')
+        if item.get('portable'):
+            if sha256(caminho_seguro(destino, item['portable']['file'])) != item['portable']['sha256']:
+                raise ValueError('Recuperacao portatil de runtime divergente')
     for index, item in enumerate(inventory['worktrees']):
         for untracked in item['untracked']:
             if sha256(caminho_seguro(destino / item['prefix'] / 'untracked', untracked['name'])) != untracked['sha256']:

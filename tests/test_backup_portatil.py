@@ -33,14 +33,20 @@ def test_backup_restaura_refs_staged_working_e_untracked(tmp_path):
     (root / '.env.local').write_text('arquivo pessoal sintetico nao deve entrar')
     key = tmp_path / 'chave.key'
     key.write_bytes(secrets.token_bytes(32))
+    from segredos_estacao import proteger_texto
+    runtime = tmp_path / 'acessos_locais.json'
+    access = {'acessos':[{'codigo':'ABC123','nome':'Somente sintetico'}]}
+    runtime.write_text(json.dumps(proteger_texto(json.dumps(access),'acessos-locais')))
     sealed = tmp_path / 'backup'
-    manifest = backup.criar(root, sealed, key)
+    manifest = backup.criar(root, sealed, key, runtime=[runtime])
     assert manifest['worktrees'] == 1 and manifest['dirty'] == 1
     assert {p.name for p in sealed.iterdir()} == {'snapshot.iib', 'manifesto.json'}
     restored = tmp_path / 'restaurado'
     backup.restaurar(sealed, restored, key)
     result = backup.verificar_restauracao(restored)
-    assert result == {'git_fsck': True, 'refs': 2, 'dirty_worktrees_restored': 1, 'untracked_verified': 1, 'runtime_verified': 0}
+    assert result == {'git_fsck': True, 'refs': 2, 'dirty_worktrees_restored': 1, 'untracked_verified': 1, 'runtime_verified': 1}
+    assert b'ABC123' not in (sealed / 'snapshot.iib').read_bytes()
+    assert json.loads((restored / 'recuperacao-portatil/000/acessos_locais.json').read_text()) == access
     inventory = json.loads((restored / 'inventory.json').read_text())
     assert inventory['worktrees'][0]['omitted_personal'] == ['.env.local']
     assert (root / 'codigo.txt').read_text() == 'working\n'

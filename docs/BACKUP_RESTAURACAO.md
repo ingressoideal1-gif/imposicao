@@ -182,3 +182,16 @@ use `agendar-backup.ps1 -Aplicar -Atualizar` com os caminhos revisados do script
 Python e repositório. A credencial de publicação protegida por DPAPI integra
 o pacote cifrado quando existe; a proteção DPAPI depende da conta Windows
 original. Em outro computador, seu provisionamento autorizado é separado.
+
+Os arquivos de runtime selecionados que usam DPAPI tambem recebem uma copia
+de recuperacao **dentro do pacote AES**, em `recuperacao-portatil/`. Ela permite
+recuperar acessos, credencial de publicacao e SMTP quando o perfil Windows
+original foi perdido. Essa copia nunca vai sozinha para o Drive; o ensaio
+decifrado e confidencial e deve permanecer em pasta privada.
+
+Depois de autenticar e restaurar o pacote em uma pasta privada, use
+`ferramentas/provisionar_runtime_recuperado.py --origem ARQUIVO_RECUPERADO
+--destino ARQUIVO_NOVO` na conta Windows da estacao de destino. O comando
+recusa sobrescrita e reprotege os dados com DPAPI dessa conta. O nome do
+arquivo deve permanecer igual; a pasta deve existir. Nao copie diretamente
+um envelope DPAPI de outra conta e espere que ele possa ser aberto.
