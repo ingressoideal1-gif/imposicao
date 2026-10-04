@@ -5500,6 +5500,7 @@ function drawCanvasFace(canvas, face) {
 }
 
 function drawCanvas() {
+    if (typeof atualizarSelecaoVisualDaNumeracao === 'function') atualizarSelecaoVisualDaNumeracao();
     atualizarControlesDoFundo();
     const canvasFront = document.getElementById('numeracao-canvas');
     if (!canvasFront || !state.numFormato) return;
@@ -6723,6 +6724,8 @@ function selectElId(id, multi = false, updateInteraction = false) {
 
     }
 
+    if (typeof atualizarSelecaoVisualDaNumeracao === 'function') atualizarSelecaoVisualDaNumeracao();
+
 }
 
 
@@ -7927,9 +7930,66 @@ window.addElement = function (type, extras) {
 
 
 
+// A lista compacta apenas aciona a seleção existente; os cartões mantêm seus
+// campos, ids e handlers no painel de propriedades.
+function renderNavegacaoDosElementosDaNumeracao() {
+    const lista = document.getElementById('num-elements-navigation-list');
+    if (!lista) return;
+    const rotulos = { TEXT: 'Numeração', FIXED: 'Texto fixo', QR: 'QR Code', QR_IDEAL: 'QR Ideal', BARCODE: 'Barcode', FOTO: 'Foto', PDF: 'PDF', SVG: 'SVG', PICOTE: 'Picote', TEATRO_FILA: 'Fila', TEATRO_LUGAR: 'Lugar', TEATRO_COMBO: 'Fila & Lugar', CAMAROTE_LOCAL: 'Local', CAMAROTE_PESSOA: 'Pessoas', CAMAROTE_PESSOA_TOTAL: 'Pessoas 1/Total' };
+    const fragmento = document.createDocumentFragment();
+    const tipo = document.getElementById('num-tipo')?.value;
+    state.numElements.forEach(el => {
+        const rotulo = el.type === 'TEXT' && el.database_text ? 'Texto — Banco de Dados' : (rotulos[el.type] || el.type);
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'num-element-navigation';
+        botao.dataset.elementId = el.id;
+        botao.dataset.elementLabel = rotulo;
+        botao.dataset.family = el.type.startsWith('TEATRO_') ? 'teatro' : el.type.startsWith('CAMAROTE_') ? 'camarote' : ['PDF', 'SVG', 'PICOTE'].includes(el.type) ? 'graficos' : el.type === 'FOTO' || (el.type === 'TEXT' && el.database_text) ? 'banco' : 'comuns';
+        const ponto = document.createElement('span');
+        ponto.className = 'num-element-navigation-dot';
+        ponto.setAttribute('aria-hidden', 'true');
+        const texto = document.createElement('span');
+        texto.className = 'num-element-navigation-text';
+        const nome = document.createElement('strong');
+        nome.textContent = (el.name || rotulo) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
+        const detalhe = document.createElement('small');
+        const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
+        detalhe.textContent = rotulo + ' · ' + face + (tipo === 'TICKET' && ['TEXT', 'QR', 'QR_IDEAL', 'BARCODE'].includes(el.type) ? ' · Ticket ' + (el.ticket_pos || 1) : '');
+        texto.append(nome, detalhe);
+        botao.append(ponto, texto);
+        botao.onclick = event => selectEl(el.id, event);
+        fragmento.append(botao);
+    });
+    lista.replaceChildren(fragmento);
+    const contador = document.getElementById('num-elements-count');
+    if (contador) contador.textContent = state.numElements.length + ' elemento(s)';
+}
+
+function atualizarSelecaoVisualDaNumeracao() {
+    const lista = document.getElementById('num-elements-navigation-list');
+    if (!lista) return;
+    const selecionados = state.selectedElIds || [];
+    lista.querySelectorAll('[data-element-id]').forEach(botao => {
+        const selecionado = selecionados.includes(botao.dataset.elementId);
+        botao.classList.toggle('selected', selecionado);
+        botao.setAttribute('aria-pressed', String(selecionado));
+        const el = state.numElements.find(item => String(item.id) === botao.dataset.elementId);
+        if (el) {
+            botao.querySelector('strong').textContent = (el.name || botao.dataset.elementLabel) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
+            const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
+            const ticket = document.getElementById('num-tipo')?.value === 'TICKET' && ['TEXT', 'QR', 'QR_IDEAL', 'BARCODE'].includes(el.type);
+            botao.querySelector('small').textContent = botao.dataset.elementLabel + ' · ' + face + (ticket ? ' · Ticket ' + (el.ticket_pos || 1) : '');
+        }
+    });
+    const vazio = document.getElementById('num-properties-empty');
+    if (vazio) vazio.style.display = state.numElements.length && !document.querySelector('#elements-list .element-card.selected') ? '' : 'none';
+}
+
 function renderElementsList() {
 
     const container = document.getElementById('elements-list');
+    if (typeof renderNavegacaoDosElementosDaNumeracao === 'function') renderNavegacaoDosElementosDaNumeracao();
 
     let empty = document.getElementById('empty-elements');
 
@@ -7956,6 +8016,8 @@ function renderElementsList() {
         container.appendChild(empty);
 
         empty.style.display = 'block';
+
+        if (typeof atualizarSelecaoVisualDaNumeracao === 'function') atualizarSelecaoVisualDaNumeracao();
 
         return;
 
@@ -8475,6 +8537,7 @@ function renderElementsList() {
     requestAnimationFrame(() => mountFontPickers());
 
     renderBoxArquivos();
+    if (typeof atualizarSelecaoVisualDaNumeracao === 'function') atualizarSelecaoVisualDaNumeracao();
 
 }
 

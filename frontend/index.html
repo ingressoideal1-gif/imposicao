@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=994">
+    <link rel="stylesheet" href="/style.css?v=1012">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -457,14 +457,14 @@
                 </div>
 
                 <!-- Seletor de Formato + Nome -->
-                <div class="card">
+                <div class="card num-config-card">
                     <div class="card-header">
                         <span class="card-title"><span class="icon">⚙️</span> Configuração da Numeração</span>
                         <!-- Acende quando a numeração aberta pertence a um cliente. A cor
                              do cartão muda junto (classe `editando-exclusiva` no
                              #view-numeracao) — ver `atualizarMarcaDaNumeracaoExclusiva`. -->
                         <span id="num-selo-exclusiva" class="badge badge-amber" style="display:none; margin-left:10px;"></span>
-                        <div style="display:flex;gap:8px;">
+                        <div class="num-save-actions" style="display:flex;gap:8px;">
                             <!-- Duplica a exclusiva como numeração PADRÃO, do catálogo
                                  geral. A exclusiva original fica exatamente como está, e
                                  os modelos que a usam continuam nela. -->
@@ -486,7 +486,7 @@
                         </div>
                     </div>
                     <input type="hidden" id="num-id">
-                    <div class="form-grid" style="grid-template-columns: 2fr 1.2fr 1.2fr 1fr;">
+                    <div class="form-grid num-config-grid" style="grid-template-columns: 2fr 1.2fr 1.2fr 1fr;">
                         <div class="form-group">
                             <label>Nome da Numeração</label>
                             <input type="text" class="form-control" id="num-name"
@@ -601,16 +601,23 @@
                             <span class="card-title" style="font-size:0.85rem;"><span class="icon">🎯</span> Adicionar
                                 Elementos</span>
                         </div>
+                        <div class="num-element-groups">
+                        <div class="num-element-group" data-family="comuns">
+                            <span class="num-group-title">Comuns</span>
                         <div class="add-elements-bar">
                             <button class="btn btn-sm btn-secondary" onclick="addElement('TEXT')">🔤 Numeração</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('QR')">📱 QR Code</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('QR_IDEAL')" title="QR de controle de acesso: cada ingresso recebe um código único, gerado automaticamente — não se digita nada">🎟️ QR Ideal</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('BARCODE')">▌▌ Barcode</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('FIXED')">🔠 Texto Fixo</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addDatabaseTextElement()" title="Texto variável: fonte, coluna do banco e ajuste do espaço do texto">🔤 Texto — Banco de Dados</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('FOTO')" title="Janela de foto: a imagem muda a cada linha do banco (credenciais, cartões PVC)">🖼️ Foto</button>
-                            <button class="btn btn-sm btn-secondary" onclick="addElement('PICOTE')">✂️ Picote</button>
                         </div>
+                        </div>
+                        <div class="num-element-group" data-family="banco">
+                            <span class="num-group-title">Banco</span>
+                            <div class="add-elements-bar">
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('FOTO')" title="Janela de foto: a imagem muda a cada linha do banco (credenciais, cartões PVC)">🖼️ Foto</button>
+                                <button class="btn btn-sm btn-secondary" onclick="addDatabaseTextElement()" title="Texto variável: fonte, coluna do banco e ajuste do espaço do texto">🔤 Texto — Banco de Dados</button>
+                            </div>
                         <div id="num-csv-columns-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">📊</span> Colunas do Banco de Dados (CSV)</span>
                             <!-- Carregar o banco NAO poe campo nenhum no ticket desde
@@ -623,7 +630,8 @@
                                 <!-- Botões dinâmicos de colunas do CSV serão inseridos aqui -->
                             </div>
                         </div>
-                        <div id="num-teatro-elements-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+                        </div>
+                        <div id="num-teatro-elements-container" class="num-element-group" data-family="teatro" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🎭</span> Elementos de Teatro</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_FILA')">Fila</button>
@@ -631,7 +639,7 @@
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_COMBO')">Fila & Lugar</button>
                             </div>
                         </div>
-                        <div id="num-camarote-elements-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
+                        <div id="num-camarote-elements-container" class="num-element-group" data-family="camarote" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🏛️</span> Elementos de Camarote</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_LOCAL')" title="Local onde as pessoas ficam (Mesa, Camarote, Sala…)">🏛️ Local</button>
@@ -644,29 +652,26 @@
                              Cada upload cria um elemento com o proprio arquivo, no tamanho
                              natural (100%). Da para adicionar quantos quiser, de qualquer
                              mistura de PDF e SVG. -->
-                        <div id="num-arquivos-box" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
-                            <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">📎</span> Adicionar Pdf e Svg</span>
+                        <div id="num-arquivos-box" class="num-element-group" data-family="graficos" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+                            <span class="num-group-title"><span class="icon">📎</span> Gráficos</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="document.getElementById('num-pdf-file').click()" title="Adiciona um elemento PDF com o arquivo escolhido, em tamanho original">📄 + PDF</button>
                                 <button class="btn btn-sm btn-secondary" onclick="document.getElementById('num-svg-file').click()" title="Adiciona um elemento SVG com o arquivo escolhido, em tamanho original">🎨 + SVG</button>
                                 <input type="file" id="num-pdf-file" accept=".pdf" style="display:none">
                                 <input type="file" id="num-svg-file" accept=".svg" style="display:none">
+                                <button class="btn btn-sm btn-secondary" onclick="addElement('PICOTE')">✂️ Picote</button>
                             </div>
                             <div id="num-arquivos-lista" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
                         </div>
-                    </div>
-
-                    <!-- Painel esquerdo (agora Carrossel na Base) -->
-                    <div class="numeracao-panel">
-
-                        <!-- Lista de elementos -->
-                        <div id="elements-list">
-                            <div class="empty-state" id="empty-elements">
-                                <div class="empty-state-icon">🎯</div>
-                                <p>Adicione elementos acima</p>
-                            </div>
                         </div>
                     </div>
+
+                    <div class="numeracao-workspace">
+                    <aside class="num-elements-navigation card" aria-label="Lista de elementos da numeração">
+                        <div class="card-header"><span class="card-title">Elementos</span><span id="num-elements-count" class="num-elements-count">0 elementos</span></div>
+                        <p class="num-selection-help">Ctrl / Shift + clique para selecionar vários elementos.</p>
+                        <div id="num-elements-navigation-list"></div>
+                    </aside>
 
                     <!-- Canvas direito -->
                     <div class="canvas-wrapper">
@@ -731,6 +736,17 @@
                                 <canvas id="numeracao-canvas-verso"></canvas>
                             </div>
                         </div>
+                    </div>
+                    <aside class="numeracao-panel card" aria-label="Propriedades dos elementos selecionados">
+                        <div class="card-header"><span class="card-title">Propriedades</span></div>
+                        <p id="num-properties-empty" class="num-selection-help">Selecione um elemento na lista ou na visualização.</p>
+                        <div id="elements-list">
+                            <div class="empty-state" id="empty-elements">
+                                <div class="empty-state-icon">🎯</div>
+                                <p>Adicione elementos acima</p>
+                            </div>
+                        </div>
+                    </aside>
                     </div>
                 </div>
 
@@ -4525,7 +4541,7 @@
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
-    <script src="script.js?v=1011"></script>
+    <script src="script.js?v=1012"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=978"></script>
     <script src="qr-evento-envio.js?v=948"></script>
