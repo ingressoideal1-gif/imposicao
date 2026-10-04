@@ -157,9 +157,9 @@ async function requisitarPropostas(acao, corpo, recurso = 'propostas', sinal = u
     } else {
         if (SERVIDA_PELA_NUVEM) throw new Error('Entre no Vibe para acessar esta funcionalidade.');
         const operador = window._acessoLocal;
-        if (!operador || !operador.codigo) throw new Error('Entre com o codigo do operador na estacao.');
+        if (!operador || !operador.token) throw new Error('Entre com o codigo do operador na estacao.');
         base = '';
-        headers['X-Operador-Codigo'] = operador.codigo;
+        headers['X-NewProd-Sessao'] = operador.token;
     }
     const res = await fetch(`${base}/api/${recurso}/${acao}`, {
         method: 'POST', headers, body: JSON.stringify(corpo), signal: sinal
@@ -237,12 +237,9 @@ async function definirStatusProposta(pedido, status) {
 // 1. `supabase.co` sai fora ANTES de qualquer coisa. O próprio SDK do Supabase
 //    usa `fetch` para renovar a sessão; sem este corte, pedir a sessão dentro do
 //    `fetch` chamaria `fetch` de novo, para sempre.
-// 2. URL ABSOLUTA do agente local (http://127.0.0.1:9000/...) não recebe
-//    cabeçalho, e nem precisa: ele vive na LAN da gráfica, atrás da trava do
-//    código local, e o operador que entrou offline não tem sessão nenhuma do
-//    Supabase para oferecer. Já o caminho RELATIVO (`${API_BASE_URL}/api/...`,
-//    que na estação também leva ao agente) recebe — é o ramo `return true`
-//    logo abaixo, e é o mesmo caminho que na nuvem levaria a uma rota nossa.
+// 2. Na pagina da estacao, somente a mesma origem recebe o token local.
+//    Na pagina da nuvem, o agente em localhost/127.0.0.1 nas portas previstas
+//    recebe a sessao Supabase. Nenhum desses tokens segue para outro destino.
 (function () {
     const fetchOriginal = window.fetch.bind(window);
 
@@ -256,22 +253,41 @@ async function definirStatusProposta(pedido, status) {
         if (u.startsWith(API_PAINEL)) return true;
         if (u.includes('supabase.co')) return false;
         if (!u.includes('/api/')) return false;
-        // Endereço ABSOLUTO que não é a função do painel não é nosso motor.
-        //
-        // Sobrou um caso só, e ele é o do agente: `http://127.0.0.1:9000/api/…`.
-        // Ele não recebe cabeçalho, e nem precisa — vive na LAN da gráfica,
-        // atrás da trava do código local, e o operador que entrou offline não
-        // tem sessão nenhuma do Supabase para oferecer.
-        //
-        // Até 17/08/2026 havia aqui um terceiro ramo, para o servidor Python
-        // que ficava na nuvem. Saiu junto com o servidor.
-        if (/^https?:\/\//i.test(u)) return false;
+        // Somente os enderecos locais conhecidos recebem a sessao da nuvem.
+        if (/^https?:\/\//i.test(u)) {
+            try {
+                const destino = new URL(u);
+                return destino.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/.test(destino.hostname)
+                    && ['9000', '8080'].includes(destino.port) && destino.pathname.startsWith('/api/');
+            } catch (_) { return false; }
+        }
         // Caminho RELATIVO: quem serviu a página é quem responde. Na estação,
         // o agente — e é assim que `${API_BASE_URL}/api/…` chega nele.
         return u.indexOf('/api/') === 0;
     }
 
     window.fetch = function (entrada, opcoes) {
+        // Somente a mesma origem da estacao recebe o token local; nunca o
+        // Supabase, o portal remoto ou um endereco externo de download.
+        const referencia = typeof entrada === 'string' ? entrada : entrada && entrada.url;
+        let destino;
+        try { destino = new URL(referencia, window.location.href); } catch (_) { destino = null; }
+        const estacao = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+        if (estacao && destino && destino.origin === window.location.origin && destino.pathname.startsWith('/api/')) {
+            let sessao;
+            try { sessao = JSON.parse(sessionStorage.getItem('newprod_acesso_local') || 'null'); } catch (_) { sessao = null; }
+            if (sessao && sessao.token) {
+                const cabecalhos = new Headers((opcoes && opcoes.headers) || (entrada && entrada.headers) || {});
+                if (!cabecalhos.has('X-NewProd-Sessao')) cabecalhos.set('X-NewProd-Sessao', sessao.token);
+                opcoes = Object.assign({}, opcoes || {}, { headers: cabecalhos });
+            }
+            return fetchOriginal(entrada, opcoes).then(function (resposta) {
+                if (resposta.status === 401 && !destino.pathname.startsWith('/api/local/login')) {
+                    window.dispatchEvent(new Event('newprod-sessao-expirada'));
+                }
+                return resposta;
+            });
+        }
         // `Request` como primeiro argumento é raro no painel e mesclar
         // cabeçalhos nele daria uma cópia sutilmente diferente. Deixa passar.
         const url = (typeof entrada === 'string') ? entrada : null;

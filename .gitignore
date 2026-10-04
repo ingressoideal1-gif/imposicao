@@ -1,4 +1,5 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
 
@@ -78,6 +79,7 @@ imposition.db
 # Copia dos codigos de acesso local que o agente baixa para validar o login sem
 # rede. Sao SENHAS em texto claro, de cada maquina, e nunca do repositorio.
 acessos_locais.json
+acessos_locais.protegidos.json
 
 # Backup local da migração de preview_jpg — rede de segurança da máquina, não
 # conteúdo do projeto. São centenas de KB de base64 que não devem entrar no git.
@@ -125,8 +127,8 @@ midia/
 
 # Anotacao com credencial deixada na pasta do frontend em 17/08/2026. Nao pode
 # ser commitada: o repositorio e publico. Ela tambem nao deveria MORAR ali — o
-# agent_tray.spec varre a pasta frontend/ inteira para dentro do NewProd.exe, e
-# .gitignore nao impede isso. O lugar certo e fora do repositorio.
+# O empacotador antigo varria a pasta inteira; o atual usa somente arquivos
+# rastreados pelo Git. O lugar certo de credenciais continua fora do repositorio.
 frontend/user_senha_correios
 
 # Provas visuais que os harness de teste geram ao rodar (nascem de novo a cada vez)

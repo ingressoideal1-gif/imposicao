@@ -460,8 +460,8 @@ def _get_db() -> dict:
         return json.load(f)
 
 def _save_db(db_data: dict):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(db_data, f, indent=4, ensure_ascii=False)
+    from persistencia_local import gravar_json_atomico
+    gravar_json_atomico(DB_FILE, db_data)
 
 
 # ─── FORMATOS ─────────────────────────────────────────────────────────────────
@@ -2000,11 +2000,21 @@ def excluir_acesso_local(acesso_id):
 def get_email_config() -> dict:
     """SMTP pertence à estação; credenciais não são publicadas no Supabase."""
     db_data = _get_db()
-    return db_data.get("email_config", {})
+    config = dict(db_data.get("email_config", {}))
+    if 'password_protegida' in config:
+        from segredos_estacao import recuperar_texto
+        config['password'] = recuperar_texto(config.pop('password_protegida'), 'smtp')
+    return config
 
 
 def save_email_config(config: dict) -> bool:
     """Salva configurações do servidor SMTP de e-mail."""
+    from segredos_estacao import proteger_texto
+    config = dict(config)
+    password = config.pop('password', '')
+    if not password:
+        raise ValueError('Informe a senha SMTP ao salvar a configuracao protegida.')
+    config['password_protegida'] = proteger_texto(password, 'smtp')
     config["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     db_data = _get_db()
     db_data["email_config"] = config

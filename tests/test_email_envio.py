@@ -154,4 +154,21 @@ def test_config_so_local(config, monkeypatch):
     monkeypatch.setattr(db, '_supabase_request', nuvem)
     assert db.save_email_config(config)
     assert gravar.call_args.args[0]['email_config']['host'] == config['host']
+    gravada = gravar.call_args.args[0]['email_config']
+    assert 'password' not in gravada
+    assert config['password'] not in str(gravada)
+    monkeypatch.setattr(db, '_get_db', lambda: {'email_config': gravada})
+    assert db.get_email_config()['password'] == config['password']
     nuvem.assert_not_called()
+
+
+def test_falha_de_protecao_nao_grava_senha(config, monkeypatch):
+    import segredos_estacao
+    def falhar(*args):
+        raise segredos_estacao.ProtecaoIndisponivel('falha sintetica')
+    monkeypatch.setattr(segredos_estacao, 'proteger_texto', falhar)
+    salvar = MagicMock()
+    monkeypatch.setattr(db, '_save_db', salvar)
+    with pytest.raises(segredos_estacao.ProtecaoIndisponivel):
+        db.save_email_config(config)
+    salvar.assert_not_called()

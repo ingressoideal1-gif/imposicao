@@ -3,44 +3,30 @@ import os
 
 block_cipher = None
 
-# O que o git se RECUSA a versionar nao entra no executavel.
-#
-# Este walk embute a pasta `frontend/` inteira, arquivo por arquivo, sem olhar
-# o que e. Em 17/08/2026 uma anotacao com senha foi deixada ali dentro; ela nao
-# chegou a entrar em nenhum MSI por sorte de horario — as compilacoes daquele dia
-# sao todas anteriores ao arquivo —, mas a proxima teria embutido a senha num
-# instalador de 67 MB que fica num bucket PUBLICO, e de la nao se tira.
-#
-# O criterio e o do git de proposito: se um arquivo esta no `.gitignore`, alguem
-# ja decidiu que ele nao deve sair desta maquina. Sem git disponivel o build para,
-# em vez de seguir embutindo tudo — um bundle a menos custa minutos, um segredo
-# publicado nao se desfaz.
+# Somente arquivos rastreados entram no instalador publico. Um arquivo local
+# nao ignorado tambem pode conter credenciais; os dois casos ficam de fora.
 import subprocess
+from pathlib import Path
 
 try:
     _saida = subprocess.run(
-        ['git', 'ls-files', '--others', '--ignored', '--exclude-standard', '--', 'frontend'],
-        capture_output=True, text=True, check=True, timeout=60).stdout
-    _ignorados = {os.path.normpath(_l.strip()) for _l in _saida.splitlines() if _l.strip()}
-except Exception as _e:
-    raise SystemExit(
-        f'[agent_tray.spec] Nao consegui perguntar ao git o que e ignorado ({_e}).\n'
-        '  O build para aqui de proposito: sem essa lista, um arquivo com segredo\n'
-        '  deixado em frontend/ entraria no instalador publico.')
+        ['git', 'ls-files', '-z', '--', 'frontend'],
+        capture_output=True, check=True, timeout=60).stdout
+    _rastreados = [os.fsdecode(p) for p in _saida.split(b'\0') if p]
+except Exception:
+    raise SystemExit('[agent_tray.spec] Git indisponivel: build interrompido.')
 
 _frontend_datas = []
-_pulados = []
-for _raiz, _dirs, _arqs in os.walk('frontend'):
-    for _a in _arqs:
-        _caminho = os.path.join(_raiz, _a)
-        if os.path.normpath(_caminho) in _ignorados:
-            _pulados.append(_caminho)
-            continue
-        _frontend_datas.append((_caminho, os.path.relpath(_raiz, '.')))
-
-if _pulados:
-    print('[agent_tray.spec] fora do executavel por estarem no .gitignore: '
-          + ', '.join(_pulados))
+_raiz_projeto = Path.cwd().resolve()
+for _nome in _rastreados:
+    _arquivo = Path(_nome)
+    if _arquivo.is_symlink() or not _arquivo.resolve().is_relative_to(_raiz_projeto / 'frontend'):
+        raise SystemExit('[agent_tray.spec] Arquivo do painel fora da fonte autorizada.')
+    if not _arquivo.is_file():
+        raise SystemExit('[agent_tray.spec] Arquivo rastreado ausente: ' + _nome)
+    _frontend_datas.append((_nome, os.path.dirname(_nome)))
+if not _frontend_datas:
+    raise SystemExit('[agent_tray.spec] Nenhum arquivo rastreado no painel.')
 
 # mfc140u.dll: o `win32ui.pyd` NAO se basta, e a falta dele so aparece na estacao.
 #
@@ -118,15 +104,14 @@ a = Analysis(
     # no import, entao nada quebra sem ela.
     datas=[
         ('formats_db.json', '.'),
+        ('permissoes_padroes.json', '.'),
         ('agent_icon.ico', '.'),
         ('Logo Ideal Dark.png', '.'),
     ] + _frontend_datas,
     hiddenimports=[
-        # Gerado pelo build_agent.ps1 e importado so dentro de uma funcao do
-        # acesso_publicacao.py, entao o PyInstaller nao o acha varrendo o
-        # codigo. Sem esta linha o agente sai sem o segredo e nao publica faixa
-        # nenhuma -- sem erro, sem aviso, ate a portaria do evento.
-        'acesso_segredo',
+        'PyInstaller.archive.readers',
+        # A credencial de publicacao e provisionada com DPAPI na estacao.
+        # acesso_segredo fica explicitamente excluido deste executavel.
         'uvicorn.logging',
         'uvicorn.loops',
         'uvicorn.loops.auto',
@@ -220,7 +205,7 @@ a = Analysis(
     # NAO acrescente 'lxml' aqui: ele parece orfao, mas vem do svglib e e
     # obrigatorio para impor elementos SVG (ver engine.py). Foi ele, alias,
     # quem levou o pacote de 46,5 para 50,7 MB quando o SVG foi implementado.
-    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter'],
+    excludes=['firebase_admin', 'google.cloud', 'grpc', 'tkinter', 'acesso_segredo'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

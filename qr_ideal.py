@@ -75,6 +75,10 @@ def caminho_padrao() -> str:
     abertura — a estacao pagaria 24 MB de extracao toda vez que liga.
     """
     if getattr(sys, "frozen", False):
+        from migracao_estacao import pasta_dados
+        protegido = pasta_dados() / NOME_ARQUIVO
+        if protegido.is_file():
+            return str(protegido)
         base = os.path.dirname(sys.executable)
     else:
         base = os.path.dirname(os.path.abspath(__file__))

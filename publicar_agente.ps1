@@ -48,7 +48,9 @@ Set-Location $raiz
 Import-Module "$raiz\ferramentas\Publicacao.psm1"   -Force
 Import-Module "$raiz\ferramentas\VersaoAgente.psm1" -Force
 
-$python = "$raiz\venv\Scripts\python.exe"
+$python = if (Test-Path "$raiz\.venv\Scripts\python.exe") { "$raiz\.venv\Scripts\python.exe" }
+          elseif (Test-Path "$raiz\venv\Scripts\python.exe") { "$raiz\venv\Scripts\python.exe" }
+          else { throw 'Python do projeto ausente.' }
 
 # BYTES originais dos tres arquivos de versao, guardados antes de escrever.
 #
@@ -242,34 +244,13 @@ foreach ($alvo in $alvos) {
 # ─── 4. Compilar ─────────────────────────────────────────────────────────────
 # Sem `2>&1`: o PyInstaller escreve em stderr mesmo com sucesso e, no PS 5.1,
 # a redirecao transforma cada linha em erro terminante, abortando o build.
-# ANTES do PyInstaller, e nao depois: gerado depois, o arquivo so entraria no
-# build SEGUINTE. Ate 15/08/2026 este script nem gerava -- ia direto para a
-# compilacao --, e todo agente publicado saiu sem o segredo, imprimindo
-# normalmente e nao publicando credencial nenhuma. O pedido 20508 saiu com 143
-# ingressos que a portaria recusaria.
-Write-Host "  Embutindo o segredo do agente..." -ForegroundColor Cyan
-try {
-    New-SegredoDoAgente -Raiz $raiz | Out-Null
-    Write-Host "  Segredo embutido (acesso_segredo.py gerado)." -ForegroundColor Green
-}
-catch {
-    Abortar "$($_.Exception.Message)"
-}
-
+# A credencial e o pool permanecem privados na estacao.
 Write-Host "  Compilando o executavel (leva alguns minutos)..." -ForegroundColor Cyan
 & $python -m PyInstaller --clean --noconfirm agent_tray.spec
 if ($LASTEXITCODE -ne 0) { Abortar "O PyInstaller falhou." }
 
-# A trava que nao depende de ninguem lembrar: o PyInstaller registra os modulos
-# que nao achou, e a linha "missing module named acesso_segredo" esteve la em
-# TODOS os builds ate 15/08 sem que ninguem lesse o arquivo.
-try {
-    Test-SegredoNoBuild -Aviso "$raiz\build\agent_tray\warn-agent_tray.txt"
-    Write-Host "  Segredo conferido dentro do executavel." -ForegroundColor Green
-}
-catch {
-    Abortar "$($_.Exception.Message)"
-}
+& $python ferramentas/conferir_pacote_agente.py --exe "$raiz\dist\NewProd.exe"
+if ($LASTEXITCODE -ne 0) { Abortar "Executavel com material privado ou migracao ausente." }
 
 Write-Host "  Gerando o MSI..." -ForegroundColor Cyan
 & "$raiz\compilar_msi.ps1"
@@ -278,7 +259,9 @@ if ($LASTEXITCODE -ne 0) { Abortar "A geracao do MSI falhou." }
 $msi = "$raiz\dist\NewProd_Setup_v$Versao.msi"
 if (-not (Test-Path $msi)) { Abortar "Nao achei $msi depois de compilar." }
 
-# ─── 5. Conferir o pacote ────────────────────────────────────────────────────
+# ─── 5. Conferir o pacote publico antes de qualquer upload
+& $python ferramentas/conferir_pacote_agente.py --exe "$raiz\dist\NewProd.exe" --msi $msi
+if ($LASTEXITCODE -ne 0) { Abortar "MSI publico recusado: preserve os dados privados fora do pacote." }
 $tamanho = (Get-Item $msi).Length
 $mb = [math]::Round($tamanho / 1MB, 2)
 $projeto = (& $python -c "import security_config; print(security_config.SUPABASE_PROJETO)" | Select-Object -Last 1).Trim()

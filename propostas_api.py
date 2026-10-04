@@ -52,6 +52,9 @@ async def propostas_da_estacao(acao: str, request: Request):
     if acao not in acoes:
         raise HTTPException(404, "Operacao inexistente")
     codigo = request.headers.get("x-operador-codigo")
+    if request.headers.get('x-newprod-sessao'):
+        from autorizacao_local import operador_da_sessao
+        codigo = operador_da_sessao(request.headers['x-newprod-sessao']).get('codigo')
     if not codigo:
         raise HTTPException(401, "Identifique o operador local")
     raw = await request.body()

@@ -91,6 +91,14 @@ O modo local/offline deve ser descrito como fluxo próprio:
 - autenticação online e autorização offline não devem ser apresentadas como o mesmo mecanismo;
 - uma operação que dependa da nuvem deve informar claramente quando não estiver disponível.
 
+O login local em `frontend/acesso-estacao.js` recebe um token temporario da
+API da estacao. `autorizacao_local.py` confere identidade e permissoes em cada
+operacao; novas rotas exigem autorizacao por padrao. O navegador nao guarda o
+codigo permanente. Sem acesso sincronizado, a estacao nao concede entrada.
+SMTP e a lista de acessos usam DPAPI da conta Windows ao serem gravados; uma
+configuracao legada somente e convertida em um salvamento explicitamente
+solicitado. Veja [backup e recuperacao](BACKUP_RESTAURACAO.md).
+
 ## Fluxos principais
 
 ### Login

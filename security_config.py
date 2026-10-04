@@ -107,6 +107,8 @@ PAINEL_SYNC_BASE_URL = "https://imposicao.pages.dev"
 # estação e o `csv-editor.js` ficou três releases atrás sem ninguém notar.
 # `tests/test_painel_estacao.py` compara esta lista com o que o HTML pede.
 PAINEL_ARQUIVOS = [
+    "painel-protocolo.json",
+    "acesso-estacao.js",
     "index.html",
     "producao.html",
     "cliente.html",

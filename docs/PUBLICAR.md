@@ -57,3 +57,12 @@ não comprovam instalação ou impressão física. Banco e Storage exigem proced
 com alvo autorizado e validação dos dados recuperados.
 
 Referência do fornecedor: [rollback no Cloudflare Pages](https://developers.cloudflare.com/pages/configuration/rollbacks/).
+
+## Mudança de autenticação de outubro de 2026
+
+O novo painel local exige tokens emitidos pelo novo backend. Antes de publicar
+esse painel ou permitir sua sincronização, instale e valide o NewProd
+compatível em todas as estações afetadas. Confirme acessos sincronizados e
+permissões de cada perfil. Uma instalação sem lista sincronizada fica bloqueada;
+a falta de rede não concede acesso. A entrega do código nesta branch não
+comprova essa implantação.

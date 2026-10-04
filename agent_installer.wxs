@@ -7,7 +7,7 @@
            Name="NewProd Agent" 
            Language="1046" 
            Codepage="65001"
-           Version="1.2.351.0"
+           Version="1.2.354.0"
            Manufacturer="Ingresso Ideal" 
            UpgradeCode="A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D">
 
@@ -69,17 +69,18 @@
                   Advertise="no" />
       </Component>
 
-      <!-- Pool do QR Ideal: 3.000.000 de codigos de 8 bytes, lidos por posicao
-           direta. Vai AO LADO do executavel, e nao dentro dele: o agente e
-           compilado `onefile`, e dado embutido seria extraido para pasta
-           temporaria a cada abertura da estacao.
-
-           Componente proprio para que a troca do pool nao dependa de trocar o
-           executavel, e vice-versa. -->
-      <Component Id="PoolQrIdeal" Guid="D1E6F5A4-1A7B-6C9D-AF50-4B8C9D0E1F2A">
-        <File Id="QrIdealPoolBin" Source="dist\qr_ideal_pool.bin" KeyPath="yes" />
-      </Component>
     </DirectoryRef>
+
+    <!-- Executa somente o modo de preservacao antes da remocao do MSI antigo.
+         Pool e credencial ficam fora dos componentes MSI e do pacote publico.
+         Falha aborta a instalacao antes de apagar o pool da versao antiga. -->
+    <Binary Id="PreservadorEstacao" SourceFile="dist\PreservarNewProd.exe" />
+    <CustomAction Id="PreservarDadosEstacao" BinaryKey="PreservadorEstacao"
+                  ExeCommand="&quot;[LocalAppDataFolder]NewProd Agent&quot;"
+                  Execute="immediate" Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="PreservarDadosEstacao" Before="RemoveExistingProducts">NOT REMOVE~="ALL"</Custom>
+    </InstallExecuteSequence>
 
     <!-- ─── Remover pasta do Menu Iniciar na desinstalação ───────────────── -->
     <DirectoryRef Id="ApplicationProgramsFolder">
@@ -99,7 +100,6 @@
     <!-- ─── Recursos a Incluir no MSI ────────────────────────────────────── -->
     <Feature Id="MainFeature" Title="NewProd Agent" Level="1">
       <ComponentRef Id="MainExecutable" />
-      <ComponentRef Id="PoolQrIdeal" />
       <ComponentRef Id="CleanupMenu" />
     </Feature>
   </Product>
