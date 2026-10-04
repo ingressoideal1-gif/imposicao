@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1012">
+    <link rel="stylesheet" href="/style.css?v=1013">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -486,7 +486,7 @@
                         </div>
                     </div>
                     <input type="hidden" id="num-id">
-                    <div class="form-grid num-config-grid" style="grid-template-columns: 2fr 1.2fr 1.2fr 1fr;">
+                    <div class="form-grid num-config-grid" style="grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(0, 1.2fr)) minmax(0, 1fr);">
                         <div class="form-group">
                             <label>Nome da Numeração</label>
                             <input type="text" class="form-control" id="num-name"
@@ -512,6 +512,16 @@
                             </select>
                         </div>
                         <div class="form-group">
+                            <label id="num-formatos-label">Formatos compatíveis</label>
+                            <details id="num-formatos-dropdown" class="num-formatos-dropdown">
+                                <summary class="form-control" id="num-formatos-resumo" aria-labelledby="num-formatos-label num-formatos-resumo" aria-disabled="true" onclick="return !!document.getElementById('num-formato').value">Selecione o formato base</summary>
+                                <div id="num-formatos-compat" class="num-formatos-menu" style="display:none;">
+                                    <p>Marque os formatos onde esta numeração deve aparecer na Imposição.</p>
+                                    <div id="num-formatos-checks" onchange="atualizarResumoDosFormatosCompativeis()"></div>
+                                </div>
+                            </details>
+                        </div>
+                        <div class="form-group">
                             <label>Modo de Impressão</label>
                             <select class="form-control" id="num-print-mode" onchange="onNumPrintModeChange()">
                                 <option value="front" selected>Frente</option>
@@ -521,72 +531,21 @@
                                 <option value="pdf_duplicate_back">Duplicar para Verso</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Tipo de Numeração</label>
-                            <select class="form-control" id="num-tipo" onchange="onTipoSelect()">
+                        <div class="num-type-fields">
+                            <div class="form-group num-type-select">
+                                <label>Tipo de Numeração</label>
+                                <select class="form-control" id="num-tipo" onchange="onTipoSelect()">
                                 <option value="SEQUENCIAL" selected>SEQUENCIAL</option>
                                 <option value="TICKET">TICKET</option>
                                 <option value="FICHAS">FICHAS</option>
                                 <option value="TEATRO">TEATRO</option>
                                 <option value="CAMAROTE">CAMAROTE</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="num-ticket-settings" style="display:none; margin-top: 12px; padding: 12px; background: rgba(0, 168, 255, 0.05); border: 1px solid rgba(0, 168, 255, 0.2); border-radius: var(--radius);">
-                        <div class="form-grid form-grid-1">
-                            <div class="form-group">
-                                <label style="color: var(--blue);">Tickets por Célula (Folha)</label>
+                                </select>
+                            </div>
+                            <div id="num-ticket-settings" class="form-group num-ticket-inline" style="display:none;">
+                                <label for="num-ticket-qtd" title="Tickets por Célula (Folha)" style="color: var(--blue);">Tickets/célula</label>
                                 <input type="number" class="form-control" id="num-ticket-qtd" min="1" value="1" onchange="onTicketQtdChange()">
-                            </div>
-                            <input type="hidden" id="num-ticket-logica" value="HORIZONTAL">
-                        </div>
-                    </div>
-                    <!-- Checkboxes de formatos compatíveis -->
-                    <div id="num-formatos-compat" style="display:none; margin: 12px 0 0 0; padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--radius);">
-                        <label style="display:block; margin-bottom:8px; font-size:0.82rem; font-weight:600;">📐 Formatos compatíveis com esta numeração <span style="font-weight:400;color:var(--text-dim);font-size:0.75rem;">(marque todos os formatos onde esta numeração deve aparecer na Imposição)</span></label>
-                        <div id="num-formatos-checks" style="display:flex; flex-wrap:wrap; gap:8px 16px;"></div>
-                    </div>
-                    <div class="divider" style="margin: 16px 0 12px 0;"></div>
-
-                    <!-- O upload de PDF e SVG saiu daqui na v490: agora e a box
-                         "Adicionar Pdf e Svg" do painel de elementos, porque cada
-                         elemento passou a ter o proprio arquivo em vez de existir um
-                         arquivo unico por numeracao. -->
-                    <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
-                        <div class="form-group">
-                            <label>Banco de Dados (CSV)</label>
-                            <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
-                                <label class="btn btn-sm btn-secondary" for="num-csv-file" style="margin: 0; cursor: pointer;">
-                                    📊 Upload CSV
-                                </label>
-                                <input type="file" id="num-csv-file" accept=".csv" style="display:none">
-                                <button class="btn btn-sm btn-secondary" id="btn-criar-num-csv" onclick="criarCsvVazioDaNumeracao()" title="Montar o banco do zero: colar as colunas do Excel ou digitar à mão">➕ Criar vazio</button>
-                                <button class="btn btn-sm btn-secondary" id="btn-ver-num-csv" style="display:none;" onclick="abrirEditorCsvDaNumeracao()" title="Ver e editar o banco de dados como planilha">📋 Ver / Editar</button>
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-csv" style="display:none; padding: 4px 8px;" onclick="clearNumCsvFile()">✕ Remover</button>
-                                <span id="num-csv-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
-                            </div>
-                            <!-- Buscar o banco direto da web. Funciona no navegador,
-                                 sem servidor no meio: o endereco de exportacao do
-                                 Google devolve os cabecalhos de CORS. -->
-                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px;">
-                                <span style="font-size:0.78rem; color:var(--text-dim); white-space:nowrap;">🌐 Da web</span>
-                                <input type="text" id="num-csv-url" class="form-control" style="flex:1; min-width:280px; font-size:0.85rem; padding:6px 10px;" placeholder="Cole o link da Planilha Google, ou de um arquivo .csv" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCsvDaWeb();}">
-                                <button class="btn btn-sm btn-secondary" id="btn-buscar-num-csv" onclick="buscarCsvDaWeb()" title="Baixar o banco de dados desse endereço">⬇ Buscar</button>
-                                <button class="btn btn-sm btn-secondary" id="btn-atualizar-num-csv" style="display:none;" onclick="atualizarCsvDaPlanilha()" title="Trazer de novo o conteúdo desta planilha, por cima do banco atual">🔄 Atualizar da planilha</button>
-                            </div>
-                            <!-- So aparece quando a numeracao tem uma planilha ligada. O
-                                 aviso existe porque "atualizar" nao e obvio: ele troca o
-                                 conteudo, e a identidade das linhas segue a POSICAO. -->
-                            <div id="num-csv-ligado" style="display:none; font-size:0.75rem; color:var(--green, #22c55e); margin-top:6px; line-height:1.5;">
-                                🔗 Este banco veio da planilha acima. <b>🔄 Atualizar da planilha</b> troca o conteúdo pelo que estiver nela agora.
-                                As linhas são reconhecidas pela <b>posição</b>: evite inserir, apagar ou reordenar linhas na planilha
-                                depois de distribuí-las entre os modelos de um pedido.
-                            </div>
-                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px; line-height:1.5;">
-                                A planilha precisa estar compartilhada como <b>“Qualquer pessoa com o link”</b>.
-                                Se ela tiver <b>várias páginas</b>, vêm <b>todas</b>, e uma coluna <code>Página</code> diz de qual veio cada linha.
-                                Para trazer só uma, abra a página no Google antes de copiar o endereço — o link fica com <code>#gid=</code>.
+                                <input type="hidden" id="num-ticket-logica" value="HORIZONTAL">
                             </div>
                         </div>
                     </div>
@@ -631,7 +590,7 @@
                             </div>
                         </div>
                         </div>
-                        <div id="num-teatro-elements-container" class="num-element-group" data-family="teatro" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+                        <div id="num-teatro-elements-container" class="num-element-group" data-family="teatro" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🎭</span> Elementos de Teatro</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_FILA')">Fila</button>
@@ -639,7 +598,7 @@
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_COMBO')">Fila & Lugar</button>
                             </div>
                         </div>
-                        <div id="num-camarote-elements-container" class="num-element-group" data-family="camarote" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
+                        <div id="num-camarote-elements-container" class="num-element-group" data-family="camarote" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🏛️</span> Elementos de Camarote</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_LOCAL')" title="Local onde as pessoas ficam (Mesa, Camarote, Sala…)">🏛️ Local</button>
@@ -661,7 +620,6 @@
                                 <input type="file" id="num-svg-file" accept=".svg" style="display:none">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('PICOTE')">✂️ Picote</button>
                             </div>
-                            <div id="num-arquivos-lista" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
                         </div>
                         </div>
                     </div>
@@ -726,7 +684,7 @@
                                     onclick="toggleBgEditorVisibility()">Ocultar fundo</button>
                             <span id="bg-editor-help">Só nesta edição, na frente e no verso. Não altera a impressão nem remove o arquivo.</span>
                         </div>
-                        <div style="display: flex; width: 100%; justify-content: center; gap: 24px; overflow: auto; padding: 8px 0; flex-wrap: wrap;">
+                        <div id="num-canvas-faces" class="num-canvas-faces" data-orientation="horizontal">
                             <div id="num-canvas-container-frente" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
                                 <span id="num-canvas-title-frente" style="font-weight: 700; color: var(--blue); font-size: 0.85rem; display: none;">FRENTE</span>
                                 <canvas id="numeracao-canvas"></canvas>
@@ -4541,7 +4499,7 @@
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
-    <script src="script.js?v=1012"></script>
+    <script src="script.js?v=1013"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=978"></script>
     <script src="qr-evento-envio.js?v=948"></script>

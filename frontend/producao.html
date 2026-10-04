@@ -8,7 +8,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1012">
+    <link rel="stylesheet" href="/style.css?v=1013">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=897"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -407,7 +407,7 @@
                         </div>
                     </div>
                     <input type="hidden" id="num-id">
-                    <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;">
+                    <div class="form-grid num-config-grid num-config-grid-producao" style="grid-template-columns: 2fr 1fr 1fr;">
                         <div class="form-group">
                             <label>Nome da Numeração</label>
                             <input type="text" class="form-control" id="num-name"
@@ -419,25 +419,22 @@
                                 <option value="">— Selecione um Formato —</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Tipo de Numeração</label>
-                            <select class="form-control" id="num-tipo" onchange="onTipoSelect()">
+                        <div class="num-type-fields">
+                            <div class="form-group num-type-select">
+                                <label>Tipo de Numeração</label>
+                                <select class="form-control" id="num-tipo" onchange="onTipoSelect()">
                                 <option value="SEQUENCIAL" selected>SEQUENCIAL</option>
                                 <option value="TICKET">TICKET</option>
                                 <option value="FICHAS">FICHAS</option>
                                 <option value="TEATRO">TEATRO</option>
                                 <option value="CAMAROTE">CAMAROTE</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="num-ticket-settings" style="display:none; margin-top: 12px; padding: 12px; background: rgba(0, 168, 255, 0.05); border: 1px solid rgba(0, 168, 255, 0.2); border-radius: var(--radius);">
-                        <div class="form-grid form-grid-1">
-                            <div class="form-group">
-                                <label style="color: var(--blue);">Tickets por Célula (Folha)</label>
-                                <input type="number" class="form-control" id="num-ticket-qtd" min="1" value="1" onchange="onTicketQtdChange()">
+                                </select>
                             </div>
-                            <input type="hidden" id="num-ticket-logica" value="HORIZONTAL">
+                            <div id="num-ticket-settings" class="form-group num-ticket-inline" style="display:none;">
+                                <label for="num-ticket-qtd" title="Tickets por Célula (Folha)" style="color: var(--blue);">Tickets/célula</label>
+                                <input type="number" class="form-control" id="num-ticket-qtd" min="1" value="1" onchange="onTicketQtdChange()">
+                                <input type="hidden" id="num-ticket-logica" value="HORIZONTAL">
+                            </div>
                         </div>
                     </div>
                     <!-- Checkboxes de formatos compatíveis -->
@@ -447,18 +444,7 @@
                     </div>
                     <div class="divider" style="margin: 16px 0 12px 0;"></div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
-                        <div class="form-group">
-                            <label>Banco de Dados (CSV)</label>
-                            <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
-                                <label class="btn btn-sm btn-secondary" for="num-csv-file" style="margin: 0; cursor: pointer;">
-                                    📊 Upload CSV
-                                </label>
-                                <input type="file" id="num-csv-file" accept=".csv" style="display:none">
-                                <button class="btn btn-sm btn-ghost btn-danger" id="btn-remove-num-csv" style="display:none; padding: 4px 8px;" onclick="clearNumCsvFile()">✕ Remover</button>
-                                <span id="num-csv-file-name" style="font-size:0.82rem; color:var(--text-dim)"></span>
-                            </div>
-                        </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                         <div class="form-group">
                             <label>Desenho Vetorial (SVG)</label>
                             <div style="display:flex; gap:10px; align-items: center; flex-wrap: wrap;">
@@ -496,8 +482,11 @@
                         <div class="add-elements-bar">
                             <button class="btn btn-sm btn-secondary" onclick="addElement('TEXT')">🔤 Numeração</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('QR')">📱 QR Code</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('QR_IDEAL')" title="QR de controle de acesso: cada ingresso recebe um código único, gerado automaticamente — não se digita nada">🎟️ QR Ideal</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('BARCODE')">▌▌ Barcode</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('FIXED')">🔠 Texto Fixo</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addElement('FOTO')" title="Janela de foto: a imagem muda a cada linha do banco (credenciais, cartões PVC)">🖼️ Foto</button>
+                            <button class="btn btn-sm btn-secondary" onclick="addDatabaseTextElement()" title="Texto variável: fonte, coluna do banco e ajuste do espaço do texto">🔤 Texto — Banco de Dados</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('SVG')">🎨 SVG</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('PDF')">📄 PDF</button>
                             <button class="btn btn-sm btn-secondary" onclick="addElement('PICOTE')">✂️ Picote</button>
@@ -508,7 +497,7 @@
                                 <!-- Botões dinâmicos de colunas do CSV serão inseridos aqui -->
                             </div>
                         </div>
-                        <div id="num-teatro-elements-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
+                        <div id="num-teatro-elements-container" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🎭</span> Elementos de Teatro</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_FILA')">Fila</button>
@@ -516,7 +505,7 @@
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('TEATRO_COMBO')">Fila & Lugar</button>
                             </div>
                         </div>
-                        <div id="num-camarote-elements-container" style="display:none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
+                        <div id="num-camarote-elements-container" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px; background: rgba(255, 160, 0, 0.04); border-radius: var(--radius); padding: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🏛️</span> Elementos de Camarote</span>
                             <div class="add-elements-bar">
                                 <button class="btn btn-sm btn-secondary" onclick="addElement('CAMAROTE_LOCAL')" title="Local onde as pessoas ficam (Mesa, Camarote, Sala…)">🏛️ Local</button>
@@ -2170,7 +2159,7 @@
     <script src="/mapa-teatro-do-pedido.js?v=1009"></script>
     <script src="/csv-editor.js?v=954"></script>
     <script src="/pedido-colunas.js?v=982"></script>
-    <script src="/script.js?v=1012"></script>
+    <script src="/script.js?v=1013"></script>
     <script src="/acesso-estacao.js?v=1010"></script>
     <script src="/dashboard-arte.js?v=978"></script>
     <script src="/criador-arte.js?v=964"></script>

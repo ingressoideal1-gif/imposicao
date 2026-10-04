@@ -4382,6 +4382,7 @@ async function editNumeracao(id, contexto = {}) {
             }
         });
     }
+    if (typeof atualizarResumoDosFormatosCompativeis === 'function') atualizarResumoDosFormatosCompativeis();
 
     renderElementsList();
 
@@ -4912,6 +4913,7 @@ function cancelNumEdit() {
     // Esconder checkboxes de formatos compatíveis
     const compatContainer = document.getElementById('num-formatos-compat');
     if (compatContainer) compatContainer.style.display = 'none';
+    if (typeof atualizarResumoDosFormatosCompativeis === 'function') atualizarResumoDosFormatosCompativeis();
 
     state.numElements = [];
 
@@ -4967,17 +4969,10 @@ window.onTipoSelect = function() {
         ticketSettings.style.display = 'none';
     }
 
-    if (tipo === 'TEATRO') {
-        if(teatroSettings) teatroSettings.style.display = 'block';
-    } else {
-        if(teatroSettings) teatroSettings.style.display = 'none';
-    }
-
-    if (tipo === 'CAMAROTE') {
-        if(camaroteSettings) camaroteSettings.style.display = 'block';
-    } else {
-        if(camaroteSettings) camaroteSettings.style.display = 'none';
-    }
+    // A biblioteca mostra todos os elementos; o tipo continua definindo as
+    // configurações da numeração e os controles de ticket das propriedades.
+    if (teatroSettings) teatroSettings.style.display = 'block';
+    if (camaroteSettings) camaroteSettings.style.display = 'block';
     
     // Re-render elements so any ticket_pos dropdowns are created/removed
     renderElementsList();
@@ -4987,6 +4982,30 @@ window.onTicketQtdChange = function() {
     renderElementsList();
 };
 
+function atualizarResumoDosFormatosCompativeis() {
+    const resumo = document.getElementById('num-formatos-resumo');
+    const dropdown = document.getElementById('num-formatos-dropdown');
+    if (!resumo || !dropdown) return;
+    const temFormato = !!document.getElementById('num-formato')?.value;
+    const marcados = [...document.querySelectorAll('#num-formatos-checks input[type="checkbox"]:checked')];
+    resumo.textContent = temFormato ? marcados.length + (marcados.length === 1 ? ' formato selecionado' : ' formatos selecionados') : 'Selecione o formato base';
+    resumo.title = temFormato ? marcados.map(cb => cb.parentElement.textContent.trim()).join('\n') : '';
+    resumo.setAttribute('aria-disabled', String(!temFormato));
+    if (!temFormato) dropdown.open = false;
+}
+
+function fecharDropdownDosFormatosCompativeis(event) {
+    const dropdown = document.getElementById('num-formatos-dropdown');
+    if (!dropdown?.open) return;
+    if (event.type === 'click' && !dropdown.contains(event.target)) dropdown.open = false;
+    if (event.type === 'keydown' && event.key === 'Escape' && dropdown.contains(event.target)) {
+        dropdown.open = false;
+        dropdown.querySelector('summary').focus();
+    }
+}
+document.addEventListener('click', fecharDropdownDosFormatosCompativeis);
+document.addEventListener('keydown', fecharDropdownDosFormatosCompativeis);
+
 // Quando o formato é selecionado, mostrar editor e checkboxes de formatos compatíveis
 
 window.onFormatoSelect = function (clearElements = true) {
@@ -4994,10 +5013,13 @@ window.onFormatoSelect = function (clearElements = true) {
     const fmtId = document.getElementById('num-formato').value;
     const compatContainer = document.getElementById('num-formatos-compat');
     const checksDiv = document.getElementById('num-formatos-checks');
+    const dropdown = document.getElementById('num-formatos-dropdown');
+    if (dropdown) dropdown.open = false;
 
     if (!fmtId) {
         document.getElementById('numeracao-editor').style.display = 'none';
         if (compatContainer) compatContainer.style.display = 'none';
+        if (typeof atualizarResumoDosFormatosCompativeis === 'function') atualizarResumoDosFormatosCompativeis();
         return;
     }
 
@@ -5031,6 +5053,7 @@ window.onFormatoSelect = function (clearElements = true) {
 
         compatContainer.style.display = 'block';
     }
+    if (typeof atualizarResumoDosFormatosCompativeis === 'function') atualizarResumoDosFormatosCompativeis();
 
     if (clearElements !== false) {
         state.numElements = [];
@@ -5102,6 +5125,11 @@ function initCanvas() {
     const fmt = state.numFormato;
 
     if (!fmt) return;
+
+    const faces = document.getElementById('num-canvas-faces');
+    if (faces) {
+        faces.dataset.orientation = Number(fmt.height_mm) > Number(fmt.width_mm) ? 'vertical' : 'horizontal';
+    }
 
 
 
@@ -16722,8 +16750,7 @@ window.abrirFotosDoElemento = function (elId) {
 
     if (!state.numCsvData || !state.numCsvData.length) {
 
-        toast('Esta numeração ainda não tem banco de dados. Crie ou importe o CSV antes de trazer as fotos — '
-            + 'ou, se o banco é do PEDIDO, use o 🖼️ Fotos do box Gerenciamento de Bancos de Dados.', 'error');
+        toast('Adicione o banco no pedido e use o 🖼️ Fotos do box Gerenciamento de Bancos de Dados.', 'error');
 
         return;
 
@@ -35322,7 +35349,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(bancoIncompleto.texto)}</span><br>
                     ${bancoIncompleto.motivo === 'mapa_teatro'
                         ? 'Confira o setor associado em <b>Mapa de Teatro</b>, sua quantidade no ERP e os elementos de teatro da numeração.'
-                        : 'Abra a numeração no <b>✏️</b>, carregue o CSV na caixa <b>Banco de Dados (CSV)</b> e aponte a coluna de cada elemento de banco de dados.'}</span>
+                        : 'Adicione o banco em <b>Gerenciamento de Bancos de Dados</b> do pedido, selecione-o em <b>Vem de:</b> e associe as colunas no modelo.'}</span>
                 </div>` : '';
 
         const bancoSnapshotERP = window.TeatroSnapshot?.tem(item) ? bancoTeatroDoModelo(item) : null;
