@@ -109,13 +109,15 @@ def test_preparacao_pedido_exige_origem_limites_e_digest(tmp_path):
 def test_modelos_independentes_preparam_em_paralelo_com_limite(tmp_path):
     import copy
     import threading
-    import time
-    contagem = {'ativos':0, 'pico':0}; lock = threading.Lock()
+    contagem = {'ativos':0, 'pico':0, 'chamadas':0}; lock = threading.Lock()
+    barreira = threading.Barrier(4)
     def abrir(*args, **kwargs):
         with lock:
             contagem['ativos'] += 1
             contagem['pico'] = max(contagem['pico'], contagem['ativos'])
-        time.sleep(.04)
+            contagem['chamadas'] += 1
+            primeira_rodada = contagem['chamadas'] <= 4
+        if primeira_rodada: barreira.wait(timeout=15)
         with lock: contagem['ativos'] -= 1
         return io.BytesIO(BYTES)
     s = ServicoPacotes(tmp_path,host='test.invalid',empresa='teste',abrir=abrir)
