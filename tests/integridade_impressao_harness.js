@@ -3,6 +3,9 @@ const vm = require('node:vm');
 const path = require('node:path');
 const crypto = require('node:crypto').webcrypto;
 const fonte = fs.readFileSync(path.join(__dirname, '../frontend/arte-de-impressao.js'), 'utf8');
+const script = fs.readFileSync(path.join(__dirname, '../frontend/script.js'), 'utf8').replace(/\r\n/g,'\n');
+const inicioNormalizador = script.indexOf('function normalizarNumeracaoLida(');
+const normalizador = script.slice(inicioNormalizador, script.indexOf('\n}',inicioNormalizador)+2);
 
 async function casos() {
     let total = 0;
@@ -35,6 +38,19 @@ async function casos() {
             : { ok: true, blob: async () => arte };
         return { estado, modelo, num, fd, cliente, mudar(fn) { mudarConsulta = fn; },
             executar() { return confirmarIntegridadeDoTrabalho(fd, 'http://localhost', estado, cliente); } };
+    }
+    {
+        const c = montar({ verso:null, modo:'front' });
+        c.num.elements = [{type:'METADATA',print_mode:'front'},{type:'TEXT',text:'Teste'}];
+        c.estado.numeracoes = [normalizarNumeracaoLida(structuredClone(c.num))];
+        const dados = JSON.parse(c.fd.get('payload'));
+        dados.numeracao = structuredClone(c.estado.numeracoes[0]);
+        c.fd.set('payload',JSON.stringify(dados));
+        await c.executar();
+        ok(c.num.elements.length === 2 && c.estado.numeracoes[0].elements.length === 1,
+            'METADATA permanece na origem e não causa divergência falsa no trabalho');
+        c.num.elements[1].text = 'Cadastro alterado';
+        await recusa(() => c.executar(), 'A numeração mudou');
     }
     {
         const c = montar();
@@ -224,14 +240,14 @@ async function casos() {
             browser = await puppeteer.launch({ headless: true });
             const page = await browser.newPage();
             await page.goto('http://127.0.0.1:' + server.address().port);
-            await page.addScriptTag({ content: fonte });
+            await page.addScriptTag({ content: normalizador+'\n'+fonte });
             const total = await page.evaluate(casos);
             console.log('OK browser: ' + total + ' verificações de integridade');
         } finally { if (browser) await browser.close(); server.close(); }
     } else {
         const ctx = vm.createContext({ console, Blob, File, FormData, TextDecoder, TextEncoder, crypto,
             structuredClone, AbortController, setTimeout, clearTimeout });
-        vm.runInContext(fonte, ctx);
+        vm.runInContext(normalizador+'\n'+fonte, ctx);
         const total = await vm.runInContext('(' + casos.toString() + ')()', ctx);
         console.log('OK: ' + total + ' verificações de integridade');
     }

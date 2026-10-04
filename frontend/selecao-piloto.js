@@ -59,7 +59,11 @@
         }
         if (resposta.sem_arte.some(id => !modelos.some(m => m.modelo === id))) throw Error('Modelo local desconhecido.');
         // Substitui o registro correspondente, preservando os outros modelos.
-        for (const num of nums) {
+        for (const raw of nums) {
+            // O digest acima usa a linha integral da nuvem. O painel precisa
+            // da mesma forma tratada do catálogo (sem METADATA, modo efetivo),
+            // sem alterar essa linha nem o snapshot conferido.
+            const num = normalizarNumeracaoLida(structuredClone(raw));
             const indice = state.numeracoes.findIndex(n => String(n.id) === String(num.id));
             if (indice < 0) state.numeracoes.push(num); else state.numeracoes[indice] = num;
         }

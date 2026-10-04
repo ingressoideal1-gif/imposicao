@@ -117,3 +117,12 @@ diario. Nunca restaurar por cima do NewProd de producao nem limpar seu spool.
 A instalacao nao altera permissao SQL ou configuracao global de impressoras.
 As filas fisicas sao do Windows: a coexistencia dos agentes nao autoriza
 impressao simultanea na mesma impressora sem coordenacao operacional.
+
+O Piloto 1.2.356-piloto-local.22 corrige a carga da numeracao apos conferir o
+pedido: o digest continua usando a linha bruta integral; uma copia passa pelo
+mesmo normalizador do catalogo antes de entrar no estado da tela. METADATA
+define o modo efetivo e nao vira elemento de impressao. Isso evita um falso
+bloqueio na conferencia final, que continua recusando mudancas reais. A
+conferencia por abertura do pedido e a troca rapida de modelos sao preservadas.
+Os testes de carga e da barreira final rodam nos dois canais; a instalacao .22
+atualiza somente o Piloto e preserva o NewProd padrao 1.2.356.

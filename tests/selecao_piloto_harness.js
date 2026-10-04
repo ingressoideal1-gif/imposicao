@@ -5,9 +5,12 @@ const {webcrypto} = require('node:crypto');
 const src = fs.readFileSync('frontend/pedido.js','utf8').replace(/\r\n/g,'\n');
 const nome = 'async function enviarParaPedido(';
 const i = src.indexOf(nome), func = src.slice(i,src.indexOf('\n}',i)+2);
+const script = fs.readFileSync('frontend/script.js','utf8').replace(/\r\n/g,'\n');
+const normalizadorInicio = script.indexOf('function normalizarNumeracaoLida(');
+const normalizador = script.slice(normalizadorInicio, script.indexOf('\n}',normalizadorInicio)+2);
 function montar() {
     const item = {id:10,_modeloOnline:{id:10},arte_url:'https://test.invalid/a.pdf'};
-    const c = {Promise,TextEncoder,Uint8Array,AbortSignal,crypto:webcrypto,state:{numeracoes:[]},
+    const c = {Promise,TextEncoder,Uint8Array,AbortSignal,structuredClone,crypto:webcrypto,state:{numeracoes:[]},
         mensagens:[], cargas:[], chamadas:[], falha:false, esperar:null,
         findOSInState:()=>({numero:99}), getOSItens:()=>[item], loadOSItens:async()=>true};
     c.window = c;
@@ -27,10 +30,28 @@ function montar() {
         await c.PilotoSelecao.lerArte(ctx.pacoteLocal,'frente',item.arte_url);
         if(ctx.aindaAtual())c.cargas.push(id);
     };
-    vm.createContext(c);vm.runInContext(fs.readFileSync('frontend/selecao-piloto.js','utf8')+'\n'+func,c);
+    vm.createContext(c);vm.runInContext(normalizador+'\n'+fs.readFileSync('frontend/selecao-piloto.js','utf8')+'\n'+func,c);
     return c;
 }
 (async()=>{
+    // A linha bruta pertence ao digest; a forma normalizada pertence à tela
+    // e à conferência final. Não apagar METADATA antes de conferir a origem.
+    const met=montar();met.getOSItens()[0]._modeloOnline.amostra_num_id=7;
+    const raw={id:7,print_mode:'front',elements:[{type:'METADATA',print_mode:'duplex'},{type:'TEXT',text:'Teste'}],csv_data:[]};
+    const antes=JSON.stringify(raw);let digestRecebido;
+    met.supabaseClient={from(){return{select(){return this;},in(){return this;},abortSignal(){return this;}};}};
+    met.lerDadosLista=async()=>({data:[raw]});
+    const fetchOriginal=met.fetch;
+    met.fetch=async(u,o)=>{if(u.endsWith('preparar-pedido-painel'))digestRecebido=JSON.parse(o.body).modelos[0].digest;return fetchOriginal(u,o);};
+    await met.PilotoSelecao.conferirPedido('vibe_99',()=>true);
+    assert.equal(JSON.stringify(raw),antes);
+    assert.equal(met.state.numeracoes[0].print_mode,'duplex');
+    assert.equal(met.state.numeracoes[0].elements.length,1);
+    const canon=v=>Array.isArray(v)?v.map(canon):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canon(v[k])])):v;
+    const esperado=await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(canon([met.getOSItens()[0]._modeloOnline,[raw]]))));
+    assert.equal(digestRecebido,Buffer.from(esperado).toString('hex'));
+    const copia=met.normalizarNumeracaoLida(structuredClone(raw));
+    assert.equal(JSON.stringify(met.state.numeracoes[0]),JSON.stringify(copia));
     const c=montar();let liberar;c.esperar=new Promise(r=>liberar=r);
     const p=c.PilotoSelecao.conferirPedido('vibe_99',()=>true);await new Promise(r=>setImmediate(r));
     await assert.rejects(c.enviarParaPedido(10,'vibe_99'));assert.equal(c.cargas.length,0);
