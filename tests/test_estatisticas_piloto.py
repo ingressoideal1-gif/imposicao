@@ -50,9 +50,12 @@ def test_injecao_preserva_html_atual_e_remove_validadores():
     with TestClient(app) as c:
         r=c.get('/app/',headers={'if-none-match':'anterior'})
         assert 'painel atual' in r.text and r.text.count('/api/pacotes-locais/painel.js')==1
+        assert r.text.count('id="newprod-canal-piloto"') == 1
+        assert 'NewProd Piloto &middot; porta 9001' in r.text
         assert int(r.headers['content-length'])==len(r.content)
         assert r.headers['cache-control']=='no-store'
         assert 'painel.js' not in c.get('/outro').text
+        assert 'newprod-canal-piloto' not in c.get('/outro').text
 
 
 def test_controles_persistem_sem_internet_e_exigem_origem(tmp_path):

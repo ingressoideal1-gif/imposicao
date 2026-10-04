@@ -1,7 +1,7 @@
 (function () {
     'use strict';
     if (location.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(location.hostname)
-        || location.port !== '9000') return;
+        || location.port !== '9001') return;
     let dados = null, ultima = 0, painel, controles, gerenciamento, mensagem = '', comandoAtivo = false;
     async function comando(corpo) {
         if (comandoAtivo) return;

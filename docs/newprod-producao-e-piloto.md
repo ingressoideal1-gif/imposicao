@@ -48,6 +48,12 @@ ativa, carrega somente o token DPAPI local e inicia a porta 9001. A coleta inici
 pausada. Retomar pelo painel autenticado ou controlar-piloto.ps1 -Acao retomar.
 O comando de coleta nao envia impressao nem confirma status remoto.
 
+O painel em http://127.0.0.1:9001/app/ apresenta o selo visivel
+"NewProd Piloto - porta 9001", inclusive na entrada. Na tela de impressao,
+"Gerenciamento Local" mostra a coleta e os arquivos da estacao. Esse recurso
+atua somente na porta 9001; o painel normal da porta 9000 permanece preservado.
+O CI reproduz a renderizacao em navegador nos dois enderecos com dados sinteticos.
+
 Para rollback, encerrar somente NewProdPiloto.exe quando estiver ocioso e apontar
 versao-ativa.json para o pacote anterior confirmado. Restaurar configuracoes e
 dados em conjunto a partir do backup cifrado quando necessario, preservando o

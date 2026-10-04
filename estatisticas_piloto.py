@@ -173,6 +173,16 @@ class PainelPilotoMiddleware:
                 if tag not in corpo:
                     corpo = corpo.replace(b'</body>', tag + b'</body>')
                 corpo = corpo.replace(b'<title>', b'<title>NewProd Piloto | ', 1)
+                # Identidade visivel tambem antes do login e da carga do JS.
+                # Este middleware e instalado somente no canal Piloto.
+                if b'id="newprod-canal-piloto"' not in corpo:
+                    selo = (b'<div id="newprod-canal-piloto" role="status" '
+                            b'style="position:fixed;top:8px;left:50%;transform:translateX(-50%);'
+                            b'z-index:2147483647;padding:6px 14px;border-radius:8px;'
+                            b'background:#581c87;color:#fff;border:1px solid #c084fc;'
+                            b'font:600 12px system-ui,sans-serif;pointer-events:none;'
+                            b'white-space:nowrap">NewProd Piloto &middot; porta 9001</div>')
+                    corpo = corpo.replace(b'</body>', selo + b'</body>', 1)
                 inicio['headers'] = [(k,v) for k,v in inicio['headers'] if k not in (b'content-length', b'etag', b'cache-control')]
                 inicio['headers'] += [(b'content-length', str(len(corpo)).encode()), (b'cache-control', b'no-store')]
                 await send(inicio)
