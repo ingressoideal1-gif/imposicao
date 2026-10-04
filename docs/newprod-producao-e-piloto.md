@@ -22,12 +22,12 @@ modelo, NI/NF, bancos, TICKET e regras de Multi-Artes. Ainda existem dependencia
 online; nao afirmar processamento integral offline. Conferencia visual e
 impressao fisica devem ser registradas separadamente dos testes sinteticos.
 
-O Piloto .20 prepara os modelos do pedido em uma listagem paginada e consulta
+O Piloto .21 prepara os modelos do pedido em uma listagem paginada, prepara ate quatro modelos em paralelo e consulta
 as numeracoes completas em lote. Alternar modelos desse pedido reutiliza a
 conferencia, sem repetir consultas nem atualizar ETags. Reabrir o pedido inicia
 nova conferencia, inclusive de URLs cujos bytes mudaram. Mudanca no modelo
 completo exige reabrir; respostas de aberturas abandonadas nao liberam modelos.
-Modelos sem arte ainda nao podem ser preparados. O limite por abertura e 128
+Modelos sem arte ou fora do catalogo aprovado continuam visiveis, mas nao sao liberados para impressao local. O limite por abertura e 128
 modelos; pedidos maiores exigem ampliar o mecanismo antes de sua utilizacao.
 
 As etapas da janela no Piloto usam dependencias e ordem de execucao, sem as
