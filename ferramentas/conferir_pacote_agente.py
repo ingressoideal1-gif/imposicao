@@ -1,15 +1,21 @@
 """Recusa codigo legado ou dados privados nos artefatos publicos do NewProd."""
 import argparse
 from pathlib import Path
-from PyInstaller.archive.readers import CArchiveReader
+
+def abrir_executavel(path):
+    # A dependencia de compilacao so e necessaria ao ler um pacote real.
+    from PyInstaller.archive.readers import CArchiveReader
+    return CArchiveReader(str(path))
 
 
 def conferir_exe(path, migrador=False):
-    pacote = CArchiveReader(str(path))
+    pacote = abrir_executavel(path)
     nomes = [n for n in pacote.toc if n.lower().endswith('.pyz')]
     if len(nomes) != 1:
         raise ValueError('Arquivo de modulos ausente ou ambiguo.')
     modulos = pacote.open_embedded_archive(nomes[0]).toc
+    if 'coleta_autonoma' in modulos and 'win32timezone' not in modulos:
+        raise ValueError('Executavel sem componente para conferir o spool do Windows.')
     if 'acesso_segredo' in modulos or any('qr_ideal_pool' in n.lower() for n in pacote.toc):
         raise ValueError('Dados privados detectados no executavel.')
     required = ('segredos_estacao', 'migracao_estacao') if migrador else ('autorizacao_local', 'segredos_estacao', 'migracao_estacao')

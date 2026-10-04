@@ -3,6 +3,8 @@
     if (location.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(location.hostname)
         || location.port !== '9001') return;
     let dados = null, ultima = 0, painel, controles, gerenciamento, mensagem = '', comandoAtivo = false;
+    const podeGerenciar = () => window._currentPerms?.perm_producao_edit === true
+        || window._currentPerms?.perm_admin_edit === true;
     async function comando(corpo) {
         if (comandoAtivo) return;
         comandoAtivo = true;
@@ -11,6 +13,10 @@
                 method:'POST', headers:{'Content-Type':'application/json','X-Piloto-Painel':'1'}, body:JSON.stringify(corpo),
                 signal:AbortSignal.timeout(20000)
             });
+            if (r.status === 403) {
+                mensagem = 'Seu acesso precisa da permissão de editar Produção para controlar a cópia local.';
+                return;
+            }
             if (!r.ok) throw Error();
             mensagem = corpo.acao === 'preferir' ? 'Preferência salva nesta estação.'
                 : corpo.acao === 'pausar' ? 'Cópia pausada.' : 'Cópia solicitada; aguardando disponibilidade da estação.';
@@ -68,7 +74,7 @@
                     check.addEventListener('change', () => comando({acao:'preferir',pedido:numero,marcado:check.checked}));
                     linha.cells[0].prepend(check);
                 }
-                check.disabled = !fresco || comandoAtivo;
+                check.disabled = !fresco || comandoAtivo || !podeGerenciar();
                 check.checked = (dados?.preferenciais || []).includes(numero);
             }
             const globais = fonte.modelosGlobais?.[parseInt(pedido.numero)];
@@ -109,13 +115,15 @@
             else tabela.closest('.prod-table-card').insertBefore(controles, tabela.closest('.prod-table-body'));
         }
         const iniciar = controles.querySelector('[data-iniciar]');
-        const ativo = fresco && (dados.fila.ativo || dados.coleta?.estado === 'consultando');
+        const ativo = fresco && (dados.fila.ativo || ['iniciando','consultando'].includes(dados.coleta?.estado));
         const textoBotao = dados?.fila.pausado ? 'Retomar cópia local' : ativo ? 'Copiando…' : 'Iniciar cópia local';
         if (iniciar.textContent !== textoBotao) iniciar.textContent = textoBotao;
-        iniciar.disabled = !fresco || comandoAtivo || ativo && !dados.fila.pausado;
-        controles.querySelector('[data-pausar]').disabled = !fresco || comandoAtivo || dados.fila.pausado;
+        iniciar.disabled = !fresco || comandoAtivo || !podeGerenciar() || ativo && !dados.fila.pausado;
+        controles.querySelector('[data-pausar]').disabled = !fresco || comandoAtivo || !podeGerenciar() || dados.fila.pausado;
         const aviso = controles.querySelector('[role=status]');
-        const avisoTexto = mensagem || 'Marque ao lado do número os pedidos preferenciais. A seleção vale nesta estação.';
+        const avisoTexto = fresco && !podeGerenciar()
+            ? 'Acompanhamento disponível. Para controlar a cópia, seu acesso precisa da permissão de editar Produção.'
+            : mensagem || 'Marque ao lado do número os pedidos preferenciais. A seleção vale nesta estação.';
         if (aviso.textContent !== avisoTexto) aviso.textContent = avisoTexto;
         if (!painel?.isConnected) {
             painel = document.createElement('details');
@@ -144,6 +152,7 @@
             `Disco livre: ${bytes(e.bytes_livres)} · Preparação: ${dados.fila.pausado ? 'pausada' : dados.fila.ocupado ? 'aguardando produção' : 'ativa'}`,
             `Última consulta: ${dados.coleta?.ultima_consulta ? new Date(dados.coleta.ultima_consulta).toLocaleString('pt-BR') : 'ainda não concluída'}`,
             `Coleta: ${dados.coleta?.estado === 'concluida' ? 'varredura concluída' : dados.coleta?.estado === 'consultando' ? 'consultando · ' + (dados.coleta.fase || 'catálogo') : dados.coleta?.estado || 'não informada'}`,
+            `Modo: ${dados.coleta?.modo === 'manual' ? 'cópia solicitada · pedidos marcados primeiro' : 'automático · aguarda disponibilidade'}`,
             `Lotes consultados nesta varredura: ${dados.coleta?.lotes_consultados ?? '—'} · Catálogo geral: ${dados.coleta?.lotes_catalogo ?? '—'}`,
             dados.coleta?.motivo || '',
             ensaio ? `Ensaio separado de impressos: ${ensaio.arquivos} arquivos · ${bytes(ensaio.bytes)} · download ${ensaio.download_segundos.toFixed(2)} s · leitura local com cache ${ensaio.leitura_segundos.toFixed(3)} s · falhas ${ensaio.falhas}` : '',

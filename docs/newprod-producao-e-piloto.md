@@ -48,10 +48,36 @@ ativa, carrega somente o token DPAPI local e inicia a porta 9001. A coleta inici
 pausada. Retomar pelo painel autenticado ou controlar-piloto.ps1 -Acao retomar.
 O comando de coleta nao envia impressao nem confirma status remoto.
 
+Controlar a copia e os pedidos preferenciais exige editar Producao ou acesso
+administrativo. O operador de impressao com essa permissao controla sua copia
+local sem receber administracao. A grade continua sendo conferida no servidor;
+quem tem apenas visualizacao acompanha os dados com os controles desativados.
+
+"Iniciar copia local" inicia imediatamente uma varredura manual, priorizando
+os pedidos marcados e atualizando suas copias. Essa copia nao aguarda a fila
+do Windows ficar vazia, pois nao envia impressao nem altera trabalhos no spool.
+Pausa, encerramento e processamento PDF/impressao ativo no proprio Piloto
+continuam interrompendo a coleta. O modo manual termina ao concluir a varredura
+ou ao pausar. A coleta automatica consulta o spool do Windows antes de copiar.
+O catalogo preserva ate 4096 registros de modelos/revisoes; a fila simultanea
+e os pedidos preferenciais continuam limitados a 128. As copias e o historico
+existentes sao preservados, sem limpeza automatica para liberar espaco.
+O pacote precisa incluir
+win32timezone, utilizado dinamicamente por win32print.EnumJobs; a conferencia
+do executavel recusa sua ausencia. Trabalho presente ou consulta indisponivel
+mantem a coleta automatica em espera.
+
 O painel em http://127.0.0.1:9001/app/ apresenta o selo visivel
 "NewProd Piloto - porta 9001", inclusive na entrada. Na tela de impressao,
 "Gerenciamento Local" mostra a coleta e os arquivos da estacao. Esse recurso
 atua somente na porta 9001; o painel normal da porta 9000 permanece preservado.
+As chamadas de Hot Folder e configuracao de impressao usam a mesma origem
+do painel da estacao, incluindo hostname e porta. O Piloto nao deve consultar
+ou registrar pastas no agente da porta 9000. A sessao local acompanha apenas
+as chamadas da propria origem; nenhuma permissao e ampliada por essa escolha.
+O rodape e a identidade da estacao na porta 9001 mostram o proprio Piloto.
+Seu botao de atualizacao informa a versao instalada e o uso de pacote proprio;
+nao chama o atualizador nem compara com o manifesto de producao.
 O CI reproduz a renderizacao em navegador nos dois enderecos com dados sinteticos.
 
 Para rollback, encerrar somente NewProdPiloto.exe quando estiver ocioso e apontar

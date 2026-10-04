@@ -23,6 +23,22 @@ def item():
             'setor': 'laser', 'prazo': '2026-09-26T10:00:00-03:00'}
 
 
+def test_catalogo_operacional_ultrapassa_limite_antigo_e_mantem_teto(tmp_path):
+    s=ServicoPacotes(tmp_path/'normal',host='test.invalid',empresa='teste')
+    for id_modelo in range(1,130):
+        entrada=item();entrada['manifesto']['modelo']=str(id_modelo)
+        s.cadastrar(entrada)
+    assert len(s.catalogo())==129
+    limitado=ServicoPacotes(tmp_path/'limitado',host='test.invalid',empresa='teste',limite_catalogo=2)
+    for id_modelo in range(1,3):
+        entrada=item();entrada['manifesto']['modelo']=str(id_modelo)
+        limitado.cadastrar(entrada)
+    entrada=item();entrada['manifesto']['modelo']='3'
+    with pytest.raises(ValueError,match='Limite'):
+        limitado.cadastrar(entrada)
+    assert len(limitado.catalogo())==2
+
+
 @contextmanager
 def ambiente(tmp_path, abrir=None, ocupado=lambda: False):
     s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste',

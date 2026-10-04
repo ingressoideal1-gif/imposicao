@@ -106,6 +106,20 @@ def test_grade_explicitamente_negada_prevalece_e_desconhecido_nao_e_admin():
     assert not auth.permissoes_efetivas({'role': 'admin'})['admin']
 
 
+def test_copia_local_usa_permissao_de_producao_sem_conceder_administracao():
+    operador = auth.permissoes_efetivas({'role': 'impressor',
+        'permissoes': {'perm_producao_edit': True, 'perm_admin_edit': False}})
+    auth.autorizar(operador, 'POST', '/api/pacotes-locais/controle-painel')
+    with pytest.raises(HTTPException) as erro:
+        auth.autorizar(operador, 'POST', '/api/acessos-locais')
+    assert erro.value.status_code == 403
+    operador['permissoes']['perm_producao_edit'] = False
+    auth.autorizar(operador, 'GET', '/api/pacotes-locais/resumo-painel')
+    with pytest.raises(HTTPException) as erro:
+        auth.autorizar(operador, 'POST', '/api/pacotes-locais/controle-painel')
+    assert erro.value.status_code == 403
+
+
 def test_gravacao_interrompida_preserva_arquivo_anterior(tmp_path, monkeypatch):
     destino = tmp_path / 'dados.json'
     destino.write_text('{"valor": 1}')

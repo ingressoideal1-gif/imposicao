@@ -99,12 +99,19 @@ class ColetaAutonoma:
         self._inicio_ocioso = relogio()
         self._ultima_varredura = relogio()
         self._solicitado = threading.Event()
+        self._manual = threading.Event()
         self._preferenciais_consultados = {}
         self.limite_ciclo = float('inf')
         self.estado = {'habilitada':True, 'estado':'aguardando', 'recebidos':0}
 
-    def solicitar(self):
+    def solicitar(self, *, manual=False):
+        if manual:
+            self._manual.set()
+            self.estado = {**self.estado, 'estado':'iniciando', 'modo':'manual'}
         self._solicitado.set()
+
+    def cancelar_manual(self):
+        self._manual.clear()
 
     def _admitir(self, original, *, abertura=False):
         self._checkpoint()
@@ -174,12 +181,14 @@ class ColetaAutonoma:
 
     def rodar(self):
         self.verificar_ociosidade()
-        manual = self._solicitado.is_set()
-        if self.relogio() < self.proxima and not manual: return
+        manual = self._manual.is_set()
+        if self.relogio() < self.proxima and not self._solicitado.is_set() and not manual: return
         self.limite_ciclo = self.relogio() + 120
         try:
             self._checkpoint()
-            if not self.spool_livre():
+            # O clique solicita somente copia de arquivos; nao imprime nem
+            # modifica o spool. A coleta automatica mantem a espera pelo spool.
+            if not manual and not self.spool_livre():
                 self.estado = {**self.estado, 'estado':'aguardando_spool',
                     'motivo':getattr(self.spool_livre, 'motivo', 'Aguardando spool livre.')}
                 return
@@ -190,6 +199,7 @@ class ColetaAutonoma:
         self.proxima = self.relogio() + 300
         reiniciar = self.estado.get('estado') == 'concluida'
         self.estado = {**self.estado, 'habilitada':True, 'estado':'consultando', 'recebidos':0,
+                       'modo':'manual' if manual else 'automatico',
                        'fase':'pedidos abertos',
                        'lotes_consultados':0 if reiniciar else self.estado.get('lotes_consultados',0),
                        'lotes_catalogo':0 if reiniciar else self.estado.get('lotes_catalogo',0)}
@@ -207,7 +217,8 @@ class ColetaAutonoma:
         try:
             con = self.servico._db()
             try:
-                aberturas = con.execute('SELECT pedido,cursor,versao FROM aberturas_piloto ORDER BY versao').fetchall()
+                aberturas = con.execute('SELECT pedido,cursor,versao FROM aberturas_piloto '
+                    'ORDER BY CASE WHEN pedido IN (SELECT pedido FROM preferencias_piloto) THEN 0 ELSE 1 END, versao').fetchall()
             finally:
                 con.close()
             for pedido, abertura_cursor, versao in aberturas:
@@ -233,7 +244,7 @@ class ColetaAutonoma:
             self._preferenciais_consultados = {p:t for p,t in self._preferenciais_consultados.items() if p in preferencias}
             self.estado = {**self.estado, 'fase':'pedidos preferenciais'}
             for pedido in preferencias:
-                if self.relogio() < self._preferenciais_consultados.get(pedido, -float('inf')) + 300:
+                if not manual and self.relogio() < self._preferenciais_consultados.get(pedido, -float('inf')) + 300:
                     continue
                 self._checkpoint()
                 con = self.servico._db()
@@ -274,6 +285,8 @@ class ColetaAutonoma:
                 if pagina['fim']: break
             self.estado = {**self.estado, 'estado':'concluida' if pagina['fim'] else 'lote_concluido',
                            'ultima_consulta':self.agora().isoformat()}
+            if pagina['fim']:
+                self._manual.clear()
             if not pagina['fim']:
                 self.proxima = 0
                 self.servico._acordar.set()

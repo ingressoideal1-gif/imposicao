@@ -148,6 +148,9 @@ a = Analysis(
         'barcode.codex',
         'barcode.ean',
         'win32print',
+        # EnumJobs converte datas usando este import dinamico da extensao C.
+        # Sem ele, consultar o spool no pacote congelado falha com ModuleNotFoundError.
+        'win32timezone',
         # win32ui, win32gui e win32con: o pedido 21524 (03/09/2026) foi quem
         # descobriu a falta. Diferente de 'win32print' (mora em
         # site-packages/win32/), 'win32ui' mora em site-packages/pythonwin/ e
