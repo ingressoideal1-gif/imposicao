@@ -69,3 +69,17 @@ def test_painel_do_piloto_nao_faz_fallback_para_producao():
     for name in ('frontend/pedido.js','frontend/script.js'):
         text=(ROOT/name).read_text(encoding='utf-8')
         assert 'window.location.port === "9001" ? [window.location.origin]' in text
+
+
+def test_pacote_recusa_coleta_sem_componente_dinamico_do_spool(monkeypatch):
+    from ferramentas import conferir_pacote_agente as guard
+    from types import SimpleNamespace
+    modulos = {n: None for n in ('coleta_autonoma', 'autorizacao_local',
+                                 'segredos_estacao', 'migracao_estacao')}
+    pacote = SimpleNamespace(toc={'PYZ.pyz': None},
+                             open_embedded_archive=lambda _: SimpleNamespace(toc=modulos))
+    monkeypatch.setattr(guard, 'CArchiveReader', lambda _: pacote)
+    with pytest.raises(ValueError, match='spool'):
+        guard.conferir_exe('pacote-sintetico.exe')
+    modulos['win32timezone'] = None
+    guard.conferir_exe('pacote-sintetico.exe')

@@ -10,6 +10,8 @@ def conferir_exe(path, migrador=False):
     if len(nomes) != 1:
         raise ValueError('Arquivo de modulos ausente ou ambiguo.')
     modulos = pacote.open_embedded_archive(nomes[0]).toc
+    if 'coleta_autonoma' in modulos and 'win32timezone' not in modulos:
+        raise ValueError('Executavel sem componente para conferir o spool do Windows.')
     if 'acesso_segredo' in modulos or any('qr_ideal_pool' in n.lower() for n in pacote.toc):
         raise ValueError('Dados privados detectados no executavel.')
     required = ('segredos_estacao', 'migracao_estacao') if migrador else ('autorizacao_local', 'segredos_estacao', 'migracao_estacao')

@@ -53,6 +53,11 @@ administrativo. O operador de impressao com essa permissao controla sua copia
 local sem receber administracao. A grade continua sendo conferida no servidor;
 quem tem apenas visualizacao acompanha os dados com os controles desativados.
 
+A coleta consulta o spool do Windows antes de copiar. O pacote precisa incluir
+win32timezone, utilizado dinamicamente por win32print.EnumJobs; a conferencia
+do executavel recusa sua ausencia. Trabalho presente ou consulta indisponivel
+mantem a coleta em espera; nao remover essa protecao para forcar o download.
+
 O painel em http://127.0.0.1:9001/app/ apresenta o selo visivel
 "NewProd Piloto - porta 9001", inclusive na entrada. Na tela de impressao,
 "Gerenciamento Local" mostra a coleta e os arquivos da estacao. Esse recurso
