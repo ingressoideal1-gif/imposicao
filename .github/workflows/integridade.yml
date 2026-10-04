@@ -63,5 +63,5 @@ jobs:
           if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) { Register-PSRepository -Default }
           if (-not (Get-Module -ListAvailable Pester | Where-Object Version -eq ([version]'5.9.0'))) { Install-Module Pester -RequiredVersion 5.9.0 -Scope CurrentUser -Repository PSGallery -Force }
           Import-Module Pester -RequiredVersion 5.9.0 -Force
-          $resultado = Invoke-Pester -Path tests/Publicacao.Tests.ps1 -PassThru
+          $resultado = Invoke-Pester -Path @('tests/Publicacao.Tests.ps1','tests/EntregaSegura.Tests.ps1') -PassThru
           if ($resultado.FailedCount -gt 0) { throw 'Regressao nos freios da publicacao' }

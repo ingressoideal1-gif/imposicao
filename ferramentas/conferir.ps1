@@ -14,17 +14,34 @@
       3. O agente esta em sincronia (repositorio, manifesto, esta maquina)?
       4. Ha branch ou rascunho acumulando?
       5. Ha algum segredo em arquivo versionado?
-      6. Os testes passam?
+      6. Os testes de publicacao e entrega segura passam?
       7. A CLI do Supabase esta ligada ao projeto certo?
       8. O link do cliente abre para quem nao tem sessao?
 
 .EXAMPLE
     .\ferramentas\conferir.ps1
 #>
+[CmdletBinding()]
+param([string]$Python = '')
+
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
 Import-Module "$raiz\ferramentas\Publicacao.psm1" -Force
+
+if (-not $Python) {
+    foreach ($candidato in @("$raiz\.venv\Scripts\python.exe", "$raiz\venv\Scripts\python.exe")) {
+        if (Test-Path -LiteralPath $candidato -PathType Leaf) { $Python = $candidato; break }
+    }
+}
+
+# A vinculacao da CLI pertence ao checkout operacional, nao a cada worktree.
+$worktrees = @(git worktree list --porcelain)
+if ($LASTEXITCODE -ne 0) { throw 'Falha consultando os worktrees.' }
+$principal = ([string]$worktrees[0]) -replace '^worktree ', ''
+if (-not (Test-Path -LiteralPath $principal -PathType Container)) {
+    throw 'Nao foi possivel identificar o checkout operacional.'
+}
 
 $alertas = @()
 function Alerta { param([string]$Texto) $script:alertas += $Texto }
@@ -77,12 +94,17 @@ if ($m.Success) { $repo = $m.Groups[1].Value }
 
 $manifesto = ''
 try {
-    $url = (& "$raiz\venv\Scripts\python.exe" -c "import security_config; print(security_config.MANIFEST_URL)" |
+    if (-not $Python) { throw 'Python do projeto indisponivel.' }
+    $url = (& $Python -c "import security_config; print(security_config.MANIFEST_URL)" |
             Select-Object -Last 1).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Falha consultando URL publica do manifesto.' }
     # Cache-buster: o Storage fica atras do CDN e serviria o manifesto antigo.
     $carimbo = [int][double]::Parse((Get-Date -UFormat %s))
     $manifesto = (Invoke-RestMethod -Uri "$url`?t=$carimbo" -TimeoutSec 30).version
-} catch { $manifesto = '(nao consegui consultar)' }
+} catch {
+    $manifesto = '(nao consegui consultar)'
+    Alerta 'Manifesto do agente nao conferido; verifique Python e rede.'
+}
 
 $maquina = ''
 try { $maquina = (Invoke-RestMethod -Uri "http://127.0.0.1:9000/api/status" -TimeoutSec 5).version }
@@ -110,9 +132,12 @@ Write-Host ""
 Write-Host "     Estacoes da grafica (versao / painel / ultimo sinal)" -ForegroundColor DarkGray
 $linhas = @()
 try {
-    $linhas = @(& "$raiz\venv\Scripts\python.exe" "$raiz\ferramentas\estacoes.py" 2>&1)
+    if (-not $Python) { throw 'Python do projeto indisponivel.' }
+    $linhas = @(& $Python "$raiz\ferramentas\estacoes.py" 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw 'Consulta das estacoes falhou.' }
 } catch {
     $linhas = @("     (nao consegui consultar as estacoes)")
+    Alerta 'Versoes das estacoes nao conferidas.'
 }
 foreach ($linha in $linhas) {
     $texto = [string]$linha
@@ -161,15 +186,16 @@ if ($achados.Count -eq 0) {
 
 # ─── 6. Testes ───────────────────────────────────────────────────────────────
 Titulo "6. Testes dos scripts de publicacao"
-$t = Invoke-Pester -Path "$raiz\tests" -Quiet -PassThru
-if ($t.FailedCount -eq 0) {
+$pester = Get-Module -ListAvailable Pester | Sort-Object Version -Descending | Select-Object -First 1
+if (-not $pester) { throw 'Pester indisponivel; testes de publicacao nao executados.' }
+Import-Module $pester.Path -Force
+$t = Invoke-Pester -Path @("$raiz\tests\Publicacao.Tests.ps1", "$raiz\tests\EntregaSegura.Tests.ps1") -PassThru
+Write-Host '     Escopo: publicacao e entrega segura; nao substitui as suites Python/JS/Deno.' -ForegroundColor DarkGray
+if ($t.FailedCount -eq 0 -and $t.PassedCount -gt 0) {
     Write-Host "     $($t.PassedCount) passando" -ForegroundColor Green
 } else {
     Write-Host "     $($t.FailedCount) falhando de $($t.TotalCount)" -ForegroundColor Red
-    $t.TestResult | Where-Object { -not $_.Passed } | ForEach-Object {
-        Write-Host "     $($_.Name)" -ForegroundColor Red
-    }
-    Alerta "$($t.FailedCount) teste(s) falhando. Rode: Invoke-Pester -Path tests"
+    Alerta 'Validacao de publicacao/entrega segura falhou ou nao executou testes.'
 }
 
 # ─── 7. Projeto Supabase ─────────────────────────────────────────────────────
@@ -182,7 +208,7 @@ $refEsperado = ''
 $sc = Get-Content -Raw -Encoding UTF8 -ErrorAction SilentlyContinue "$raiz\security_config.py"
 if ($sc -and $sc -match 'https://([a-z0-9]+)\.supabase\.co') { $refEsperado = $Matches[1] }
 
-$arquivoRef = "$raiz\supabase\.temp\project-ref"
+$arquivoRef = Join-Path $principal 'supabase\.temp\project-ref'
 $refLigado = ''
 if (Test-Path -PathType Leaf $arquivoRef) {
     $refLigado = (Get-Content -Raw -Encoding UTF8 $arquivoRef)
@@ -292,3 +318,4 @@ if ($alertas.Count -eq 0) {
     foreach ($a in $alertas) { Write-Host "   - $a" -ForegroundColor Yellow }
 }
 Write-Host ""
+if ($t.FailedCount -gt 0 -or $t.PassedCount -eq 0) { exit 1 }
