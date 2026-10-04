@@ -80,6 +80,16 @@ Seu botao de atualizacao informa a versao instalada e o uso de pacote proprio;
 nao chama o atualizador nem compara com o manifesto de producao.
 O CI reproduz a renderizacao em navegador nos dois enderecos com dados sinteticos.
 
+O seletor nativo de Hot Folder mantem uma janela por processo. Cliques repetidos
+ou outra aba recuperam a mesma janela e aguardam a mesma escolha, sem gerar
+o erro de seletor ja aberto. Janela minimizada ou oculta e restaurada; quando
+o Windows recusa o foco, sua janela pisca. Cancelamento e erros liberam o estado
+para uma nova tentativa. As chamadas ctypes preservam ponteiros de 64 bits;
+COM recusado impede a abertura. A regressao faz parte dos checks dos dois canais.
+O Piloto 1.2.356-piloto-local.19 inclui esse ajuste; sua instalacao independente
+nao atualiza o executavel de producao. A fonte comum prepara a mesma correcao
+para a proxima entrega normal, que continua sendo uma operacao separada.
+
 Para rollback, encerrar somente NewProdPiloto.exe quando estiver ocioso e apontar
 versao-ativa.json para o pacote anterior confirmado. Restaurar configuracoes e
 dados em conjunto a partir do backup cifrado quando necessario, preservando o
