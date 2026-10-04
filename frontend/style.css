@@ -1330,6 +1330,9 @@ input[type="color"].element-card-fields .form-control,
 #view-numeracao #num-canvas-container-verso { max-width: 100%; min-width: 0; }
 #view-numeracao #numeracao-canvas,
 #view-numeracao #numeracao-canvas-verso { max-width: 100%; height: auto; }
+#view-numeracao .num-add-elements-header { justify-content: flex-start; flex-wrap: nowrap; gap: 12px; min-width: 0; }
+#view-numeracao .num-add-elements-header .card-title { flex-shrink: 0; white-space: nowrap; }
+#view-numeracao #num-compatibilidade-info { min-width: 0; color: var(--text-dim); font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #view-numeracao .num-element-groups { display: flex; flex-wrap: wrap; gap: 10px; }
 #view-numeracao .num-element-group {
     --num-group-color: #93c5fd; --num-group-border: #385a87; --num-group-bg: #14243b;
