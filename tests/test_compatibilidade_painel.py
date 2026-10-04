@@ -62,6 +62,25 @@ def test_reinicio_preserva_painel_mais_recente_do_mesmo_protocolo(tmp_path):
     assert (destino / 'index.html').read_text(encoding='utf-8') == 'sincronizado'
 
 
+def test_painel_embutido_inclui_vendor_em_subpastas_sem_perder_atualizacao(tmp_path):
+    origem, destino = tmp_path / 'embutido', tmp_path / 'painel'
+    origem.mkdir()
+    marcar(origem)
+    (origem / 'index.html').write_text('painel sintetico')
+    vendor = origem / 'vendor' / 'editor'
+    vendor.mkdir(parents=True)
+    for nome in ('editor.js', 'editor.css'):
+        (vendor / nome).write_text('recurso embutido')
+    assert semear(destino, origem)
+    assert (destino / 'vendor/editor/editor.css').read_text() == 'recurso embutido'
+    atualizado = destino / 'vendor/editor/editor.js'
+    atualizado.write_text('sincronizado posteriormente')
+    futuro = time.time() + 3600
+    os.utime(atualizado, (futuro, futuro))
+    assert semear(destino, origem)
+    assert atualizado.read_text() == 'sincronizado posteriormente'
+
+
 def test_download_legado_nao_vira_painel_da_estacao(tmp_path, monkeypatch):
     # Extrai a funcao real sem importar o worker ou conectar na nuvem.
     import security_config

@@ -301,14 +301,16 @@ def _semear_painel(destino: str, origem: str) -> bool:
         from compatibilidade_painel import renovar_conjunto
         renovar = renovar_conjunto(destino, origem)
         os.makedirs(destino, exist_ok=True)
-        for nome in os.listdir(origem):
-            org = os.path.join(origem, nome)
-            dst = os.path.join(destino, nome)
-            if not os.path.isfile(org):
-                continue
-            if not renovar and os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(org):
-                continue
-            shutil.copy2(org, dst)
+        for pasta, _, arquivos in os.walk(origem, followlinks=False):
+            for nome in arquivos:
+                org = os.path.join(pasta, nome)
+                dst = os.path.join(destino, os.path.relpath(org, origem))
+                if os.path.islink(org) or not os.path.realpath(dst).startswith(os.path.realpath(destino) + os.sep):
+                    raise ValueError('Arquivo do painel fora da pasta autorizada.')
+                if not renovar and os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(org):
+                    continue
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(org, dst)
         return os.path.isfile(os.path.join(destino, "index.html"))
     except Exception as e:
         print(f"[app] Não consegui semear o painel local: {e}", flush=True)

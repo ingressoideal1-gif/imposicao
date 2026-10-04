@@ -149,7 +149,9 @@ def autorizar(operador, metodo, caminho):
     if recurso in ('admin', 'acessos-locais', 'user', 'diag'):
         chaves = ['perm_admin_' + sufixo]
     elif recurso == 'pacotes-locais':
-        chaves = ['perm_admin_edit'] if caminho.endswith('/controle-painel') else ['perm_pedidos_view']
+        # Copia e prioridade da estacao pertencem a producao; nao concedem
+        # administracao, impressao nem alteracao de pedidos na nuvem.
+        chaves = ['perm_producao_edit', 'perm_admin_edit'] if caminho.endswith('/controle-painel') else ['perm_pedidos_view']
     elif recurso == 'impose':
         chaves = ['perm_gerar_pdf']
     elif recurso == 'print' or recurso == 'hotfolder' and caminho.endswith('/drop'):
