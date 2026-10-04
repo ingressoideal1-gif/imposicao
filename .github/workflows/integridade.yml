@@ -44,6 +44,14 @@ jobs:
           node-version: '22'
       - shell: pwsh
         run: npm ci --ignore-scripts
+      - name: Piloto visivel na porta 9001 e ausente na producao
+        shell: pwsh
+        run: |
+          $navegadores = @('C:\Program Files\Google\Chrome\Application\chrome.exe', 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe')
+          $env:PUPPETEER_EXECUTABLE_PATH = $navegadores | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $env:PUPPETEER_EXECUTABLE_PATH) { throw 'Navegador de regressao ausente' }
+          node tests/estatisticas_piloto_harness.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Autorizacao, empresa, origem e revisao
         shell: pwsh
         run: ./node_modules/@deno/win32-x64/deno.exe test --no-config --node-modules-dir=none --allow-env --allow-read --quiet supabase/functions/_compartilhado/piloto_catalogo_test.ts supabase/functions/_compartilhado/piloto_estacao_test.ts supabase/functions/_compartilhado/piloto_local_test.ts supabase/functions/_compartilhado/piloto_vinculo_test.ts

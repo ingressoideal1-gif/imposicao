@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const assert = require('assert/strict');
 (async()=>{
- const browser=await puppeteer.launch({headless:true});
+ const browser=await puppeteer.launch({headless:true, ...(process.env.PUPPETEER_EXECUTABLE_PATH ? {executablePath:process.env.PUPPETEER_EXECUTABLE_PATH} : {})});
  try {
   const page=await browser.newPage();let falha=false;let preferencias=[];const comandos=[];let pausado=false;
   await page.setRequestInterception(true);
@@ -18,7 +18,13 @@ const assert = require('assert/strict');
     preferenciais:preferencias,modelos:[{modelo:'1',estado:'recursos_antecipados'}],estatisticas:{arquivos_cache:1,bytes_cache:1048576,bytes_livres:1073741824,modelos_catalogados:1,revisoes_com_falha:0},fila:{pendentes:2,pausado},coleta:{}})});
    return route.respond({contentType:'text/html',body:`<html><body><div class="prod-table-card"><div class="prod-table-body"><table id="table-impressao"><tr class="os-row" onclick="abrirImposicaoDoPedido('os1','1')"><td></td><td></td><td></td><td></td><td>2 modelos</td></tr></table></div></div><script>let aberturas=0;function abrirImposicaoDoPedido(){aberturas++;return 'aberto'};const state={ordens:[{id:'os1',numero:'1'}],modelosGlobais:{1:[{id:1},{id:2}]}};</script></body></html>`});
   });
+  // O recurso experimental nao deve atuar sobre o painel de producao.
   await page.goto('http://127.0.0.1:9000/app/');
+  await page.addScriptTag({content:fs.readFileSync('frontend/estatisticas-piloto.js','utf8')});
+  assert.equal(await page.$('#estatisticas-piloto-local'),null);
+  assert.equal(await page.$('[data-piloto-preferir]'),null);
+  assert.equal(comandos.length,0);
+  await page.goto('http://127.0.0.1:9001/app/');
   await page.evaluate(()=>{const original=setTimeout;window.setTimeout=(fn,ms,...args)=>original(fn,ms===15000?200:ms,...args);});
   await page.addScriptTag({content:fs.readFileSync('frontend/estatisticas-piloto.js','utf8')});
   await page.waitForFunction(()=>document.querySelector('[data-piloto-modelos]')?.textContent.includes('1/2'));
