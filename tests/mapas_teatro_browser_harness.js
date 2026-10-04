@@ -108,7 +108,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         async function salvarNoBrowser(falha = false) {
             await abrirConfirmacaoSalvar();
             await page.click(dialogo + ' [data-role="ok"]');
-            await verificarDialogo(falha ? 'Mapa não salvo' : 'Mapa salvo');
+            await verificarDialogo(falha ? 'Mapa não salvo' : 'Mapa salvo; publicação pendente');
             assert.equal(await page.$$eval(dialogo + ' button', els => els.length), 1);
             await page.click(dialogo + ' [data-role="ok"]');
             await page.waitForSelector(dialogo, { hidden: true });
@@ -313,7 +313,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
             cs[0].tipo = 'PCD'; cs[1].tipo = 'Obeso'; cs[2].tipo = 'Acompanhante';
         });
         await abrirConfirmacaoSalvar(); await page.click(dialogo + ' [data-role="ok"]');
-        await verificarDialogo('Mapa salvo');
+        await verificarDialogo('Mapa salvo; publicação pendente');
         assert.match(await page.$eval(dialogo, el => el.textContent), /PDFs do mapa e de cada setor estão prontos/);
         assert.equal(await page.$eval(dialogo + ' [data-role="ok"]', el => el.textContent), 'Ver PDFs');
         await page.click(dialogo + ' [data-role="ok"]');
@@ -474,7 +474,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         await page.$eval('#mapa-nome', el => { el.value = 'Mapa salvo upload interrompido'; });
         await page.evaluate(() => { window.state.mapaAtual.config.setores[0].nome = 'Setor alterado para testar upload'; });
         await abrirConfirmacaoSalvar(); await page.click(dialogo + ' [data-role="ok"]');
-        await verificarDialogo('Mapa salvo');
+        await verificarDialogo('Mapa salvo; publicação pendente');
         assert.match(await page.$eval(dialogo, el => el.textContent), /envio dos PDFs para o ERP está pendente/);
         assert.equal(await page.evaluate(() => registros.find(m => m.id === 'mapa-browser-1').name), 'Mapa salvo upload interrompido');
         const escritasAntesRetry = await page.evaluate(() => gravacoes.length);

@@ -463,7 +463,11 @@ window.duplicarMapaTeatro = async function(id) {
     try {
         const salvo = await persistirMapaTeatro(copia);
         registrarMapaSalvo(salvo);
-        avisarMapa('Mapa duplicado como "' + novoNome + '"!', 'success');
+        const { pdfs, mensagem } = await publicarPdfsMapaSalvo(salvo);
+        const publicado = pdfs?.persistencia?.estado === 'pronto';
+        avisarMapa('Mapa duplicado como "' + novoNome + '". '
+            + (publicado ? 'PDFs publicados para o ERP.' : 'Publicação dos PDFs pendente: ' + mensagem),
+            publicado ? 'success' : 'warning');
     } catch (e) {
         console.error('[Mapas] Erro ao duplicar:', e);
         window.state.mapaAtual = copia;
@@ -498,6 +502,26 @@ async function confirmarAcaoMapa(opcoes) {
     }
 }
 
+async function publicarPdfsMapaSalvo(salvo) {
+    let pdfs = null;
+    try {
+        if (!window.MapasTeatroPdf) throw new Error('Os recursos de PDF não carregaram. Atualize a página e tente novamente pelo botão PDFs.');
+        avisarMapa('Mapa salvo. Preparando os PDFs por setor...', 'info');
+        pdfs = await window.MapasTeatroPdf.gerar(salvo);
+        pdfs.mapaPersistido = JSON.parse(JSON.stringify(salvo));
+        if (!window.MapasTeatroPdfStorage) throw new Error('O recurso de publicação não carregou. Atualize a página e tente novamente pelo botão PDFs.');
+        avisarMapa('Mapa salvo. Salvando os PDFs para o ERP...', 'info');
+        pdfs.persistencia = await window.MapasTeatroPdfStorage.persistir(salvo, pdfs);
+        if (pdfs.persistencia?.estado !== 'pronto') throw new Error('A publicação dos PDFs não foi confirmada. Tente novamente pelo botão PDFs.');
+        return { pdfs, mensagem: '' };
+    } catch (e) {
+        const mensagem = e.message || 'Não foi possível publicar os PDFs. Tente novamente pelo botão PDFs.';
+        if (pdfs) pdfs.persistencia = { estado: 'pendente', mensagem };
+        console.error('[Mapas] Mapa salvo; publicação dos PDFs pendente:', e);
+        return { pdfs, mensagem };
+    }
+}
+
 window.salvarMapaTeatro = async function() {
     const mapa = window.state.mapaAtual;
     if (!mapa || mapaSalvando || mapaConfirmando) return false;
@@ -514,48 +538,40 @@ window.salvarMapaTeatro = async function() {
         .map(el => ({ el, disabled: el.disabled }));
     mapaSalvando = true;
     controles.forEach(({ el }) => { el.disabled = true; });
-    let salvo;
     try {
-        salvo = await persistirMapaTeatro(mapa);
-        registrarMapaSalvo(salvo, idAnterior);
-    } catch (e) {
-        console.error('[Mapas] Erro ao salvar:', e);
-        const mensagem = e.code === 'MAPA_LEGADO' ? e.message
-            : 'Não foi possível confirmar o salvamento. Suas alterações continuam no editor; tente novamente.';
-        avisarMapa(mensagem);
-        await confirmarAcaoMapa({ titulo: 'Mapa não salvo', mensagem: escaparMapaHtml(mensagem),
-            textoOk: 'Voltar ao editor', somenteOk: true });
+        let salvo;
+        try {
+            salvo = await persistirMapaTeatro(mapa);
+            registrarMapaSalvo(salvo, idAnterior);
+        } catch (e) {
+            console.error('[Mapas] Erro ao salvar:', e);
+            const mensagem = e.code === 'MAPA_LEGADO' ? e.message
+                : 'Não foi possível confirmar o salvamento. Suas alterações continuam no editor; tente novamente.';
+            avisarMapa(mensagem);
+            await confirmarAcaoMapa({ titulo: 'Mapa não salvo', mensagem: escaparMapaHtml(mensagem),
+                textoOk: 'Voltar ao editor', somenteOk: true });
+            return false;
+        }
+
+        encerrarEditorMapa();
+        const { pdfs, mensagem } = await publicarPdfsMapaSalvo(salvo);
+        const publicado = pdfs?.persistencia?.estado === 'pronto';
+        avisarMapa(publicado ? 'Mapa salvo e PDFs publicados para o ERP.'
+            : 'Mapa salvo; publicação dos PDFs para o ERP pendente: ' + mensagem,
+            publicado ? 'success' : 'warning');
+        const verPdfs = await confirmarAcaoMapa({ titulo: publicado ? 'Mapa salvo e publicado' : 'Mapa salvo; publicação pendente',
+            mensagem: `O mapa <strong>${escaparMapaHtml(salvo.name)}</strong> foi salvo e os dados foram conferidos.<br><br>`
+                + (pdfs ? 'Os PDFs do mapa e de cada setor estão prontos. Eles também ficam disponíveis no botão PDFs da lista.'
+                    : 'Os PDFs ainda não estão prontos. Use o botão PDFs da lista para gerar novamente.')
+                + (publicado ? '<br>Os arquivos também foram salvos para o ERP.'
+                    : '<br>O envio dos PDFs para o ERP está pendente: ' + escaparMapaHtml(mensagem)),
+            textoOk: pdfs ? 'Ver PDFs' : 'Concluir', textoCancelar: 'Concluir', somenteOk: !pdfs });
+        if (pdfs && verPdfs) window.MapasTeatroPdf.abrir(pdfs);
+        return true;
     } finally {
         mapaSalvando = false;
         controles.forEach(({ el, disabled }) => { el.disabled = disabled; });
     }
-    if (salvo) {
-        encerrarEditorMapa();
-        avisarMapa('Mapa salvo e confirmado.', 'success');
-        let pdfs = null;
-        if (window.MapasTeatroPdf) {
-            try {
-                avisarMapa('Mapa salvo. Preparando os PDFs por setor...', 'info');
-                pdfs = await window.MapasTeatroPdf.gerar(salvo);
-                if (window.MapasTeatroPdfStorage) {
-                    pdfs.mapaPersistido = JSON.parse(JSON.stringify(salvo));
-                    avisarMapa('Mapa salvo. Salvando os PDFs para o ERP...', 'info');
-                    try { pdfs.persistencia = await window.MapasTeatroPdfStorage.persistir(salvo, pdfs); }
-                    catch (e) { pdfs.persistencia = { estado: 'pendente', mensagem: e.message }; }
-                }
-            } catch (e) { console.error('[Mapas] Mapa salvo; geração do PDF pendente:', e); }
-        }
-        const verPdfs = await confirmarAcaoMapa({ titulo: 'Mapa salvo',
-            mensagem: `O mapa <strong>${escaparMapaHtml(salvo.name)}</strong> foi salvo e os dados foram conferidos.<br><br>`
-                + (pdfs ? 'Os PDFs do mapa e de cada setor estão prontos. Eles também ficam disponíveis no botão PDFs da lista.'
-                    + (pdfs.persistencia ? (pdfs.persistencia.estado === 'pronto' ? '<br>Os arquivos também foram salvos para o ERP.'
-                        : '<br>O envio dos PDFs para o ERP está pendente: ' + escaparMapaHtml(pdfs.persistencia.mensagem || 'use o botão Salvar PDFs para o ERP.')) : '')
-                    : 'Os PDFs ainda não estão prontos. Use o botão PDFs da lista para gerar novamente.'),
-            textoOk: pdfs ? 'Ver PDFs' : 'Concluir', textoCancelar: 'Concluir', somenteOk: !pdfs });
-        if (pdfs && verPdfs) window.MapasTeatroPdf.abrir(pdfs);
-        return true;
-    }
-    return false;
 };
 
 // ==========================================
