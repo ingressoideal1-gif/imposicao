@@ -115,7 +115,7 @@
             else tabela.closest('.prod-table-card').insertBefore(controles, tabela.closest('.prod-table-body'));
         }
         const iniciar = controles.querySelector('[data-iniciar]');
-        const ativo = fresco && (dados.fila.ativo || dados.coleta?.estado === 'consultando');
+        const ativo = fresco && (dados.fila.ativo || ['iniciando','consultando'].includes(dados.coleta?.estado));
         const textoBotao = dados?.fila.pausado ? 'Retomar cópia local' : ativo ? 'Copiando…' : 'Iniciar cópia local';
         if (iniciar.textContent !== textoBotao) iniciar.textContent = textoBotao;
         iniciar.disabled = !fresco || comandoAtivo || !podeGerenciar() || ativo && !dados.fila.pausado;
@@ -152,6 +152,7 @@
             `Disco livre: ${bytes(e.bytes_livres)} · Preparação: ${dados.fila.pausado ? 'pausada' : dados.fila.ocupado ? 'aguardando produção' : 'ativa'}`,
             `Última consulta: ${dados.coleta?.ultima_consulta ? new Date(dados.coleta.ultima_consulta).toLocaleString('pt-BR') : 'ainda não concluída'}`,
             `Coleta: ${dados.coleta?.estado === 'concluida' ? 'varredura concluída' : dados.coleta?.estado === 'consultando' ? 'consultando · ' + (dados.coleta.fase || 'catálogo') : dados.coleta?.estado || 'não informada'}`,
+            `Modo: ${dados.coleta?.modo === 'manual' ? 'cópia solicitada · pedidos marcados primeiro' : 'automático · aguarda disponibilidade'}`,
             `Lotes consultados nesta varredura: ${dados.coleta?.lotes_consultados ?? '—'} · Catálogo geral: ${dados.coleta?.lotes_catalogo ?? '—'}`,
             dados.coleta?.motivo || '',
             ensaio ? `Ensaio separado de impressos: ${ensaio.arquivos} arquivos · ${bytes(ensaio.bytes)} · download ${ensaio.download_segundos.toFixed(2)} s · leitura local com cache ${ensaio.leitura_segundos.toFixed(3)} s · falhas ${ensaio.falhas}` : '',

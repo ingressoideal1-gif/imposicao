@@ -273,6 +273,46 @@ def test_spool_impede_novo_lote(tmp_path):
     coleta.rodar();assert not c.cursores
 
 
+def test_inicio_manual_copia_imediatamente_com_spool_ocupado_e_continua_lotes(tmp_path):
+    s,c,coleta,_=ambiente(tmp_path,hora=10)
+    coleta.spool_livre=lambda:False
+    coleta.rodar()
+    assert not c.cursores and coleta.estado['estado']=='aguardando_spool'
+    s.iniciar_copia()
+    coleta.rodar()
+    assert c.cursores==list(range(8)) and coleta.estado['modo']=='manual'
+    coleta.rodar()
+    assert c.cursores==list(range(16))
+    s.pausar(True)
+    assert not coleta._manual.is_set()
+    coleta.rodar()
+    assert c.cursores==list(range(16))
+    s.pausar(False)
+    coleta.rodar()
+    assert c.cursores==list(range(16)) and coleta.estado['estado']=='aguardando_spool'
+
+
+def test_inicio_manual_prioriza_marcados_antes_dos_outros_abertos(tmp_path):
+    s,c,coleta,_=ambiente(tmp_path,hora=10)
+    chamados=[]
+    def listar(cursor,pedido=None):
+        chamados.append(pedido)
+        return {'itens':[],'proximo':0,'fim':True}
+    c.listar=listar
+    s.abrir_pedido('90')
+    s.preferir('42',True)
+    coleta.spool_livre=lambda:False
+    s.iniciar_copia()
+    coleta.rodar()
+    assert chamados[:2]==['42','90']
+    assert coleta.estado['estado']=='concluida' and not coleta._manual.is_set()
+    # Novo clique tambem atualiza o selecionado dentro do intervalo de cinco minutos.
+    chamados.clear()
+    s.iniciar_copia()
+    coleta.rodar()
+    assert chamados[0]=='42'
+
+
 def test_preferenciais_nao_repetem_antes_de_cada_lote(tmp_path):
     s,c,coleta,tempo=ambiente(tmp_path,hora=10)
     s.preferir('42',True);coleta._solicitado.clear();pedidos=[];original=c.listar

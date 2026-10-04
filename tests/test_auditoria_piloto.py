@@ -20,7 +20,7 @@ def test_servico_reinicia_no_mesmo_processo(tmp_path):
 
 
 def test_catalogo_cheio_recusa_antes_de_persistir_pacote(tmp_path):
-    s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste')
+    s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste', limite_catalogo=128)
     con = s._db()
     try:
         con.executemany('INSERT INTO catalogo VALUES (?,?,?)',

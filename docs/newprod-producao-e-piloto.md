@@ -53,10 +53,19 @@ administrativo. O operador de impressao com essa permissao controla sua copia
 local sem receber administracao. A grade continua sendo conferida no servidor;
 quem tem apenas visualizacao acompanha os dados com os controles desativados.
 
-A coleta consulta o spool do Windows antes de copiar. O pacote precisa incluir
+"Iniciar copia local" inicia imediatamente uma varredura manual, priorizando
+os pedidos marcados e atualizando suas copias. Essa copia nao aguarda a fila
+do Windows ficar vazia, pois nao envia impressao nem altera trabalhos no spool.
+Pausa, encerramento e processamento PDF/impressao ativo no proprio Piloto
+continuam interrompendo a coleta. O modo manual termina ao concluir a varredura
+ou ao pausar. A coleta automatica consulta o spool do Windows antes de copiar.
+O catalogo preserva ate 4096 registros de modelos/revisoes; a fila simultanea
+e os pedidos preferenciais continuam limitados a 128. As copias e o historico
+existentes sao preservados, sem limpeza automatica para liberar espaco.
+O pacote precisa incluir
 win32timezone, utilizado dinamicamente por win32print.EnumJobs; a conferencia
 do executavel recusa sua ausencia. Trabalho presente ou consulta indisponivel
-mantem a coleta em espera; nao remover essa protecao para forcar o download.
+mantem a coleta automatica em espera.
 
 O painel em http://127.0.0.1:9001/app/ apresenta o selo visivel
 "NewProd Piloto - porta 9001", inclusive na entrada. Na tela de impressao,

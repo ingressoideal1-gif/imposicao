@@ -31,7 +31,11 @@ def _conferencia_recente(quando):
 
 
 class ServicoPacotes:
-    def __init__(self, raiz, *, host, empresa, setor='laser', ocupado=lambda: False, abrir=None, conferir=None):
+    def __init__(self, raiz, *, host, empresa, setor='laser', ocupado=lambda: False, abrir=None, conferir=None,
+                 limite_catalogo=4096):
+        if type(limite_catalogo) is not int or not 1 <= limite_catalogo <= 4096:
+            raise ValueError('Limite de catalogo invalido.')
+        self.limite_catalogo = limite_catalogo
         self.raiz = Path(raiz).absolute()
         self.empresa = empresa
         self.host = host
@@ -236,8 +240,10 @@ class ServicoPacotes:
     def iniciar_copia(self):
         if not self.coleta_autonoma:
             raise ValueError('Coleta autônoma indisponível nesta estação.')
+        for pedido in self.preferencias():
+            self.abrir_pedido(pedido)
+        self.coleta_autonoma.solicitar(manual=True)
         self.pausar(False)
-        self.coleta_autonoma.solicitar()
         self._acordar.set()
 
     def pausar(self, pausado):
@@ -247,6 +253,8 @@ class ServicoPacotes:
                         ('pausado', '1' if pausado else '0'))
             con.commit()
             self.preparador.pausar(pausado)
+            if pausado and self.coleta_autonoma:
+                self.coleta_autonoma.cancelar_manual()
         finally:
             con.close()
 
@@ -327,7 +335,7 @@ class ServicoPacotes:
                                    (m['modelo'], m['revisao'])).fetchone()
             if anterior and json.loads(anterior[0])['manifesto'] != m:
                 raise ValueError('Revisão imutável.')
-            if not anterior and con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= 128:
+            if not anterior and con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= self.limite_catalogo:
                 raise ValueError('Limite do catálogo piloto atingido.')
             con.execute('INSERT OR REPLACE INTO catalogo VALUES (?,?,?)', (m['modelo'], m['revisao'], texto))
             con.commit()
@@ -420,7 +428,7 @@ class ServicoPacotes:
                                    (m['modelo'], m['revisao'])).fetchone()
             if anterior and json.loads(anterior[0])['manifesto'] != m:
                 raise ValueError('Revisão imutável.')
-            if not anterior and con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= 128:
+            if not anterior and con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= self.limite_catalogo:
                 raise ValueError('Catálogo do piloto cheio.')
             for nome in recursos:
                 info = m['arquivos'][nome]
@@ -443,7 +451,7 @@ class ServicoPacotes:
             registro = dict(manifesto=m, fontes={}, prazo=prazo, setor=setor)
             try:
                 if not con.execute('SELECT 1 FROM catalogo WHERE modelo=? AND revisao=?', (m['modelo'], m['revisao'])).fetchone():
-                    if con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= 128:
+                    if con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= self.limite_catalogo:
                         raise ValueError('Catálogo do piloto cheio.')
                     con.execute('INSERT INTO catalogo VALUES (?,?,?)',
                                 (m['modelo'], m['revisao'], json.dumps(registro, ensure_ascii=False)))
