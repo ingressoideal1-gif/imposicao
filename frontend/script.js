@@ -21259,6 +21259,22 @@ window.renderAdmAproveitamento = renderAdmAproveitamento;
  * upsert que mandasse so o campo mexido apagaria o outro — marcar a caixa
  * limparia o limiar, e digitar o limiar desmarcaria a caixa.
  */
+async function salvarConfigAproveitamentoSegura(acao, corpo) {
+    const sessao = await supabaseClient.auth.getSession();
+    const token = sessao?.data?.session?.access_token;
+    if (sessao?.error || !token) {
+        throw new Error('Para salvar Aproveitamento, entre com sua conta de administrador no painel web.');
+    }
+    const resposta = await fetch(`${API_PAINEL}/api/config-aproveitamento/${acao}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(corpo)
+    });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.detail || dados.error || 'Nao foi possivel confirmar a configuracao.');
+    if (!dados.configuracao) throw new Error('O servidor nao confirmou a configuracao.');
+    return dados.configuracao;
+}
+
 async function gravarProdutoCombinavel(idProduto, mudanca) {
 
     const id = String(idProduto);
@@ -21278,13 +21294,7 @@ async function gravarProdutoCombinavel(idProduto, mudanca) {
         atualizado_em: new Date().toISOString()
     }, mudanca);
 
-    const { error } = await supabaseClient
-
-        .from('producao_produtos_combinaveis')
-
-        .upsert(linha, { onConflict: 'id_produto' });
-
-    if (error) throw error;
+    await salvarConfigAproveitamentoSegura('produto', linha);
 
     return linha;
 
@@ -21310,7 +21320,7 @@ window.salvarProdutoCombinavel = async function(idProduto, liberado) {
 
         console.error('[ADM] salvarProdutoCombinavel', e);
 
-        toast('Nao consegui salvar. Recarregue a pagina e tente de novo.', 'error');
+        toast(e.message || 'Nao consegui salvar. Recarregue a pagina e tente de novo.', 'error');
 
         renderAdmAproveitamento();
 
@@ -21360,7 +21370,7 @@ window.salvarLimiarDoProduto = async function(idProduto, pct) {
 
         console.error('[ADM] salvarLimiarDoProduto', e);
 
-        toast('Nao consegui salvar o limiar deste produto.', 'error');
+        toast(e.message || 'Nao consegui salvar o limiar deste produto.', 'error');
 
         renderAdmAproveitamento();
 
@@ -21385,13 +21395,11 @@ window.salvarLimiarDeSobra = async function(pct) {
 
     try {
 
-        const { error } = await supabaseClient.from('producao_config').upsert({
+        await salvarConfigAproveitamentoSegura('limiar', {
             chave: 'limiar_sobra',
             valor: v,
             atualizado_em: new Date().toISOString()
-        }, { onConflict: 'chave' });
-
-        if (error) throw error;
+        });
 
         state.limiarSobra = v;
 
@@ -21405,7 +21413,7 @@ window.salvarLimiarDeSobra = async function(pct) {
 
         console.error('[ADM] salvarLimiarDeSobra', e);
 
-        toast('Nao consegui salvar o limiar.', 'error');
+        toast(e.message || 'Nao consegui salvar o limiar.', 'error');
 
     }
 
