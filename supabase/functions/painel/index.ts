@@ -31,6 +31,7 @@
  * grade e a origem da verdade.
  */
 import { banco, contar } from "../_compartilhado/banco.ts";
+import { salvarConfigAproveitamento } from "../_compartilhado/config_aproveitamento.ts";
 import { operarBancosPedido } from "../_compartilhado/bancos_pedido.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
@@ -255,6 +256,12 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       throw new Recusa(422, "corpo invalido: esperava JSON");
     }
   };
+
+  if (p[0] === "config-aproveitamento" && p.length === 2) {
+    if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    const quem = await quemChama(req);
+    return ok(await salvarConfigAproveitamento(p[1], await corpoJson(), quem.permissoes));
+  }
 
   if (p[0] === "bancos-pedido" && p.length === 2) {
     if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);

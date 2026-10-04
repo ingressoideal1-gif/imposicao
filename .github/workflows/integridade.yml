@@ -51,11 +51,16 @@ jobs:
       - name: Contratos do navegador
         shell: pwsh
         run: |
-          foreach ($arquivo in @('tests/upgrade_estacao_harness.js','tests/token_estacao_harness.js','tests/grade_do_acesso_local_harness.js','tests/propostas_sem_anon_harness.js')) {
+          foreach ($arquivo in @('tests/config_aproveitamento_harness.js','tests/upgrade_estacao_harness.js','tests/token_estacao_harness.js','tests/grade_do_acesso_local_harness.js','tests/propostas_sem_anon_harness.js')) {
             node $arquivo
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           node --test tests/auditoria_rls.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Contrato de configuracao administrativa
+        shell: pwsh
+        run: |
+          npm exec --yes --package=deno@2.9.5 -- deno test --node-modules-dir=none --allow-env --allow-read --quiet supabase/functions/_compartilhado/config_aproveitamento_test.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Freios da publicacao
         shell: pwsh
