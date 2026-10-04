@@ -44,7 +44,7 @@ function context(origin, localToken='token-local-sintetico', bearer='jwt-sinteti
             document:{getElementById:()=>footer},toast:m=>notices.push(m),
             getEstacaoEscolhida:()=>assert.fail('Piloto nao usa estacao de producao salva'),
             _agentIdLocalCache:null,_agentIdLocalEm:0,
-            fetch:async url=>{calls.push(url);return {ok:true,json:async()=>({version:'NewProd 1.2.355-piloto-local.16',agent_id:'piloto-sintetico',onde:'local'})};}};
+            fetch:async url=>{calls.push(url);return {ok:true,json:async()=>({version:'NewProd 1.2.356-piloto-local.17',agent_id:'piloto-sintetico',onde:'local'})};}};
         vm.createContext(pilot);
         vm.runInContext(base+['showAgentUpdateWarning','_baseDoAgenteAgora','atualizarVersaoAgenteRodape','descobrirAgentIdLocal','verificarAtualizacaoAgente'].map(extract).join('\n'),pilot);
         pilot.showAgentUpdateWarning('http://127.0.0.1:9000','99.0');

@@ -7,6 +7,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
     'test_canais_newprod.py','test_seguranca_estacao.py','test_integridade_impressao.py',
+    'test_numeracao_compatibilidade.py',
     'test_engine_pdf_mesclar.py','test_engine_modelos_somados.py','test_engine_banco_nunca_vira_sequencial.py',
     'test_teatro_banco.py','test_teatro_snapshot.py','test_painel_estacao.py',
     'test_pacotes_locais.py','test_preparacao_local.py','test_antecipacao_local.py',
@@ -15,7 +16,8 @@ TESTES = [
     'test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
 HARNESSES = ['modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
              'selecao_piloto_harness.js','integridade_impressao_harness.js',
-             'token_estacao_harness.js']
+             'token_estacao_harness.js','ticket_condicoes_harness.js',
+             'ticket_previas_harness.js','numeracao_compatibilidade_harness.js']
 
 def conferir(canais=('producao','piloto')):
     for canal in canais:
