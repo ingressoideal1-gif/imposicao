@@ -469,41 +469,7 @@ function New-SegredoDoAgente {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Raiz)
 
-    $segredo = $env:ACESSO_AGENTE_SEGREDO
-    if (-not $segredo) {
-        $envLocal = Join-Path $Raiz ".env.local"
-        if (Test-Path $envLocal) {
-            $linha = Get-Content $envLocal |
-                     Where-Object { $_ -match '^\s*ACESSO_AGENTE_SEGREDO\s*=' } |
-                     Select-Object -First 1
-            if ($linha) { $segredo = ($linha -split '=', 2)[1].Trim().Trim('"').Trim("'") }
-        }
-    }
-    if (-not $segredo) {
-        # `throw`, e nao um aviso: um agente sem segredo imprime normalmente e
-        # nao publica nada. Seguir seria produzir exatamente o release que
-        # custou o pedido 20508.
-        throw ("ACESSO_AGENTE_SEGREDO nao encontrado. Sem ele o agente imprime " +
-               "normalmente mas NAO publica a faixa de codigos, e a portaria do " +
-               "evento fica sem o que conferir. Ponha a linha no .env.local, com " +
-               "o MESMO valor gravado nos segredos do Supabase (a funcao " +
-               "`acesso-estacao` confere os dois): ACESSO_AGENTE_SEGREDO=<valor>")
-    }
-
-    # A barra invertida primeiro: invertida a ordem, o escape da aspa seria
-    # escapado de novo e o .py sairia com erro de sintaxe -- e o agente sairia
-    # sem o segredo, em silencio, de novo.
-    $escapado = $segredo.Replace('\', '\\').Replace('"', '\"')
-    $destino = Join-Path $Raiz "acesso_segredo.py"
-    @"
-# -*- coding: utf-8 -*-
-# GERADO NA COMPILACAO. Nao edite, nao versione.
-# O .gitignore cobre este arquivo: ele e o segredo que autoriza a estacao a
-# publicar a faixa de codigos do QR Ideal no backend da nuvem.
-SEGREDO = "$escapado"
-"@ | Out-File -FilePath $destino -Encoding utf8
-
-    return $destino
+    throw "Geracao de segredo no executavel desativada. Use provisionamento DPAPI na estacao."
 }
 
 function Test-SegredoNoBuild {

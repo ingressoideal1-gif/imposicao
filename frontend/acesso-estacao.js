@@ -3,6 +3,34 @@ const CHAVE_SESSAO_LOCAL = 'newprod_acesso_local';
 
 async function iniciarAcessoLocal(liberarUICompleta) {
     try {
+        const status = await fetch(`${API_BASE_URL}/api/status`).then(r => r.json());
+        if (Number(status?.sessao_local_protocolo || 0) < 1) {
+            mostrarLoginLocal(liberarUICompleta);
+            const erro = document.getElementById('auth-erro-local');
+            const botao = document.getElementById('btn-auth-local');
+            if (erro) {
+                erro.textContent = 'Atualize o NewProd desta estação para entrar com segurança.';
+                erro.style.display = 'block';
+            }
+            if (botao) {
+                botao.type = 'button';
+                botao.textContent = 'Atualizar NewProd';
+                botao.onclick = async () => {
+                    botao.disabled = true;
+                    try {
+                        const resposta = await fetch(`${API_BASE_URL}/api/update`, { method: 'POST' });
+                        if (!resposta.ok) throw new Error();
+                        botao.textContent = 'Atualizando. Aguarde e reabra o painel.';
+                    } catch (e) {
+                        botao.disabled = false;
+                        if (erro) erro.textContent = 'Não foi possível iniciar. Tente quando a estação estiver ociosa.';
+                    }
+                };
+            }
+            return;
+        }
+    } catch (e) { /* o login abaixo continua exigindo confirmacao do agente */ }
+    try {
         const resp = await fetch(`${API_BASE_URL}/api/local/login/estado`);
         const data = await resp.json();
         if (resp.ok && data && data.configurado === false) {

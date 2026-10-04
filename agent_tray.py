@@ -9,6 +9,10 @@ import webbrowser
 import socket
 import time
 
+if len(sys.argv) == 3 and sys.argv[1] == '--preparar-upgrade':
+    from migracao_estacao import executar_upgrade
+    sys.exit(executar_upgrade(sys.argv[2]))
+
 if getattr(sys, 'frozen', False):
     # ── Modo executavel (PyInstaller) ──────────────────────────────────────
     # Com console=False, o subsistema Win32 de mensagens nao e inicializado

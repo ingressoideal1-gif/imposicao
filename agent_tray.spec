@@ -109,6 +109,7 @@ a = Analysis(
         ('Logo Ideal Dark.png', '.'),
     ] + _frontend_datas,
     hiddenimports=[
+        'PyInstaller.archive.readers',
         # A credencial de publicacao e provisionada com DPAPI na estacao.
         # acesso_segredo fica explicitamente excluido deste executavel.
         'uvicorn.logging',

@@ -47,6 +47,11 @@ if (-not $PSBoundParameters.ContainsKey('Runtime')) {
         $arquivo = Join-Path $instalacao $nomeArquivo
         if (Test-Path -LiteralPath $arquivo -PathType Leaf) { $arquivo }
     })
+    $dadosProtegidos = Join-Path $env:LOCALAPPDATA 'NewProd Dados Protegidos'
+    foreach ($nomeArquivo in @('qr_ideal_pool.bin','credencial-publicacao.json')) {
+        $arquivo = Join-Path $dadosProtegidos $nomeArquivo
+        if (Test-Path -LiteralPath $arquivo -PathType Leaf) { $Runtime += $arquivo }
+    }
 }
 $nome = 'backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
 $destino = Join-Path $area $nome
