@@ -74,7 +74,7 @@ function scenario(mode, bar, quantities, options = {}) {
   const pedidoFns=['pdfDaFaceNaPreviaPedido','numeracaoDaArteNaPreviaPedido','buildStrictAssemblySets','arteDoModeloParaFolha','arteParaOMotor','carregarPdfsDaCombinacaoPaginada','drawPedPreview'];
   const code=scriptFns.map(n=>extract(s,n)).concat(pedidoFns.map(n=>extract(p,n))).join('\n');
   vm.createContext(sandbox);
-  for (const name of ['camposPendentesDoModelo', 'problemaNosCamposDosModelos', 'preencherFaixaDoModelo', 'elementoMesclaComArte']) {
+  for (const name of ['familiaDoElementoDeNumeracao', 'familiasDaNumeracao', 'elementoUsaPosicaoTicket', 'erroDaNumeracaoTicket', 'camposPendentesDoModelo', 'problemaNosCamposDosModelos', 'preencherFaixaDoModelo', 'elementoMesclaComArte']) {
     vm.runInContext(extract(s, name), sandbox);
   }
   vm.runInContext(code,sandbox);vm.runInContext('drawPedPreview()',sandbox);
