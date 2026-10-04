@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1014">
+    <link rel="stylesheet" href="/style.css?v=1016">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -556,9 +556,10 @@
 
                     <!-- Barra de Elementos (Topo) -->
                     <div class="top-elements-panel card" style="padding:16px; margin-bottom: 0;">
-                        <div class="card-header" style="margin-bottom:12px; padding-bottom: 8px;">
+                        <div class="card-header num-add-elements-header" style="margin-bottom:12px; padding-bottom: 8px;">
                             <span class="card-title" style="font-size:0.85rem;"><span class="icon">🎯</span> Adicionar
                                 Elementos</span>
+                            <small id="num-compatibilidade-info" role="status"></small>
                         </div>
                         <div class="num-element-groups">
                         <div class="num-element-group" data-family="comuns">
@@ -590,7 +591,6 @@
                             </div>
                         </div>
                         </div>
-                        <small id="num-compatibilidade-info" style="display:block; margin-top:12px; color:var(--text-dim);" role="status"></small>
                         <div id="num-teatro-elements-container" class="num-element-group" data-family="teatro" style="margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 12px;">
                             <span class="card-title" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px; display:block;"><span class="icon">🎭</span> Elementos de Teatro</span>
                             <div class="add-elements-bar">
