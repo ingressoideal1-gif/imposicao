@@ -2029,6 +2029,15 @@ body.not-logged-in .app-shell {
     overflow-wrap: anywhere;
 }
 
+.cliente-evento {
+    font-size: 1.18rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #facc15;
+    margin: 8px 0 0;
+    overflow-wrap: anywhere;
+}
+
 .cliente-section {
     background: var(--card);
     border: 1px solid var(--border);
