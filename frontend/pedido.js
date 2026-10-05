@@ -1759,6 +1759,15 @@ function drawPedPreview() {
 
                             if (cachedPage) {
 
+                                // Cada página conserva seu tamanho real. As medidas
+                                // carregadas em pedArtWidth/Height são só da primeira;
+                                // usá-las nas outras encolhe um A4 para um crachá.
+                                // dw/dh já incluem escala por eixo, capa e zoom.
+                                const paginaW = cachedPage._pdfWidthPt || cachedPage.width / 1.5;
+                                const paginaH = cachedPage._pdfHeightPt || cachedPage.height / 1.5;
+                                if (paginaW > 0 && art_orig_w > 0) dw *= paginaW / art_orig_w;
+                                if (paginaH > 0 && art_orig_h > 0) dh *= paginaH / art_orig_h;
+
                                 // A arte entra no grupo; quem multiplica é o grupo inteiro
                                 gctx.drawImage(cachedPage, offH - dw / 2, offV - dh / 2, dw, dh);
 
@@ -1781,6 +1790,10 @@ function drawPedPreview() {
                                             off.width = vp.width;
 
                                             off.height = vp.height;
+
+                                            // Viewport antes do arredondamento do canvas.
+                                            off._pdfWidthPt = vp.width / 1.5;
+                                            off._pdfHeightPt = vp.height / 1.5;
 
                                             const octx = off.getContext('2d');
 
