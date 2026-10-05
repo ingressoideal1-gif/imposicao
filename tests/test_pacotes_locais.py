@@ -77,7 +77,7 @@ def test_falha_nao_publica_revisao_nem_destroi_anterior(pacote, monkeypatch, fal
     if falha == 'disco': monkeypatch.setattr(pl.shutil, 'disk_usage', lambda _: SimpleNamespace(free=0))
     if falha == 'interrupcao':
         def interromper(*args): raise OSError('queda simulada antes da ativacao')
-        monkeypatch.setattr(pl.os, 'replace', interromper)
+        monkeypatch.setattr(pl.os, 'link', interromper)
     with pytest.raises((pl.PacoteInvalido, OSError)):
         a.preparar(novo, fontes)
     assert a.consultar(m['empresa'], '1', 'r2')['estado'] == 'sem_copia'
@@ -113,6 +113,69 @@ def test_concorrencia_mesma_revisao(pacote):
         resultados = list(pool.map(lambda _: a.preparar(m, fontes), range(2)))
     assert all(r['estado'] == 'local_validado' for r in resultados)
     assert len(list(a.raiz.rglob('objetos/*'))) == 1
+
+
+def test_publicacao_concorrente_nao_substitui_objeto_compartilhado(pacote, monkeypatch):
+    import threading
+    a, m, fontes = pacote
+    barreira = threading.Barrier(2)
+    fsync_original = pl.os.fsync
+    replace_original = pl.os.replace
+    substituicoes = []
+    def fsync(fd):
+        fsync_original(fd)
+        # Ambos verificaram ausencia e terminaram a copia antes de publicar.
+        barreira.wait(timeout=15)
+    def replace(origem, destino):
+        substituicoes.append(destino)
+        if destino.exists():
+            raise PermissionError('Objeto aberto por leitor no Windows')
+        return replace_original(origem, destino)
+    monkeypatch.setattr(pl.os, 'fsync', fsync)
+    monkeypatch.setattr(pl.os, 'replace', replace)
+    def preparar(modelo):
+        manifesto = copy.deepcopy(m); manifesto['modelo'] = str(modelo)
+        # Instancias independentes tambem precisam compartilhar com seguranca.
+        outro = pl.ArmazemPacotes(a.raiz, habilitado=True, reserva_bytes=0)
+        return outro.preparar(manifesto, fontes)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        resultados = list(pool.map(preparar, (1, 2)))
+    assert all(r['estado'] == 'local_validado' for r in resultados)
+    assert substituicoes == []
+    assert len(list(a.raiz.rglob('objetos/*'))) == 1
+    assert not list(a.raiz.rglob('parcial-*'))
+    for modelo in ('1', '2'):
+        assert a.ler_recurso(m['empresa'], modelo, m['revisao'], 'frente') == fontes['frente'].read_bytes()
+
+
+def test_acesso_negado_ao_reparar_corrupcao_nao_libera_pacote(pacote, monkeypatch):
+    a, m, fontes = pacote
+    a.preparar(m, fontes)
+    objeto = next(a.raiz.rglob('objetos/*')); objeto.write_bytes(b'corrompido')
+    def negar(*args): raise PermissionError('Reparo indisponivel')
+    monkeypatch.setattr(pl.os, 'replace', negar)
+    novo = copy.deepcopy(m); novo['modelo'] = '2'
+    with pytest.raises(PermissionError): a.preparar(novo, fontes)
+    assert a.consultar(m['empresa'], '2', m['revisao'])['estado'] == 'sem_copia'
+    assert a.consultar(m['empresa'], '1', m['revisao'])['estado'] == 'falha_validacao'
+    assert objeto.read_bytes() == b'corrompido'
+    assert not list(a.raiz.rglob('parcial-*'))
+
+
+def test_reparo_concorrente_so_aceita_objeto_integralmente_validado(pacote, monkeypatch):
+    a, m, fontes = pacote
+    a.preparar(m, fontes)
+    objeto = next(a.raiz.rglob('objetos/*')); objeto.write_bytes(b'corrompido')
+    replace_original = pl.os.replace
+    def outro_reparou(origem, destino):
+        replace_original(origem, destino)
+        raise PermissionError('Outro preparador publicou e um leitor abriu o arquivo')
+    monkeypatch.setattr(pl.os, 'replace', outro_reparou)
+    novo = copy.deepcopy(m); novo['modelo'] = '2'
+    assert a.preparar(novo, fontes)['estado'] == 'local_validado'
+    assert a.ler_recurso(m['empresa'], '2', m['revisao'], 'frente') == fontes['frente'].read_bytes()
+    assert a.consultar(m['empresa'], '1', m['revisao'])['estado'] == 'local_validado'
+    assert not list(a.raiz.rglob('parcial-*'))
 
 
 def test_desativar_preserva_pacote(pacote):
