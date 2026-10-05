@@ -48,6 +48,14 @@ ou ocorrer erro; uma resposta antiga nao fecha o popup de uma abertura nova.
 Alternar modelos nao inicia essa conferencia. A imagem integra o pacote proprio,
 sem download externo, e o comportamento da producao permanece preservado.
 
+A visualizacao da imposicao, ao selecionar um modelo, mostra a logo original
+da Ideal e "Aguarde, gerando Imposição" nos dois canais. Reutiliza a logo ja
+embutida no painel e o aviso existente dentro da janela, mantendo o descarte
+da previa anterior e a liberacao pelo desenho atual. O popup de conferencia
+do pedido continua exclusivo do Piloto. O pacote .25 inclui esse ajuste comum;
+a tela da producao recebe os mesmos arquivos pelo sincronismo do painel, sem
+necessidade de substituir o executavel ou o MSI.
+
 ## Atualizar as duas variantes
 
 1. Trabalhar em checkout isolado atualizado, preservando alteracoes existentes.
