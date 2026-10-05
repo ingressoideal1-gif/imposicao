@@ -16,7 +16,8 @@ triggers nas tabelas do ERP. A revisao e calculada na consulta; nao e um contado
 persistente. Assim, alteracoes de qualquer consumidor do banco entram na
 conferencia sem depender de esse consumidor avisar o Piloto.
 
-O snapshot inclui modelos completos, bancos vinculados, produto efetivo,
+O snapshot inclui modelos completos, bancos das numeracoes, bancos proprios do
+pedido e seus vinculos, produto efetivo,
 status da proposta, prazos e metadados de objetos do Storage usados nas fontes.
 Leitura de Storage e somente de metadados; nenhuma tabela desse schema e alterada.
 O digest do modelo/banco continua integral e compativel com a forma bruta do
@@ -32,8 +33,12 @@ frontend; METADATA so e normalizado na copia usada pela tela.
 4. Modelos afetados ou arquivos ausentes sao preparados com ate quatro workers.
    A revisao e consultada novamente ao terminar. Mudanca durante download bloqueia.
 5. Existencia/tamanho sao suficientes para decidir reutilizacao na abertura.
-   A leitura usada pelo painel e pelo motor obrigatoriamente confere os bytes
+A leitura usada pelo painel e pelo motor obrigatoriamente confere os bytes
    com SHA-256, impedindo geracao com arquivo local corrompido.
+
+Quando a revisao muda, a marca de banco ja carregado e invalidada no Piloto.
+A montagem seguinte usa a carga existente do pedido para trazer os bancos
+atuais; trocar modelos depois dessa carga continua aproveitando o mesmo banco.
 
 URLs sem objeto/versao/ETag verificavel mantem a revalidacao HTTP. Objetos
 versionados sao comparados com o ETag do Storage; um download com versao

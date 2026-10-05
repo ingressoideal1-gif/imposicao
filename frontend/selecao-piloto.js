@@ -2,6 +2,7 @@
 (function () {
     'use strict';
     const liberados = new Map();
+    const revisoesPedidos = new Map();
     let pedidoAtual = null;
     let popupConferencia = null;
     function mostrarConferencia() {
@@ -111,6 +112,15 @@
                 || fotografias.get(pacote.modelo) !== JSON.stringify(canonico(itemAtual?._modeloOnline))) throw Error('Resposta local não corresponde ao pedido.');
         }
         if (resposta.sem_arte.some(id => !modelos.some(m => m.modelo === id))) throw Error('Modelo local desconhecido.');
+        if (/^[a-f0-9]{64}$/.test(resposta.revisao_pedido || '')) {
+            // Bancos do pedido/vinculos tambem participam da revisao. A marca
+            // anterior nao pode dispensar a carga depois de uma alteracao.
+            if (revisoesPedidos.get(String(osId)) !== resposta.revisao_pedido) {
+                state._bancosPedidoDe = null;
+                if (state._bancosConsultados) delete state._bancosConsultados[String(osId)];
+            }
+            revisoesPedidos.set(String(osId), resposta.revisao_pedido);
+        }
         // Substitui o registro correspondente, preservando os outros modelos.
         for (const raw of nums) {
             // O digest acima usa a linha integral da nuvem. O painel precisa

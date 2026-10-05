@@ -54,6 +54,9 @@ BEGIN
     'numeracoes',coalesce((SELECT jsonb_agg(j ORDER BY j->>'id') FROM numeros),'[]'::jsonb),
     'origens',coalesce((SELECT jsonb_agg(j ORDER BY j->>'id') FROM origens),'[]'::jsonb),
     'produtos',coalesce((SELECT jsonb_agg(j ORDER BY j->>'id_produto') FROM produtos),'[]'::jsonb),
+    'bancos',coalesce((SELECT jsonb_agg(to_jsonb(b) ORDER BY b.id) FROM public.pedidos_bancos b WHERE b.id_int=pedido_num),'[]'::jsonb),
+    'vinculos',coalesce((SELECT jsonb_agg(to_jsonb(v) ORDER BY v.modelo_id) FROM public.pedidos_modelos_banco v
+      WHERE v.modelo_id IN (SELECT j->>'id' FROM modelos)),'[]'::jsonb),
     'pedidos',coalesce((SELECT jsonb_agg(jsonb_build_object('id_int',p.id_int,'status_interno',p.status_interno,
       'revisao',encode(sha256(convert_to(to_jsonb(p)::text,'UTF8')),'hex'))) FROM public.propostas p WHERE p.id_int=pedido_num),'[]'::jsonb),
     'prazos',coalesce((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.data_termino,p.id) FROM public.propostas_os p WHERE p.id_int=pedido_num),'[]'::jsonb)
@@ -63,7 +66,9 @@ BEGIN
   FOR linhas IN SELECT value FROM jsonb_array_elements(doc->'modelos')
     UNION ALL SELECT value FROM jsonb_array_elements(doc->'numeracoes')
     UNION ALL SELECT value FROM jsonb_array_elements(doc->'origens')
-    UNION ALL SELECT value FROM jsonb_array_elements(doc->'produtos') LOOP
+    UNION ALL SELECT value FROM jsonb_array_elements(doc->'produtos')
+    UNION ALL SELECT value FROM jsonb_array_elements(doc->'bancos')
+    UNION ALL SELECT value FROM jsonb_array_elements(doc->'vinculos') LOOP
     IF coalesce(linhas->>'empresa_id',linhas->>'id_empresa') IS NOT NULL
       AND coalesce(linhas->>'empresa_id',linhas->>'id_empresa') IS DISTINCT FROM p_empresa_id THEN
       RAISE EXCEPTION 'empresa divergente';
