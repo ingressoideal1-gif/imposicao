@@ -22,7 +22,7 @@ class ClienteAutonomo:
         self.abrir = abrir or urllib.request.build_opener(SemRedirecionamento()).open
 
     def chamar(self, acao, corpo):
-        if acao not in ('listar', 'conferir'):
+        if acao not in ('listar', 'conferir', 'conferir-pedido'):
             raise ValueError('Operação fora do piloto.')
         try:
             segredo = self.segredo()
@@ -32,8 +32,9 @@ class ClienteAutonomo:
                 headers={'Content-Type':'application/json', 'X-Agente-Segredo':segredo})
             with self.abrir(req, timeout=20) as resposta:
                 if getattr(resposta, 'status', 200) != 200: raise ValueError()
-                raw = resposta.read(1024 * 1024 + 1)
-                if len(raw) > 1024 * 1024: raise ValueError()
+                limite = (8 if acao == 'conferir-pedido' else 1) * 1024 * 1024
+                raw = resposta.read(limite + 1)
+                if len(raw) > limite: raise ValueError()
                 return json.loads(raw)
         except Exception:
             raise ConferenciaIndisponivel('Canal autônomo não confirmado; confira habilitação e acesso da estação.') from None
@@ -42,6 +43,9 @@ class ClienteAutonomo:
         corpo = {k:item[k] for k in ('empresa','modelo','fontes')}
         corpo['digest'] = item['observacao']['digest']
         return ConferidorPiloto.validar(item, self.chamar('conferir', corpo))
+
+    def conferir_pedido(self, pedido, revisao=''):
+        return self.chamar('conferir-pedido', {'empresa':self.empresa, 'pedido':pedido, 'revisao':revisao})
 
     def listar(self, cursor, pedido=None):
         corpo = {'empresa':self.empresa, 'cursor':cursor}

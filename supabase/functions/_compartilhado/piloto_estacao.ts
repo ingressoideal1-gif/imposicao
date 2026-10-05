@@ -3,6 +3,7 @@ import { operadorLocalPropostas } from './propostas.ts';
 import { conferirPiloto } from './piloto_local.ts';
 import { listarPiloto } from './piloto_catalogo.ts';
 import { banco } from './banco.ts';
+import { conferirPedidoPiloto } from './piloto_pedido.ts';
 
 export async function conferirVinculoPiloto(operador: Record<string, unknown>, estacao: string,
   empresa: string | undefined, consultar = banco): Promise<Record<string, unknown>> {
@@ -55,6 +56,7 @@ export async function operarPilotoEstacao(acao: string, req: Request,
   const operador = await conferirVinculoPiloto(await operadorLocalPropostas(codigo), estacao,
     Deno.env.get('PILOTO_LOCAL_EMPRESA'));
   if (acao === 'listar') return await listarPiloto(corpo, operador);
+  if (acao === 'conferir-pedido') return await conferirPedidoPiloto(corpo, operador);
   if (acao === 'conferir') return await conferirPiloto(corpo, operador, banco, Deno.env.get('PILOTO_LOCAL_EMPRESA'), Deno.env.get('PILOTO_LOCAL_EMPRESA_ID'), true);
   throw new Recusa(404,'operacao inexistente');
 }

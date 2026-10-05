@@ -13,7 +13,7 @@ TESTES = [
     'test_teatro_banco.py','test_teatro_snapshot.py','test_painel_estacao.py',
     'test_pacotes_locais.py','test_preparacao_local.py','test_antecipacao_local.py',
     'test_coleta_autonoma.py','test_conferencia_piloto.py','test_auditoria_piloto.py',
-    'test_diario_local.py','test_pacotes_api.py','test_selecao_piloto.py',
+    'test_diario_local.py','test_pacotes_api.py','test_selecao_piloto.py','test_revisao_pedido_piloto.py',
     'test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
 HARNESSES = ['modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
              'foto_piloto_harness.js','foto_lib_harness.js',

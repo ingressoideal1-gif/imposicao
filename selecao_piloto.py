@@ -5,12 +5,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 from antecipacao_local import AntecipadorRecursos
 from conferencia_piloto import ConferenciaIndisponivel
+from revisao_pedido_piloto import CacheRevisaoPedido, validar_recibo, versoes_confiaveis
 
 
 class SelecaoPiloto:
     def __init__(self, servico):
         self.servico = servico
         self._lock = threading.Lock()
+        self._cache = CacheRevisaoPedido(servico)
 
     def preparar(self, dados):
         if (not isinstance(dados, dict) or set(dados) != {'pedido', 'modelo', 'digest'}
@@ -34,14 +36,14 @@ class SelecaoPiloto:
         finally:
             self._lock.release()
 
-    def _preparar_item(self, dados, item):
+    def _preparar_item(self, dados, item, *, conferido_em=None):
         s = self.servico
         cliente = s.coleta_autonoma.cliente
         if not item or item['observacao']['digest'] != dados['digest']:
             raise ConferenciaIndisponivel('O modelo mudou ou não está disponível. Selecione novamente.')
         if not item['fontes'].get('frente'):
             raise ConferenciaIndisponivel('Arte de frente ainda não disponível para preparação local.')
-        resposta = s.antecipar(item, _conferidor=lambda i, _: cliente.conferir(i))
+        resposta = s.antecipar(item, _conferidor=lambda i, _: conferido_em or cliente.conferir(i))
         entrada = next(i['manifesto'] for i in s.catalogo()
                        if i['manifesto']['modelo'] == dados['modelo']
                        and i['manifesto']['revisao'] == resposta['revisao'])
@@ -49,10 +51,12 @@ class SelecaoPiloto:
         # Instância dedicada: sem herdar a dispensa de atualização do coletor
         # ocioso. URLs iguais também são revalidadas (ETag ou download).
         preparador = AntecipadorRecursos(None, s.local, s.host, s.obter_coleta, s.salvar_coleta,
-                                         abrir=s.preparador.armazenamento.abrir, intervalo=0)
+                                         abrir=s.preparador.armazenamento.abrir, intervalo=0,
+                                         versoes_fontes=item.get('versoes_fontes') if conferido_em else None)
         preparador.preparar(entrada, {})
         atual = s.obter_coleta(entrada)
-        cliente.conferir(item)  # mudança durante download não libera a seleção
+        if not conferido_em:
+            cliente.conferir(item)  # legado: mudanca durante download nao libera
         if not atual or s.local.consultar(s.empresa, dados['modelo'], atual['revisao'])['estado'] != 'local_validado':
             raise ValueError('Cópia local não validada.')
         recursos = {nome: '/api/pacotes-locais/recurso-painel/' + dados['modelo'] + '/' + atual['revisao'] + '/' + nome
@@ -81,6 +85,8 @@ class SelecaoPiloto:
         if not self.servico.coleta_autonoma:
             raise ConferenciaIndisponivel('Coleta indisponível.')
         cliente = self.servico.coleta_autonoma.cliente
+        if callable(getattr(cliente, 'conferir_pedido', None)):
+            return self._preparar_por_revisao(dados['pedido'], solicitados, cliente)
         encontrados, cursor = {}, 0
         for _ in range(256):
             pagina = cliente.listar(cursor, pedido=dados['pedido'])
@@ -112,6 +118,62 @@ class SelecaoPiloto:
         finally:
             self._lock.release()
         return {'pedido':dados['pedido'], 'pacotes':pacotes, 'sem_arte':indisponiveis}
+
+    def _preparar_por_revisao(self, pedido, solicitados, cliente):
+        if not self._lock.acquire(blocking=False):
+            raise ConferenciaIndisponivel('Outro pedido esta sendo preparado. Aguarde e reabra.')
+        try:
+            anterior = self._cache.obter(pedido)
+            rev_anterior = anterior['revisao'] if anterior and anterior['empresa'] == self.servico.empresa else ''
+            recibo = validar_recibo(cliente.conferir_pedido(pedido, rev_anterior),
+                                    self.servico.empresa, pedido, rev_anterior)
+            itens = anterior['itens'] if recibo['sem_mudanca'] else recibo['itens']
+            encontrados = {}
+            for item in itens:
+                if (item.get('empresa') != self.servico.empresa or item.get('pedido') != pedido
+                        or not re.fullmatch('[1-9][0-9]{0,14}', item.get('modelo',''))
+                        or item['modelo'] in encontrados):
+                    raise ConferenciaIndisponivel('Resposta do pedido divergente.')
+                encontrados[item['modelo']] = item
+            for modelo, digest in solicitados.items():
+                if modelo in encontrados and encontrados[modelo]['observacao']['digest'] != digest:
+                    raise ConferenciaIndisponivel('Pedido alterado. Reabra para conferir.')
+            sem_arte = [m for m in solicitados if m not in encontrados or not encontrados[m]['fontes'].get('frente')]
+            antigos_itens = {i['modelo']:i for i in anterior['itens']} if anterior else {}
+            antigos_pacotes = {p['modelo']:p for p in anterior['pacotes']} if anterior else {}
+            reutilizados, preparar = {}, []
+            for modelo in solicitados:
+                if modelo in sem_arte: continue
+                item, pacote = encontrados[modelo], antigos_pacotes.get(modelo)
+                antigo = antigos_itens.get(modelo)
+                # Versao do Storage acompanha tambem substituicao na mesma URL.
+                # Aqui basta existencia/tamanho; leitura real sempre verifica SHA.
+                if (pacote and antigo and versoes_confiaveis(item)
+                        and all(item[k] == antigo.get(k) for k in ('fontes','versoes_fontes','observacao'))
+                        and self.servico.local.consultar(self.servico.empresa,modelo,pacote['revisao'],
+                                                        verificar_bytes=False)['estado'] == 'local_validado'):
+                    reutilizados[modelo] = dict(pacote, atualizado=False)
+                else:
+                    preparar.append(modelo)
+            def preparar_modelo(modelo):
+                return self._preparar_item({'pedido':pedido,'modelo':modelo,'digest':solicitados[modelo]},
+                                          encontrados[modelo],conferido_em=recibo['conferido_em'])
+            with ThreadPoolExecutor(max_workers=4,thread_name_prefix='RevisaoPedidoPiloto') as pool:
+                for pacote in pool.map(preparar_modelo, preparar):
+                    reutilizados[pacote['modelo']] = pacote
+            # Downloads/recursos sem versao exigem uma segunda revisao do pedido
+            # como barreira da corrida. Caminho inteiramente reutilizado: uma so.
+            if preparar:
+                final = validar_recibo(cliente.conferir_pedido(pedido,recibo['revisao']),
+                                        self.servico.empresa,pedido,recibo['revisao'])
+                if not final['sem_mudanca']:
+                    raise ConferenciaIndisponivel('Pedido mudou durante a copia. Reabra para conferir.')
+            pacotes = [reutilizados[m] for m in solicitados if m in reutilizados]
+            self._cache.salvar(pedido,recibo['revisao'],itens,pacotes)
+            return {'pedido':pedido,'revisao_pedido':recibo['revisao'],'pacotes':pacotes,'sem_arte':sem_arte,
+                    'reutilizados':len(pacotes)-len(preparar)}
+        finally:
+            self._lock.release()
 
     def ler(self, modelo, revisao, nome):
         if (not re.fullmatch(r'[1-9][0-9]{0,14}', modelo)

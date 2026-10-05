@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -20,7 +21,8 @@ def _etag_forte(valor):
 
 
 class AntecipadorRecursos:
-    def __init__(self, integrado, local, host, obter, salvar, abrir=None, *, relogio=time.monotonic, intervalo=300):
+    def __init__(self, integrado, local, host, obter, salvar, abrir=None, *, relogio=time.monotonic, intervalo=300,
+                 versoes_fontes=None):
         self.integrado, self.local, self.host = integrado, local, host
         self.obter, self.salvar = obter, salvar
         self.abrir = abrir or urllib.request.build_opener(SemRedirecionamento()).open
@@ -28,6 +30,7 @@ class AntecipadorRecursos:
         self._revalidar = {}
         self._atualizar_ao_abrir = set()
         self.somente_ao_abrir = False
+        self.versoes_fontes = versoes_fontes
 
     @property
     def habilitado(self):
@@ -66,9 +69,24 @@ class AntecipadorRecursos:
                 if shutil.disk_usage(area).free < self.local.reserva_bytes + 128 * 1024 * 1024:
                     raise OSError('Reserva de disco insuficiente.')
                 antigo = anterior['configuracao'].get('validadores_http', {}).get(nome) if reutilizavel else None
-                headers = {'If-None-Match': antigo} if _etag_forte(antigo) else {}
+                versao = (self.versoes_fontes or {}).get(nome)
+                if versao and _etag_forte(antigo) and antigo.strip('"') == versao['etag'].strip('"'):
+                    # A copia anterior acabou de passar pelo SHA local acima;
+                    # o validador forte coincide com o snapshot atual do Storage.
+                    arquivos[nome] = deepcopy(anterior['arquivos'][nome])
+                    validadores[nome] = antigo
+                    continue
+                # Revalidacao legada para URLs sem versao verificavel.
+                headers = {'If-None-Match': antigo} if _etag_forte(antigo) and not versao else {}
+                endereco = url
+                if versao:
+                    partes = urllib.parse.urlsplit(url)
+                    query = urllib.parse.parse_qsl(partes.query,keep_blank_values=True)
+                    query.append(('piloto_revisao',versao['revisao']))
+                    endereco = urllib.parse.urlunsplit(partes._replace(query=urllib.parse.urlencode(query)))
+                    headers['Cache-Control'] = 'no-cache'
                 try:
-                    resposta = self.abrir(urllib.request.Request(url, headers=headers), timeout=15)
+                    resposta = self.abrir(urllib.request.Request(endereco, headers=headers), timeout=15)
                 except urllib.error.HTTPError as erro:
                     if erro.code != 304 or not headers:
                         erro.close()
@@ -85,6 +103,8 @@ class AntecipadorRecursos:
                     if getattr(resposta, 'status', 200) != 200:
                         raise ValueError('Recurso remoto incompleto.')
                     etag = getattr(resposta, 'headers', {}).get('ETag')
+                    if versao and (not isinstance(etag,str) or etag.strip('"') != versao['etag'].strip('"')):
+                        raise ValueError('Versao do arquivo nao corresponde ao Storage.')
                     if _etag_forte(etag):
                         validadores[nome] = etag
                     with tempfile.NamedTemporaryFile(dir=area, delete=False) as destino:
