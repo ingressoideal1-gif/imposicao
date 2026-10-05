@@ -41,6 +41,13 @@ Recursos fora desse catalogo ainda podem exigir rede na preparacao anterior
 ao primeiro PDF; nao declarar que todas as dependencias estao antecipadas.
 O contrato de uploads, campos, bancos, NI/NF, TICKET e Multi-Artes permanece.
 
+O Piloto .24 mostra um popup modal com a logo local da Ideal e o texto
+"Aguarde, conferencia de dados" desde o clique para abrir o pedido. O popup
+acompanha o carregamento e a conferencia, fecha ao concluir, retornar sem abrir
+ou ocorrer erro; uma resposta antiga nao fecha o popup de uma abertura nova.
+Alternar modelos nao inicia essa conferencia. A imagem integra o pacote proprio,
+sem download externo, e o comportamento da producao permanece preservado.
+
 ## Atualizar as duas variantes
 
 1. Trabalhar em checkout isolado atualizado, preservando alteracoes existentes.
