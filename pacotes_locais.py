@@ -143,7 +143,23 @@ class ArmazemPacotes:
                             raise PacoteInvalido("Integridade divergente: " + nome)
                         saida.flush()
                         os.fsync(saida.fileno())
-                    os.replace(temporario, destino)
+                    # Publicacao atomica sem sobrescrever: dois modelos podem
+                    # compartilhar estes bytes. No Windows, substituir o
+                    # objeto enquanto outro leitor o abre causa WinError 5.
+                    try:
+                        os.link(temporario, destino)
+                    except FileExistsError:
+                        _sem_links(destino)
+                        if _hash_arquivo(destino, checkpoint) != esperado:
+                            # Reparar corrupcao continua permitido. Se outro
+                            # preparador reparou primeiro e um leitor abriu o
+                            # objeto, so aceitar os bytes integralmente validos.
+                            try:
+                                os.replace(temporario, destino)
+                            except PermissionError:
+                                _sem_links(destino)
+                                if _hash_arquivo(destino, checkpoint) != esperado:
+                                    raise
                 finally:
                     if temporario is not None and temporario.exists():
                         temporario.unlink()  # somente o parcial criado nesta chamada

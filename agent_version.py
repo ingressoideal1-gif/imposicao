@@ -9,7 +9,7 @@ aplica, e o auto-update compara este valor com o do manifesto.
 from canais_newprod import PILOTO
 AGENT_VERSION = "1.2.356"
 if PILOTO:
-    AGENT_VERSION += "-piloto-local.22"
+    AGENT_VERSION += "-piloto-local.23"
 
 
 def como_tupla(texto: str) -> tuple:
