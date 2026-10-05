@@ -4230,8 +4230,8 @@ window.previaFicouPronta = previaFicouPronta;
  * delas — e isso e' uma troca de classe.
  */
 function fecharJanelaDoModelo() {
-    previaFicouPronta();
     if (window.isImposing) return;
+    previaFicouPronta();
     state.activeOSItem = null;
     if (typeof atualizarVariacoesNaJanelaDoModelo === 'function') atualizarVariacoesNaJanelaDoModelo(null);
 
