@@ -126,3 +126,7 @@ bloqueio na conferencia final, que continua recusando mudancas reais. A
 conferencia por abertura do pedido e a troca rapida de modelos sao preservadas.
 Os testes de carga e da barreira final rodam nos dois canais; a instalacao .22
 atualiza somente o Piloto e preserva o NewProd padrao 1.2.356.
+
+O [registro da entrega de 04/10/2026](registro-2026-10-04-piloto-desempenho-e-conferencia.md)
+reune alteracoes, commits, versoes conferidas, testes, recuperacao e limites
+da validacao da .22. Diagnosticos e inventarios de producao ficam no registro privado.
