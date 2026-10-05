@@ -3,6 +3,59 @@
     'use strict';
     const liberados = new Map();
     let pedidoAtual = null;
+    let popupConferencia = null;
+    function mostrarConferencia() {
+        if (popupConferencia) {
+            popupConferencia.close();
+            popupConferencia.remove();
+        }
+        if (!document.getElementById('piloto-conferencia-estilo')) {
+            const estilo = document.createElement('style');
+            estilo.id = 'piloto-conferencia-estilo';
+            estilo.textContent = `
+                #piloto-conferencia { width:min(420px,calc(100vw - 40px)); box-sizing:border-box;
+                    padding:32px 24px; border:1px solid #d5e5e9; border-radius:16px;
+                    background:#fff; color:#19364b; text-align:center;
+                    box-shadow:0 20px 70px #0004; }
+                #piloto-conferencia::backdrop { background:rgba(10,25,40,.6); }
+                #piloto-conferencia img { display:block; width:320px; max-width:100%; height:auto; margin:0 auto 28px; }
+                #piloto-conferencia p { margin:18px 0 0; font:600 17px/1.5 system-ui,sans-serif; }
+                #piloto-conferencia .indicador { width:32px; height:32px; margin:auto;
+                    border:3px solid #d8eeed; border-top-color:#13aaa5; border-radius:50%;
+                    animation:piloto-conferencia-girar .9s linear infinite; }
+                @keyframes piloto-conferencia-girar { to { transform:rotate(360deg); } }
+                @media (prefers-reduced-motion:reduce) { #piloto-conferencia .indicador { animation:none; } }
+            `;
+            document.head.appendChild(estilo);
+        }
+        const dialogo = document.createElement('dialog');
+        dialogo.id = 'piloto-conferencia';
+        dialogo.setAttribute('aria-labelledby', 'piloto-conferencia-mensagem');
+        dialogo.setAttribute('aria-busy', 'true');
+        const logo = document.createElement('img');
+        logo.src = '/logo-ideal-2026.png';
+        logo.alt = 'Ingresso Ideal';
+        const indicador = document.createElement('div');
+        indicador.className = 'indicador';
+        indicador.setAttribute('aria-hidden', 'true');
+        const mensagem = document.createElement('p');
+        mensagem.id = 'piloto-conferencia-mensagem';
+        mensagem.setAttribute('role', 'status');
+        mensagem.textContent = 'Aguarde, conferencia de dados';
+        dialogo.append(logo, indicador, mensagem);
+        // Escape não deve esconder uma conferência que continua em andamento.
+        dialogo.addEventListener('cancel', evento => evento.preventDefault());
+        document.body.appendChild(dialogo);
+        dialogo.showModal();
+        popupConferencia = dialogo;
+        return () => {
+            // Uma abertura antiga não pode fechar o popup do pedido seguinte.
+            if (popupConferencia !== dialogo) return;
+            dialogo.close();
+            dialogo.remove();
+            popupConferencia = null;
+        };
+    }
     function iniciarPedido(osId) {
         liberados.clear();
         pedidoAtual = {osId:String(osId)};
@@ -124,4 +177,17 @@
         return locais[0]?.chave || url;
     }
     window.PilotoSelecao = {iniciarPedido, conferirPedido, conferir, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
+    // A injeção exclusiva do Piloto ocorre depois do script principal. Manter
+    // o fluxo original e acompanhar também seus retornos antecipados e erros.
+    const abrirPedido = window.abrirImposicaoDoPedido;
+    if (typeof abrirPedido === 'function') {
+        window.abrirImposicaoDoPedido = async function (...argumentos) {
+            const fechar = mostrarConferencia();
+            try {
+                return await abrirPedido.apply(this, argumentos);
+            } finally {
+                fechar();
+            }
+        };
+    }
 })();
