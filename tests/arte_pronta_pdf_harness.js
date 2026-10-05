@@ -64,5 +64,20 @@ function fixture(mode, pages, changes = {}) {
     await conventional.ctx.decisionAmostraItem(1, 'os', 'PRONTO');
     assert(conventional.calls.includes('save'));
     assert(!conventional.calls.includes('fetch')); cases++;
+    // Regra confirmada em 05/10/2026: 100 pecas em PDF impar/frente e
+    // par/verso exigem 200 paginas, inclusive pelo botao em lote do pedido.
+    for (const [mode, expected] of [['front', 100], ['duplex_unico', 100], ['duplex', 200], ['pdf_odd_even', 200], ['pdf_duplicate_back', 100]]) {
+        for (const emLote of [false, true]) {
+            for (const pages of [expected - 1, expected, expected + 1]) {
+                const f = fixture(mode, pages, { qtd: 100 });
+                await f.ctx.decisionAmostraItem(1, 'os', 'PRONTO', { emLote });
+                assert.equal(f.calls.includes('save'), pages === expected, `${mode}: ${pages}, lote=${emLote}`);
+                assert.equal(f.calls.includes('snapshot'), pages === expected);
+                assert.equal(f.item.qtd, 100, 'a quantidade comercial nao e ajustada ao PDF');
+                if (pages !== expected) assert(f.notices.some(n => n.includes(`${pages} páginas; esperado: ${expected}`)));
+                cases++;
+            }
+        }
+    }
     console.log(`${cases} casos OK`);
 })().catch(e => { console.error(e); process.exitCode = 1; });
