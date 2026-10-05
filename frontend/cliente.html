@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ideal Imposition — Aprovação do Pedido</title>
     <meta name="description" content="Ideal Imposition — Envio de artes e aprovação de pedidos online.">
-    <link rel="stylesheet" href="/style.css?v=1020">
+    <link rel="stylesheet" href="/style.css?v=1021">
     <link rel="stylesheet" href="/cliente-modelo.css?v=963">
     <style>
         /* Ajustes básicos para o cliente rodar isolado, caso existam dependências no body geral */
@@ -53,6 +53,7 @@
                 <div class="cliente-header-texto">
                     <h1 class="cliente-title">Pedido <span id="cliente-pedido-numero"></span></h1>
                     <p class="cliente-subtitle" id="cliente-pedido-cliente"></p>
+                    <p class="cliente-evento" id="cliente-pedido-evento" hidden></p>
                     <span id="cliente-os-itens-count" class="badge badge-blue"></span>
                 </div>
             </header>
@@ -197,7 +198,7 @@
          para decidir o selo PAGO, para as duas telas não divergirem. -->
     <!-- Os icones desenhados, antes de qualquer tela que os use: as abas, os
          cartoes e os selos pedem o SVG a este arquivo em vez de escrever emoji. -->
-    <script src="/icones-cliente.js?v=1009"></script>
+    <script src="/icones-cliente.js?v=1021"></script>
     <script src="/pagamento-do-pedido.js?v=1020"></script>
     <script src="/banco-do-modelo.js?v=897"></script>
     <script src="/mapa-teatro-revisao.js?v=1008"></script>
@@ -213,6 +214,6 @@
     <script src="/cliente-faturamento.js?v=917"></script>
     <script src="/cliente-orcamento.js?v=897"></script>
     <script src="/cliente-pagamento.js?v=981"></script>
-    <script src="/cliente.js?v=1017"></script>
+    <script src="/cliente.js?v=1021"></script>
 </body>
 </html>

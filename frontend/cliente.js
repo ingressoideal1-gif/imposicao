@@ -1403,8 +1403,13 @@ async function initClientePage(numero, token) {
     const contentEl = document.getElementById('cliente-content');
     const numeroEl = document.getElementById('cliente-pedido-numero');
     const clienteEl = document.getElementById('cliente-pedido-cliente');
+    const eventoEl = document.getElementById('cliente-pedido-evento');
 
     if (numeroEl) numeroEl.textContent = `#${numero}`;
+    if (eventoEl) {
+        eventoEl.textContent = '';
+        eventoEl.hidden = true;
+    }
 
     // Esperar o Supabase carregar
     let attempts = 0;
@@ -1636,6 +1641,7 @@ async function initClientePage(numero, token) {
 
         // 2. Mesclar dados de pedidos_artes (arquivos PDF, revisões e urls)
         let arteConsolidada = null;
+        let nomeEvento = '';
         try {
             const queryNum = parseInt(numero);
             if (!isNaN(queryNum)) {
@@ -1648,6 +1654,9 @@ async function initClientePage(numero, token) {
                 if (!Array.isArray(artes)) throw new Error('Status das artes indisponível.');
                 // Mesma linha mais recente usada na consolidação das decisões.
                 arteConsolidada = artes[0] || null;
+                // O briefing pode estar em outra linha de arte do mesmo pedido.
+                const arteComEvento = artes.find(arte => String(arte.nome_evento || '').trim());
+                nomeEvento = String(arteComEvento?.nome_evento || '').trim();
                 
                 if (artes && artes.length > 0) {
                     state.osItens[osId].forEach(item => {
@@ -1669,6 +1678,10 @@ async function initClientePage(numero, token) {
             }
         } catch (err) { console.warn('Erro ao mesclar pedidos_artes:', err); throw err; }
 
+        if (eventoEl) {
+            eventoEl.textContent = nomeEvento;
+            eventoEl.hidden = !nomeEvento;
+        }
 
         // Salvar a OS no state.ordens
         const os = {
