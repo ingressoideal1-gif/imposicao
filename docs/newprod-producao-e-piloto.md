@@ -60,6 +60,20 @@ necessidade de substituir o executavel ou o MSI.
 
 ## Atualizar as duas variantes
 
+O Piloto .27 substitui a conferencia remota por modelo por uma revisao do pedido
+em snapshot consistente no banco. O recibo compacto da nuvem e consultado em
+cada abertura, sem prazo de tolerancia. Modelos com copias atuais e fontes
+versionadas sao reutilizados; recursos sem versao/ETag verificavel continuam
+revalidando HTTP. O cache da revisao persiste na estacao e e independente por
+pedido. Mudanca de modelo, banco compartilhado, produto, status ou objeto do
+Storage altera a revisao, inclusive substituicao na mesma URL. Downloads exigem
+uma nova consulta ao terminar; mudanca durante a copia bloqueia a liberacao.
+Na abertura, copias reutilizadas conferem existencia e tamanho; a leitura real
+da arte pelo painel/motor continua obrigatoriamente verificando SHA-256.
+Nao ha notificacoes Realtime nesta etapa nem autorizacao de uso offline.
+O NewProd padrao conserva seu fluxo; nao recebe o pacote nem o cache do Piloto.
+Ver [registro da revisao por pedido](registro-2026-10-05-piloto-revisao-pedido.md).
+
 1. Trabalhar em checkout isolado atualizado, preservando alteracoes existentes.
 2. Aplicar a correcao na fonte comum. Mudanca exclusiva do Piloto exige guarda
    de canal e teste comprovando que o comportamento padrao continua preservado.

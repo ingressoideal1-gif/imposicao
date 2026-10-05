@@ -180,7 +180,7 @@ class ArmazemPacotes:
             con.close()
         return self.consultar(m["empresa"], m["modelo"], m["revisao"], checkpoint=checkpoint)
 
-    def consultar(self, empresa, modelo, revisao, *, revisao_online=None, checkpoint=None):
+    def consultar(self, empresa, modelo, revisao, *, revisao_online=None, checkpoint=None, verificar_bytes=True):
         resultado = {"estado": "desativado", "origem": None,
                      "autorizado_offline": False, "revisao": revisao}
         if not self.habilitado:
@@ -212,7 +212,8 @@ class ArmazemPacotes:
                 if info is not None:
                     arquivo = pasta / "objetos" / info["sha256"]
                     _sem_links(arquivo)
-                    if _hash_arquivo(arquivo, checkpoint) != (info["sha256"], info["bytes"]):
+                    if (verificar_bytes and _hash_arquivo(arquivo, checkpoint) != (info["sha256"], info["bytes"])) or (
+                            not verificar_bytes and arquivo.stat().st_size != info['bytes']):
                         raise PacoteInvalido("Arquivo alterado no disco.")
         except (OSError, ValueError, TypeError, KeyError):
             resultado["estado"] = "falha_validacao"

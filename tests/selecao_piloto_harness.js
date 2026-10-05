@@ -20,7 +20,7 @@ function montar() {
         if(url.endsWith('preparar-pedido-painel')){
             const body=JSON.parse(opts.body); if(c.esperar)await c.esperar;
             if(c.falha)return {ok:false};
-            return {ok:true,json:async()=>({pedido:'99',sem_arte:[],pacotes:[{modelo:'10',digest:body.modelos[0].digest,revisao:'b'.repeat(64),origem:'local',atualizado:true,
+            return {ok:true,json:async()=>({pedido:'99',revisao_pedido:c.revisaoPedido||'c'.repeat(64),sem_arte:[],pacotes:[{modelo:'10',digest:body.modelos[0].digest,revisao:'b'.repeat(64),origem:'local',atualizado:true,
                 fontes:{frente:item.arte_url},recursos:{frente:'/api/pacotes-locais/recurso-painel/10/'+'b'.repeat(64)+'/frente'}}]})};
         }
         assert.ok(url.startsWith('/api/pacotes-locais/recurso-painel/'));
@@ -52,6 +52,14 @@ function montar() {
     assert.equal(digestRecebido,Buffer.from(esperado).toString('hex'));
     const copia=met.normalizarNumeracaoLida(structuredClone(raw));
     assert.equal(JSON.stringify(met.state.numeracoes[0]),JSON.stringify(copia));
+    const bancos=montar();bancos.state._bancosPedidoDe='vibe_99';bancos.state._bancosConsultados={'vibe_99':true};
+    await bancos.PilotoSelecao.conferirPedido('vibe_99',()=>true);
+    assert.equal(bancos.state._bancosPedidoDe,null);assert.equal(bancos.state._bancosConsultados.vibe_99,undefined);
+    bancos.state._bancosPedidoDe='vibe_99';bancos.state._bancosConsultados.vibe_99=true;
+    await bancos.PilotoSelecao.conferirPedido('vibe_99',()=>true);
+    assert.equal(bancos.state._bancosPedidoDe,'vibe_99');assert.equal(bancos.state._bancosConsultados.vibe_99,true);
+    bancos.revisaoPedido='d'.repeat(64);await bancos.PilotoSelecao.conferirPedido('vibe_99',()=>true);
+    assert.equal(bancos.state._bancosPedidoDe,null);assert.equal(bancos.state._bancosConsultados.vibe_99,undefined);
     const c=montar();let liberar;c.esperar=new Promise(r=>liberar=r);
     const p=c.PilotoSelecao.conferirPedido('vibe_99',()=>true);await new Promise(r=>setImmediate(r));
     await assert.rejects(c.enviarParaPedido(10,'vibe_99'));assert.equal(c.cargas.length,0);
