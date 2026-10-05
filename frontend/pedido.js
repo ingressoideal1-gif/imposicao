@@ -4206,6 +4206,7 @@ function limparPreviaEnquantoCarrega() {
         const recado = document.createElement('div');
         recado.className = 'previa-montando';
         recado.setAttribute('role', 'status');
+        recado.setAttribute('aria-live', 'polite');
         recado.innerHTML = '<img class="previa-montando-logo" alt="Ingresso Ideal"><span class="roda" aria-hidden="true"></span><span>Aguarde, gerando Imposição</span>';
         // A logo original já integra o painel, incluindo o sincronismo dos
         // agentes instalados. A prévia não precisa buscar uma imagem na rede.
