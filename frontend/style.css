@@ -5166,13 +5166,21 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
    quase um segundo a janela mostraria a folha do modelo ANTERIOR logo abaixo
    do nome do modelo novo. */
 .previa-montando {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    min-height: 220px; color: var(--text-dim); font-size: 0.9rem;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    min-height: 220px; padding: 24px 12px; box-sizing: border-box;
+    color: var(--text); font-size: 1rem; font-weight: 600; text-align: center;
+}
+.previa-montando .previa-montando-logo {
+    width: min(280px, 85%); height: auto; padding: 12px 16px;
+    background: #fff; border-radius: 8px; box-sizing: border-box;
 }
 .previa-montando .roda {
-    width: 18px; height: 18px; border-radius: 50%;
-    border: 2px solid rgba(99, 102, 241, 0.3); border-top-color: #6366f1;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid rgba(19, 170, 165, 0.2); border-top-color: #13aaa5;
     animation: spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .previa-montando .roda { animation: none; }
 }
 
 /* ─── Hot Folder: os ladrilhos das pastas ────────────────────────────────────

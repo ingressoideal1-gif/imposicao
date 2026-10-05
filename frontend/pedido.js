@@ -4199,13 +4199,17 @@ function limparPreviaEnquantoCarrega() {
         canvas.style.display = 'none';
     }
     const selo = document.getElementById('ped-preview-sheet-num');
-    if (selo) selo.textContent = 'Montando…';
+    if (selo) selo.textContent = 'Gerando Imposição…';
 
     const dono = canvas ? (canvas.closest('.ped-preview-canvas-container') || canvas.parentElement) : null;
     if (dono && !dono.querySelector('.previa-montando')) {
         const recado = document.createElement('div');
         recado.className = 'previa-montando';
-        recado.innerHTML = '<span class="roda"></span><span>Montando a pr&eacute;via deste modelo…</span>';
+        recado.setAttribute('role', 'status');
+        recado.innerHTML = '<img class="previa-montando-logo" alt="Ingresso Ideal"><span class="roda" aria-hidden="true"></span><span>Aguarde, gerando Imposição</span>';
+        // A logo original já integra o painel, incluindo o sincronismo dos
+        // agentes instalados. A prévia não precisa buscar uma imagem na rede.
+        recado.querySelector('img').src = window.MAPA_TEATRO_LOGO_PNG || 'logo.png';
         dono.insertBefore(recado, dono.firstChild);
     }
 }
