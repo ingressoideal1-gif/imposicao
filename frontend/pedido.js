@@ -4211,6 +4211,8 @@ function limparPreviaEnquantoCarrega() {
         // A logo original já integra o painel, incluindo o sincronismo dos
         // agentes instalados. A prévia não precisa buscar uma imagem na rede.
         recado.querySelector('img').src = window.MAPA_TEATRO_LOGO_PNG || 'logo.png';
+        // Fora da janela movel: rolagem, recorte e transformacoes dos seus
+        // ancestrais nao podem deslocar o popup do centro da tela.
         document.body.appendChild(recado);
     }
 }
