@@ -5166,8 +5166,15 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
    quase um segundo a janela mostraria a folha do modelo ANTERIOR logo abaixo
    do nome do modelo novo. */
 .previa-montando {
+    position: fixed; inset: 0; z-index: 2147483646;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    background: rgba(10, 25, 40, 0.6); box-sizing: border-box; pointer-events: none;
+}
+.previa-montando .previa-montando-conteudo {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
-    min-height: 220px; padding: 24px 12px; box-sizing: border-box;
+    width: min(420px, 100%); min-height: 220px; padding: 24px 12px; box-sizing: border-box;
+    background: var(--bg-card, #1b2d45); border: 1px solid var(--border, #486480);
+    border-radius: 16px; box-shadow: 0 20px 70px #0004;
     color: var(--text, #e6edf7); font-size: 1rem; font-weight: 600; text-align: center;
 }
 .previa-montando .previa-montando-logo {

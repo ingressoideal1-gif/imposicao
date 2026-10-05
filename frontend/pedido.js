@@ -4202,16 +4202,16 @@ function limparPreviaEnquantoCarrega() {
     if (selo) selo.textContent = 'Gerando Imposição…';
 
     const dono = canvas ? (canvas.closest('.ped-preview-canvas-container') || canvas.parentElement) : null;
-    if (dono && !dono.querySelector('.previa-montando')) {
+    if (dono && !document.querySelector('.previa-montando')) {
         const recado = document.createElement('div');
         recado.className = 'previa-montando';
         recado.setAttribute('role', 'status');
         recado.setAttribute('aria-live', 'polite');
-        recado.innerHTML = '<img class="previa-montando-logo" alt="Ingresso Ideal"><span class="roda" aria-hidden="true"></span><span>Aguarde, gerando Imposição</span>';
+        recado.innerHTML = '<div class="previa-montando-conteudo"><img class="previa-montando-logo" alt="Ingresso Ideal"><span class="roda" aria-hidden="true"></span><span>Aguarde, gerando Imposição</span></div>';
         // A logo original já integra o painel, incluindo o sincronismo dos
         // agentes instalados. A prévia não precisa buscar uma imagem na rede.
         recado.querySelector('img').src = window.MAPA_TEATRO_LOGO_PNG || 'logo.png';
-        dono.insertBefore(recado, dono.firstChild);
+        document.body.appendChild(recado);
     }
 }
 
@@ -4231,6 +4231,7 @@ window.previaFicouPronta = previaFicouPronta;
  */
 function fecharJanelaDoModelo() {
     if (window.isImposing) return;
+    previaFicouPronta();
     state.activeOSItem = null;
     if (typeof atualizarVariacoesNaJanelaDoModelo === 'function') atualizarVariacoesNaJanelaDoModelo(null);
 
