@@ -29,6 +29,8 @@ const RAIZ = path.dirname(__dirname);
 const puppeteer = require(path.join(RAIZ, 'node_modules', 'puppeteer'));
 
 const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
+const ESTILO = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
+const ESTILO_ESPERA = ESTILO.slice(ESTILO.indexOf('.previa-montando {'), ESTILO.indexOf('/* ─── Hot Folder:'));
 
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
@@ -94,6 +96,7 @@ function pagina() {
     const navegador = await puppeteer.launch({ headless: 'new' });
     const aba = await navegador.newPage();
     await aba.setContent(pagina(), { waitUntil: 'load' });
+    await aba.addStyleTag({ content: ESTILO_ESPERA });
 
     // O estado minimo que as funcoes leem, e o codigo de verdade por cima.
     await aba.evaluate(`
@@ -213,9 +216,37 @@ function pagina() {
     ok(v.pixel === '#000000' || v.pixel === '#00000',
        'e o canvas e apagado: nunca a folha do modelo anterior debaixo do nome do novo', v);
 
+    // O popup deve ficar no centro da TELA, inclusive com a previa escondida,
+    // ancestral transformado, rolagem e chamadas repetidas durante a troca.
+    await aba.evaluate(() => {
+        document.getElementById('ped-preview-home').style.transform = 'translate(80px, 120px)';
+        document.body.style.minHeight = '2400px';
+        __api.limparPreviaEnquantoCarrega();
+    });
+    ok(await aba.evaluate(() => document.querySelector('.previa-montando').parentElement === document.body),
+       'o popup fica fora da janela movel e dos seus ancestrais');
+    ok(await aba.$$eval('.previa-montando', els => els.length === 1), 'a espera continua tendo um unico popup');
+    for (const [width, height] of [[1366, 768], [900, 600], [360, 640]]) {
+        await aba.setViewport({ width, height });
+        await aba.evaluate(() => window.scrollTo(0, 700));
+        const caixa = await aba.$eval('.previa-montando-conteudo', el => {
+            const r = el.getBoundingClientRect();
+            return { x: r.x, y: r.y, width: r.width, height: r.height };
+        });
+        ok(Math.abs(caixa.x + caixa.width / 2 - width / 2) < 1 &&
+           Math.abs(caixa.y + caixa.height / 2 - height / 2) < 1,
+           'popup centralizado na tela de ' + width + 'x' + height + ' com rolagem', caixa);
+        ok(caixa.x >= 0 && caixa.x + caixa.width <= width,
+           'popup cabe na largura de ' + width + 'px', caixa);
+    }
+
     await aba.evaluate(() => __api.previaFicouPronta());
     v = await olhar();
     ok(v.montando === 0, 'e o recado sai quando a previa fica pronta', v);
+
+    await aba.evaluate(() => { __api.limparPreviaEnquantoCarrega(); __api.fecharJanelaDoModelo(); });
+    ok(await aba.$$eval('.previa-montando', els => els.length === 0),
+       'fechar a janela durante a carga tambem retira o popup da tela');
 
     await navegador.close();
 

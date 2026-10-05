@@ -50,9 +50,11 @@ sem download externo, e o comportamento da producao permanece preservado.
 
 A visualizacao da imposicao, ao selecionar um modelo, mostra a logo original
 da Ideal e "Aguarde, gerando Imposição" nos dois canais. Reutiliza a logo ja
-embutida no painel e o aviso existente dentro da janela, mantendo o descarte
-da previa anterior e a liberacao pelo desenho atual. O popup de conferencia
-do pedido continua exclusivo do Piloto. O pacote .25 inclui esse ajuste comum;
+embutida no painel e apresenta um popup no centro da tela, independente da
+posicao da linha do modelo e da rolagem. Mantem o descarte da previa anterior
+e a liberacao pelo desenho atual; fechar a janela tambem remove o aviso.
+O popup de conferencia do pedido continua exclusivo do Piloto.
+O pacote .26 inclui esse ajuste comum;
 a tela da producao recebe os mesmos arquivos pelo sincronismo do painel, sem
 necessidade de substituir o executavel ou o MSI.
 
