@@ -3121,6 +3121,8 @@ async function selecionarFacesDoPdfDoPedido(blob, face, modo, arquivo = {}) {
 
 function updatePedSummary() {
 
+    if (typeof atualizarRestricaoModoVibe === 'function') atualizarRestricaoModoVibe('ped');
+
     const fmtSelect = document.getElementById('ped-formato');
 
     const numSelect = document.getElementById('ped-numeracao');
@@ -3343,7 +3345,6 @@ function updatePedSummary() {
 
     const printModeEl = document.getElementById('ped-print-mode');
 
-    if (typeof atualizarRestricaoModoVibe === 'function') atualizarRestricaoModoVibe('ped');
     state.printMode = printModeEl ? printModeEl.value : 'front';
     atualizarFacesDeImpressaoDoPedido();
 
@@ -5422,6 +5423,9 @@ function renderPedOSQueue(opcoes = {}) {
             const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(selectedNumId));
             // A coluna espelha o cadastro da numeração, sem inferir pelo nome ou pelo verso legado.
             const modoImpressaoDaNumeracao = selectedNum ? rotuloDoModoDeImpressao(selectedNum) : '—';
+            const modoIncompativel = selectedNum && VersoDoModelo.doModo(selectedNum.print_mode)
+                && VersoDoModelo.normalizar(item.verso_tipo)
+                && !VersoDoModelo.compativel(item.verso_tipo, selectedNum.print_mode);
 
             // Exibir o valor do modelo: calcular aqui esconderia um campo ausente.
             const nfCalculado = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
@@ -5582,6 +5586,7 @@ function renderPedOSQueue(opcoes = {}) {
                             ${rot('Verso')}
                             <span class="ped-modo-impressao-da-numeracao" style="flex: 1; min-width: 0; padding: 6px 8px; font-size: 0.84rem; line-height: 1.3; color: #ffffff; white-space: normal; overflow-wrap: anywhere;">${escHtmlSimples(modoImpressaoDaNumeracao)}</span>
                         </div>
+                        ${modoIncompativel ? `<div class="ped-modo-incompativel-vibe" role="alert" style="padding:6px 8px;color:#fef3c7;background:#422006;border:1px solid #fbbf24;border-radius:4px;font-size:0.8rem;white-space:normal;overflow-wrap:anywhere;">Incompatível com o pedido: ${escHtmlSimples(item.verso_tipo)}. Ajuste a numeração ou o pedido no Vibe.</div>` : ''}
                     </td>
                     <td style="padding: 6px; width: 150px; min-width: 150px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
