@@ -39,7 +39,7 @@ import { conferirSenha, senhaAtual } from "../_compartilhado/senha_liberacao.ts"
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
 import { operarEmailArtes } from "../_compartilhado/email_artes.ts";
 import { operarFundo } from "../_compartilhado/fundo.ts";
-import { operarPropostas } from "../_compartilhado/propostas.ts";
+import { exigirOperadorPropostas, operarPropostas } from "../_compartilhado/propostas.ts";
 import { recusaDeRotaDesconhecida, RecusaDeValidacao } from "../_compartilhado/validacao.ts";
 import {
   limparItemOs,
@@ -256,6 +256,24 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       throw new Recusa(422, "corpo invalido: esperava JSON");
     }
   };
+
+  // Conferencia do painel web. Somente leitura de protocolo/identidade:
+  // nao reserva emissoes nem expoe codigos, base privada ou sal do evento.
+  if (p.length === 2 && p[0] === "qr-ideal" && p[1] === "contratos") {
+    if (req.method !== "GET") recusaDeRotaDesconhecida(req.method);
+    const quem = await quemChama(req);
+    exigirOperadorPropostas(quem.permissoes, "consultar");
+    const pedido = url.searchParams.get("pedido") || "";
+    if (!/^[1-9]\d*$/.test(pedido) || !Number.isSafeInteger(Number(pedido)) || Number(pedido) > 2147483647) {
+      throw new Recusa(422, "pedido invalido");
+    }
+    const contratos = await banco("GET",
+      `producao_acesso_qr_contratos?pedido=eq.${Number(pedido)}&select=pedido,modelo,versao&order=modelo.asc`);
+    if (!Array.isArray(contratos)) throw new Recusa(503, "conferencia QR indisponivel");
+    const resposta = ok(contratos.map((c: any) => ({ pedido: c.pedido, modelo: c.modelo, versao: c.versao })));
+    resposta.headers.set("Cache-Control", "no-store");
+    return resposta;
+  }
 
   if (p[0] === "config-aproveitamento" && p.length === 2) {
     if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
