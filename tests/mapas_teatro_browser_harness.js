@@ -291,7 +291,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
             await page.addScriptTag({ path: path.join(raiz, 'frontend', arquivo) });
             assert.ok(html.includes(arquivo), arquivo + ' incluído na página real');
         }
-        const saida = path.resolve(raiz, '..', 'tmp_mapas-pdf-app-20261003');
+        const saida = path.resolve(raiz, '..', 'tmp_mapas-pdf-app-20261006');
         fs.mkdirSync(saida, { recursive: true });
         const cdp = await page.createCDPSession();
         await cdp.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: saida });
@@ -307,6 +307,34 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
             const y = id => document.getElementById(id).getBoundingClientRect().y;
             return y('mapa-fileira-prefix') === y('mapa-fileira-inicio') && y('mapa-fileira-inicio') === y('mapa-fileira-fim');
         }), true, 'identificador, início e fim alinhados');
+        const desenhoTela = await page.evaluate(() => {
+            const antes = JSON.stringify(window.state.mapaAtual.config), rects = [], textos = [];
+            const retangulo = canvasCtx.fillRect, texto = canvasCtx.fillText;
+            canvasCtx.fillRect = function(x, y, width, height) { if (height === 24) rects.push({ x, y, width, height }); return retangulo.call(this, x, y, width, height); };
+            canvasCtx.fillText = function(label, x, y) { if (this.textAlign === 'center') textos.push({ label, x, y, width: this.measureText(label).width }); return texto.call(this, label, x, y); };
+            try { renderMapa(); } finally { canvasCtx.fillRect = retangulo; canvasCtx.fillText = texto; }
+            const key = Object.keys(getSetorAtual().cadeiras)[0], [x, y] = key.split(',').map(Number), r = mapCanvas.getBoundingClientRect();
+            return { rects, textos, preservado: antes === JSON.stringify(window.state.mapaAtual.config), key,
+                clique: { x: r.left + (camera.x + (x * 32 + 30) * camera.zoom) * r.width / mapCanvas.width,
+                    y: r.top + (camera.y + (y * 32 + 12) * camera.zoom) * r.height / mapCanvas.height } };
+        });
+        assert.equal(desenhoTela.rects.length, 16); assert.equal(desenhoTela.preservado, true);
+        assert.ok(desenhoTela.textos.some(t => t.label === '1-A')); assert.ok(desenhoTela.textos.some(t => t.label === '4-D'));
+        desenhoTela.rects.forEach((r, i) => {
+            assert.equal(r.width, 24 * 1.30); assert.equal(r.height, 24);
+            assert.equal(desenhoTela.textos[i].x, r.x + r.width / 2);
+            assert.ok(desenhoTela.textos[i].width <= r.width - 4 + .01, 'texto dentro do assento');
+        });
+        await page.click('#tool-select'); await page.mouse.click(desenhoTela.clique.x, desenhoTela.clique.y);
+        assert.equal(await page.evaluate(k => window.cadeirasSelecionadas.has(k), desenhoTela.key), true, 'borda alargada seleciona o mesmo lugar');
+        await page.evaluate(() => {
+            window.assentosPdf = [];
+            const original = PDFLib.PDFPage.prototype.drawRectangle;
+            PDFLib.PDFPage.prototype.drawRectangle = function(opcoes) {
+                if (opcoes.borderWidth === .8) assentosPdf.push({ x: opcoes.x, y: opcoes.y, width: opcoes.width, height: opcoes.height });
+                return original.call(this, opcoes);
+            };
+        });
         await page.screenshot({ path: path.join(saida, 'editor-conjunto-' + arquivoHtml + '.png') });
         await page.evaluate(() => {
             const s = window.state.mapaAtual.config.setores[0], cs = Object.values(s.cadeiras);
@@ -329,9 +357,17 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
                 const contents = p.node.Contents(), refs = contents.asArray ? contents.asArray() : [contents];
                 texto += refs.map(r => new TextDecoder().decode(PDFLib.decodePDFRawStream(pdf.context.lookup(r)).decode())).join('\n');
             }
-            return { paginas: pdf.getPageCount(), bytes: Array.from(bytes), texto, tamanho: pdf.getPage(0).getSize() };
+            return { paginas: pdf.getPageCount(), bytes: Array.from(bytes), texto, tamanho: pdf.getPage(0).getSize(), assentos: assentosPdf };
         });
-        assert.equal(provaPdf.paginas, 1); assert.match(provaPdf.texto, /<3141> Tj/); assert.match(provaPdf.texto, /<3444> Tj/);
+        assert.equal(provaPdf.paginas, 1); assert.match(provaPdf.texto, /<312D41> Tj/); assert.match(provaPdf.texto, /<342D44> Tj/);
+        assert.equal(provaPdf.assentos.length, 16);
+        provaPdf.assentos.forEach((a, i, assentos) => {
+            assert.ok(Math.abs(a.width / a.height - 1.30) < 1e-10);
+            assert.ok(a.x >= 0 && a.x + a.width <= provaPdf.tamanho.width && a.y >= 0 && a.y + a.height <= provaPdf.tamanho.height);
+            for (const b of assentos.slice(i + 1)) {
+                assert.ok(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y, 'assentos nao se sobrepoem');
+            }
+        });
         assert.ok(provaPdf.texto.includes('<' + Buffer.from('ASSENTOS POR MESA').toString('hex').toUpperCase() + '> Tj'));
         assert.ok(provaPdf.texto.includes('<' + Buffer.from('Mesa 1').toString('hex').toUpperCase() + '> Tj'));
         assert.ok(!provaPdf.texto.includes(Buffer.from('Fila ').toString('hex').toUpperCase()));
@@ -380,7 +416,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
         });
         assert.equal(grande.total, 3000); assert.equal(grande.paginas, 1, 'setor denso fica inteiro em uma página');
         assert.ok(grande.texto.includes('<' + Buffer.from('ASSENTOS POR CAMAROTE').toString('hex').toUpperCase() + '> Tj'));
-        const rotulosDensos = [...grande.texto.matchAll(/<([0-9A-F]+)> Tj/g)].map(m => Buffer.from(m[1], 'hex').toString('latin1')).filter(t => /^[A-Z]+\d+$/.test(t));
+        const rotulosDensos = [...grande.texto.matchAll(/<([0-9A-F]+)> Tj/g)].map(m => Buffer.from(m[1], 'hex').toString('latin1')).filter(t => /^[A-Z]+-\d+$/.test(t));
         assert.equal(rotulosDensos.length, 3000); assert.equal(new Set(rotulosDensos).size, 3000, 'nenhum lugar omitido ou repetido');
         for (const proibido of ['Detalhe ', 'Resumo do setor', 'páginas de detalhe', 'Lista completa no resumo']) {
             assert.ok(!grande.texto.includes(Buffer.from(proibido, 'latin1').toString('hex').toUpperCase()));
@@ -432,7 +468,7 @@ const pagina = `<!doctype html><html><head><meta charset="UTF-8"><link rel="styl
                 const u = new URL(String(alvo));
                 if (!u.pathname.startsWith('/functions/v1/mapas-teatro-pdfs/')) return fetchOriginal(alvo, opcoes);
                 const id = decodeURIComponent(u.pathname.split('/').at(-2));
-                const rev = u.searchParams.get('revisao'), gerador = u.searchParams.get('gerador'), chave = id + ':' + rev;
+                const rev = u.searchParams.get('revisao'), gerador = u.searchParams.get('gerador'), chave = id + ':' + rev + ':' + gerador;
                 if (opcoes.headers.Authorization !== 'Bearer token-sintetico') throw Error('Autenticação ausente');
                 if (opcoes.method === 'POST') {
                     enviosErp.push(chave);

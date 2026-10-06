@@ -52,13 +52,15 @@ Formato solicitado: **exatamente uma página por setor**, com todos os lugares a
 | --- | --- |
 | `mapa_id` | UUID do mapa |
 | `revisao_exportacao` | SHA-256 da versão dos dados usada no desenho |
-| `gerador_versao` | `a3-v1-20261003` nesta entrega |
+| `gerador_versao` | Versão do desenho: `a3-v1-20261003` na entrega original; `a3-v2-20261006` preparada em 06/10, pendente de implantação |
 | `nome_mapa` | Nome na revisão exportada |
 | `snapshot` | Cópia de `{id,name,config}` usada |
 | `arquivos` | JSONB com mapa completo e um arquivo por setor |
 | `criado_em`, `criado_por` | Data de conclusão e autor |
 
 Cada item de `arquivos` contém `tipo`, `setor_id`, `nome_setor`, `quantidade_assentos`, `storage_path`, `sha256_arquivo`, `tamanho_bytes` e `paginas`. O arquivo do mapa completo tem `tipo='mapa'` e `setor_id=null`; os demais têm `tipo='setor'` e o ID real do setor. A API acrescenta `pdf_recurso` ao resultado; esse endereço é calculado e não precisa ser gravado no banco.
+
+O ajuste visual preparado em 06/10 separa conjunto e lugar com hífen (`A-1`, `1-A`) e aumenta a largura do assento em 30%. Como os dados do mapa permanecem iguais, a revisão da configuração não muda; o novo desenho é distinguido por `gerador_versao`. Após aplicar o SQL de compatibilidade e publicar a aplicação/Edge Function, novos salvamentos geram a versão v2, sem substituir os PDFs v1. A consulta somente de leitura não publica automaticamente a v2. Ver [ajuste e ordem de implantação](ajuste-visual-mapas-teatro-2026-10-06.md).
 
 O nome do conjunto usado no PDF fica no setor correspondente em `snapshot.config.setores[].nomeConjunto`, com o mesmo fallback **Fila**. Para informações do cadastro atual, ler `producao_mapas_teatro.config`; para reproduzir uma exportação anterior, ler seu `snapshot`. `nomeConjunto` não é um campo adicional no manifesto `arquivos[]`. Alterar esse nome gera uma nova revisão dos dados e novos PDFs; os arquivos históricos conservam o texto da revisão exportada.
 
@@ -77,11 +79,13 @@ Todas as chamadas exigem `Authorization: Bearer <access_token da sessão do ERP>
 | Operação | Método e caminho |
 | --- | --- |
 | Consultar PDFs da revisão atual | `GET /mapas/{mapa_id}/exportacao` |
-| Consultar revisão específica | `GET /mapas/{mapa_id}/exportacao?revisao={hash}&gerador=a3-v1-20261003` |
-| Baixar PDF completo | `GET /mapas/{mapa_id}/arquivo?revisao={hash}&gerador=a3-v1-20261003` |
+| Consultar revisão específica | `GET /mapas/{mapa_id}/exportacao?revisao={hash}&gerador={gerador_versao}` |
+| Baixar PDF completo | `GET /mapas/{mapa_id}/arquivo?revisao={hash}&gerador={gerador_versao}` |
 | Baixar PDF do setor | Mesmo caminho, acrescentando `&setor={setor_id}` |
 
 Codificar IDs e parâmetros para URL. O ERP pode usar diretamente `pdf_recurso` retornado pelo endpoint de consulta, mantendo a autenticação no cabeçalho. Esse endereço identifica uma revisão e não expira por um token embutido. A sessão do usuário precisa continuar válida; mapas sem permissão não são expostos.
+
+Usar a versão devolvida em `gerador_versao` ou o `pdf_recurso` completo. Para buscar a exportação histórica original, informar explicitamente `gerador=a3-v1-20261003`; após a implantação da v2, omitir `gerador` consulta a nova versão e pode retornar `pendente` até o primeiro salvamento/publicação dos PDFs v2 daquele mapa. A chave da exportação é o conjunto `(mapa_id, revisao_exportacao, gerador_versao)`.
 
 A consulta retorna `estado='pendente'` quando aquela revisão ainda não tiver exportação completa. Quando pronta, retorna `estado='pronto'`, `mapa_id`, `nome_mapa`, `revisao_exportacao`, `gerador_versao` e `arquivos[]`, com nomes, quantidades e recursos dos PDFs. Se uma revisão antiga for solicitada explicitamente, `revisao_atual=false` informa que o mapa foi alterado depois. Não tratar uma exportação antiga como se fosse a configuração atual.
 

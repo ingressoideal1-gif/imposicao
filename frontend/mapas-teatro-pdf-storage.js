@@ -1,6 +1,6 @@
 // PDFs privados: a chave de serviço fica somente na Edge Function.
 (function () {
-    const GERADOR = 'a3-v1-20261003';
+    const GERADOR = 'a3-v2-20261006';
     const pendentes = new Map();
     function base() {
         if (typeof VIBECODE_SUPABASE_URL === 'undefined') throw Error('O envio dos PDFs precisa de conexão com o banco.');

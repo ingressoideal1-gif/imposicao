@@ -23,6 +23,7 @@ let cameraStart = { x: 0, y: 0 };
 
 // Grid e Assentos
 const SEAT_SIZE = 24;
+const SEAT_WIDTH = SEAT_SIZE * 1.30;
 const SEAT_GAP = 8;
 const GRID_SIZE = SEAT_SIZE + SEAT_GAP;
 
@@ -971,19 +972,19 @@ function renderMapa() {
             canvasCtx.fillStyle = '#9b59b6'; // Purple for selected
         }
 
-        canvasCtx.fillRect(cx * gSize, cy * gSize, SEAT_SIZE, SEAT_SIZE);
+        canvasCtx.fillRect(cx * gSize, cy * gSize, SEAT_WIDTH, SEAT_SIZE);
         
         canvasCtx.fillStyle = '#ffffff';
         
-        const text = (c.prefixo || '') + (c.num || '') + (tipoObj.sufixo ? ' ' + tipoObj.sufixo : '');
-        if (text.length > 4) {
-            canvasCtx.font = '8px Arial';
-        } else {
-            canvasCtx.font = '10px Arial';
-        }
+        const text = [String(c.prefixo ?? ''), String(c.num ?? '')].filter(v => v !== '').join('-')
+            + (tipoObj.sufixo ? ' ' + tipoObj.sufixo : '');
+        const fontSize = text.length > 4 ? 8 : 10;
+        canvasCtx.font = fontSize + 'px Arial';
+        const textWidth = canvasCtx.measureText(text).width;
+        if (textWidth > SEAT_WIDTH - 4) canvasCtx.font = (fontSize * (SEAT_WIDTH - 4) / textWidth) + 'px Arial';
         canvasCtx.textAlign = 'center';
         canvasCtx.textBaseline = 'middle';
-        canvasCtx.fillText(text, cx * gSize + SEAT_SIZE/2, cy * gSize + SEAT_SIZE/2);
+        canvasCtx.fillText(text, cx * gSize + SEAT_WIDTH/2, cy * gSize + SEAT_SIZE/2);
     }
     
     canvasCtx.restore();
