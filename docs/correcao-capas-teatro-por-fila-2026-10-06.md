@@ -39,9 +39,15 @@ quantidades diferentes e conferência dos rótulos com a preparação real dos
 PDFs dos mapas. Prévia: seleção individual/combinada, várias folhas, última
 folha incompleta, troca de setor, retorno ao miolo e limite de Refazer.
 
-`ferramentas/conferir_duas_versoes.py` passou: 392 testes e dois skips em cada
+`ferramentas/conferir_duas_versoes.py` passou: 402 testes e dois skips em cada
 canal, além dos harnesses e testes de navegador nas páginas index/producao.
 Os skips existentes e o aviso de depreciação Starlette não foram alterados.
+
+A entrega preserva a correção de conferência de mapas já instalada no Junior
+em 1.2.359. O executável relê apenas o mapa solicitado para conferir a revisão,
+com prazo de 15 segundos, sem sincronizar ou gravar o catálogo local. Erros de
+consulta continuam bloqueando a geração. As nove regressões dessa conferência
+foram incorporadas à validação obrigatória dos dois canais.
 
 Verificação adicional: 101 testes passaram; 19 testes de
 `test_engine_refazer.py` falharam porque usam `base_ticket.pdf` inexistente.

@@ -1329,7 +1329,7 @@ async def impose_file(
         import io
         data = json.loads(payload)
         import teatro_snapshot
-        data["avisos_teatro"] = teatro_snapshot.aplicar(data, db.get_mapa_teatro)
+        data["avisos_teatro"] = teatro_snapshot.aplicar(data, db.get_mapa_teatro_para_conferencia)
         for aviso_teatro in data["avisos_teatro"]:
             print("[teatro] " + aviso_teatro, flush=True)
         from integridade_impressao import validar_uploads

@@ -10,7 +10,7 @@ TESTES = [
     'test_canais_newprod.py','test_seguranca_estacao.py','test_integridade_impressao.py',
     'test_numeracao_compatibilidade.py',
     'test_engine_pdf_mesclar.py','test_engine_modelos_somados.py','test_engine_banco_nunca_vira_sequencial.py',
-    'test_teatro_banco.py','test_teatro_snapshot.py','test_painel_estacao.py',
+    'test_teatro_banco.py','test_teatro_snapshot.py','test_mapa_conferencia_newprod.py','test_painel_estacao.py',
     'test_pacotes_locais.py','test_preparacao_local.py','test_antecipacao_local.py',
     'test_coleta_autonoma.py','test_conferencia_piloto.py','test_auditoria_piloto.py',
     'test_diario_local.py','test_pacotes_api.py','test_selecao_piloto.py','test_revisao_pedido_piloto.py',

@@ -265,7 +265,7 @@ def _supabase_request(method: str, path: str, body: dict = None) -> list | dict 
 
 
 def _supabase_call(method: str, path: str, body: dict = None,
-                   silencioso: bool = False) -> list | dict | None:
+                   silencioso: bool = False, timeout: float | None = None) -> list | dict | None:
     """A requisição em si, sem perguntar se o Supabase está "ativo".
 
     Existe separada porque `IS_SUPABASE_ACTIVE` é False de propósito no executável,
@@ -294,7 +294,7 @@ def _supabase_call(method: str, path: str, body: dict = None,
         
     req = urllib.request.Request(url, headers=headers, method=method, data=data)
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, **({'timeout': timeout} if timeout is not None else {})) as resp:
             content = resp.read().decode("utf-8")
             if content:
                 return json.loads(content)
@@ -1080,6 +1080,23 @@ def get_mapas_teatro() -> list:
             return []
     db = _get_db()
     return db.get("mapas_teatro", [])
+
+def get_mapa_teatro_para_conferencia(mapa_id: str) -> dict | None:
+    """Relê a revisão atual do mapa, inclusive no executável com catálogo local.
+
+    Os lugares continuam vindo do snapshot aprovado. Esta leitura pontual não
+    sincroniza nem grava o catálogo e não usa uma cópia local em caso de falha.
+    """
+    filtro = urllib.parse.urlencode({'id': 'eq.' + mapa_id, 'select': 'id,config', 'limit': 1})
+    try:
+        res = _supabase_call('GET', 'producao_mapas_teatro?' + filtro,
+                             silencioso=True, timeout=15)
+    except Exception:
+        raise ValueError('Não foi possível consultar o mapa atual. Confira a conexão da estação e tente novamente.') from None
+    if not isinstance(res, list) or any(not isinstance(m, dict) for m in res):
+        raise ValueError('Resposta inválida ao consultar o mapa atual. Tente novamente.')
+    return res[0] if res else None
+
 
 def get_mapa_teatro(mapa_id: str) -> dict | None:
     if IS_SUPABASE_ACTIVE:
