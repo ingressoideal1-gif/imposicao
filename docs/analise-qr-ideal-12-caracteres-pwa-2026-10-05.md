@@ -2,6 +2,10 @@
 
 Data: 05/10/2026. Escopo: análise anterior à implementação. Nenhuma regra, credencial, função remota, instalação ou impressão foi alterada. O checkout operacional e suas alterações preexistentes foram preservados.
 
+Este documento preserva o diagnóstico anterior à autorização de execução. A implementação,
+as consultas administrativas posteriores e as provas de publicação estão no
+[registro da entrega](entrega-qr-ideal-12-caracteres-2026-10-05.md).
+
 ## Parecer
 
 O formato proposto, **quatro últimos dígitos do modelo invertidos + oito caracteres do código**, atende ao limite de 12 caracteres e separa os dois modelos do pedido 23063. Entretanto, **a substituição isolada do prefixo não está pronta para publicação**.

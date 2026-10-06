@@ -29,6 +29,7 @@ def sql():
     try:
         run((ROOT/"tests/qr12_schema_fixture.sql").read_text(encoding="utf-8"))
         run((ROOT/"sql/ideal_control_qr12.sql").read_text(encoding="utf-8"))
+        run((ROOT/"sql/ideal_control_qr12_suspensao.sql").read_text(encoding="utf-8"))
         yield run
     finally:
         # Nome gerado exclusivamente por este teste; nenhum banco compartilhado.
@@ -95,3 +96,20 @@ def test_rbac_e_leitor_minimo(sql):
     assert sql("SELECT producao_acesso_qr_leitor_evento('00000000-0000-4000-8000-000000000012')") == "2"
     assert sql("SELECT has_table_privilege('anon','producao_acesso_qr_reservas','SELECT')") == "f"
     assert sql("SELECT has_function_privilege('authenticated','producao_acesso_qr_contratos_obter(integer)','EXECUTE')") == "f"
+
+
+def test_suspensao_nao_retorna_ao_legado_e_preserva_reimpressao(sql):
+    ativar(sql)
+    original=sql("SELECT producao_acesso_qr_contratos_obter(23063)")
+    sql("UPDATE producao_acesso_qr_controle SET ativo=false; INSERT INTO pedidos_modelos VALUES(11,51,10,1,now(),'qr');")
+    assert "suspensas" in sql("SELECT producao_acesso_qr_contratos_obter(51)",ok=False)
+    assert sql("SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=51") == "0"
+    assert sql("SELECT count(*) FROM producao_acesso_qr_reservas WHERE pedido=51") == "0"
+    assert sql("SELECT producao_acesso_qr_contratos_obter(23063)") == original
+    sql("INSERT INTO pedidos_modelos VALUES(12,52,10,1,'2026-10-01','qr'); SELECT producao_acesso_qr_contratos_obter(52)")
+    assert sql("SELECT versao FROM producao_acesso_qr_contratos WHERE pedido=52") == "1"
+    sql("INSERT INTO pedidos_modelos VALUES(13,53,10,1,'2026-10-01','qr'); INSERT INTO producao_acesso_qr_autorizacoes VALUES(53,'SINTETICO: ausencia de impressao confirmada')")
+    assert "suspensas" in sql("SELECT producao_acesso_qr_contratos_obter(53)",ok=False)
+    # Reativar usa a base v2; a tentativa bloqueada nao deixou contrato v1.
+    sql("UPDATE producao_acesso_qr_controle SET ativo=true; SELECT producao_acesso_qr_contratos_obter(51)")
+    assert sql("SELECT versao FROM producao_acesso_qr_contratos WHERE pedido=51") == "2"

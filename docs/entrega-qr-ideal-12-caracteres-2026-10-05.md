@@ -69,7 +69,7 @@ da v2 deve abrir online, atualizar/recarregar e concluir o download do evento.
 
 Destino: produção e-deal, projeto `vwbtitjlpelrcnsytzqw`, frontend Cloudflare e
 NewProd. Checkout isolado `ideal-imposition-qr12-20261005`; checkout operacional
-preservado. Release planejado web v1023 / NewProd 1.2.357.
+preservado. Release entregue web v1023 / NewProd 1.2.357.
 
 1. Backup e ensaio, testes sintéticos, revisão do diff e dos pacotes.
 2. Aplicar `sql/ideal_control_qr12.sql` em uma transação. Cria quatro tabelas
@@ -115,5 +115,63 @@ credenciais, trocar sais, reconstruir IDs nem limpar celulares.
 - Dois canais: 389 testes passaram em cada canal, com dois skips por canal,
   além dos harnesses de compatibilidade e dos navegadores.
 
-Publicação, ativação e instalação serão registradas abaixo com a confirmação de
-execução. Testes de navegador desktop não comprovam câmera/iPhone ou impressão física.
+Testes de navegador desktop não comprovam câmera/iPhone ou impressão física.
+
+## Publicação e instalação confirmadas
+
+- [PR 94](https://github.com/ingressoideal1-gif/imposicao/pull/94) integrado pelo
+  GitHub após os quatro checks obrigatórios. Commit de fonte
+  `249f789c8e6973d6b04e10a9a8aa869f6d164198`; integração
+  `0cac10147683e483a57b95eb288f443e4ae543d6`. Tags `v1023` e `agente-v1.2.357`.
+- A entrega envolve frontend, Python, SQL e Edge. O comando de entrega de escopo
+  único recusa esse conjunto misto; a publicação foi feita em etapas coordenadas,
+  mantendo revisão de segredos, testes, PR protegido e conferência pública.
+- SQL aplicado em transação: 539 reservas legadas inventariadas; nenhum contrato
+  criado na migração, nenhum hash/sal/registro de entrada convertido.
+- Base v2 privada enviada; download autenticado de 24.000.000 bytes e SHA-256
+  conferidos. Acesso anônimo recusado. O instalador não contém essa base.
+- Edge ativas: `acesso-estacao` 258, `portaria` 262 e `acesso-interno` 262.
+  O terceiro consumidor usa o módulo compartilhado de preparação. As opções de
+  verificação JWT foram preservadas. Consulta autenticada de status do pedido
+  23063 respondeu com zero contratos.
+- Cloudflare confirmou a implantação `1b61630c-96b5-4e27-a29b-ab27ab441684`.
+  Após a propagação, 34 comparações de arquivos com cache-buster passaram nos
+  domínios `imposition.ai-ideal.com.br` e `imposicao.pages.dev`.
+- PWA publicado: Chrome 150 isolado, service worker `sw.js?v=1023`, 44 recursos
+  em cache, abertura offline da interface e HTML/validador da portaria presentes.
+  Sem carga, a portaria direciona corretamente para configurar o evento.
+  Chamadas de negócio foram bloqueadas nesse navegador de conferência.
+- [MSI 1.2.357](https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.357.msi):
+  157.282.304 bytes; SHA-256
+  `c01622798960516460684f7a6d0be1104fa3b8b435678e84cd81f659b0e7d96b`.
+  Download público conferido antes de ativar `latest.json`; manifesto público
+  relido e confirmado na versão 1.2.357.
+- PC-JR-HOME, produção na porta 9000: 1.2.357 instalada pelo item **Atualizar agora**
+  da bandeja, preservando as travas do atualizador contra produção em andamento.
+  SHA do executável instalado corresponde ao pacote:
+  `6f787b762e619de92ef8e4543d84d323b1cbbdd40360139e72c89ff499d9e4c6`.
+- Piloto na porta 9001: 1.2.357-piloto-local.27, instalado em pasta versionada
+  independente, SHA
+  `928d6835b66ed8880517077543df5d549ecad206f3b5d713a673d484677aad7b`.
+  Fila ociosa confirmada e coleta pausada antes da troca; estado anterior retomado.
+  Versão anterior e manifesto de recuperação preservados.
+- Ambas as APIs anunciam `qr_ideal_contrato_v2`. Os 22 arquivos locais conferidos
+  correspondem à fonte, incluindo a transformação esperada de identificação do
+  Piloto em seus dois HTMLs. O campo de heartbeat `painel_versao` captura o primeiro
+  `?v=` do HTML (CSS v1021), portanto sozinho não representa a versão v1023 dos JS.
+
+## Ativação e pendências operacionais
+
+A confirmação sobre impressão/entrega anterior do pedido 23063 continua pendente.
+Zero credenciais e zero preparação na nuvem foram confirmados administrativamente;
+essa ausência não comprova que nunca houve impressão offline. A autorização ampla
+para executar a entrega não substitui esse fato. O pedido permanece sem autorização
+de migração e com bloqueio de colisão no gerador novo.
+
+Antes de usar v2 em um telefone, abrir o aplicativo online, aceitar/recarregar a
+atualização e concluir o download do evento. Não usar **Apagar eventos** para
+atualizar. Aparelhos e estações offline não receberam atualização comprovada.
+
+O estado final de ativação e das estações online será registrado após a conferência
+da propagação do instalador. Não houve impressão física nem alteração dos ingressos
+já emitidos nesta entrega.
