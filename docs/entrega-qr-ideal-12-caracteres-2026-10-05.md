@@ -1,5 +1,11 @@
 # QR Ideal: protocolo de 12 caracteres e compatibilidade da portaria
 
+**Estado atualizado em 06/10/2026:** piloto QR12 ativado somente para o pedido
+23063, após confirmação humana de ausência de impressão/entrega dos 22 modelos.
+São 10.300 ingressos reservados, sem colisão. O corte geral permanece `infinity`.
+As pendências de confirmação descritas no registro de 05/10 abaixo são históricas;
+consulte a atualização ao final para as verificações e pendências atuais.
+
 ## Contrato e revisão
 
 Nova emissão v2: `inverter(ultimos4(modelo).padStart(4,'0')) + codigo_privado_de_8_caracteres`.
@@ -268,3 +274,58 @@ Para a liberação operacional:
 Não foi necessária nova permissão para executar código, SQL ou publicação. Os
 itens pendentes são fatos e verificações operacionais indisponíveis nesta sessão.
 Evidências sanitizadas: [registro JSON](evidencia-entrega-qr12-2026-10-05.json).
+
+## Atualização de 06/10/2026: piloto do pedido 23063
+
+O usuário confirmou no chat que nenhum dos 22 modelos foi impresso ou entregue,
+inclusive offline, e escolheu o PC-JR-HOME para o teste. Essa declaração foi
+persistida em `producao_acesso_qr_autorizacoes` para o pedido 23063.
+
+Às 07h18 de Brasília, uma transação administrativa no projeto e-deal
+`vwbtitjlpelrcnsytzqw` conferiu a fonte exata dos 22 modelos, ausência de
+credenciais/preparações, base `ideal-qr12-1` e ausência de contratos v2 anteriores.
+Com a trava de reserva e bloqueio breve das fontes durante a transação, criou
+uma autorização, 22 contratos e 22 reservas e habilitou o controle mantendo
+`corte=infinity`. Não houve migração de esquema, alteração de sal nem emissão
+de credenciais. O estado anterior e o SQL executado ficaram preservados na
+auditoria privada de backups; o SQL recusa reexecução após o sucesso.
+
+Uma nova consulta após o commit confirmou:
+
+- Somente `23063` na lista de autorizações; nenhum contrato v2 de outro pedido.
+- 22 contratos e 22 reservas v2, capacidade total 10.300, zero sobreposições.
+- Faixa global reservada `[0,10300)`, sem reutilização da base independente.
+- Modelo 1001859: prefixo `9581`, 500 posições, deslocamento 0.
+- Modelo 1001959: prefixo `9591`, 800 posições, deslocamento 9.200.
+- Os dois contratos legados do pedido 22944 permaneceram idênticos ao estado
+  anterior. Zero credenciais e zero preparações do pedido 23063 nessa conferência.
+
+No PC-JR-HOME, API de versão confirmou NewProd 1.2.358 e a base privada teve
+SHA-256 conferido novamente. O cálculo local com os contratos persistidos
+conferiu os 10.300 conteúdos: todos únicos, com 12 caracteres e prefixo correto;
+os 22 casos imediatamente além de cada faixa foram recusados. Nenhum conteúdo
+de ingresso ou código privado foi gravado no relatório.
+
+A chamada automática à API de prévia respondeu HTTP 401 por falta de sessão
+de operador. Nenhuma autenticação foi removida ou contornada. Esse resultado
+não prova a prévia autenticada; foi solicitada ao usuário a conferência pelo
+acesso habitual no painel. O aplicativo Piloto local estava fechado nessa
+retomada; a estação escolhida usa a produção na porta 9000.
+
+O piloto está reservado para conferência controlada. Antes de imprimir a tiragem
+completa ou ampliar para outros pedidos, ainda é necessário:
+
+1. Reabrir o pedido no painel autenticado do PC-JR-HOME e conferir as prévias
+   dos modelos 1001859 e 1001959, sem alerta de colisão.
+2. Fazer uma prova física e conferir os códigos no celular com o PWA atualizado.
+3. Concluir a preparação/publicação do evento e seu download pelo fluxo normal,
+   verificando leitura, repetição, operação offline e sincronização. Leituras
+   de teste em evento real devem ser controladas para não consumir ingressos
+   destinados ao cliente inadvertidamente.
+4. Provisionar a base privada nas demais estações participantes antes de ampliar.
+
+Suspender novas reservas continua sendo `ativo=false`, preservando contratos e
+credenciais. Isso não revoga os contratos já reservados e não impede suas
+reimpressões. Não excluir autorizações, contratos ou reservas para voltar ao
+legado; eventual cancelamento de ingressos exige o fluxo próprio de auditoria.
+Nenhuma impressão física, validação de câmera ou liberação geral foi realizada.
