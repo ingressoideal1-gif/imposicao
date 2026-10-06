@@ -31,7 +31,8 @@ function scenario(failModel = false, initial = false) {
         };
         return query;
     } };
-    const context = { window: {}, state: { osItens: { vibe_123: [item] } },
+    const context = { VersoDoModelo: require('../frontend/cor-numeracao-do-modelo.js').VersoDoModelo,
+        window: {}, state: { osItens: { vibe_123: [item] } },
         supabaseClient: client, vibeClient: client, console: { error() {} },
         bloqueioDeModeloAprovado: () => null,
         resolveItemCorNumIds: () => ({ corId: 'cor', numId: 'numero' }),

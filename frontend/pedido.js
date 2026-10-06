@@ -3018,6 +3018,12 @@ window.montarRefazerPayload = montarRefazerPayload;
 
 function onPedNumeracaoSelect() {
     const numId = document.getElementById('ped-numeracao')?.value;
+    const item = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    const escolhida = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if (item && numId && VersoDoModelo.erro(item, escolhida?.print_mode)) {
+        document.getElementById('ped-numeracao').value = numeracaoIdDoItem(item) || '';
+        return toast(VersoDoModelo.erro(item, escolhida?.print_mode), 'warning');
+    }
     if (numId && window.state && window.state.numeracoes) {
         const num = window.state.numeracoes.find(n => String(n.id) === String(numId));
         if (num && num.print_mode) {
@@ -3337,6 +3343,7 @@ function updatePedSummary() {
 
     const printModeEl = document.getElementById('ped-print-mode');
 
+    if (typeof atualizarRestricaoModoVibe === 'function') atualizarRestricaoModoVibe('ped');
     state.printMode = printModeEl ? printModeEl.value : 'front';
     atualizarFacesDeImpressaoDoPedido();
 
@@ -6139,6 +6146,7 @@ window.runPedImposition = async function (mode, isRefazer) {
 async function executarPedImposition(mode, isRefazer) {
     if (state.pedidoSelecaoCarregando) return toast('Aguarde o modelo selecionado carregar.', 'warning');
     if (state.pedidoSelecaoErro) return toast(state.pedidoSelecaoErro, 'warning');
+    if (!await conferirModoVibeDoTrabalho('ped')) return;
     const folha1 = folha1DoPedido();
     if (folha1?.erro) return toast(folha1.erro, 'warning');
     if (folha1 && isRefazer) return toast('Desmarque Folha 1 antes de usar Refazer Folhas ou Refazer Célula.', 'warning');
@@ -6997,6 +7005,7 @@ async function executarPedImposition(mode, isRefazer) {
         if (validarContexto && !validarContexto()) return;
         if (!selecaoAindaAtual()) return toast('A seleção mudou. Confira e gere novamente.', 'warning');
         const urlImpose = `${baseUrl}/api/impose`;
+        if (!await conferirModoVibeDoTrabalho('ped', payload.print_mode)) throw new Error('Geração cancelada: configuração do pedido não confirmada.');
 
         if (payloadMultiArtes.some(a => a.modo_pdf)) {
             const versao = await fetch(`${baseUrl}/api/version`, { method: 'GET', signal: impositionAbortController.signal });
@@ -7497,6 +7506,10 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
     const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if (numId && VersoDoModelo.erro(item, num?.print_mode)) {
+        renderPedOSQueue();
+        return toast(VersoDoModelo.erro(item, num?.print_mode), 'warning');
+    }
     if (num) {
         item.numeracao = num.name || num.tipo;
         // Os dois nomes locais da mesma coluna, juntos. Ver
@@ -7532,12 +7545,9 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
         autoSaveOSItemField(itemId, osId, 'gabarito_operacional', item.gabarito_operacional);
         autoSaveOSItemField(itemId, osId, 'tipo_numeracao', item.tipo_numeracao);
 
-        // Atualizar verso_tipo baseado no print_mode da numeração (fonte de verdade: producao_numeracoes)
+        // A previa acompanha a numeracao; a categoria comercial permanece a do Vibe.
         const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : temVerso(num.print_mode);
-        const novoVersoTipo = VersoDoModelo.resolver(item, num);
-        item.verso_tipo = novoVersoTipo;
         item.verso = isDuplex;
-        autoSaveOSItemField(itemId, osId, 'verso_tipo', novoVersoTipo);
 
         // Recalcular num_final
         let ticket_qtd = 1;

@@ -45,7 +45,8 @@ function montar() {
     met.fetch=async(u,o)=>{if(u.endsWith('preparar-pedido-painel'))digestRecebido=JSON.parse(o.body).modelos[0].digest;return fetchOriginal(u,o);};
     await met.PilotoSelecao.conferirPedido('vibe_99',()=>true);
     assert.equal(JSON.stringify(raw),antes);
-    assert.equal(met.state.numeracoes[0].print_mode,'duplex');
+    assert.equal(met.state.numeracoes[0].print_mode,'front','coluna explicita prevalece sobre METADATA antigo');
+    assert.equal(met.normalizarNumeracaoLida({...structuredClone(raw),print_mode:null}).print_mode,'duplex','METADATA apenas quando a coluna esta ausente');
     assert.equal(met.state.numeracoes[0].elements.length,1);
     const canon=v=>Array.isArray(v)?v.map(canon):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canon(v[k])])):v;
     const esperado=await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(canon([met.getOSItens()[0]._modeloOnline,[raw]]))));

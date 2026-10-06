@@ -55,7 +55,7 @@ const CATALOGO = [
     { id: CORPORATIVO, name: 'CAMAROTE CORPORATIVO 05', is_custom: false, tipo: 'SEQUENCIAL' },
     { id: PRESIDENTE,  name: 'CAMAROTE PRESIDENTE 05',  is_custom: false, tipo: 'SEQUENCIAL' },
     { id: CERTA,       name: 'CAMAROTE PATROCINADORES 05', is_custom: false, tipo: 'SEQUENCIAL' },
-];
+].map(n => ({...n, print_mode: 'front'}));
 
 /**
  * Um mundo por caso. O `autoSaveOSItemField` de mentira anota o que iria para o
@@ -66,6 +66,7 @@ function mundo(arquivo, nomeDaFuncao) {
     const gravado = {};
     const item = {
         id: '1000563',
+        verso_tipo: 'SÓ FRENTE',
         nome_modelo: '05/set CAMAROTE PATROCINADORES (DO 01 AO 24) 80 UND CADA',
         quantidade: 1920, qtd: 1920, num_inicial: 1,
         // O que o ERP escreveu, e o que a fila deixava para tras.
