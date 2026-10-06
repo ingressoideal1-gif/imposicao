@@ -35335,6 +35335,17 @@ function atualizarVariacoesNaJanelaDoModelo(item) {
     faixa.innerHTML = texto ? `<strong>Variações:</strong> ${formatarVariacoesDoModelo(texto)}` : '';
 }
 
+function avisoModoVibeDaAmostra(item, numeracao) {
+    if (!numeracao || !VersoDoModelo.normalizar(item?.verso_tipo)
+        || !VersoDoModelo.doModo(numeracao.print_mode)
+        || VersoDoModelo.compativel(item.verso_tipo, numeracao.print_mode)) return '';
+    return `<div role="alert" style="margin:12px 16px 0;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:rgba(245,158,11,.12);color:#fbbf24;font-size:.85rem;line-height:1.5;">
+        <strong>⚠️ Modo de impressão incompatível</strong><br>
+        Pedido no Vibe: <b>${escapeHtml(item.verso_tipo)}</b> · Numeração: <b>${escapeHtml(rotuloDoModoDeImpressao(numeracao))}</b>.<br>
+        Selecione uma numeração compatível. Para mudar entre só frente e com verso, altere primeiro o pedido no Vibe e reabra-o.
+    </div>`;
+}
+
 function renderAmostrasOSItens(osId, opcoes = {}) {
     const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
     const targetOSId = os ? os.id : osId;
@@ -35793,6 +35804,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     ${statusBadge}
                 </div>
             </div>
+            ${state.amostrasContainerId === 'cliente-amostras-itens-container' ? '' : `<div id="amostra-modo-vibe-${idx}" data-amostra-modo-vibe="${idx}">${avisoModoVibeDaAmostra(item, numeracaoSelecionada)}</div>`}
             <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
                     ${state.amostrasContainerId === 'cliente-amostras-itens-container' || !String(item.variacoes_texto || '').trim() ? '' : `
                     <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text); overflow-wrap: anywhere;">
@@ -36459,6 +36471,10 @@ function atualizarDadosDosCardsAmostra(osId, container, html, itens) {
     if (container.dataset.amostrasOsId !== String(osId)) return;
     const template = document.createElement('template');
     template.innerHTML = html;
+    template.content.querySelectorAll('[data-amostra-modo-vibe]').forEach(novo => {
+        const atual = container.querySelector(`[data-amostra-modo-vibe="${novo.dataset.amostraModoVibe}"]`);
+        if (atual && atual.innerHTML !== novo.innerHTML) atual.innerHTML = novo.innerHTML;
+    });
     template.content.querySelectorAll('[data-amostra-avisos]').forEach(novo => {
         const atual = container.querySelector(`[data-amostra-avisos="${novo.dataset.amostraAvisos}"]`);
         if (atual && atual.innerHTML !== novo.innerHTML) atual.innerHTML = novo.innerHTML;
@@ -37217,6 +37233,8 @@ function onItemNumSelect(idx, osId, itemId) {
         if (modoBadge) modoBadge.textContent = 'Numeração não alterada: modo incompatível com o pedido.';
         return toast(VersoDoModelo.erro(item, numObj?.print_mode), 'warning');
     }
+    const avisoModo = document.getElementById(`amostra-modo-vibe-${idx}`);
+    if (avisoModo) avisoModo.innerHTML = avisoModoVibeDaAmostra(item, numObj);
     
     let versoStateChanged = false;
     let limparAmostraVerso = false;
