@@ -11266,6 +11266,14 @@ function drawPreview() {
         }
     }
 
+    const capasTeatro = (previewPart === 'capa' || previewPart === 'contracapa')
+        ? setsTeatro?.[0]?.cover_items : null;
+    if (capasTeatro) {
+        total_sheets = Math.ceil(capasTeatro.length / poses_per_sheet);
+        window.currentPreviewPage = Math.max(1, Math.min(window.currentPreviewPage || 1, total_sheets));
+        const inputFolha = document.getElementById('preview-page-input');
+        if (inputFolha) inputFolha.value = window.currentPreviewPage;
+    }
     document.getElementById('preview-sheet-num').textContent = `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
 
     const isBack = state.previewFace === 'back' || previewPart === 'miolo_verso';
@@ -11279,7 +11287,11 @@ function drawPreview() {
             if (S < 0) S = 0;
 
             let item_index = (S * poses_per_sheet) + P;
-            if (setsTeatro) {
+            if (capasTeatro) {
+                const itemCapa = capasTeatro[S * poses_per_sheet + P]?.[0];
+                if (!itemCapa) continue;
+                item_index = itemCapa.global_index;
+            } else if (setsTeatro) {
                 let folha = S, set = setsTeatro[0];
                 for (const candidato of setsTeatro) {
                     set = candidato;

@@ -46,7 +46,13 @@ def montar_sets(modelos, poses):
         for p in range(poses):
             items = modelo["items"][p * folhas:(p + 1) * folhas]
             alocacoes.append(items + [None] * (folhas - len(items)))
-        sets.append({"type": "strict", "num_sheets": folhas,
+        plano = {"type": "strict", "num_sheets": folhas,
                      "cell_allocations": alocacoes, "depth": 1,
-                     "model_idx": idx, "teatro": True})
+                     "model_idx": idx, "teatro": True}
+        if fontes[idx]:
+            plano["cover_items"] = [
+                [modelo["items"][b["inicio"]],
+                 modelo["items"][b["inicio"] + b["quantidade"] - 1]]
+                for b in fontes[idx]]
+        sets.append(plano)
     return sets

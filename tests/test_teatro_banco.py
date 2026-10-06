@@ -99,7 +99,8 @@ def test_banco_inconsistente_recusado(mutacao):
 def impor(tmp_path, **extra):
     cfg = ImpositionConfig(base_file="", out_pdf=str(tmp_path / "teatro.pdf"),
         formato={"name": "Ingresso", "width_mm": 100, "height_mm": 50, "cols": 2, "rows": 1,
-                 "gap_h_mm": 0, "gap_v_mm": 0, "offset_h_mm": 0, "offset_v_mm": 0, "rotations": {}},
+                 "gap_h_mm": 0, "gap_v_mm": 0, "offset_h_mm": 0, "offset_v_mm": 0, "rotations": {},
+                 "has_cover": extra.pop("com_capa", False), "cover_font_y": 25, "cover_font_size": 8},
         saida={"name": "Folha", "width_mm": 220, "height_mm": 150},
         numeracao={"tipo": "TEATRO", "elements": [{"type": "TEATRO_COMBO", "x_mm": 12,
                    "y_mm": 20, "font_size": 14, "font_name": "helv", "color": "#000000"}]},
@@ -153,7 +154,8 @@ def test_refazer_folha_31_de_62_lugares(tmp_path):
     assert conteudos(arquivos) == [[["A", "-", "31", "B", "-", "2"]]]
 
 
-def test_quatro_artes_leem_apenas_os_lugares_do_proprio_setor(tmp_path):
+@pytest.mark.parametrize("com_capa", [False, True])
+def test_quatro_artes_leem_apenas_os_lugares_do_proprio_setor(tmp_path, com_capa):
     artes = []
     for i, qtd in enumerate((3, 4, 2, 5)):
         path = tmp_path / f"arte{i}.pdf"
@@ -168,7 +170,7 @@ def test_quatro_artes_leem_apenas_os_lugares_do_proprio_setor(tmp_path):
             "elements": [{"type": "TEATRO_COMBO", "x_mm": 12, "y_mm": 20,
                           "font_size": 14, "font_name": "helv", "color": "#000000"}]}})
     original = copy.deepcopy(artes)
-    arquivos = impor(tmp_path, multi_artes=artes)
+    arquivos = impor(tmp_path, multi_artes=artes, com_capa=com_capa)
     assert artes == original
     vistos = []
     for path in arquivos:
@@ -183,9 +185,21 @@ def test_quatro_artes_leem_apenas_os_lugares_do_proprio_setor(tmp_path):
                     assert arte == "ARTE" + setor
                     vistos.append((int(setor), int(numero)))
     assert sorted(vistos) == [(i, n) for i, q in enumerate((3, 4, 2, 5)) for n in range(1, q + 1)]
+    if com_capa:
+        capas = sorted(tmp_path.glob("*_01_capa.pdf"))
+        assert len(capas) == 4
+        vistos_capas = []
+        for path in capas:
+            with fitz.open(path) as doc:
+                texto = doc[0].get_text()
+                assert texto.count("ARTE") == 1
+                i = int(texto.split("ARTE", 1)[1][0])
+                vistos_capas.append(i)
+                assert f"Fila {i} - Teatro - de 1 a {(3, 4, 2, 5)[i]}" in texto
+        assert sorted(vistos_capas) == [0, 1, 2, 3]
 
 
-def test_capa_identifica_os_limites_reais_de_cada_pilha(tmp_path):
+def test_capa_por_fila_independente_dos_limites_da_pilha(tmp_path):
     cfg = ImpositionConfig(base_file="", out_pdf=str(tmp_path / "capas.pdf"),
         formato={"width_mm":100,"height_mm":50,"cols":2,"rows":1,"has_cover":True,"cover_font_y":20},
         saida={"width_mm":220,"height_mm":150},
@@ -195,9 +209,13 @@ def test_capa_identifica_os_limites_reais_de_cada_pilha(tmp_path):
     textos = []
     for path in sorted(tmp_path.glob("*_01_capa.pdf")):
         with fitz.open(path) as doc: textos.extend(p.get_text() for p in doc)
-    assert len(textos) == 1
-    assert "Fila A / 1 a Fila B / 2 (5 lugares)" in textos[0]
-    assert "Fila B / 3 a Fila C / 2 (4 lugares)" in textos[0]
+    assert len(textos) == 2
+    assert "Fila A - Teatro - de 1 a 3 (3 lugares)" in textos[0]
+    assert "Fila B - Teatro - de 1 a 4 (4 lugares)" in textos[0]
+    assert "Fila C - Teatro - de 1 a 2 (2 lugares)" in textos[1]
+    assert textos[1].count("Fila") == 1
+    with fitz.open(next(tmp_path.glob("*_03_contracapa.pdf"))) as doc:
+        assert len(doc) == 2
 
 
 @pytest.mark.parametrize("qtd,folhas", [(82, 11), (515, 65), (12, 2), (1, 1)])
@@ -240,3 +258,43 @@ def test_pdf_real_em_oito_poses_tem_a_ordem_vertical_completa(tmp_path, qtd, fol
                 indice = p * folhas + s
                 esperado = f"{rows[indice]['Fila']} - {rows[indice]['Numero']}" if indice < qtd else ""
                 assert page.get_text(clip=clip).strip() == esperado
+
+
+@pytest.mark.parametrize("conjunto", ["Mesa", "Fileira Especial", "Camarote"])
+def test_capas_preservam_nome_editado_do_pdf_do_mapa_e_todas_as_filas(tmp_path, conjunto):
+    # Os rótulos esperados vêm da preparação real do PDF do mapa.
+    js = """
+const fs=require('node:fs'),vm=require('node:vm');
+const T=require('./frontend/teatro-banco.js');
+const c={window:{}};vm.createContext(c);
+vm.runInContext(fs.readFileSync('frontend/mapas-teatro-pdf.js','utf8'),c);
+const cadeiras=Object.fromEntries(Array.from({length:17},(_,y)=>
+    Array.from({length:1+y%3},(_,x)=>[x+','+y,{prefixo:'VIP '+String(y+1).padStart(2,'0'),num:String(x+1).padStart(2,'0'),tipo:'Normal'}])).flat());
+const mapa={id:'mapa',name:'Mapa teste',config:{setores:[{id:'setor',nome:'Setor',nomeConjunto:process.argv[1],cadeiras}]}};
+const pdf=c.window.MapasTeatroPdf.preparar(mapa).setores[0];
+const banco=T.preparar(mapa,'a'.repeat(64)).setores[0];
+console.log(JSON.stringify({rows:banco.rows,rotulos:pdf.filas.map(([fila])=>pdf.nomeConjunto+' '+fila)}));
+"""
+    r = subprocess.run(["node", "-e", js, conjunto], cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    fonte = json.loads(r.stdout)
+    rows = fonte["rows"]
+    cfg = ImpositionConfig(base_file="", out_pdf=str(tmp_path / "capas.pdf"),
+        formato={"width_mm":120,"height_mm":25,"cols":2,"rows":4,
+                 "has_cover":True,"cover_font_y":15,"cover_font_size":8},
+        saida={"width_mm":260,"height_mm":130},
+        numeracao={"tipo":"TEATRO","elements":[{"type":"TEATRO_COMBO","x_mm":10,"y_mm":15,"font_size":8}]},
+        csv_data=rows, layout_schema="sequential", sheets_per_block=50)
+    ImpositionEngine(cfg).process()
+    with fitz.open(next(tmp_path.glob("*_01_capa.pdf"))) as doc:
+        assert len(doc) == 3
+        textos = [p.get_text() for p in doc]
+        assert [texto.count("VIP") for texto in textos] == [8,8,1]
+        for titulo in fonte["rotulos"]:
+            assert sum(texto.count(titulo + " - Setor") for texto in textos) == 1
+        for idx in range(17):
+            qtd = 1 + idx % 3
+            assert f"{fonte['rotulos'][idx]} - Setor - de 01 a {qtd:02} ({qtd} lugares)" in textos[idx // 8]
+    with fitz.open(next(tmp_path.glob("*_02_miolo.pdf"))) as doc:
+        assert len(doc) == (len(rows) + 7) // 8
+        assert sum(p.get_text().count("VIP") for p in doc) == len(rows)

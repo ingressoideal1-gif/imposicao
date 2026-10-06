@@ -17,7 +17,7 @@ async function executar() {
     assert.equal(plano.setores[0].rows[0].Numero,'1 Cad');
     assert.equal(plano.setores[0].rows[0].Mapa_ID,'mapa-ideal');
     assert.equal(plano.setores[2].rows[0].Conjunto,'Mesa');
-    assert.deepEqual(T.capa(plano.setores[2].rows,3,5),{titulo:'Mesas',detalhe:' - Mesa A / 1 Cad a Mesa B / 2 (5 lugares)'});
+    assert.deepEqual(T.capa(plano.setores[2].rows,3,5),{titulo:'Mesa B',detalhe:' - Mesas - de 1 a 4 (4 lugares)'});
     assert.equal(new Set(plano.setores.flatMap(s=>s.rows.map(r=>r.__id))).size,36);
     original.config.setores[0].cadeiras['8,0']={tipo:'Apagado'};
     assert.equal(T.preparar(original,rev).quantidade,36);
@@ -70,6 +70,13 @@ async function executar() {
     global.fetch=async()=>({ok:true,json:async()=>({capabilities:['mapa_teatro_blocos_v1']})});
     await assert.rejects(T.conferirMotor(fd,'http://estacao'),/Atualize/);
     global.fetch=async()=>({ok:true,json:async()=>({capabilities:['teatro_vertical_modelo_v1']})});
+    await T.conferirMotor(fd,'http://estacao'); global.fetch=fetchAntigo;
+    const comCapa = JSON.parse(fd.get('payload'));
+    comCapa.formato = {has_cover:true};
+    fd.set('payload',JSON.stringify(comCapa));
+    global.fetch=async()=>({ok:true,json:async()=>({capabilities:['teatro_vertical_modelo_v1']})});
+    await assert.rejects(T.conferirMotor(fd,'http://estacao'),/capa por conjunto/);
+    global.fetch=async()=>({ok:true,json:async()=>({capabilities:['teatro_vertical_modelo_v1','teatro_capas_fila_v1']})});
     await T.conferirMotor(fd,'http://estacao'); global.fetch=fetchAntigo;
     // Executa a função real da prévia, com os mesmos modelos e bancos enviados ao motor.
     const fonte=fs.readFileSync('frontend/pedido.js','utf8'), inicio=fonte.indexOf('\nfunction buildStrictAssemblySets('),fim=fonte.indexOf('\n}',inicio)+2;

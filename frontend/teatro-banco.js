@@ -97,17 +97,21 @@
                 const items = m.items.slice(p * folhas, (p + 1) * folhas);
                 return items.concat(Array(folhas - items.length).fill(null));
             });
-            return { type: 'strict', num_sheets: folhas, cell_allocations: alocacoes, depth: 1, model_idx: idx, teatro: true };
+            const plano = { type: 'strict', num_sheets: folhas, cell_allocations: alocacoes, depth: 1, model_idx: idx, teatro: true };
+            if (fontes[idx]) plano.cover_items = fontes[idx].blocos.map(b =>
+                [m.items[b.inicio], m.items[b.inicio + b.quantidade - 1]]);
+            return plano;
         });
     }
     function capa(rows, indice, folhas) {
         const fonte = grupos(rows);
         if (!fonte) return null;
         if (!Number.isSafeInteger(folhas) || folhas < 1 || indice < 0 || indice >= rows.length) return null;
-        const inicio = Math.floor(indice / folhas) * folhas, fim = Math.min(inicio + folhas, rows.length) - 1;
-        const rotulo = r => (r.Conjunto || 'Fila') + ' ' + r.Fila + ' / ' + r.Numero;
-        return { titulo: fonte.nomeSetor || 'Teatro',
-            detalhe: ' - ' + rotulo(rows[inicio]) + ' a ' + rotulo(rows[fim]) + ' (' + (fim - inicio + 1) + ' lugares)' };
+        const bloco = fonte.blocos.find(b => indice >= b.inicio && indice < b.inicio + b.quantidade);
+        const primeiro = rows[bloco.inicio], ultimo = rows[bloco.inicio + bloco.quantidade - 1];
+        return { titulo: (primeiro.Conjunto || 'Fila') + ' ' + primeiro.Fila,
+            detalhe: ' - ' + (fonte.nomeSetor || 'Teatro') + ' - de ' + primeiro.Numero + ' a ' + ultimo.Numero
+                + ' (' + bloco.quantidade + ' lugares)' };
     }
     function configurarMontagem(payload) {
         if (payload.schema === 'pdf_multiple') return false;
@@ -207,6 +211,8 @@
         const resposta = await root.fetch(baseUrl + '/api/version', { signal });
         const info = resposta.ok ? await resposta.json() : null;
         if (!info?.capabilities?.includes('teatro_vertical_modelo_v1')) throw Error('Atualize o NewProd desta estação para imprimir TEATRO com preenchimento vertical por modelo.');
+        if (payload.formato?.has_cover && numeracoes.some(n => grupos(n?.csv_data || []))
+                && !info?.capabilities?.includes('teatro_capas_fila_v1')) throw Error('Atualize o NewProd desta estação para gerar uma capa por conjunto do mapa de teatro.');
         if (numeracoes.some(n => n?.teatro_modelo) && !info?.capabilities?.includes('teatro_snapshot_v1')) throw Error('Atualize o NewProd desta estação para gerar pelos snapshots do ERP.');
         formData.set('payload', JSON.stringify(payload));
     }
