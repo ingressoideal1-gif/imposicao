@@ -52,7 +52,7 @@ Formato solicitado: **exatamente uma página por setor**, com todos os lugares a
 | --- | --- |
 | `mapa_id` | UUID do mapa |
 | `revisao_exportacao` | SHA-256 da versão dos dados usada no desenho |
-| `gerador_versao` | Versão do desenho: `a3-v1-20261003` na entrega original; `a3-v2-20261006` preparada em 06/10, pendente de implantação |
+| `gerador_versao` | Versão do desenho: `a3-v1-20261003` na entrega original; `a3-v2-20261006` na entrega de 06/10/2026 |
 | `nome_mapa` | Nome na revisão exportada |
 | `snapshot` | Cópia de `{id,name,config}` usada |
 | `arquivos` | JSONB com mapa completo e um arquivo por setor |

@@ -4,7 +4,7 @@ Em 06/10/2026 foi preparado o ajuste solicitado: na tela e no PDF, o identificad
 
 ## Escopo e estado
 
-Implementação local na branch `feat/mapas-assentos-20261006`, criada sobre `origin/main` em `488de51f`, no checkout `C:\ProjetosLocais\ideal-imposition\tmp_mapas-assentos-20261006`. O checkout operacional e suas alterações preexistentes foram preservados. Não houve commit, publicação web, aplicação de SQL remoto, instalação, envio de arquivos ao ERP ou impressão física nesta tarefa.
+Na etapa inicial, a implementação local foi preparada na branch `feat/mapas-assentos-20261006`, criada sobre `origin/main` em `488de51f`, no checkout `C:\ProjetosLocais\ideal-imposition\tmp_mapas-assentos-20261006`. O checkout operacional e suas alterações preexistentes foram preservados. Nessa etapa inicial não houve commit, publicação web, aplicação de SQL remoto, instalação, envio de arquivos ao ERP ou impressão física. A entrega autorizada em seguida está registrada ao final.
 
 Os dados de fila/lugar, coordenadas, identificação dos setores, quantidades, bancos do ERP e revisão JCS permanecem preservados. A grade da tela continua com passo de 32 px; o quadro passa de 24 × 24 para 31,2 × 24 px. Assim, o desenho cabe na mesma célula e o clique na borda alargada seleciona o mesmo assento.
 
@@ -16,7 +16,7 @@ Os PDFs já publicados são imutáveis. Reutilizar `a3-v1-20261003` devolveria o
 
 A Edge Function preparada aceita consultas/downloads explícitos tanto v1 quanto v2, mantendo os bytes e caminhos históricos. Novos uploads usam somente v2. Nenhuma política, autorização ou chave de serviço foi alterada. A versão faz parte da referência do arquivo e da chave única da exportação, sem adicionar campos ao cadastro do mapa ou a `pedidos_modelos`.
 
-A tabela existente `public.producao_mapas_teatro_pdf_exportacoes` e sua RPC ainda precisam aceitar v2. Foi preparado `sql/20261006_mapas_teatro_pdf_gerador_v2.sql`, **não aplicado**. Ele permite as duas versões no CHECK e altera apenas a guarda de versão da definição vigente da RPC `mapas_teatro_publicar_pdf_exportacao`, preservando correções anteriores, SECURITY INVOKER e permissões. O SQL original da entrega de 03/10 não foi modificado nem reaplicado. O novo script recusa estrutura inesperada ou reaplicação; não reescreve registros, mapas ou arquivos armazenados.
+Na preparação local, a tabela existente `public.producao_mapas_teatro_pdf_exportacoes` e sua RPC precisavam aceitar v2. Foi preparado `sql/20261006_mapas_teatro_pdf_gerador_v2.sql`, sem aplicação remota nessa etapa inicial. Ele permite as duas versões no CHECK e altera apenas a guarda de versão da definição vigente da RPC `mapas_teatro_publicar_pdf_exportacao`, preservando correções anteriores, SECURITY INVOKER e permissões. O SQL original da entrega de 03/10 não foi modificado nem reaplicado. O novo script recusa estrutura inesperada ou reaplicação; não reescreve registros, mapas ou arquivos armazenados. A aplicação autorizada e sua conferência posterior estão registradas ao final.
 
 ## Validação executada
 
