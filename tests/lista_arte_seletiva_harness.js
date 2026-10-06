@@ -28,7 +28,8 @@ function environment() {
             if (['os-search-arte', 'os-search-impressao', 'os-search-acabamento'].includes(id)) return { value: ui.search };
             return null;
         } },
-        failCorrections: false, failModels: false, holdProducts: null,
+        failCorrections: false, failModels: false, failProducts: false, failLinks: false,
+        sessionUser: {id: 'usuario-web'}, privateLinks: [], holdProducts: null,
         carregarArtesGlobais: async () => { c.state.todasArtes = [1, 2, 3, 4, 6, 100].map(id_int => ({ id_int, status: 'EM ARTE' })); },
         carregarLinksExistentes: async () => {}, carregarTemposNoCard: async () => {}, loadUsuarios: async () => {},
         aplicarNomesPreferenciaisDasPropostas: async () => {}, carregarHorasDosPrazos: async () => ({}),
@@ -46,7 +47,7 @@ function environment() {
             return filtered.slice(body.offset, body.offset + body.limite);
         }
     };
-    const client = { from(table) {
+    const client = { auth: {getSession: async () => ({data: {session: c.sessionUser ? {user: c.sessionUser} : null}})}, from(table) {
         let ids, range, correction = false;
         return {
             select() { return this; }, order() { return this; }, abortSignal() { return this; },
@@ -58,10 +59,13 @@ function environment() {
                 try {
                     logs.push({ table, ids, range, correction });
                     if (table === 'produtos_proposta' && c.holdProducts) await c.holdProducts;
-                    if (correction && c.failCorrections || table === 'pedidos_modelos' && !correction && c.failModels) {
+                    if (correction && c.failCorrections || table === 'pedidos_modelos' && !correction && c.failModels
+                        || table === 'produtos_proposta' && c.failProducts
+                        || table === 'pedidos_links_cliente' && (c.failLinks || !c.sessionUser)) {
                         resolve({ error: Error('falha sintetica') }); return;
                     }
                     let data = [];
+                    if (table === 'pedidos_links_cliente') data = c.privateLinks;
                     if (table === 'produtos_proposta') {
                         data = ids ? products.filter(p => ids.includes(p.id_int)) : products;
                         if (range) data = data.slice(range[0], range[1] + 1);
@@ -82,7 +86,7 @@ function environment() {
         + ['recorteDaCargaDeOrdens', 'carregarPedidoPesquisado', 'loadOrdens', 'carregarOrdensDados', 'loadOrdensFromVibecode',
             'pedidosComCorrecaoDeArte', 'propostaAtivaNaListaArte', 'pedidoCancelado', 'pedidoSaiuDaArte',
             'modeloEmCorrecaoDeArte', 'normalizarStatusImpressao', 'pedidosJaNaGrafica', 'pedidoEntraNoPainel',
-            'arteFoiLancada', 'lerDadosLista', 'lerLotesDaLista', 'comporPrazoDoERP', 'carregarModelosGlobais',
+            'arteFoiLancada', 'temSessaoDoSupabase', 'lerDadosLista', 'lerLotesDaLista', 'comporPrazoDoERP', 'carregarModelosGlobais',
             'carregarPagamentosGlobais', 'setFiltroFilaArte', 'pesquisarPedidosNaListaArte',
             'carregarDadosDoRecorteGrafica', 'solicitarRecorteDoPainel', 'pesquisarPedidosNoPainelProducao', 'setFiltroPrazo'].map(n => extract(n)).join('\n')
         + '\n' + extract('consultarPropostas', config), c);
@@ -92,6 +96,36 @@ const tick = () => new Promise(r => setImmediate(r));
 (async () => {
     let checks = 0;
     const ok = (condition, message) => { checks++; assert(condition, message); };
+    // O acesso local do operador nao e uma sessao Supabase: a tabela de tokens
+    // continua privada, mas sua ausencia nao impede a consulta do pedido.
+    const local = environment();
+    local.c.location = {hostname: '127.0.0.1', protocol: 'http:'};
+    local.c.sessionUser = null;
+    local.c._acessoLocal = 'operador-sintetico';
+    local.c._currentUser = {id: 'usuario-expirado'};
+    local.ui.view = 'view-lista-impressao'; local.ui.search = '1';
+    ok(await local.c.loadOrdens(), 'pesquisa local sem sessao Supabase conclui');
+    ok(!local.logs.some(l => l.table === 'pedidos_links_cliente'), 'pesquisa local nao solicita tokens privados');
+    const pedidoLocal = local.c.state.ordens.find(o => o.numero === 1);
+    ok(pedidoLocal && !local.c.pedidoSaiuDaArte(pedidoLocal), 'pesquisa nao libera pedido em arte para impressao');
+    ok(local.c.state.modelosGlobais[1].length === 1, 'modelos do pedido local foram carregados');
+    for (const failure of ['failModels', 'failProducts']) {
+        const anterior = local.c.state.ordens;
+        local.c[failure] = true;
+        ok(await local.c.loadOrdens() === false && local.c.state.ordens === anterior,
+            `pesquisa local preserva lista e informa falha real: ${failure}`);
+        local.c[failure] = false;
+    }
+    const web = environment(); web.ui.search = '1';
+    web.c.CLIENTE_BASE_URL = 'https://exemplo.invalid';
+    web.c.privateLinks = [{os_id:'vibe_1', numero_pedido:1, token:'sintetico', status_arte:'Em Alteração'}];
+    ok(await web.c.loadOrdens(), 'pesquisa com sessao Supabase conclui');
+    ok(web.logs.some(l => l.table === 'pedidos_links_cliente') && web.c.state.linksClienteData.vibe_1.status_arte === 'Em Alteração',
+        'sessao Supabase conserva leitura e estado do link');
+    const anteriorWeb = web.c.state.ordens;
+    web.c.failLinks = true;
+    ok(await web.c.loadOrdens() === false && web.c.state.ordens === anteriorWeb,
+        'falha real no link autenticado nao e mascarada');
     const { c, ui, logs, paints } = environment();
     ok(await c.loadOrdens(), 'carga ativa conclui');
     assert.deepEqual(Array.from(c.state.ordens, o => o.numero).sort((a, b) => a - b), [1, 2, 3, 4, 5]); checks++;
