@@ -5429,6 +5429,31 @@ function atualizarRestricaoModoVibe(prefixo) {
         aviso.textContent = mensagem || (itens.length ? 'Opções conforme o pedido. Para mudar entre só frente e com verso, altere no Vibe.' : '');
         aviso.hidden = !itens.length;
     }
+    // O seletor do Pedido fica em Configuracao, normalmente recolhida. O conflito
+    // precisa continuar visivel fora desse grupo e considerar a numeracao real,
+    // mesmo se o operador mudar somente o seletor do trabalho.
+    const conflitoDoVinculo = prefixo === 'num' ? '' : itens.map(item => {
+        const id = numeracaoIdDoItem(item);
+        const num = (state.numeracoes || []).find(n => String(n.id) === String(id));
+        return num ? VersoDoModelo.erro(item, num.print_mode) : '';
+    }).find(Boolean);
+    const conflito = mensagem || conflitoDoVinculo || '';
+    const alertaId = prefixo + '-modo-alerta-vibe';
+    let alerta = document.getElementById(alertaId);
+    const cabecalho = prefixo === 'ped'
+        ? document.querySelector('#ped-preview-card-container .card-header') || document.querySelector('#view-pedido .page-header')
+        : document.querySelector((prefixo === 'num' ? '#view-numeracao' : '#view-imposicao') + ' .page-header');
+    if (!alerta && conflito && cabecalho) {
+        alerta = document.createElement('div');
+        alerta.id = alertaId;
+        alerta.setAttribute('role', 'alert');
+        alerta.style.cssText = 'margin:10px 12px;padding:12px 14px;border:1px solid #fbbf24;border-radius:6px;background:#422006;color:#fef3c7;white-space:normal;overflow-wrap:anywhere';
+        cabecalho.insertAdjacentElement('afterend', alerta);
+    }
+    if (alerta) {
+        alerta.textContent = conflito ? 'Atenção: ' + conflito : '';
+        alerta.hidden = !conflito;
+    }
 }
 
 async function lerModeloModoVibe(item, osId) {

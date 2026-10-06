@@ -94,6 +94,7 @@ function cenario(quantos, comCamarote) {
 (async function () {
     const navegador = await puppeteer.launch({ headless: 'new' });
     const aba = await navegador.newPage();
+    await aba.addScriptTag({path:path.join(RAIZ,'frontend/cor-numeracao-do-modelo.js')});
     await aba.setViewport({ width: 1920, height: 1080 });
 
     await aba.setContent(
@@ -511,6 +512,8 @@ function cenario(quantos, comCamarote) {
     const colunaModos = await aba.evaluate(() => Array.from(
         document.querySelectorAll('.ped-modo-impressao-da-numeracao'), el => el.textContent.trim()));
     modos.forEach(([, rotulo], i) => ok(colunaModos[i] === rotulo, 'Verso exibe ' + rotulo + ' do cadastro', colunaModos));
+    const conflitos = await aba.$$eval('.ped-modo-incompativel-vibe', els => els.map(e=>({visivel:e.checkVisibility(),texto:e.textContent})));
+    ok(conflitos.length === 5 && conflitos.every(e=>e.visivel && e.texto.includes('Incompatível')), 'incompatibilidades aparecem na fila antes de abrir o modelo', conflitos);
     ok(colunaModos[5] === '—' && colunaModos[6] === '—',
        'sem numeracao encontrada, Verso nao inventa um modo a partir do ERP', colunaModos);
     const atualizacao = await aba.evaluate(() => {
@@ -530,7 +533,15 @@ function cenario(quantos, comCamarote) {
     ok(atualizacao.texto === modos[3][1], 'o redesenho acompanha a configuracao atual da numeracao', atualizacao);
     ok(!atualizacao.editavel, 'a senha da gerencia nao torna Verso uma escolha independente', atualizacao);
     ok(atualizacao.preservouModelo, 'exibir o modo nao altera campos do modelo', atualizacao);
+    ok(await aba.$('#ped-queue-row-m1 .ped-modo-incompativel-vibe') === null, 'correcao do modo remove o aviso da linha');
     ok(atualizacao.conteudo <= atualizacao.largura + 1, 'o nome longo do modo PDF cabe na coluna', atualizacao);
+
+    const pedidoIncompativel = cenario(1, false);
+    Object.assign(pedidoIncompativel.osItens['1'][0], {id:1002265,verso_tipo:'FRENTE E VERSO',amostra_num_id:null,numeracao_id:null,gabarito_operacional:'90x140 - Só Frente'});
+    Object.assign(pedidoIncompativel.numeracoes[0], {name:'90x140 - Só Frente',print_mode:'front'});
+    await desenhar(pedidoIncompativel);
+    const porNome = await aba.$eval('#ped-queue-row-1002265 .ped-modo-incompativel-vibe',e=>({visivel:e.checkVisibility(),texto:e.textContent}));
+    ok(porNome.visivel && porNome.texto.includes('FRENTE E VERSO'), 'modelo sem ID de numeracao tambem avisa pelo gabarito resolvido', porNome);
 
     // Dois produtos e três modelos: não agrupar os dois modelos do crachá
     // numa única linha, nem perder o status das duas unidades já impressas.
