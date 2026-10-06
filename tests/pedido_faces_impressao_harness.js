@@ -54,6 +54,7 @@ async function testarTelasReais() {
                 window.liberarMapaTeatroDaTela = () => {};
                 window.agendarRedesenhoDaPrevia = () => {};
             }, html);
+            await page.addScriptTag({path: path.join(root, 'frontend/cor-numeracao-do-modelo.js')});
             await page.addStyleTag({content: fs.readFileSync(path.join(root, 'frontend/style.css'), 'utf8')});
             await page.addScriptTag({content: ['temVerso', 'versoUnico', 'modoDeVersoDoModelo',
                 'atualizarFacesDeImpressaoDoPedido', 'selecionarFaceDeImpressaoDoPedido',

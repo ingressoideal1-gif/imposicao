@@ -67,6 +67,7 @@ function extrair(nome) {
             return q;
         } },
     };
+    box.VersoDoModelo = require('../frontend/cor-numeracao-do-modelo.js').VersoDoModelo;
     vm.createContext(box);
     vm.runInContext(extrair('lerDadosLista') + extrair('loadOSItens') + '\n' + extrair('navigateToAmostrasFromOS'), box);
     await box.navigateToAmostrasFromOS('os');

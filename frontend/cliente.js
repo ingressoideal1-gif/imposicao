@@ -1257,6 +1257,7 @@ async function gravarStatusDoLink(status) {
  */
 function numeracaoTemVersoNoPortal(numObj) {
     if (!numObj) return false;
+    if (VersoDoModelo.doModo(numObj.print_mode)) return numObj.print_mode !== 'front';
     const modo = String(numObj.print_mode || 'front').trim().toLowerCase();
     if (modo === 'duplex' || modo === 'duplex_unico' || modo === 'pdf_odd_even' || modo === 'pdf_duplicate_back') return true;
     if (Array.isArray(numObj.elements) && numObj.elements.some(el => el && el.face === 'back')) return true;
@@ -1616,7 +1617,8 @@ async function initClientePage(numero, token) {
                     // Mesma precedência do painel: a numeração resolvida manda.
                     // O modelo pode conservar FRENTE E VERSO de antes da edição.
                     // Sem numeração disponível, preservar a configuração salva.
-                    const itemVerso = matchedNum ? numIsDuplex : !_semVerso(item.verso_tipo);
+                    const versoTipo = VersoDoModelo.resolver(item, matchedNum);
+                    const itemVerso = versoTipo ? VersoDoModelo.temVerso(versoTipo) : (matchedNum ? numIsDuplex : !_semVerso(item.verso_tipo));
                     return {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',
@@ -1626,7 +1628,7 @@ async function initClientePage(numero, token) {
                         amostra_cor_id: idsDoBanco.corId,
                         amostra_num_id: resolvedNumId,
                         verso: itemVerso,
-                        verso_tipo: itemVerso ? (!_semVerso(item.verso_tipo) ? item.verso_tipo : 'FRENTE E VERSO') : (matchedNum ? 'Frente' : (item.verso_tipo || 'SÓ FRENTE')),
+                        verso_tipo: versoTipo || item.verso_tipo,
                         amostra_obs: item.observacao_arte || item.amostra_obs || '',
                         amostra_status: statusFrontend,
                         // Garantir que a imagem de aprovacao esteja sempre populada

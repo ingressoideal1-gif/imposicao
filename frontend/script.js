@@ -5391,26 +5391,19 @@ window.validarPdfImparFrenteVersoPar = validarPdfImparFrenteVersoPar;
  *
  * Os modos duplex explícitos vivem na numeração
  * (`producao_numeracoes.print_mode`). Eles ACRESCENTAM verso mesmo quando o
- * `verso_tipo` legado ainda diz Frente. Um `front` da numeração não rebaixa o
- * verso do ERP: há cadastros antigos em que esse campo ficou no padrão.
+ * `verso_tipo` legado ainda diz Frente. Um modo explícito da numeração prevalece;
+ * o texto legado só é usado quando o modo não está disponível.
  */
 function modoDeVersoDoModelo(item) {
-    // A linha CRUA do catálogo, e não o `numeracaoDoModelo`: o `print_mode` vem
-    // da coluna e não muda com o banco do modelo, e esta função é chamada a cada
-    // redesenho de card — resolver o banco aqui seria trabalho pago à toa.
-    const nid = (typeof numeracaoIdDoItem === 'function') ? numeracaoIdDoItem(item) : null;
+    const nid = typeof numeracaoIdDoItem === 'function' ? numeracaoIdDoItem(item) : null;
     const num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
-    if (num?.print_mode === 'pdf_duplicate_back') return 'pdf_duplicate_back';
-    if (versoUnico(num && num.print_mode)) return 'duplex_unico';
-    if (temVerso(num && num.print_mode)) return 'duplex';
-    const tipo = String(item?.verso_tipo || '').trim().toUpperCase();
-    const temVersoNoErp = !!(item && (item.verso === true || (tipo && !['FRENTE', 'SÓ FRENTE', 'SO FRENTE'].includes(tipo))));
-    return temVersoNoErp ? 'duplex' : 'front';
+    return VersoDoModelo.modo(item, num);
 }
 window.modoDeVersoDoModelo = modoDeVersoDoModelo;
 
 function isNumeracaoDuplex(numObj) {
     if (!numObj) return false;
+    if (VersoDoModelo.doModo(numObj.print_mode)) return numObj.print_mode !== 'front';
     if (temVerso(numObj.print_mode)) return true;
     if (Array.isArray(numObj.elements) && numObj.elements.some(el => el && el.face === 'back')) return true;
     const name = (numObj.name || numObj.tipo || '').toLowerCase();
@@ -28139,20 +28132,8 @@ async function loadOSItens(osId, opcoes = {}) {
                         const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
                         const numIsDuplex = isNumeracaoDuplex(matchedNum);
                         // Fonte de verdade: print_mode da numeração em producao_numeracoes
-                        let resolvedVersoTipo;
-                        if (matchedNum) {
-                            // Numeração encontrada: usar print_mode da numeração
-                            resolvedVersoTipo = numIsDuplex ? 'FxVerso' : 'Frente';
-                        } else {
-                            // Sem numeração: usar verso_tipo salvo no pedido, convertendo valores legados
-                            const vt = item.verso_tipo;
-                            if (vt === 'FxVerso' || vt === 'VERSO COMUM' || vt === 'VERSO VARIÁVEL' || vt === 'VERSO VARIAVEL' || vt === 'FRENTE E VERSO') {
-                                resolvedVersoTipo = 'FxVerso';
-                            } else {
-                                resolvedVersoTipo = 'Frente';
-                            }
-                        }
-                        const itemVerso = (resolvedVersoTipo === 'FxVerso');
+                        const resolvedVersoTipo = VersoDoModelo.resolver(item, matchedNum) || item.verso_tipo;
+                        const itemVerso = resolvedVersoTipo ? VersoDoModelo.temVerso(resolvedVersoTipo) : !!item.frente_verso;
 
                         const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || item.tipo_numeracao || item.numeracao);
                         const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || null);
@@ -32915,13 +32896,27 @@ function matchNumeracao(numText, formatoId) {
 async function autoSaveOSItemField(itemId, osId, field, value) {
     // A quantidade de cada modelo pertence ao ERP, inclusive depois da arte pronta.
     if (field === 'qtd' || field === 'quantidade') return;
+    const itemAntes = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+    const anterior = itemAntes ? { ...itemAntes } : null;
     try {
+        const modeloVerso = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+        const campoVerso = field === 'numeracao_id' ? 'amostra_num_id' : field;
+        const atualizaVerso = ['verso_tipo', 'amostra_num_id'].includes(campoVerso);
+        if (atualizaVerso && (typeof supabaseClient === 'undefined' || !supabaseClient)) {
+            throw new Error('Conexão ao banco necessária para salvar a numeração e o verso do modelo.');
+        }
+        const patchVerso = atualizaVerso
+            ? VersoDoModelo.payload({ [campoVerso]: value }, modeloVerso, state.numeracoes) : null;
+        if (field === 'verso_tipo') {
+            if (!patchVerso.verso_tipo) return;
+            value = patchVerso.verso_tipo;
+        }
         if (state.osItens[osId]) {
             const item = state.osItens[osId].find(i => String(i.id) === String(itemId));
             if (item) {
                 item[field] = value;
                 if (field === 'verso_tipo') {
-                    item.verso = !!(value && value !== 'Frente');
+                    item.verso = VersoDoModelo.temVerso(value);
                 }
                 // `numeracao_id` e `amostra_num_id` são a MESMA coluna — o
                 // `dbFieldMap` logo abaixo traduz um no outro. Gravar só o nome
@@ -32954,9 +32949,11 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 ? (parseInt(value, 10) || 0)
                 : value;
             
-            const updatePayload = { [dbField]: dbValue };
-            if (dbField === 'verso_tipo') {
-                updatePayload.frente_verso = (value !== 'Frente');
+            let updatePayload = { [dbField]: dbValue };
+            if (dbField === 'verso_tipo' || dbField === 'amostra_num_id') {
+                const modelo = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+                updatePayload = VersoDoModelo.payload(updatePayload, modelo, state.numeracoes);
+                if (!Object.keys(updatePayload).length) return;
             }
             
             const isNumericId = /^\d+$/.test(String(itemId).trim());
@@ -32968,17 +32965,41 @@ async function autoSaveOSItemField(itemId, osId, field, value) {
                 query = query.eq('id', itemId);
             }
             
-            const { error } = await query;
-            if (error) console.error(`[OS] Erro ao auto-salvar pedidos_modelos ${dbField}:`, error);
+            if (atualizaVerso) {
+                const osObj = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+                const osNumero = Number(osObj?.numero ?? String(osId).replace(/^vibe_/, ''));
+                if (!Number.isSafeInteger(osNumero) || osNumero <= 0) throw new Error('Pedido não identificado.');
+                query = query.eq('id_int', osNumero).select(['id', 'id_int', ...Object.keys(updatePayload)].join(', '));
+            }
+            const { data, error } = await query;
+            if (error) throw error;
+            if (atualizaVerso && (!Array.isArray(data) || data.length !== 1
+                || String(data[0].id) !== String(itemId)
+                || !Object.entries(updatePayload).every(([k, v]) => data[0][k] === v))) {
+                throw new Error('O banco não confirmou o vínculo e o verso enviados.');
+            }
+            const salvo = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+            if (salvo && updatePayload.verso_tipo) {
+                Object.assign(salvo, { verso_tipo: updatePayload.verso_tipo, frente_verso: updatePayload.frente_verso, verso: updatePayload.frente_verso });
+            }
         } else {
-            await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ [field]: value })
+                body: JSON.stringify(patchVerso || { [field]: value })
             });
+            if (!response.ok) throw new Error('Falha ao salvar o modelo: HTTP ' + response.status);
         }
     } catch (e) {
+        if (itemAntes && anterior && itemAntes[field] === value
+            && ['verso_tipo', 'amostra_num_id', 'numeracao_id'].includes(field)) {
+            for (const k of ['verso_tipo', 'frente_verso', 'verso', 'amostra_num_id', 'numeracao_id']) {
+                if (Object.prototype.hasOwnProperty.call(anterior, k)) itemAntes[k] = anterior[k];
+                else delete itemAntes[k];
+            }
+        }
         console.error(`[OS] Erro ao auto-salvar ${field}:`, e);
+        if (typeof toast === 'function') toast('Não foi possível salvar o modelo. Reabra o pedido e confira a configuração.', 'error');
     }
 }
 
@@ -33057,7 +33078,7 @@ async function saveActiveOSItemField(field, value) {
         if (item) {
             item[field] = value;
             if (field === 'verso_tipo') {
-                item.verso = !!(value && value !== 'Frente');
+                item.verso = VersoDoModelo.temVerso(value);
             }
             
             // Mapear campo local → coluna no banco (pedidos_modelos)
@@ -33146,29 +33167,11 @@ window.onImposicaoEndInput = onImposicaoEndInput;
 
 function onImposicaoPrintModeChange(value) {
     updateImpSummary();
-    // `verso_tipo` é coluna do ERP parceiro e só conhece 'Frente'/'FxVerso'
-    // (31/08/2026): o FxVersoUnico grava 'FxVerso' ali, e quem guarda o terceiro
-    // modo é o `print_mode` da numeração, que é tabela nossa.
-    const isDuplex = temVerso(value);
-    
-    // Evitar sobrescrever opções de verso duplex como VERSO VARIÁVEL com VERSO COMUM/FRENTE E VERSO
-    const activeItem = state.activeOSItem;
-    if (activeItem) {
-        const itens = state.osItens[activeItem.osId] || [];
-        const item = itens.find(i => String(i.id) === String(activeItem.itemId));
-        if (item) {
-            if (isDuplex) {
-                const currentIsVerso = item.verso_tipo && item.verso_tipo !== 'Frente';
-                if (!currentIsVerso) {
-                    saveActiveOSItemField('verso_tipo', 'FxVerso');
-                }
-            } else {
-                saveActiveOSItemField('verso_tipo', 'Frente');
-            }
-            return;
-        }
-    }
-    saveActiveOSItemField('verso_tipo', isDuplex ? 'FxVerso' : 'Frente');
+    const ativo = state.activeOSItem;
+    const item = ativo && (state.osItens[ativo.osId] || []).find(i => String(i.id) === String(ativo.itemId));
+    const num = item && (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+    const tipo = VersoDoModelo.doModo(num?.print_mode);
+    if (tipo) saveActiveOSItemField('verso_tipo', tipo);
 }
 window.onImposicaoPrintModeChange = onImposicaoPrintModeChange;
 
@@ -34054,10 +34057,10 @@ function renderImpOSQueue(opcoes = {}) {
                     <td style="padding: 12px; width: 165px; min-width: 165px; max-width: 165px;" title="Frente e Verso/Tipo de Verso">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Verso</span>
-                            <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'verso_tipo', this.value)" onclick="event.stopPropagation()">
-                                <option value="Frente" ${item.verso_tipo === 'Frente' || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE' || !item.verso_tipo ? 'selected' : ''}>Frente</option>
-                                <option value="FxVerso" ${item.verso_tipo === 'FxVerso' || item.verso_tipo === 'VERSO COMUM' || item.verso_tipo === 'VERSO VARIÁVEL' || item.verso_tipo === 'VERSO VARIAVEL' ? 'selected' : ''}>FxVerso</option>
-                            </select>
+                            <span class="imp-modo-impressao-da-numeracao">${escHtmlSimples((() => {
+                                const n = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
+                                return n ? rotuloDoModoDeImpressao(n) : '—';
+                            })())}</span>
                         </div>
                     </td>
                     <td style="padding: 12px 12px 12px 100px; white-space:nowrap; display:flex; gap:6px; align-items:center;">
@@ -34189,9 +34192,7 @@ function impQueueUpdateNum(itemId, osId, numId) {
 
         // Atualizar modo de verso baseado na numeração
         const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : false;
-        // Se a numeração é FxVerso, mudamos para FxVerso
-        // Se for Frente, mudamos para Frente
-        let novoVersoTipo = isDuplex ? 'FxVerso' : 'Frente';
+        const novoVersoTipo = VersoDoModelo.resolver(item, num);
         
         item.verso_tipo = novoVersoTipo;
         item.verso = isDuplex;
@@ -34217,10 +34218,8 @@ function impQueueUpdateNum(itemId, osId, numId) {
             if (nfInput) {
                 nfInput.value = nf;
             }
-            const versoSelect = row.querySelector('td[title="Frente e Verso/Tipo de Verso"] select');
-            if (versoSelect) {
-                versoSelect.value = novoVersoTipo;
-            }
+            const versoRotulo = row.querySelector('.imp-modo-impressao-da-numeracao');
+            if (versoRotulo) versoRotulo.textContent = rotuloDoModoDeImpressao(num);
         }
 
         // Atualizar campo de numeração na imposição principal se for o item ativo
@@ -34315,7 +34314,7 @@ async function impQueueUpdateField(itemId, osId, field, value) {
                 const itemAtual = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
                 const jaEraUnico = versoUnico(printMode.value)
                     || (itemAtual && versoUnico(modoDeVersoDoModelo(itemAtual)));
-                const wantsDuplex = (value !== 'Frente');
+                const wantsDuplex = VersoDoModelo.temVerso(value);
                 printMode.value = wantsDuplex ? (jaEraUnico ? 'duplex_unico' : 'duplex') : 'front';
                 printMode.dispatchEvent(new Event('change'));
             }
@@ -37086,21 +37085,8 @@ function onItemNumSelect(idx, osId, itemId) {
         const isDuplexNum = isNumeracaoDuplex(numObj);
         const oldVerso = !!item.verso;
 
-        if (isDuplexNum) {
-            item.verso = true;
-            if (!item.verso_tipo || item.verso_tipo === 'Frente' || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
-                item.verso_tipo = 'FxVerso';
-            }
-        } else {
-            // Inclui FRENTE E VERSO e demais valores legados. Sem numeração
-            // selecionada, preservar o verso salvo em vez de inferir Frente.
-            if (numObj) {
-                item.verso_tipo = 'Frente';
-                item.verso = false;
-            } else {
-                item.verso = !!(item.verso_tipo && item.verso_tipo !== 'Frente');
-            }
-
+        VersoDoModelo.aplicar(item, numObj);
+        if (numObj && VersoDoModelo.doModo(numObj.print_mode) === 'SÓ FRENTE') {
             // Numeração só Frente: a amostra de verso que o cliente veria deixa de
             // fazer sentido e precisa sair do banco. A arte enviada pelo operador
             // (verso_arte_url / verso_arte_json) é preservada de propósito, para
@@ -37856,6 +37842,13 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             dbData.amostra_num_id = itemLocal.amostra_num_id;
         }
 
+        if ('verso_tipo' in dataToUpdate || 'amostra_num_id' in dataToUpdate) {
+            const resumoVerso = VersoDoModelo.payload(dbData, itemLocal, state.numeracoes);
+            delete dbData.verso_tipo;
+            delete dbData.frente_verso;
+            Object.assign(dbData, resumoVerso);
+        }
+
         // Se não sobrou nenhum campo para atualizar, evita fazer a requisição
         if (Object.keys(dbData).length === 0) {
             return;
@@ -37912,6 +37905,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         }
         itemLocal._pedidoModeloId = linhaConfirmada.id;
         Object.assign(itemLocal, dataToUpdate);
+        if (dbData.verso_tipo) {
+            itemLocal.verso_tipo = dbData.verso_tipo;
+            itemLocal.frente_verso = dbData.frente_verso;
+            itemLocal.verso = dbData.frente_verso;
+        }
         // `dataToUpdate` não tem `status_arte` — ele é derivado aqui. Sem copiar,
         // a faixa do card só saberia quem aprovou depois de um F5.
         if (dbData.status_arte) itemLocal.status_arte = dbData.status_arte;
@@ -39987,23 +39985,7 @@ async function desenharItemAmostraCombinada(idx, osId) {
     const numIsDuplex = isNumeracaoDuplex(num);
     const oldVersoInCanvas = !!item.verso;
 
-    if (numIsDuplex) {
-        if (!item.verso) {
-            item.verso = true;
-            if (!item.verso_tipo || item.verso_tipo === 'Frente' || item.verso_tipo === 'SÓ FRENTE' || item.verso_tipo === 'SO FRENTE') {
-                item.verso_tipo = 'FxVerso';
-            }
-        }
-    } else {
-        // A numeração atual também prevalece sobre os valores legados aqui.
-        // Sem numeração resolvida, o desenho conserva a configuração do modelo.
-        if (num) {
-            item.verso_tipo = 'Frente';
-            item.verso = false;
-        } else {
-            item.verso = !!(item.verso_tipo && item.verso_tipo !== 'Frente');
-        }
-    }
+    VersoDoModelo.aplicar(item, num);
 
     if (num) {
         await preloadAmostraItemPdfElements(num, idx, osId, item);
@@ -42592,7 +42574,7 @@ async function openArtesModal(itemId, osId) {
     const fileLabel = document.getElementById('modal-artes-file-label');
     const fileVersoGroup = document.getElementById('modal-artes-file-verso-group');
     
-    if (artesModalState.versoTipo === 'FRENTE E VERSO') {
+    if (VersoDoModelo.temVerso(artesModalState.versoTipo)) {
         if (fileLabel) fileLabel.textContent = 'Arquivo Frente (PDF/Imagem)';
         if (fileVersoGroup) fileVersoGroup.style.display = 'block';
     } else {
@@ -42656,7 +42638,7 @@ function renderArtesTimeline() {
         const isPdf = arte.url_arquivo && arte.url_arquivo.toLowerCase().endsWith('.pdf');
         const isVersoPdf = arte.verso_url_arquivo && arte.verso_url_arquivo.toLowerCase().endsWith('.pdf');
 
-        if (artesModalState.versoTipo === 'FRENTE E VERSO') {
+        if (VersoDoModelo.temVerso(artesModalState.versoTipo)) {
             previewHtml = `
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
                 <div style="border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 120px; position: relative;">

@@ -1,3 +1,5 @@
+// Contrato compartilhado carregado como nas páginas reais.
+global.VersoDoModelo = require('../frontend/cor-numeracao-do-modelo.js').VersoDoModelo;
 // A NUMERACAO ESCOLHIDA PELO OPERADOR NAO PODE VOLTAR ATRAS SOZINHA (27/08/2026).
 //
 // `pedidos_modelos` guarda a numeracao do modelo DUAS vezes: o texto, escrito

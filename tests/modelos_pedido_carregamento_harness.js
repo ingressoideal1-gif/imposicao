@@ -48,6 +48,7 @@ function contexto() {
             })().then(ok,erro);}};
         return q;
     }};
+    c.VersoDoModelo = require('../frontend/cor-numeracao-do-modelo.js').VersoDoModelo;
     vm.createContext(c); vm.runInContext(codigo,c);
     c.state.osItens[os.id]=produtos.map(p=>c.mapVibecodeProdutoToOSItem(p,os.id));
     return c;
