@@ -30,6 +30,8 @@ def sql():
         run((ROOT/"tests/qr12_schema_fixture.sql").read_text(encoding="utf-8"))
         run((ROOT/"sql/ideal_control_qr12.sql").read_text(encoding="utf-8"))
         run((ROOT/"sql/ideal_control_qr12_suspensao.sql").read_text(encoding="utf-8"))
+        run((ROOT/"sql/ideal_control_qr12_suspensao_piloto.sql").read_text(encoding="utf-8"))
+        run((ROOT/"sql/ideal_control_qr12_base_independente.sql").read_text(encoding="utf-8"))
         yield run
     finally:
         # Nome gerado exclusivamente por este teste; nenhum banco compartilhado.
@@ -113,3 +115,16 @@ def test_suspensao_nao_retorna_ao_legado_e_preserva_reimpressao(sql):
     # Reativar usa a base v2; a tentativa bloqueada nao deixou contrato v1.
     sql("UPDATE producao_acesso_qr_controle SET ativo=true; SELECT producao_acesso_qr_contratos_obter(51)")
     assert sql("SELECT versao FROM producao_acesso_qr_contratos WHERE pedido=51") == "2"
+
+
+def test_piloto_autorizado_com_corte_infinito_respeita_suspensao(sql):
+    sql("INSERT INTO producao_acesso_qr_autorizacoes VALUES(23063,'SINTETICO: ausencia de impressao confirmada')")
+    assert "suspensas" in sql("SELECT producao_acesso_qr_contratos_obter(23063)",ok=False)
+    assert sql("SELECT count(*) FROM producao_acesso_qr_contratos") == "0"
+    sql("UPDATE producao_acesso_qr_controle SET ativo=true")
+    original=sql("SELECT producao_acesso_qr_contratos_obter(23063)")
+    assert sql("SELECT count(*) FROM producao_acesso_qr_contratos WHERE versao=2") == "2"
+    sql("INSERT INTO pedidos_modelos VALUES(11,51,10,1,now(),'qr'); SELECT producao_acesso_qr_contratos_obter(51)")
+    assert sql("SELECT versao FROM producao_acesso_qr_contratos WHERE pedido=51") == "1"
+    sql("UPDATE producao_acesso_qr_controle SET ativo=false")
+    assert sql("SELECT producao_acesso_qr_contratos_obter(23063)") == original

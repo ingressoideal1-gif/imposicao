@@ -34,8 +34,8 @@ LINHAS = 30_000
 TAMANHO = 8
 TOTAL = COLUNAS * LINHAS  # 3.000.000
 POOL_SHA256 = "8e30409786113d484103cb66f88080a99bb67530a4817c245789c8929da35174"
-POOL_V2_SHA256 = "931cc39738a68b9eb814e3d9908962bd04e3782893234f881222a0526a6e6d51"
-POOL_V2_NOME = "qr_ideal_pool_qr12_d1.bin"
+POOL_V2_SHA256 = "6e968837c7f16a9acd0b0a46adfa84bbb1137dae75010f64512ca7f01351e1dc"
+POOL_V2_NOME = "qr_ideal_pool_qr12_1.bin"
 
 NOME_ARQUIVO = "qr_ideal_pool.bin"
 
@@ -88,7 +88,7 @@ def indice_contrato(pedido, modelo, item, contrato):
         raise ValueError("QR Ideal: numero fora da reserva; confira o inicio e a tiragem")
     if versao == 1 and contrato.get("pool_revisao") == "ideal-master-1":
         return indice(pedido, modelo, item)
-    if versao != 2 or contrato.get("pool_revisao") != "ideal-qr12-d1":
+    if versao != 2 or contrato.get("pool_revisao") != "ideal-qr12-1":
         raise ValueError("QR Ideal: contrato exige atualizacao da estacao")
     offset = int(contrato["deslocamento"])
     if not (0 <= pos < capacidade and 0 <= offset and offset + capacidade <= TOTAL):

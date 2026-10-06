@@ -2,7 +2,7 @@ import { conteudoDoIngresso, indiceContrato, POOL_BYTES, PlanoModelo } from "../
 import { hashCodigo } from "../supabase/functions/_compartilhado/hash.ts";
 function assert(v: unknown) { if (!v) throw new Error("Contrato QR12 violado"); }
 const c = { pedido:23063, modelo:1001859, versao:2, inicio:7, passo:3, posicao:2,
- quantidade:10, deslocamento:5000, capacidade:30, pool_revisao:"ideal-qr12-d1", fonte_hash:"sintetico" };
+ quantidade:10, deslocamento:5000, capacidade:30, pool_revisao:"ideal-qr12-1", fonte_hash:"sintetico" };
 const plano:PlanoModelo={...c,setor:"sintetico",tipo:"QR_IDEAL",prefix:"",suffix:"",pad:0,qr_contrato:c};
 Deno.test("v2 usa 12 caracteres e posição reservada; TICKET preserva células físicas",async()=>{
  const pool=new Uint8Array(POOL_BYTES);pool.set(new TextEncoder().encode("00001389"),5001*8);

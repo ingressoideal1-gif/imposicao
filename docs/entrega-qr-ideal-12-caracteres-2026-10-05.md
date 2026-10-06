@@ -7,22 +7,31 @@ São 12 **caracteres alfanuméricos**, sendo quatro algarismos no prefixo. Zeros
 preservados. O pedido continua identificando o contrato e seu sal no banco.
 
 Apenas trocar o prefixo deixaria o mesmo sufixo secreto em modelos diferentes.
-A implementação usa uma base privada distinta (`ideal-qr12-d1`), sem nenhum
+A implementação final usa uma base privada independente (`ideal-qr12-1`), sem nenhum
 código da base legada, e uma reserva global exclusiva por emissão. Não há
 reutilização de posição, inclusive entre pedidos/eventos e modelos com os mesmos
 quatro últimos algarismos. Esgotamento dos 3 milhões de códigos bloqueia novas
 emissões; exige outra revisão da base, nunca truncamento ou volta por módulo.
 
-A base v2 é reproduzível nas estações a partir da base privada completa existente.
-A chave deriva de SHA-256(domínio || bytes privados); o hash público de integridade
-não permite reproduzi-la. Candidatos HMAC-SHA256 com contador, primeiros cinco
-bytes em Base32, são deduplicados e comparados com todos os códigos antigos.
-O código usa [hmac da biblioteca padrão Python](https://docs.python.org/3/library/hmac.html).
-Não há biblioteca criptográfica nova, segredo no frontend/MSI nem endpoint para
-baixar a base usando a credencial compartilhada de publicação.
+A base final foi gerada com `secrets.token_bytes(5)`, Base32 e deduplicação,
+comparando cada candidato com todos os códigos antigos. Não deriva de material
+distribuído nos instaladores históricos. Três milhões de códigos únicos foram
+conferidos, sem interseção com a base legada.
+
+A revisão final identificou que a base antiga havia sido distribuída em MSIs.
+Mesmo retirando esses arquivos do ar, não é possível revogar cópias anteriores.
+Por isso a derivação `ideal-qr12-d1`, incluída na etapa intermediária 1.2.357,
+foi retirada antes de qualquer emissão v2. A 1.2.358 exige a base independente;
+ausência ou hash incorreto bloqueiam o QR12, sem derivar ou baixar outra base.
+
+O administrador provisiona cada estação por canal privado, usando
+`ferramentas/provisionar_qr12.py --origem <arquivo-privado> --canal producao|piloto`.
+O comando confere tamanho/hash, protege a pasta e não sobrescreve uma base
+divergente. Não há biblioteca criptográfica nova, segredo no frontend/MSI nem
+endpoint para baixar a base usando a credencial compartilhada de publicação.
 
 SHA-256 da base de 24.000.000 bytes:
-`931cc39738a68b9eb814e3d9908962bd04e3782893234f881222a0526a6e6d51`.
+`6e968837c7f16a9acd0b0a46adfa84bbb1137dae75010f64512ca7f01351e1dc`.
 Python e nuvem verificam este mesmo arquivo. A nuvem lê exclusivamente o bucket
 privado `ideal-control-master`; estações guardam a base na pasta protegida.
 
@@ -69,7 +78,7 @@ da v2 deve abrir online, atualizar/recarregar e concluir o download do evento.
 
 Destino: produção e-deal, projeto `vwbtitjlpelrcnsytzqw`, frontend Cloudflare e
 NewProd. Checkout isolado `ideal-imposition-qr12-20261005`; checkout operacional
-preservado. Release entregue web v1023 / NewProd 1.2.357.
+preservado. Release final web v1023 / NewProd 1.2.358.
 
 1. Backup e ensaio, testes sintéticos, revisão do diff e dos pacotes.
 2. Aplicar `sql/ideal_control_qr12.sql` em uma transação. Cria quatro tabelas
@@ -79,11 +88,20 @@ preservado. Release entregue web v1023 / NewProd 1.2.357.
    negado. Publicar os consumidores Edge após o SQL.
 4. Integrar por PR com verificações obrigatórias; conferir assets públicos e
    atualizar NewProd/Piloto com verificação do pacote e do serviço local.
-5. Ativar novas emissões somente após esses passos. Não converter o pedido 23063
-   sem a confirmação solicitada sobre impressão/entrega.
+5. Provisionar a base independente nas estações do evento controlado. Após
+   confirmar ausência de emissão anterior, autorizar somente esse pedido e manter
+   `corte=infinity`, sem ampliar para outros modelos. Validar papel, aparelho,
+   download, leitura, repetição e sincronização antes do corte geral.
+   Não converter o pedido 23063 sem a confirmação solicitada sobre impressão/entrega.
 
-Para suspender novas emissões: `UPDATE public.producao_acesso_qr_controle SET ativo=false WHERE id=true;`.
+Para suspender novas reservas v2: `UPDATE public.producao_acesso_qr_controle SET ativo=false WHERE id=true;`.
 Manter contratos, bases e leitor novo para reimpressões e ingressos já emitidos.
+As migrações complementares `ideal_control_qr12_suspensao.sql` e
+`ideal_control_qr12_suspensao_piloto.sql` impedem que a suspensão crie contratos
+legados para modelos elegíveis, tanto no piloto restrito como após o corte geral.
+`ideal_control_qr12_base_independente.sql` troca a revisão somente com emissão
+desativada e nenhum contrato v2 existente. Aplicar nessa ordem após a migração
+original; arquivos de migrações já aplicadas não foram reescritos.
 Depois de emitir v2, voltar ao gerador antigo não é rollback válido. Não apagar
 credenciais, trocar sais, reconstruir IDs nem limpar celulares.
 
@@ -117,7 +135,7 @@ credenciais, trocar sais, reconstruir IDs nem limpar celulares.
 
 Testes de navegador desktop não comprovam câmera/iPhone ou impressão física.
 
-## Publicação e instalação confirmadas
+## Etapa intermediária publicada: v1023 / 1.2.357, emissão v2 desligada
 
 - [PR 94](https://github.com/ingressoideal1-gif/imposicao/pull/94) integrado pelo
   GitHub após os quatro checks obrigatórios. Commit de fonte
@@ -172,6 +190,15 @@ Antes de usar v2 em um telefone, abrir o aplicativo online, aceitar/recarregar a
 atualização e concluir o download do evento. Não usar **Apagar eventos** para
 atualizar. Aparelhos e estações offline não receberam atualização comprovada.
 
-O estado final de ativação e das estações online será registrado após a conferência
-da propagação do instalador. Não houve impressão física nem alteração dos ingressos
-já emitidos nesta entrega.
+A entrega técnica compatível não habilita emissão geral antes da validação do
+evento controlado prevista na análise. A emissão v2 permanece desligada; falta a
+confirmação sobre o pedido piloto e a validação operacional em papel/aparelho.
+Não houve impressão física nem alteração dos ingressos já emitidos nesta entrega.
+
+## Revisão final 1.2.358
+
+A base independente foi provisionada nas duas instalações locais, em pastas
+protegidas separadas. Outras estações precisam recebê-la por canal privado antes
+de emitir QR12. Atualizar o MSI sozinho não realiza esse provisionamento.
+O backup passa a incluir a base nova e os contratos de ambos os canais.
+Os resultados finais de publicação, instalação e testes são registrados abaixo.
