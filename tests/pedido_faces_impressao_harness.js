@@ -25,7 +25,101 @@ vm.createContext(context);
 for (const name of ['temVerso', 'atualizarFacesDeImpressaoDoPedido', 'selecionarFaceDeImpressaoDoPedido', 'faceDeImpressaoDoPedido', 'selecionarFacesDoPdfDoPedido', 'folha1DoPedido', 'selecionarFolha1DoPedido']) {
     vm.runInContext(extract(pedido, name), context);
 }
+async function testarTelasReais() {
+    const browser = await require('puppeteer').launch({headless: true});
+    try {
+        for (const file of ['index.html', 'producao.html']) {
+            const html = fs.readFileSync(path.join(root, 'frontend', file), 'utf8');
+            const page = await browser.newPage();
+            const errors = [];
+            page.on('pageerror', error => errors.push(error.message));
+            await page.setViewport({width: 1366, height: 768});
+            await page.setRequestInterception(true);
+            page.on('request', request => request.resourceType() === 'stylesheet'
+                ? request.respond({status: 200, contentType: 'text/css', body: ''}) : request.abort());
+            // O HTML real, sem scripts de inicialização nem serviços externos.
+            await page.evaluate(source => {
+                const template = document.createElement('template');
+                template.innerHTML = source;
+                const view = template.content.querySelector('#view-pedido');
+                view.querySelectorAll('script, link, img, iframe').forEach(el => el.remove());
+                view.classList.add('active');
+                document.body.append(view);
+                // Janela aberta de um modelo; o grupo começa recolhido no painel principal.
+                const preview = document.getElementById('ped-preview-card-container');
+                if (preview) preview.style.display = 'block';
+                window.state = {printMode: 'front', activeOSItem: {itemId: 1},
+                    selectedOSItems: [], numeracoes: [], formatos: [], saidas: []};
+                window.trabalhoUsaMapaTeatro = () => false;
+                window.liberarMapaTeatroDaTela = () => {};
+                window.agendarRedesenhoDaPrevia = () => {};
+            }, html);
+            await page.addStyleTag({content: fs.readFileSync(path.join(root, 'frontend/style.css'), 'utf8')});
+            await page.addScriptTag({content: ['temVerso', 'versoUnico', 'modoDeVersoDoModelo',
+                'atualizarFacesDeImpressaoDoPedido', 'selecionarFaceDeImpressaoDoPedido',
+                'faceDeImpressaoDoPedido', 'updatePedSummary', 'onPedNumeracaoSelect',
+                'alternarGrupoDaJanela']
+                .map(name => extract(pedido, name)).join('\n')
+                + '\n' + extract(script, 'numeracaoIdDoItem')});
+            if (file === 'index.html') await page.click('#jg-config .jg-botao');
+            for (const id of ['ped-print-faces', 'ped-print-only-front', 'ped-print-only-back']) {
+                assert.equal(await page.$$eval('#' + id, nodes => nodes.length), 1, file + ': ' + id);
+            }
+            // A numeração vinculada determina o modo usado ao abrir o modelo.
+            for (const mode of ['duplex', 'duplex_unico', 'pdf_odd_even', 'pdf_duplicate_back']) {
+                const result = await page.evaluate(mode => {
+                    const item = {id: 1, amostra_num_id: 10};
+                    state.numeracoes = [{id: 10, print_mode: mode}];
+                    const original = JSON.stringify([item, state.numeracoes]);
+                    const selectedMode = modoDeVersoDoModelo(item);
+                    document.getElementById('ped-print-mode').value = selectedMode;
+                    updatePedSummary();
+                    return {selectedMode, actualMode: state.printMode,
+                        hidden: document.getElementById('ped-print-faces').hidden,
+                        unchanged: original === JSON.stringify([item, state.numeracoes])};
+                }, mode);
+                assert.equal(result.actualMode, result.selectedMode, file + ': modo ' + mode);
+                assert.equal(result.hidden, false, file + ': faces visíveis em ' + mode);
+                assert.equal(result.unchanged, true);
+                await page.click('#ped-print-only-front');
+                assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'front');
+                await page.click('#ped-print-only-back');
+                assert.equal(await page.$eval('#ped-print-only-front', el => el.checked), false);
+                assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'back');
+                await page.evaluate(() => updatePedSummary());
+                assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'back');
+                await page.click('#ped-print-only-back');
+                assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'both');
+                await page.click('#ped-print-only-front');
+                await page.evaluate(() => {state.activeOSItem.itemId++; updatePedSummary();});
+                assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'both');
+            }
+            await page.click('#ped-print-only-back');
+            await page.select('#ped-print-mode', 'front');
+            assert.equal(await page.$eval('#ped-print-faces', el => el.hidden), true);
+            assert.equal(await page.$eval('#ped-print-only-back', el => el.checked), false);
+            assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'both');
+            // Trocar a numeração também passa pelo select verdadeiro, inclusive FxVersoUnico.
+            await page.evaluate(() => {
+                state.numeracoes = [{id: 10, print_mode: 'duplex_unico'}];
+                document.getElementById('ped-numeracao').innerHTML = '<option value="10">Sintética</option>';
+                onPedNumeracaoSelect();
+            });
+            assert.equal(await page.evaluate(() => state.printMode), 'duplex_unico');
+            assert.equal(await page.$eval('#ped-print-faces', el => el.hidden), false);
+            await page.click('#ped-print-only-front');
+            await page.evaluate(() => {state.selectedOSItems = [{itemId: 2}]; updatePedSummary();});
+            assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'both');
+            await page.setViewport({width: 400, height: 700});
+            await page.click('#ped-print-only-back');
+            assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'back');
+            assert.deepEqual(errors, [], file + ': erros no navegador');
+            await page.close();
+        }
+    } finally { await browser.close(); }
+}
 async function main() {
+    await testarTelasReais();
     context.atualizarFacesDeImpressaoDoPedido();
     assert.equal(fields['ped-print-faces'].hidden, false);
     assert.equal(context.faceDeImpressaoDoPedido(), 'both');
@@ -124,6 +218,6 @@ async function main() {
     assert.match(pedido, /const blob = await selecionarFacesDoPdfDoPedido\(await res.blob\(\), faceDoTrabalho, payload.print_mode\)/);
     for (const queue of ['printBlobQueue', 'multiBlobs', 'queue']) assert(pedido.includes('sendPrintJobDirect(' + queue + ', opcoesDeFace)'));
     assert(pedido.includes('criarEntregaDeImpressao(opcoesDeFace)'));
-    console.log('OK: faces, troca de modelo, PDFs reais, ICC, erros e destinos.');
+    console.log('OK: HTMLs reais, modos vinculados, faces, troca de modelo, PDFs reais, ICC, erros e destinos.');
 }
 main().catch(e=>{console.error(e); process.exitCode=1;});
