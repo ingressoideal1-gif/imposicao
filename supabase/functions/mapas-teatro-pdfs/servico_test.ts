@@ -26,7 +26,7 @@ function fixture() {
   const deps: Dependencias = {
     async mapa(id) { chamadas.push("mapa"); if (negar) throw new Recusa(403, "Sem acesso"); assert.equal(id, mapa.id); return structuredClone(mapa); },
     async escritor() { chamadas.push("autor"); return { id: "autor-sintetico" }; },
-    async exportacao(_id, rev) { chamadas.push("consulta"); return row?.revisao_exportacao === rev ? row : null; },
+    async exportacao(_id, rev, versao) { chamadas.push("consulta"); return row?.revisao_exportacao === rev && row?.gerador_versao === versao ? row : null; },
     async upload(path, bytes) { chamadas.push("upload"); if (falha && chamadas.filter(c => c === "upload").length === falha) throw new Recusa(502, "Upload interrompido"); objetos.set(path, bytes); if (mudar) mapa.name = "Mapa alterado"; },
     async finalizar(snapshot, rev, arquivos) {
       chamadas.push("finalizar");
@@ -86,6 +86,40 @@ Deno.test("repetição não duplica upload nem manifesto", async () => {
   await atender(post(await formulario(f.mapa)), f.deps);
   assert.equal(f.chamadas.filter(c => c === "upload").length, antes);
   assert.equal(f.chamadas.filter(c => c === "finalizar").length, 1);
+});
+Deno.test("gerador v1 preserva consulta e bytes; v2 nao reutiliza o PDF antigo", async () => {
+  const f = fixture(), antigo = "a3-v1-20261003";
+  await atender(post(await formulario(f.mapa)), f.deps);
+  f.row.gerador_versao = antigo;
+  for (const a of f.row.arquivos) {
+    const anterior = a.storage_path;
+    a.storage_path = caminho(f.mapa.id, f.row.revisao_exportacao, a.setor_id, a.sha256_arquivo, antigo);
+    f.objetos.set(a.storage_path, f.objetos.get(anterior)!); f.objetos.delete(anterior);
+  }
+  const preservado = structuredClone(f.row);
+  const atual = await (await atender(get(), f.deps)).json();
+  assert.equal(atual.estado, "pendente"); assert.equal(atual.gerador_versao, GERADOR);
+  const historico = await (await atender(get("exportacao?gerador=" + antigo), f.deps)).json();
+  assert.equal(historico.estado, "pronto"); assert.equal(historico.gerador_versao, antigo);
+  const download = await atender(new Request(historico.arquivos[1].pdf_recurso, { headers: { Authorization: auth } }), f.deps);
+  assert.equal(await sha256(new Uint8Array(await download.arrayBuffer())), preservado.arquivos[1].sha256_arquivo);
+  assert.deepEqual(f.row, preservado);
+  // Agora os registros simulados convivem, como na chave unica do banco.
+  const consultar = f.deps.exportacao;
+  f.deps.exportacao = async (id, rev, versao) => versao === antigo && rev === preservado.revisao_exportacao ? preservado : consultar(id, rev, versao);
+  const novo = await (await atender(post(await formulario(f.mapa)), f.deps)).json();
+  assert.equal(novo.estado, "pronto"); assert.equal(novo.gerador_versao, GERADOR);
+  const novamente = await (await atender(get("exportacao?gerador=" + antigo), f.deps)).json();
+  assert.deepEqual(novamente.arquivos, historico.arquivos);
+});
+Deno.test("consulta v1 ausente informa v1; gerador desconhecido e upload v1 recusam", async () => {
+  const f = fixture(), antigo = "a3-v1-20261003";
+  const r = await (await atender(get("exportacao?gerador=" + antigo), f.deps)).json();
+  assert.equal(r.estado, "pendente"); assert.equal(r.gerador_versao, antigo);
+  await assert.rejects(() => atender(get("exportacao?gerador=desconhecido"), f.deps), recusa(422));
+  const form = await formulario(f.mapa); form.set("gerador_versao", antigo);
+  await assert.rejects(() => atender(post(form), f.deps), recusa(409));
+  assert.equal(f.objetos.size, 0);
 });
 Deno.test("mapa alterado durante upload não finaliza revisão antiga", async () => {
   const f = fixture(); f.mudar();

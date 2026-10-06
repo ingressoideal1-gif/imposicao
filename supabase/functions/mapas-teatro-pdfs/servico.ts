@@ -1,7 +1,7 @@
 import "../../../frontend/pdf-lib.min.js";
 import { banco } from "../_compartilhado/banco.ts";
 import { quemConfigura, Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
-import { Arquivo, BUCKET, caminho, GERADOR, Mapa, MAX_ARQUIVO, MAX_TOTAL, recurso, revisao, setores, sha256, textoId } from "./puro.ts";
+import { Arquivo, BUCKET, caminho, GERADOR, GERADORES, Mapa, MAX_ARQUIVO, MAX_TOTAL, recurso, revisao, setores, sha256, textoId } from "./puro.ts";
 
 const PDF = (globalThis as any).PDFLib;
 const TABELA = "producao_mapas_teatro_pdf_exportacoes";
@@ -66,12 +66,12 @@ export const producao: Dependencias = {
     return new Uint8Array(await r.arrayBuffer());
   },
 };
-function resposta(row: any, mapa: Mapa, atual: string, base: string, consultada = atual) {
+function resposta(row: any, mapa: Mapa, atual: string, base: string, consultada = atual, gerador = GERADOR) {
   if (!row) return { mapa_id: mapa.id, nome_mapa: mapa.name, revisao_exportacao: consultada, revisao_atual: consultada === atual,
-    gerador_versao: GERADOR, estado: "pendente", arquivos: [] };
+    gerador_versao: gerador, estado: "pendente", arquivos: [] };
   return { exportacao_id: row.id, mapa_id: row.mapa_id, nome_mapa: row.nome_mapa, revisao_exportacao: row.revisao_exportacao,
     gerador_versao: row.gerador_versao, estado: "pronto", revisao_atual: row.revisao_exportacao === atual,
-    criado_em: row.criado_em, arquivos: row.arquivos.map((a: Arquivo) => ({ ...a, pdf_recurso: recurso(base, mapa.id, row.revisao_exportacao, a.setor_id) })) };
+    criado_em: row.criado_em, arquivos: row.arquivos.map((a: Arquivo) => ({ ...a, pdf_recurso: recurso(base, mapa.id, row.revisao_exportacao, a.setor_id, row.gerador_versao) })) };
 }
 async function corpoLimitado(req: Request): Promise<FormData> {
   if (Number(req.headers.get("content-length") || 0) > MAX_TOTAL || !req.body) throw new Recusa(413, "O envio ultrapassa 30 MB.");
@@ -105,13 +105,13 @@ export async function atender(req: Request, deps: Dependencias = producao): Prom
   const atual = await revisao(mapa), base = url.origin + "/" + partes.slice(0, idx).join("/");
   if (req.method === "GET") {
     const rev = url.searchParams.get("revisao") || atual, versao = url.searchParams.get("gerador") || GERADOR;
-    if (!/^[a-f0-9]{64}$/.test(rev) || versao !== GERADOR) throw new Recusa(422, "Revisão ou gerador inválido.");
+    if (!/^[a-f0-9]{64}$/.test(rev) || !GERADORES.includes(versao)) throw new Recusa(422, "Revisão ou gerador inválido.");
     const row = await deps.exportacao(id, rev, versao);
-    if (acao === "exportacao") return Response.json(resposta(row, mapa, atual, base, rev), { headers: { "Cache-Control": "no-store" } });
+    if (acao === "exportacao") return Response.json(resposta(row, mapa, atual, base, rev, versao), { headers: { "Cache-Control": "no-store" } });
     const setor = url.searchParams.get("setor");
     const a: Arquivo | undefined = row?.arquivos.find((a: Arquivo) => a.setor_id === setor && a.tipo === (setor === null ? "mapa" : "setor"));
     if (!a) throw new Recusa(404, "PDF não publicado para esse mapa, setor e revisão.");
-    if (a.storage_path !== caminho(id, rev, setor, a.sha256_arquivo)) throw new Recusa(502, "Referência do PDF inválida.");
+    if (a.storage_path !== caminho(id, rev, setor, a.sha256_arquivo, versao)) throw new Recusa(502, "Referência do PDF inválida.");
     const bytes = await deps.download(a.storage_path);
     if (bytes.byteLength !== a.tamanho_bytes || await sha256(bytes) !== a.sha256_arquivo) throw new Recusa(502, "O PDF persistido não confere com o registro.");
     return new Response(bytes as BodyInit, { headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="mapa-teatro.pdf"',

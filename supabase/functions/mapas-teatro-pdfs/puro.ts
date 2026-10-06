@@ -2,7 +2,8 @@ import { Recusa } from "../_compartilhado/sessao.ts";
 import "../../../frontend/mapa-teatro-revisao.js";
 
 export const BUCKET = "mapas-teatro-pdfs";
-export const GERADOR = "a3-v1-20261003";
+export const GERADOR = "a3-v2-20261006";
+export const GERADORES = ["a3-v1-20261003", GERADOR];
 export const MAX_ARQUIVO = 10 * 1024 * 1024;
 export const MAX_TOTAL = 30 * 1024 * 1024;
 export type Mapa = { id: string; name: string; config: Record<string, any> };
@@ -47,12 +48,13 @@ export function setores(m: Mapa): { id: string; nome: string; quantidade: number
     return { id, nome: String(s.nome || "Sem nome"), quantidade: cadeiras.length };
   });
 }
-export function caminho(mapa: string, rev: string, setor: string | null, hash: string): string {
-  if (!/^[a-f0-9]{64}$/.test(rev) || !/^[a-f0-9]{64}$/.test(hash)) throw new Recusa(422, "Revisão ou hash inválido.");
-  return `${hexId(mapa)}/${rev}/${GERADOR}/${setor === null ? "mapa" : "setores/" + hexId(setor)}/${hash}.pdf`;
+export function caminho(mapa: string, rev: string, setor: string | null, hash: string, gerador = GERADOR): string {
+  if (!/^[a-f0-9]{64}$/.test(rev) || !/^[a-f0-9]{64}$/.test(hash) || !GERADORES.includes(gerador)) throw new Recusa(422, "Revisão, hash ou gerador inválido.");
+  return `${hexId(mapa)}/${rev}/${gerador}/${setor === null ? "mapa" : "setores/" + hexId(setor)}/${hash}.pdf`;
 }
-export function recurso(base: string, mapa: string, rev: string, setor: string | null): string {
-  const q = new URLSearchParams({ revisao: rev, gerador: GERADOR });
+export function recurso(base: string, mapa: string, rev: string, setor: string | null, gerador = GERADOR): string {
+  if (!GERADORES.includes(gerador)) throw new Recusa(422, "Gerador inválido.");
+  const q = new URLSearchParams({ revisao: rev, gerador });
   if (setor !== null) q.set("setor", setor);
   return `${base}/mapas/${encodeURIComponent(mapa)}/arquivo?${q}`;
 }
