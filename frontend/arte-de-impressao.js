@@ -198,6 +198,11 @@
             }
             const dados = JSON.parse(fd.get('payload'));
             const artes = dados.multi_artes || [];
+            const usaQrIdeal = (artes.length ? artes : [dados]).some(a =>
+                [a.numeracao, a.numeracao_2].some(n => (n?.elements || []).some(e => e?.type === 'QR_IDEAL')));
+            if (usaQrIdeal && !info?.capabilities?.includes('qr_ideal_contrato_v2')) {
+                throw new Error('Atualize o NewProd desta estação antes de gerar QR Ideal. A emissão precisa conferir a reserva dos códigos.');
+            }
             if (artes.length) {
                 // Combinacao usa exclusivamente as faces indexadas por modelo.
                 // Os formularios podem trazer a arte da selecao individual e

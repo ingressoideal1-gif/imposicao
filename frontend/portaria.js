@@ -147,6 +147,7 @@
         opcoes.headers = opcoes.headers || {};
         if (estado.token) opcoes.headers['Authorization'] = 'Bearer ' + estado.token;
         if (opcoes.body) opcoes.headers['Content-Type'] = 'application/json';
+        caminho += (caminho.indexOf('?') < 0 ? '?' : '&') + 'leitor=2';
         return fetch(base() + caminho, opcoes).then(function (r) {
             return r.json().catch(function () { return {}; }).then(function (corpo) {
                 if (!r.ok) {
@@ -331,11 +332,13 @@
     function prontoParaLer() {
         var c = estado.carga;
         return !baixandoCarga && c && (c.credenciais || []).length > 0 &&
+            (!c.publicacao || Number(c.publicacao.leitor_minimo || 1) <= 2) &&
             (!c.publicacao || (c.publicacao.concluida && c.publicacao_baixada === c.publicacao.versao));
     }
     function atualizarProntidao() {
         var pronto = prontoParaLer(), aviso = $('evento-salvo-offline');
-        if (aviso) aviso.textContent = pronto ? 'Pronto para uso offline.'
+        if (aviso) aviso.textContent = estado.carga?.publicacao?.leitor_minimo > 2
+            ? 'Atualize o Ideal Control para ler os ingressos deste evento.' : pronto ? 'Pronto para uso offline.'
             : estado.carga && estado.carga.publicacao && estado.carga.publicacao.concluida
                 ? 'Ingressos publicados. Conecte à internet para concluir o download neste celular.'
                 : 'Aguardando publicação dos ingressos. O evento já pode ser configurado. Conecte à internet para sincronizar.';

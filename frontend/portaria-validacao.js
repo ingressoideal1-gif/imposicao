@@ -47,11 +47,12 @@
     function saisParaTentar(texto, carga) {
         var sais = carga.sais || {};
         var doPedido = pedidoDoConteudo(texto);
-        if (doPedido && sais[doPedido]) return [sais[doPedido]];
-
         var todos = Object.keys(sais).map(function (p) { return sais[p]; });
         if (carga.evento && carga.evento.sal) todos.push(carga.evento.sal);
-        return todos;
+        // O prefixo v2 identifica o modelo; um pedido homônimo NÃO identifica
+        // o sal. Tentar todos também preserva ambiguidades dos códigos comuns.
+        if (doPedido && sais[doPedido]) todos.unshift(sais[doPedido]);
+        return todos.filter(function (s, i) { return s && todos.indexOf(s) === i; });
     }
 
     function setorPorId(carga, id) {

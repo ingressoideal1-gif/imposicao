@@ -1153,6 +1153,7 @@ class ImpositionConfig:
         self.print_mode = print_mode
         self.pdf_expected_items = pdf_expected_items
         self.rotate_page = rotate_page
+        self.numeracao = numeracao
         self.numeracao_2 = numeracao_2
         self.multi_artes = multi_artes or []
         if any(a.get("modo_pdf") for a in self.multi_artes):
@@ -2045,6 +2046,11 @@ class ImpositionEngine:
             if not pedido:
                 continue
             pedido = str(pedido).strip()
+            if hasattr(cfg.pool_qr, "contrato"):
+                contrato = cfg.pool_qr.contratos.get((pedido, modelo))
+                if contrato is None or contrato["versao"] == 2:
+                    # Modelo sem QR ou faixa exclusiva reservada antes do PDF.
+                    continue
             chave = (pedido, _qi.coluna_do_modelo(pedido, modelo))
             anterior = por_pedido_e_coluna.get(chave)
             if anterior is not None and anterior != modelo:

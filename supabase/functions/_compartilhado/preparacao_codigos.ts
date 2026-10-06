@@ -2,6 +2,8 @@
 export const POOL_BYTES = 24_000_000;
 export const POOL_SHA256 = "8e30409786113d484103cb66f88080a99bb67530a4817c245789c8929da35174";
 export const POOL_OBJETO = "ideal-control-master/qr_ideal_pool.bin";
+export const POOL_V2_SHA256 = "931cc39738a68b9eb814e3d9908962bd04e3782893234f881222a0526a6e6d51";
+export const POOL_V2_OBJETO = "ideal-control-master/qr_ideal_pool_qr12_d1.bin";
 
 export function indiceQr(pedido: number, modelo: number, numero: number): number {
   const diferenca = ((pedido % 100 - modelo % 100) + 100) % 100;
@@ -11,7 +13,25 @@ export function indiceQr(pedido: number, modelo: number, numero: number): number
 export type PlanoModelo = {
   modelo: number; setor: string; quantidade: number; inicio: number;
   passo: number; posicao: number; tipo: string; prefix: string; suffix: string; pad: number;
+  qr_contrato?: ContratoQr;
 };
+
+export type ContratoQr = { pedido: number; modelo: number; versao: number; inicio: number;
+  passo: number; posicao: number; quantidade: number; deslocamento: number | null;
+  capacidade: number; pool_revisao: string; fonte_hash: string };
+
+export function indiceContrato(pedido: number, modelo: number, valor: number, c: ContratoQr): number {
+  if (c.pedido !== pedido || c.modelo !== modelo) throw new Error("Contrato QR de outro pedido/modelo.");
+  const pos = valor - c.inicio, offset = c.deslocamento;
+  if (!Number.isSafeInteger(pos) || pos < 0 || pos >= c.capacidade) throw new Error("Número fora da reserva QR.");
+  if (c.versao === 1 && c.pool_revisao === "ideal-master-1") return indiceQr(pedido, modelo, valor);
+  if (c.versao !== 2 || c.pool_revisao !== "ideal-qr12-d1") throw new Error("Versão QR incompatível.");
+  if (!Number.isSafeInteger(pos) || pos < 0 || pos >= c.capacidade || offset === null ||
+      !Number.isSafeInteger(offset) || offset < 0 || offset + c.capacidade > 3000000) {
+    throw new Error("Número fora da reserva QR; base nunca pode dar a volta.");
+  }
+  return offset + pos;
+}
 
 export function planejar(fonte: any[]): PlanoModelo[] {
   const planos: PlanoModelo[] = [];
@@ -47,6 +67,7 @@ export function conteudoDoIngresso(pool: Uint8Array | null, pedido: number, m: P
   const valor = m.inicio + i * m.passo + m.posicao - 1;
   if (m.tipo !== "QR_IDEAL") return m.prefix + String(valor).padStart(m.pad, "0") + m.suffix;
   if (!pool || pool.byteLength !== POOL_BYTES) throw new Error("Base privada indisponível.");
-  const offset = indiceQr(pedido, m.modelo, valor) * 8;
-  return String(pedido).split("").reverse().join("") + new TextDecoder("ascii").decode(pool.subarray(offset, offset + 8));
+  const offset = (m.qr_contrato ? indiceContrato(pedido, m.modelo, valor, m.qr_contrato) : indiceQr(pedido, m.modelo, valor)) * 8;
+  const prefixo = m.qr_contrato?.versao === 2 ? String(m.modelo).slice(-4).padStart(4,"0") : String(pedido);
+  return prefixo.split("").reverse().join("") + new TextDecoder("ascii").decode(pool.subarray(offset, offset + 8));
 }

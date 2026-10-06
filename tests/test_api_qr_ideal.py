@@ -18,6 +18,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import qr_ideal
 
 
+@pytest.fixture(autouse=True)
+def contratos_sinteticos(monkeypatch):
+    import qr_contratos
+    import acesso_local
+    monkeypatch.setattr(acesso_local, "validar", lambda codigo: {"codigo":"SINTETICO","role":"admin","ativo":True})
+    monkeypatch.setattr(qr_contratos, "obter", lambda pedido, **kw: [dict(pedido=int(pedido),modelo=1000022,
+        versao=1,inicio=1,capacidade=30000,deslocamento=None,pool_revisao="ideal-master-1")])
+
+
 def _base36(n: int) -> str:
     alfabeto = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     s = ""
@@ -42,7 +51,7 @@ def pool_sintetico():
 def test_devolve_o_codigo_e_o_conteudo(pool_sintetico, monkeypatch):
     import app as app_mod
     monkeypatch.setattr(app_mod, "_POOL_QR", qr_ideal.PoolQR(pool_sintetico))
-    cliente = TestClient(app_mod.app)
+    cliente = TestClient(app_mod.app, headers={"x-operador-codigo":"SINTETICO"})
 
     r = cliente.get("/api/qr-ideal", params={"pedido": "20272", "modelo": "1000022", "item": 7})
 
@@ -57,7 +66,7 @@ def test_devolve_o_codigo_e_o_conteudo(pool_sintetico, monkeypatch):
 def test_pedido_terminado_em_zero_mantem_o_zero(pool_sintetico, monkeypatch):
     import app as app_mod
     monkeypatch.setattr(app_mod, "_POOL_QR", qr_ideal.PoolQR(pool_sintetico))
-    cliente = TestClient(app_mod.app)
+    cliente = TestClient(app_mod.app, headers={"x-operador-codigo":"SINTETICO"})
 
     r = cliente.get("/api/qr-ideal", params={"pedido": "20270", "modelo": "1000022", "item": 1})
 
@@ -68,7 +77,7 @@ def test_pedido_terminado_em_zero_mantem_o_zero(pool_sintetico, monkeypatch):
 def test_sem_pool_na_maquina_responde_503(monkeypatch):
     import app as app_mod
     monkeypatch.setattr(app_mod, "_POOL_QR", False)
-    cliente = TestClient(app_mod.app)
+    cliente = TestClient(app_mod.app, headers={"x-operador-codigo":"SINTETICO"})
 
     r = cliente.get("/api/qr-ideal", params={"pedido": "20272", "modelo": "1000022", "item": 7})
 
