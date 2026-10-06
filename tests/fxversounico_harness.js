@@ -1,3 +1,5 @@
+// Contrato compartilhado carregado como nas páginas reais.
+global.VersoDoModelo = require('../frontend/cor-numeracao-do-modelo.js').VersoDoModelo;
 // FxVersoUnico: o terceiro Modo de Impressao (usuario, 31/08/2026).
 //
 //   Frente        -- so a frente.
@@ -120,13 +122,11 @@ const api = new Function('state', 'window',
     ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n3', verso_tipo: 'FxVerso', verso: true }) === 'duplex_unico',
         'numeracao FxVersoUnico manda, mesmo com o ERP dizendo so FxVerso');
 
-    // E o ponto que mais importa nao regredir: quase nenhuma numeracao
-    // cadastrada tem print_mode duplex, e um modelo de frente e verso NAO pode
-    // perder o verso porque a numeracao dele diz 'front'.
-    ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n1', verso_tipo: 'FxVerso', verso: true }) === 'duplex',
-        'numeracao Frente nao rebaixa um modelo que o ERP diz ter verso');
-    ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n1', verso_tipo: 'VERSO COMUM', verso: true }) === 'duplex',
-        'o verso_tipo legado do ERP continua valendo');
+    // Contrato de 06/10/2026: modo explícito prevalece sobre o resumo legado.
+    ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n1', verso_tipo: 'FxVerso', verso: true }) === 'front',
+        'print_mode front prevalece sobre o resumo antigo');
+    ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n1', verso_tipo: 'VERSO COMUM', verso: true }) === 'front',
+        'VERSO COMUM antigo não reativa verso com print_mode front');
     ok(api.modoDeVersoDoModelo({ amostra_num_id: 'n1', verso_tipo: 'Frente', verso: false }) === 'front',
         'modelo so de frente continua so de frente');
     ok(api.modoDeVersoDoModelo({ verso_tipo: 'Frente', verso: false }) === 'front',

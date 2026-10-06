@@ -55,18 +55,13 @@ window.versoUnico = versoUnico;
  *
  * Os modos duplex explícitos vivem na numeração
  * (`producao_numeracoes.print_mode`). Eles ACRESCENTAM verso mesmo quando o
- * `verso_tipo` legado ainda diz Frente. Um `front` da numeração não rebaixa o
- * verso do ERP: há cadastros antigos em que esse campo ficou no padrão.
+ * `verso_tipo` legado ainda diz Frente. Um modo explícito da numeração prevalece;
+ * o texto legado só é usado quando o modo não está disponível.
  */
 function modoDeVersoDoModelo(item) {
-    const nid = (typeof numeracaoIdDoItem === 'function') ? numeracaoIdDoItem(item) : null;
+    const nid = typeof numeracaoIdDoItem === 'function' ? numeracaoIdDoItem(item) : null;
     const num = nid ? (state.numeracoes || []).find(n => String(n.id) === String(nid)) : null;
-    if (num?.print_mode === 'pdf_duplicate_back') return 'pdf_duplicate_back';
-    if (versoUnico(num && num.print_mode)) return 'duplex_unico';
-    if (temVerso(num && num.print_mode)) return 'duplex';
-    const tipo = String(item?.verso_tipo || '').trim().toUpperCase();
-    const temVersoNoErp = !!(item && (item.verso === true || (tipo && !['FRENTE', 'SÓ FRENTE', 'SO FRENTE'].includes(tipo))));
-    return temVersoNoErp ? 'duplex' : 'front';
+    return VersoDoModelo.modo(item, num);
 }
 window.modoDeVersoDoModelo = modoDeVersoDoModelo;
 
@@ -7539,7 +7534,7 @@ async function pedQueueUpdateNum(itemId, osId, numId) {
 
         // Atualizar verso_tipo baseado no print_mode da numeração (fonte de verdade: producao_numeracoes)
         const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : temVerso(num.print_mode);
-        const novoVersoTipo = isDuplex ? 'FxVerso' : 'Frente';
+        const novoVersoTipo = VersoDoModelo.resolver(item, num);
         item.verso_tipo = novoVersoTipo;
         item.verso = isDuplex;
         autoSaveOSItemField(itemId, osId, 'verso_tipo', novoVersoTipo);
@@ -7655,14 +7650,14 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
             const el = document.getElementById('ped-qtd');
             if (el) { el.value = value; el.dispatchEvent(new Event('change')); }
         } else if (field === 'verso_tipo') {
-            item.verso = (value === 'FxVerso');
+            item.verso = VersoDoModelo.temVerso(value);
             const printMode = document.getElementById('ped-print-mode');
             if (printMode) {
                 // O `verso_tipo` do ERP só diz se TEM verso; qual dos dois modos
                 // de verso vale é a numeração que sabe. Sem passar por aqui,
                 // salvar qualquer campo do modelo rebaixava um FxVersoUnico a
                 // FxVerso e a folha voltava a consumir o arquivo aos pares.
-                printMode.value = (value === 'FxVerso') ? modoDeVersoDoModelo(item) : 'front';
+                printMode.value = modoDeVersoDoModelo(item);
                 if (typeof updatePedSummary === 'function') {
                     updatePedSummary();
                 }

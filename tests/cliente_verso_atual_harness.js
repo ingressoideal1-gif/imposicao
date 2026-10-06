@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const VersoDoModelo = require('../frontend/cor-numeracao-do-modelo.js').VersoDoModelo;
+global.VersoDoModelo = VersoDoModelo;
 const root = path.join(__dirname, '..');
 const ler = nome => fs.readFileSync(path.join(root, 'frontend', nome), 'utf8').replace(/\r\n/g, '\n');
 const cliente = ler('cliente.js');
@@ -15,7 +17,7 @@ function extrair(src, nome) {
     assert.ok(fim > inicio, nome + ': fim');
     return src.slice(inicio, fim + 2);
 }
-const contexto = { window: {} };
+const contexto = { window: {}, VersoDoModelo };
 vm.createContext(contexto);
 vm.runInContext(extrair(cliente, 'numeracaoTemVersoNoPortal')
     + extrair(cliente, 'deveDesenharVersoAoVivo')
@@ -53,7 +55,7 @@ const tipos = ['FRENTE E VERSO', 'FxVerso', 'VERSO COMUM', 'VERSO VARIÁVEL', 'V
 for (const tipo of tipos) {
     const atual = carregar(tipo, frente);
     assert.equal(atual.verso, false, tipo + ': numeração atual vence');
-    assert.equal(atual.verso_tipo, 'Frente', 'booleano e texto coerentes');
+    assert.equal(atual.verso_tipo, 'SÓ FRENTE', 'booleano e texto coerentes');
     assert.equal(carregar(tipo, null).verso, true, 'sem numeração, preservar ' + tipo);
 }
 for (const tipo of ['Frente', 'SÓ FRENTE', 'SO FRENTE', '', null]) {
@@ -61,11 +63,12 @@ for (const tipo of ['Frente', 'SÓ FRENTE', 'SO FRENTE', '', null]) {
 }
 for (const num of [
     { ...frente, print_mode: 'duplex' },
-    { ...frente, print_mode: 'duplex_unico' },
-    { ...frente, elements: [{ type: 'TEXT', face: 'back' }] }
+    { ...frente, print_mode: 'duplex_unico' }
 ]) {
     assert.equal(carregar('Frente', num).verso, true, 'verso legítimo permanece');
 }
+assert.equal(carregar('FRENTE E VERSO', { ...frente, elements: [{ type: 'TEXT', face: 'back' }] }).verso, false, 'front explícito vence elemento legado');
+
 // O HTML efetivamente entregue ao cliente deixa de criar o bloco do verso.
 const htmlArte = new Function('pdfParesNoPortal', 'pdfCopiaNoPortal', extrair(cliente, 'blocoDeArteDoCliente')
     + '\nreturn blocoDeArteDoCliente;')(
@@ -106,6 +109,7 @@ function selecionar(tipo, num) {
     const item = { ...bruto(tipo), verso: true };
     const saves = [];
     const box = {
+        VersoDoModelo,
         state: { osItens: { os: [item] }, numeracoes: num ? [num] : [] },
         document: { getElementById: () => ({ value: num ? num.id : '' }) },
         pintarSelectDeNumeracao() {}, sincronizarNumeracaoDoItem() {},
@@ -125,7 +129,7 @@ function selecionar(tipo, num) {
 for (const tipo of tipos) {
     const { item, payload } = selecionar(tipo, frente);
     assert.equal(item.verso, false);
-    assert.equal(payload.verso_tipo, 'Frente', tipo + ': salvar a face corrigida');
+    assert.equal(payload.verso_tipo, 'SÓ FRENTE', tipo + ': salvar a face corrigida');
     assert.equal(payload.verso_amostra_arte_base64, null);
     const semNum = selecionar(tipo, null);
     assert.equal(semNum.item.verso, true, 'limpar seletor preserva verso');
@@ -144,7 +148,7 @@ for (const tipo of tipos) {
     const item = { ...bruto(tipo), verso: true };
     atualizarCanvas(item, frente, isNumeracaoDuplex);
     assert.equal(item.verso, false);
-    assert.equal(item.verso_tipo, 'Frente');
+    assert.equal(item.verso_tipo, 'SÓ FRENTE');
     const semNum = { ...bruto(tipo), verso: true };
     atualizarCanvas(semNum, null, isNumeracaoDuplex);
     assert.equal(semNum.verso, true);

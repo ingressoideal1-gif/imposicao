@@ -172,3 +172,69 @@
         module.exports = { reconciliarCorNumDoModelo: reconciliarCorNumDoModelo };
     }
 })(typeof window !== 'undefined' ? window : globalThis);
+
+// Contrato de persistencia: print_mode e a fonte; verso_tipo e seu resumo.
+(function (root) {
+    'use strict';
+    const porModo = Object.freeze({
+        front: 'SÓ FRENTE', duplex: 'FRENTE E VERSO',
+        pdf_duplicate_back: 'FRENTE E VERSO', duplex_unico: 'VERSO FIXO',
+        pdf_odd_even: 'VERSO VARIÁVEL'
+    });
+    function doModo(modo) {
+        return Object.prototype.hasOwnProperty.call(porModo, modo) ? porModo[modo] : null;
+    }
+    function normalizar(valor) {
+        const v = String(valor || '').trim().toUpperCase();
+        if (['FRENTE', 'SÓ FRENTE', 'SO FRENTE'].includes(v)) return 'SÓ FRENTE';
+        if (['FXVERSO', 'FRENTE E VERSO', 'VERSO COMUM'].includes(v)) return 'FRENTE E VERSO';
+        if (v === 'VERSO FIXO') return v;
+        if (['VERSO VARIÁVEL', 'VERSO VARIAVEL'].includes(v)) return 'VERSO VARIÁVEL';
+        return null;
+    }
+    function temVerso(valor) {
+        const tipo = normalizar(valor);
+        return tipo !== null && tipo !== 'SÓ FRENTE';
+    }
+    function resolver(item, num) {
+        return doModo(num?.print_mode) || normalizar(item?.verso_tipo);
+    }
+    function modo(item, num) {
+        // O seletor da imposicao representa PDF em pares como duplex; a
+        // validacao/paginacao PDF continua lendo print_mode na numeracao.
+        if (num?.print_mode === 'pdf_odd_even') return 'duplex';
+        if (doModo(num?.print_mode)) return num.print_mode;
+        const tipo = normalizar(item?.verso_tipo);
+        if (tipo === 'SÓ FRENTE') return 'front';
+        // Sem numeracao, preservar a leitura historica: o rotulo nao permite
+        // reconstruir com seguranca modos PDF ou a paginacao de um verso fixo.
+        return temVerso(tipo) || item?.verso === true || item?.frente_verso === true ? 'duplex' : 'front';
+    }
+    function aplicar(item, num) {
+        const tipo = resolver(item, num);
+        if (tipo) {
+            item.verso_tipo = tipo;
+            item.verso = temVerso(tipo);
+        }
+        return tipo;
+    }
+    // Nao deduzir frente de catalogo ausente, modo desconhecido ou desvinculacao.
+    // A retirada do vinculo preserva o resumo salvo anteriormente.
+    function payload(patch, item, numeracoes) {
+        const result = { ...patch };
+        const id = Object.prototype.hasOwnProperty.call(patch, 'amostra_num_id')
+            ? patch.amostra_num_id : (item?.amostra_num_id || item?.numeracao_id);
+        const num = (numeracoes || []).find(n => id != null && String(n.id) === String(id));
+        const tipo = doModo(num?.print_mode);
+        delete result.verso_tipo;
+        delete result.frente_verso;
+        if (tipo) {
+            result.verso_tipo = tipo;
+            result.frente_verso = temVerso(tipo);
+        }
+        return result;
+    }
+    const api = Object.freeze({ doModo, normalizar, temVerso, resolver, modo, aplicar, payload });
+    root.VersoDoModelo = api;
+    if (typeof module !== 'undefined' && module.exports) module.exports.VersoDoModelo = api;
+})(typeof window !== 'undefined' ? window : globalThis);

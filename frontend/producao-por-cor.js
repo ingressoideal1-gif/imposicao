@@ -177,7 +177,7 @@
             const num = numbering.find(item => String(item.id) === String(numId));
             const back = num && typeof window.isNumeracaoDuplex === 'function'
                 ? (window.isNumeracaoDuplex(num) ? 'FxVerso' : 'Frente')
-                : (['FxVerso', 'VERSO COMUM', 'VERSO VARIÁVEL', 'VERSO VARIAVEL', 'FRENTE E VERSO'].includes(model.verso_tipo) ? 'FxVerso' : 'Frente');
+                : (['FxVerso', 'VERSO COMUM', 'VERSO FIXO', 'VERSO VARIÁVEL', 'VERSO VARIAVEL', 'FRENTE E VERSO'].includes(model.verso_tipo) ? 'FxVerso' : 'Frente');
             return {
                 modelId: model.id,
                 osId: order && order.id,
