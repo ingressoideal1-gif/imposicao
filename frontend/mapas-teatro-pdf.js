@@ -15,7 +15,7 @@
                 const coordenadas = key.split(',');
                 const [x, y] = coordenadas.map(Number);
                 if (coordenadas.length !== 2 || coordenadas.some(v => !v.trim()) || !Number.isFinite(x) || !Number.isFinite(y)) throw Error('Posição inválida no setor ' + s.nome + '.');
-                return { key, x, y, label: String(c.prefixo ?? '') + String(c.num ?? ''), tipo: c.tipo || 'Normal' };
+                return { key, x, y, label: [String(c.prefixo ?? ''), String(c.num ?? '')].filter(v => v !== '').join('-'), tipo: c.tipo || 'Normal' };
             });
             const filas = new Map(), tipos = new Map();
             for (const t of mapa.config.tiposAssento || []) tipos.set(t.id, { ...t, quantidade: 0 });
@@ -103,20 +103,22 @@
                 const page = base('Desenho do setor');
                 page.drawRectangle({ x: area.x, y: area.y, width: area.w, height: area.h, borderWidth: .6, borderColor: rgb(.87, .91, .94), color: rgb(.99, .995, 1) });
                 const step = Math.min((area.w - 20) / cols, (area.h - 20) / rows), side = step * .74;
-                const ox = (area.w - ((cols - 1) * step + side)) / 2, oy = (area.h - ((rows - 1) * step + side)) / 2;
+                const seatWidth = side * 1.30;
+                const ox = (area.w - ((cols - 1) * step + seatWidth)) / 2, oy = (area.h - ((rows - 1) * step + side)) / 2;
                 let n = 0;
                 for (const c of setor.cadeiras) {
                     const x = area.x + ox + (c.x - (b?.minX || 0)) * step, y = area.y + area.h - oy - (c.y - (b?.minY || 0)) * step - side;
                     const t = setor.tipos.find(t => t.id === c.tipo), color = cor(t?.cor);
-                    page.drawRectangle({ x, y, width: side, height: side, borderWidth: .8, borderColor: color, color, opacity: .10, borderOpacity: 1 });
-                    page.drawLine({ start: { x: x + side * .16, y: y + side * .14 }, end: { x: x + side * .84, y: y + side * .14 }, thickness: .9, color });
+                    page.drawRectangle({ x, y, width: seatWidth, height: side, borderWidth: .8, borderColor: color, color, opacity: .10, borderOpacity: 1 });
+                    page.drawLine({ start: { x: x + seatWidth * .16, y: y + side * .14 }, end: { x: x + seatWidth * .84, y: y + side * .14 }, thickness: .9, color });
                     {
-                        const size = Math.min(12, side * .46, side * .85 / Math.max(1, largura(c.label, 1, bold)));
-                        texto(page, c.label, x + (side - largura(c.label, size, bold)) / 2, y + side * .48 - size * .30, size, bold);
+                        const size = Math.min(12, side * .46, seatWidth * .85 / Math.max(1, largura(c.label, 1, bold)));
+                        texto(page, c.label, x + (seatWidth - largura(c.label, size, bold)) / 2, y + side * .48 - size * .30, size, bold);
                         if (c.tipo !== 'Normal') {
-                            page.drawCircle({ x: x + side, y: y + side, size: side * .16, color });
+                            const badgeX = x + seatWidth - side * .16, badgeY = y + side - side * .16;
+                            page.drawCircle({ x: badgeX, y: badgeY, size: side * .16, color });
                             const badgeSize = Math.min(side * .18, side * .28 / Math.max(1, largura(t.codigo, 1, bold)));
-                            texto(page, t.codigo, x + side - largura(t.codigo, badgeSize, bold) / 2, y + side - badgeSize * .30, badgeSize, bold);
+                            texto(page, t.codigo, badgeX - largura(t.codigo, badgeSize, bold) / 2, badgeY - badgeSize * .30, badgeSize, bold);
                         }
                     }
                     if (++n % 500 === 0) await new Promise(r => setTimeout(r, 0));

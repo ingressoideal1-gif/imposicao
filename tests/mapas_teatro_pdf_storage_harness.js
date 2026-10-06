@@ -8,16 +8,20 @@ const fonte = fs.readFileSync(path.join(__dirname, '../frontend/mapas-teatro-pdf
 const rev = 'a'.repeat(64);
 const mapa = { id: 'mapa-sintetico', config: { setores: [{ id: 's1', nome: 'Plateia' }] } };
 const pdf = { revisao: rev, total: 1, bytes: new Uint8Array([1, 2]), arquivos: [{ quantidade: 1, bytes: new Uint8Array([3, 4]) }] };
-function montar() {
+function montar(legado = false) {
     const chamadas = []; let salvo = null, falhar = false, session = true;
+    const historico = legado ? { gerador_versao: 'a3-v1-20261003', estado: 'pronto', arquivos: [{ legado: true }] } : null;
     const c = { FormData, Blob, URLSearchParams, AbortController, setTimeout, clearTimeout, crypto: webcrypto,
         VIBECODE_SUPABASE_URL: 'https://projeto.invalid', supabaseClient: { auth: { async getSession() {
             return { data: { session: session ? { access_token: 'token-sintetico' } : null } };
         } } }, async fetch(url, opts) {
             assert.equal(opts.headers.Authorization, 'Bearer token-sintetico'); chamadas.push(opts.method);
+            const gerador = new URL(url).searchParams.get('gerador');
+            assert.equal(gerador, 'a3-v2-20261006');
             if (falhar && opts.method === 'POST') return Response.json({ detail: 'Upload interrompido' }, { status: 502 });
             if (opts.method === 'POST') {
                 const form = opts.body;
+                assert.equal(form.get('gerador_versao'), gerador);
                 assert.equal(form.get('revisao_exportacao'), rev);
                 const arquivos = JSON.parse(form.get('manifesto'));
                 assert.equal(arquivos.length, 2);
@@ -26,10 +30,10 @@ function montar() {
                 for (const a of arquivos) a.pdf_recurso = url.replace('/exportacao?', '/arquivo?') + (a.setor_id ? '&setor=' + a.setor_id : '');
                 salvo = { mapa_id: mapa.id, revisao_exportacao: rev, gerador_versao: form.get('gerador_versao'), estado: 'pronto', arquivos };
             }
-            return Response.json(salvo || { mapa_id: mapa.id, revisao_exportacao: rev, gerador_versao: 'a3-v1-20261003', estado: 'pendente', arquivos: [] });
+            return Response.json(salvo || (historico?.gerador_versao === gerador ? historico : null) || { mapa_id: mapa.id, revisao_exportacao: rev, gerador_versao: gerador, estado: 'pendente', arquivos: [] });
         } };
     c.window = c; vm.createContext(c); vm.runInContext(fonte, c);
-    return { api: c.MapasTeatroPdfStorage, chamadas, semSessao() { session = false; }, falhar(v) { falhar = v; }, salvo() { return salvo; } };
+    return { api: c.MapasTeatroPdfStorage, chamadas, historico, semSessao() { session = false; }, falhar(v) { falhar = v; }, salvo() { return salvo; } };
 }
 (async () => {
     let n = 0;
@@ -51,5 +55,8 @@ function montar() {
     assert.deepEqual(e.chamadas, []); n++;
     const f = montar(); await f.api.persistir(mapa, pdf); f.salvo().revisao_atual = false;
     await assert.rejects(() => f.api.persistir(mapa, pdf), /alterado durante a consulta/); assert.equal(f.chamadas.filter(x => x === 'POST').length, 1); n++;
+    const g = montar(true), historico = structuredClone(g.historico);
+    assert.equal((await g.api.persistir(mapa, pdf)).gerador_versao, 'a3-v2-20261006');
+    assert.deepEqual(g.chamadas, ['GET', 'POST']); assert.deepEqual(g.historico, historico); n++;
     console.log('OK: ' + n + ' verificações do armazenamento de PDFs, sem rede.');
 })().catch(e => { console.error(e); process.exitCode = 1; });
