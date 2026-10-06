@@ -66,8 +66,11 @@ def aplicar(payload, ler_mapa):
         mapa_id, setor_id = modelo["mapa_teatro_id"], modelo["mapa_teatro_setor_id"]
         if mapa_id not in atuais: atuais[mapa_id] = ler_mapa(mapa_id)
         atual = atuais[mapa_id]
-        if (not atual or atual.get("id") != mapa_id
-                or not any(s.get("id") == setor_id for s in atual.get("config", {}).get("setores", []))):
+        if not atual:
+            raise ValueError("Mapa de teatro não encontrado na conferência atual. Confira o vínculo no ERP.")
+        if atual.get("id") != mapa_id:
+            raise ValueError("O mapa consultado não corresponde ao mapa do modelo.")
+        if not any(s.get("id") == setor_id for s in atual.get("config", {}).get("setores", [])):
             raise ValueError("O setor do modelo não pertence ao mapa consultado.")
         # Bytes JCS produzidos pelo serializador compartilhado; reler a config
         # antes de calcular SHA-256 impede gerar a partir de uma conferência obsoleta.

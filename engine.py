@@ -4591,9 +4591,11 @@ class ImpositionEngine:
 
     def _generate_contracapa_for_chunk(self, set_idx, layer_idx, set_def, cfg):
         doc_c = fitz.open()
-        p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
-        if self.rotate_angle > 0:
-            p.set_rotation(self.rotate_angle)
+        folhas = math.ceil(len(set_def["cover_items"]) / (cfg.rows * cfg.cols)) if set_def.get("cover_items") else 1
+        for _ in range(folhas):
+            p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
+            if self.rotate_angle > 0:
+                p.set_rotation(self.rotate_angle)
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_03_contracapa.pdf")
         _salvar_pdf(doc_c, out_name)
         doc_c.close()
@@ -4652,10 +4654,9 @@ class ImpositionEngine:
         if (item_start.get("csv_row") or {}).get("Origem") == "Mapa de Teatro":
             row_start, row_end = item_start["csv_row"], item_end["csv_row"]
             qtd = item_end["local_idx"] - item_start["local_idx"] + 1
-            bloco_str = row_start.get("Setor") or "Teatro"
-            def rotulo(row):
-                return f"{row.get('Conjunto', 'Fila')} {row['Fila']} / {row['Numero']}"
-            sufixo_str = f" - {rotulo(row_start)} a {rotulo(row_end)} ({qtd} lugares)"
+            bloco_str = f"{row_start.get('Conjunto') or 'Fila'} {row_start['Fila']}"
+            setor = row_start.get("Setor") or "Teatro"
+            sufixo_str = f" - {setor} - de {row_start['Numero']} a {row_end['Numero']} ({qtd} lugares)"
         elif getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
             camarote_num = cfg.c_ini + (bloco_num - 1)
             bloco_str = f"Camarote {camarote_num:02d}"
@@ -4748,7 +4749,15 @@ class ImpositionEngine:
                 start_y + row * (cfg.item_h + cfg.gap_v),
             )
 
-        if set_def["type"] == "assembly":
+        if set_def.get("cover_items"):
+            # Uma capa por FILA do mapa, independente das pilhas do miolo.
+            for ordem, (item_start, item_end) in enumerate(set_def["cover_items"]):
+                P = ordem % poses
+                if ordem > 0 and P == 0:
+                    p = nova_folha()
+                cell_x0, cell_y0 = canto_da_celula(P)
+                self._desenhar_capa_de_bloco(p, cell_x0, cell_y0, item_start, item_end, cfg, multi_map, stack_size)
+        elif set_def["type"] == "assembly":
             # UMA CAPA POR BLOCO, e não por célula (04/09/2026, pedido 21524).
             #
             # Antes a capa da montagem era desenhada célula a célula, como a do

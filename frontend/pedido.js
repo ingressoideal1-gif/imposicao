@@ -1213,7 +1213,16 @@ function drawPedPreview() {
         total_sheets = visible_sheets;
     }
 
-    const folhaBase = sets_needed > 1 || refazerCels
+    const capasTeatroSet = !fontesRefazer && (previewPart === 'capa' || previewPart === 'contracapa')
+        ? window.currentAssemblySets?.[currentSet - 1]?.cover_items : null;
+    if (capasTeatroSet) {
+        visible_sheets = Math.ceil(capasTeatroSet.length / poses_per_sheet);
+        window.currentPreviewPage = Math.max(1, Math.min(window.currentPreviewPage || 1, visible_sheets));
+        const inputFolha = document.getElementById('ped-preview-page-input');
+        if (inputFolha) inputFolha.value = window.currentPreviewPage;
+    }
+
+    const folhaBase = sets_needed > 1 || refazerCels || capasTeatroSet
         ? `Folha ${window.currentPreviewPage || 1} de ${visible_sheets}`
         : `Folha ${window.currentPreviewPage || 1} de ${total_sheets}`;
     let folhaLabel = folhaBase;
@@ -1293,7 +1302,16 @@ function drawPedPreview() {
             // pediu os itens certos ("#22" = o vigésimo segundo do modelo).
             let origemDaCelula = null;
 
-            if (fontesRefazer) {
+            if (capasTeatroSet) {
+                const itemCapa = capasTeatroSet[local_S * poses_per_sheet + P]?.[0];
+                if (!itemCapa) {
+                    desenharCelulaVazia(row, col);
+                    continue;
+                }
+                item_index = itemCapa.global_index;
+                item_local_index = itemCapa.local_index;
+                item_arte_index = itemCapa.arte_index;
+            } else if (fontesRefazer) {
                 // Folha compactada: esta célula recebe o próximo item da lista, na
                 // ordem digitada. O índice é a posição no modelo menos 1.
                 const fonte = fontesRefazer[(local_S * poses_per_sheet) + P];
