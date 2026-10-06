@@ -1,9 +1,9 @@
 {
-  "fonte_commit": "249f789c8e6973d6b04e10a9a8aa869f6d164198",
-  "merge_commit": "0cac10147683e483a57b95eb288f443e4ae543d6",
-  "pr": "https://github.com/ingressoideal1-gif/imposicao/pull/94",
+  "fonte_commit": "051b83241c66c2aed065f6319c74b7c110b062f3",
+  "merge_commit": "af9873aebfabdb1a9b4e88b4e26dfc72b3a83184",
+  "pr": "https://github.com/ingressoideal1-gif/imposicao/pull/95",
   "web_versao": 1023,
-  "agent_versao": "1.2.357",
+  "agent_versao": "1.2.358",
   "web": [
     {
       "domain": "imposition.ai-ideal.com.br",
@@ -230,37 +230,41 @@
     "versoes": [
       {
         "porta": 9000,
-        "versao": "NewProd 1.2.357",
+        "versao": "NewProd 1.2.358",
         "qr12": true
       },
       {
         "porta": 9001,
-        "versao": "NewProd 1.2.357-piloto-local.27",
+        "versao": "NewProd 1.2.358-piloto-local.27",
         "qr12": true
       }
     ],
     "assets": 22,
     "conferidos": 22,
     "divergencias": [],
-    "exe_producao_sha256": "6f787b762e619de92ef8e4543d84d323b1cbbdd40360139e72c89ff499d9e4c6"
+    "exe_producao_sha256": "7794290651f08afd4e8266ea6a1d2bff5a866a00d7a87a8c976a02692e31d67c"
   },
   "msi": {
-    "sha256": "c01622798960516460684f7a6d0be1104fa3b8b435678e84cd81f659b0e7d96b",
     "bytes": 157282304,
-    "manifesto_conferido": true,
-    "publico_conferido": true
+    "sha256": "220880d8a2ef2124fd49d47806c4db8a8003d5ce74ebfb06785cac179ea52142",
+    "publico_conferido": true,
+    "manifesto_conferido": true
   },
   "edge": {
-    "portaria": 262,
-    "acesso-estacao": 258,
-    "acesso-interno": 262
+    "acesso-estacao": 259,
+    "portaria": 263,
+    "acesso-interno": 263
   },
   "banco": {
     "rls_4_tabelas": true,
     "reservas_legadas": 539,
     "aplicado": true,
     "ativo": false,
-    "indice_identidade_valido": true
+    "indice_identidade_valido": true,
+    "corte": "infinity",
+    "pool_revisao": "ideal-qr12-1",
+    "contratos": 0,
+    "trava_suspensao": true
   },
   "pedido_23063": {
     "confirmacao_impressao_anterior": "pendente",
@@ -272,5 +276,76 @@
     "sem impressao fisica",
     "sem camera de celular",
     "atualizacao de aparelhos offline nao comprovada"
+  ],
+  "etapa_intermediaria_1_2_357": {
+    "fonte_commit": "249f789c8e6973d6b04e10a9a8aa869f6d164198",
+    "merge_commit": "0cac10147683e483a57b95eb288f443e4ae543d6",
+    "pr": "https://github.com/ingressoideal1-gif/imposicao/pull/94",
+    "agent_versao": "1.2.357",
+    "msi": {
+      "sha256": "c01622798960516460684f7a6d0be1104fa3b8b435678e84cd81f659b0e7d96b",
+      "bytes": 157282304,
+      "manifesto_conferido": true,
+      "publico_conferido": true
+    },
+    "edge": {
+      "portaria": 262,
+      "acesso-estacao": 258,
+      "acesso-interno": 262
+    },
+    "estacoes_locais": {
+      "versoes": [
+        {
+          "porta": 9000,
+          "versao": "NewProd 1.2.357",
+          "qr12": true
+        },
+        {
+          "porta": 9001,
+          "versao": "NewProd 1.2.357-piloto-local.27",
+          "qr12": true
+        }
+      ],
+      "assets": 22,
+      "conferidos": 22,
+      "divergencias": [],
+      "exe_producao_sha256": "6f787b762e619de92ef8e4543d84d323b1cbbdd40360139e72c89ff499d9e4c6"
+    }
+  },
+  "base_independente": {
+    "bytes": 24000000,
+    "sha256": "6e968837c7f16a9acd0b0a46adfa84bbb1137dae75010f64512ca7f01351e1dc",
+    "codigos_unicos": 3000000,
+    "intersecao_legado": 0,
+    "storage_privado_conferido": true,
+    "provisionada": [
+      "PC-JR-HOME producao",
+      "PC-JR-HOME piloto"
+    ]
+  },
+  "testes_finais": {
+    "python_sql_afetados": 76,
+    "sql_incluidos": 10,
+    "deno": 330,
+    "producao": 389,
+    "piloto": 389,
+    "skips_por_canal": 2
+  },
+  "backup_final": {
+    "nome": "backup-20261005-215124-be624240",
+    "bytes": 190686215,
+    "sha256": "e358fd2473fecc987bae87f79d55c61468331338c9102bca6778baf8c0497413",
+    "restaurado": true,
+    "refs": 1218,
+    "runtime_conferidos": 10,
+    "drive_desktop_copia_conferida": true,
+    "sincronizacao_remota_drive_comprovada": false
+  },
+  "conferencia_final_utc": "2026-10-06T01:00:57.485959+00:00",
+  "pendencias": [
+    "Confirmar impressao/entrega anterior do pedido 23063",
+    "Provisionar base privada nas demais estacoes do evento",
+    "Validar evento controlado em papel e aparelhos antes da ativacao geral",
+    "FLEXO sem sinal recente; demais estacoes em atualizacao automatica"
   ]
 }
