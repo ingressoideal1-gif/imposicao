@@ -15,7 +15,7 @@ const expected = {
     duplex_unico: 'VERSO FIXO', pdf_odd_even: 'VERSO VARIÁVEL'
 };
 function scenario(mode, options = {}) {
-    const item = { id: 1, id_int: 123, amostra_num_id: 'n', verso_tipo: 'FxVerso', verso: true };
+    const item = { id: 1, id_int: 123, amostra_num_id: 'anterior', verso_tipo: mode === 'front' ? 'SÓ FRENTE' : 'VERSO FIXO', verso: mode !== 'front' };
     const row = { ...item };
     const calls = [], notices = [];
     const ctx = { window: {}, VersoDoModelo, console: { error() {} },
@@ -49,59 +49,54 @@ function scenario(mode, options = {}) {
             const item = { amostra_num_id: 'n', verso_tipo: old, verso: true };
             const num = { id: 'n', print_mode: mode };
             const patch = VersoDoModelo.payload({ verso_tipo: old }, item, [num]);
-            assert.equal(patch.verso_tipo, label);
-            assert.equal(patch.frente_verso, mode !== 'front');
+            assert(!('verso_tipo' in patch));
+            assert(!('frente_verso' in patch));
             assert.equal(item.verso_tipo, old, 'construir payload não modifica o modelo');
             assert.equal(VersoDoModelo.modo(item, num), mode === 'pdf_odd_even' ? 'duplex' : mode);
         }
         for (const local of [false, true]) {
             const s = scenario(mode, { local });
             await s.ctx.autoSaveOSItemField(1, 'vibe_123', 'verso_tipo', 'FxVerso');
-            if (local) {
-                assert.equal(s.calls.length, 0, 'rota antiga não confirma escrita moderna');
-                assert.equal(s.notices.length, 1);
-                continue;
-            }
-            assert.equal(s.calls[0].body.verso_tipo, label);
-            assert.equal(s.calls[0].body.frente_verso, mode !== 'front');
+            assert.equal(s.calls.length, 0, 'Imposition nao altera a categoria do Vibe');
         }
         const s = scenario(mode);
         await s.ctx.saveAmostraToDB(1, 'vibe_123', { amostra_num_id: 'n', verso_tipo: 'FxVerso' });
-        assert.equal(s.row.verso_tipo, label);
-        assert.equal(s.row.frente_verso, mode !== 'front');
-        assert.equal(s.item.verso_tipo, label);
+        const solicitado = mode === 'front' ? 'SÓ FRENTE' : 'VERSO FIXO';
+        assert.equal(s.row.verso_tipo, solicitado);
+        assert(!('frente_verso' in s.calls[0].body));
+        assert.equal(s.item.verso_tipo, solicitado);
         assert.deepEqual(s.calls[0].filters, [['id', 1], ['id_int', 123]]);
     }
     for (const mode of [null, 'desconhecido']) {
         const s = scenario(mode);
         await s.ctx.autoSaveOSItemField(1, 'vibe_123', 'verso_tipo', 'Frente');
         assert.equal(s.calls.length, 0, 'não sobrescrever resumo sem modo conhecido');
-        assert.equal(s.item.verso_tipo, 'FxVerso');
+        assert.equal(s.item.verso_tipo, 'VERSO FIXO');
     }
     const removed = scenario('duplex');
     await removed.ctx.saveAmostraToDB(1, 'vibe_123', { amostra_num_id: null });
     assert.equal(removed.row.amostra_num_id, null);
-    assert.equal(removed.row.verso_tipo, 'FxVerso');
+    assert.equal(removed.row.verso_tipo, 'VERSO FIXO');
     assert(!('verso_tipo' in removed.calls[0].body));
     const other = scenario('duplex');
     await other.ctx.saveAmostraToDB(1, 'vibe_123', { modo_pdf: true });
     assert(!('verso_tipo' in other.calls[0].body), 'edição não relacionada não converte histórico');
     const failed = scenario('front', { fail: true });
-    await assert.rejects(failed.ctx.saveAmostraToDB(1, 'vibe_123', { verso_tipo: 'FxVerso' }));
-    assert.equal(failed.item.verso_tipo, 'FxVerso');
-    assert.equal(failed.row.verso_tipo, 'FxVerso');
+    await assert.rejects(failed.ctx.saveAmostraToDB(1, 'vibe_123', { amostra_num_id: 'n' }));
+    assert.equal(failed.item.verso_tipo, 'SÓ FRENTE');
+    assert.equal(failed.row.verso_tipo, 'SÓ FRENTE');
     for (const options of [{ fail: true }, { empty: true }]) {
         const s = scenario('front', options);
-        await s.ctx.autoSaveOSItemField(1, 'vibe_123', 'verso_tipo', 'Frente');
+        await s.ctx.autoSaveOSItemField(1, 'vibe_123', 'numeracao_id', 'n');
         assert.equal(s.notices.length, 1, 'falha ou zero linhas devem avisar');
-        assert.equal(s.item.verso_tipo, 'FxVerso', 'falha restaura o resumo local');
+        assert.equal(s.item.verso_tipo, 'SÓ FRENTE', 'falha preserva a categoria do Vibe');
     }
     const changed = scenario('duplex_unico');
     changed.item.amostra_num_id = 'anterior';
     await changed.ctx.autoSaveOSItemField(1, 'vibe_123', 'numeracao_id', 'n');
-    assert.equal(changed.calls.length, 1, 'vínculo e resumo no mesmo UPDATE');
+    assert.equal(changed.calls.length, 1, 'vinculo em um UPDATE sem reescrever a categoria');
     assert.equal(changed.calls[0].body.amostra_num_id, 'n');
-    assert.equal(changed.calls[0].body.verso_tipo, 'VERSO FIXO');
+    assert(!('verso_tipo' in changed.calls[0].body));
     assert.equal(VersoDoModelo.temVerso('SÓ FRENTE'), false);
     assert.equal(VersoDoModelo.temVerso('VERSO FIXO'), true);
     for (const html of ['index.html', 'producao.html', 'cliente.html']) {

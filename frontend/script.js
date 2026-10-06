@@ -1798,7 +1798,7 @@ function normalizarNumeracaoLida(n) {
         const metadataEl = n.elements.find(el => el && el.type === 'METADATA');
         if (metadataEl) {
             // Se a coluna nao tem print_mode, extrair do METADATA
-            if (!n.print_mode || n.print_mode === 'front') {
+            if (!n.print_mode) {
                 if (metadataEl.print_mode) n.print_mode = metadataEl.print_mode;
             }
             n.elements = n.elements.filter(el => !el || el.type !== 'METADATA');
@@ -5188,6 +5188,7 @@ window.onFormatoSelect = function (clearElements = true) {
 
 
 window.onNumPrintModeChange = function() {
+    atualizarRestricaoModoVibe('num');
     const printMode = document.getElementById('num-print-mode')?.value || 'front';
     const containerVerso = document.getElementById('num-canvas-container-verso');
     const titleFrente = document.getElementById('num-canvas-title-frente');
@@ -5400,6 +5401,109 @@ function modoDeVersoDoModelo(item) {
     return VersoDoModelo.modo(item, num);
 }
 window.modoDeVersoDoModelo = modoDeVersoDoModelo;
+
+function modelosDoEditorVibe() {
+    const contexto = window.customNumeracaoEditState;
+    if (!contexto) return [];
+    if (contexto.view === 'imposicao' && !contexto.itemId) return [];
+    const item = (state.osItens[contexto.osId] || []).find(i => String(i.id) === String(contexto.itemId));
+    return item ? [item] : [{ verso_tipo: null }];
+}
+
+function atualizarRestricaoModoVibe(prefixo) {
+    const select = document.getElementById(prefixo + '-print-mode');
+    if (!select) return;
+    const itens = prefixo === 'num' ? modelosDoEditorVibe()
+        : itensDaImposicao((state.selectedOSItems || []).length > 1);
+    const mensagem = VersoDoModelo.limitarSelect(select, itens);
+    const avisoId = prefixo + '-modo-aviso-vibe';
+    let aviso = document.getElementById(avisoId);
+    if (!aviso && itens.length && select.parentNode) {
+        aviso = document.createElement('small');
+        aviso.id = avisoId;
+        aviso.setAttribute('role', 'status');
+        aviso.style.cssText = 'display:block;margin-top:6px;color:var(--text-dim);white-space:normal';
+        select.parentNode.appendChild(aviso);
+    }
+    if (aviso) {
+        aviso.textContent = mensagem || (itens.length ? 'Opções conforme o pedido. Para mudar entre só frente e com verso, altere no Vibe.' : '');
+        aviso.hidden = !itens.length;
+    }
+}
+
+async function lerModeloModoVibe(item, osId) {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Conecte ao banco para conferir o tipo de impressão informado no Vibe.');
+    const pedido = item.id_int || findOSInState(item.os_id || osId)?.numero;
+    const id = item._pedidoModeloId || item.id;
+    if (!id || !pedido) throw new Error('Reabra o pedido para identificar o modelo antes de alterar ou imprimir.');
+    const { data, error } = await supabaseClient.from('pedidos_modelos')
+        .select('id,id_int,verso_tipo,amostra_num_id').eq('id', id).eq('id_int', pedido).maybeSingle();
+    if (error || !data) throw new Error('Não foi possível conferir o modelo no Vibe. Reabra o pedido.');
+    return data;
+}
+
+async function conferirModoVibeDaNumeracao(id, modo) {
+    if (!VersoDoModelo.doModo(modo)) throw new Error('Modo de impressão desconhecido.');
+    for (const item of modelosDoEditorVibe()) {
+        const atual = await lerModeloModoVibe(item, window.customNumeracaoEditState?.osId);
+        const erro = VersoDoModelo.erro(atual, modo);
+        if (erro) throw new Error(erro);
+    }
+    if (!id) return;
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Conecte ao banco para conferir os modelos vinculados à numeração.');
+    // Conferir todos os vinculos visiveis, sem tratar uma pagina parcial como lista completa.
+    for (let inicio = 0; ; inicio += 500) {
+        const { data, error } = await supabaseClient.from('pedidos_modelos')
+            .select('id,verso_tipo').eq('amostra_num_id', id).order('id').range(inicio, inicio + 499);
+        if (error || !Array.isArray(data)) throw new Error('Não foi possível conferir os modelos vinculados à numeração.');
+        const incompatível = data.find(item => !VersoDoModelo.compativel(item.verso_tipo, modo));
+        if (incompatível) throw new Error('A numeração está vinculada a um pedido incompatível com esse modo. Ajuste o pedido no Vibe ou use uma numeração exclusiva.');
+        if (data.length < 500) break;
+    }
+}
+
+async function conferirModoVibeDoTrabalho(prefixo, modoDoPayload) {
+    const itens = itensDaImposicao((state.selectedOSItems || []).length > 1);
+    const esperados = (state.selectedOSItems || []).length > 1 ? state.selectedOSItems.length
+        : (state.activeOSItem || (state.selectedOSItems || []).length ? 1 : 0);
+    if (!itens.length && !esperados) return true; // Imposicao avulsa, sem pedido comercial.
+    if (itens.length !== esperados) {
+        toast('A seleção não está completamente carregada. Reabra o pedido.', 'warning');
+        return false;
+    }
+    const selecionado = document.getElementById(prefixo + '-print-mode')?.value || state.printMode;
+    const contexto = JSON.stringify([state.activeOSItem, state.selectedOSItems, selecionado]);
+    try {
+        if (modoDoPayload != null && modoDoPayload !== selecionado) throw new Error('O modo mudou durante a preparação. Gere novamente.');
+        for (const item of itens) {
+            const atual = await lerModeloModoVibe(item, state.activeOSItem?.osId);
+            if (VersoDoModelo.normalizar(atual.verso_tipo) !== VersoDoModelo.normalizar(item.verso_tipo)) {
+                throw new Error('O tipo de impressão mudou no Vibe. Reabra o pedido antes de gerar ou imprimir.');
+            }
+            const numId = numeracaoIdDoItem(item);
+            if (!numId || String(atual.amostra_num_id) !== String(numId)) throw new Error('A numeração vinculada mudou ou está ausente. Reabra o pedido.');
+            const numSelecionada = document.getElementById(prefixo + '-numeracao')?.value;
+            if (itens.length === 1 && numSelecionada && String(numSelecionada) !== String(numId)) throw new Error('Vincule a numeração escolhida ao modelo antes de gerar ou imprimir.');
+            const { data: num, error } = await supabaseClient.from('producao_numeracoes')
+                .select('id,print_mode').eq('id', numId).maybeSingle();
+            if (error || !num) throw new Error('Não foi possível conferir o modo da numeração.');
+            const erro = VersoDoModelo.erro(atual, num.print_mode);
+            if (erro) throw new Error(erro);
+            const carregada = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+            if (num.print_mode !== carregada?.print_mode) throw new Error('A numeração mudou. Reabra o pedido antes de gerar ou imprimir.');
+            const modoEsperado = num.print_mode === 'pdf_odd_even' ? 'duplex' : num.print_mode;
+            if (selecionado !== modoEsperado) throw new Error('O modo do trabalho deve acompanhar a numeração. Altere o modo no editor da numeração e reabra o pedido.');
+        }
+        const agora = document.getElementById(prefixo + '-print-mode')?.value || state.printMode;
+        if (contexto !== JSON.stringify([state.activeOSItem, state.selectedOSItems, agora])) throw new Error('A seleção mudou durante a conferência. Gere novamente.');
+        return true;
+    } catch (error) {
+        toast(error.message, 'warning');
+        return false;
+    }
+}
+window.atualizarRestricaoModoVibe = atualizarRestricaoModoVibe;
+window.conferirModoVibeDoTrabalho = conferirModoVibeDoTrabalho;
 
 function isNumeracaoDuplex(numObj) {
     if (!numObj) return false;
@@ -9870,6 +9974,10 @@ window.saveNumeracao = async function () {
     const erroTicket = erroDaNumeracaoTicket(tipo, document.getElementById('num-ticket-qtd').value, state.numElements);
     if (erroTicket) return toast(erroTicket, 'warning');
 
+    try {
+        await conferirModoVibeDaNumeracao(null, document.getElementById('num-print-mode')?.value);
+    } catch (error) { return toast(error.message, 'warning'); }
+
     // O id de destino precisa ser conhecido ANTES do upload: o preview vai para o
     // Storage com o nome do registro. São três caminhos de gravação — editar,
     // substituir uma numeração homônima, ou criar — e os três têm que apontar para
@@ -10364,6 +10472,8 @@ window.saveNumeracao = async function () {
         // comentário no `idDaNumeracaoGravada` lá embaixo.
         let idDaNumeracaoGravada = null;
 
+        await conferirModoVibeDaNumeracao(id || homonima?.id || null, data.print_mode);
+
         if (id) {
 
             await api('PUT', `/numeracoes/${id}`, data);
@@ -10838,6 +10948,7 @@ function drawPreview() {
     const activeItem = state.activeOSItem;
     
     const printModeEl = document.getElementById('imp-print-mode');
+    atualizarRestricaoModoVibe('imp');
     if (printModeEl) {
         state.printMode = printModeEl.value;
     } else if (activeItem) {
@@ -13188,6 +13299,7 @@ window.runImposition = async function (mode, returnBlob = false) {
     if (mode === 'print' && !confirmarRetomadaImpressao()) return;
     if (state.imposicaoSelecaoCarregando || state.pedidoSelecaoCarregando) return toast('Aguarde o carregamento completo do modelo.', 'warning');
     if (state.imposicaoSelecaoErro) return toast('Reabra o modelo: ' + state.imposicaoSelecaoErro, 'error');
+    if (!await conferirModoVibeDoTrabalho('imp')) return;
     if ((state.selectedOSItems || []).length > 1 && itensDaImposicao(true).some(i => i.modo_pdf)) {
         return toast('Gere a combinação de PDFs paginados pela janela do Pedido no Painel de Produção.', 'warning');
     }
@@ -14223,6 +14335,7 @@ window.runImposition = async function (mode, returnBlob = false) {
         // direto, sem a Vercel no caminho e sem limite de corpo. Se nao houvesse
         // estacao, o ramo `else` da sondagem ja teria lancado.
         const urlImpose = `${baseUrl}/api/impose`;
+        if (!await conferirModoVibeDoTrabalho('imp', payload.print_mode)) throw new Error('Geração cancelada: configuração do pedido não confirmada.');
 
         await window.TeatroBanco?.conferirMotor(formData, baseUrl, impositionAbortController.signal);
         await confirmarIntegridadeDoTrabalho(formData, baseUrl, state, supabaseClient, impositionAbortController.signal);
@@ -28132,8 +28245,9 @@ async function loadOSItens(osId, opcoes = {}) {
                         const matchedNum = resolvedNumId ? (state.numeracoes || []).find(n => String(n.id) === String(resolvedNumId)) : null;
                         const numIsDuplex = isNumeracaoDuplex(matchedNum);
                         // Fonte de verdade: print_mode da numeração em producao_numeracoes
-                        const resolvedVersoTipo = VersoDoModelo.resolver(item, matchedNum) || item.verso_tipo;
-                        const itemVerso = resolvedVersoTipo ? VersoDoModelo.temVerso(resolvedVersoTipo) : !!item.frente_verso;
+                        const resolvedVersoTipo = item.verso_tipo;
+                        const tipoEfetivo = VersoDoModelo.resolver(item, matchedNum);
+                        const itemVerso = tipoEfetivo ? VersoDoModelo.temVerso(tipoEfetivo) : !!item.frente_verso;
 
                         const resolvedNumeracao = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || item.tipo_numeracao || item.numeracao);
                         const resolvedGabarito = matchedNum ? (matchedNum.name || matchedNum.tipo) : (item.gabarito_operacional || null);
@@ -32894,6 +33008,7 @@ function matchNumeracao(numText, formatoId) {
  * Auto-salva um campo do item da OS (formato_id, cor_id, numeracao_id)
  */
 async function autoSaveOSItemField(itemId, osId, field, value) {
+    if (field === 'verso_tipo' || field === 'frente_verso') return;
     // A quantidade de cada modelo pertence ao ERP, inclusive depois da arte pronta.
     if (field === 'qtd' || field === 'quantidade') return;
     const itemAntes = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
@@ -33069,6 +33184,7 @@ window.agendarRedesenhoDasFilas = agendarRedesenhoDasFilas;
  * Salva um campo do item ativo atualmente selecionado na imposição
  */
 async function saveActiveOSItemField(field, value) {
+    if (field === 'verso_tipo' || field === 'frente_verso') return;
     if (window.NavegacaoPainel?.restaurando()) return;
     if (field === 'qtd' || field === 'quantidade') return;
     if (state.activeOSItem) {
@@ -33120,22 +33236,24 @@ function onImposicaoFormatoChange(value) {
 window.onImposicaoFormatoChange = onImposicaoFormatoChange;
 
 function onImposicaoNumeracaoChange(value) {
+    const ativo = state.activeOSItem;
+    const item = ativo && (state.osItens[ativo.osId] || []).find(i => String(i.id) === String(ativo.itemId));
+    const escolhida = (state.numeracoes || []).find(n => String(n.id) === String(value));
+    if (item && value && VersoDoModelo.erro(item, escolhida?.print_mode)) {
+        const select = document.getElementById('imp-numeracao');
+        if (select) select.value = numeracaoIdDoItem(item) || '';
+        return toast(VersoDoModelo.erro(item, escolhida?.print_mode), 'warning');
+    }
     updateImpSummary();
     toggleImpNumEditButtons();
     saveActiveOSItemField('numeracao_id', value);
     const numObj = state.numeracoes.find(n => String(n.id) === String(value));
     saveActiveOSItemField('numeracao', numObj ? (numObj.name || numObj.tipo) : null);
     
-    // Se a numeração contém verso, mudar automaticamente para duplex (frente e verso).
-    // O modo da PRÓPRIA numeração vem primeiro: uma numeração FxVersoUnico não
-    // pode ser rebaixada a FxVerso por este atalho, senão a folha volta a
-    // consumir o arquivo aos pares.
+    // O trabalho acompanha exatamente o modo da numeração escolhida.
     if (numObj) {
-        const modoDaNum = versoUnico(numObj.print_mode) ? 'duplex_unico' : 'duplex';
-        const hasVerso = temVerso(numObj.print_mode) ||
-                         (numObj.name && numObj.name.toLowerCase().includes('verso')) ||
-                         (numObj.elements && numObj.elements.some(el => el.face === 'back'));
-        if (hasVerso) {
+        const modoDaNum = VersoDoModelo.modo(item, numObj);
+        if (modoDaNum) {
             const printMode = document.getElementById('imp-print-mode');
             if (printMode && printMode.value !== modoDaNum) {
                 printMode.value = modoDaNum;
@@ -33167,11 +33285,7 @@ window.onImposicaoEndInput = onImposicaoEndInput;
 
 function onImposicaoPrintModeChange(value) {
     updateImpSummary();
-    const ativo = state.activeOSItem;
-    const item = ativo && (state.osItens[ativo.osId] || []).find(i => String(i.id) === String(ativo.itemId));
-    const num = item && (state.numeracoes || []).find(n => String(n.id) === String(numeracaoIdDoItem(item)));
-    const tipo = VersoDoModelo.doModo(num?.print_mode);
-    if (tipo) saveActiveOSItemField('verso_tipo', tipo);
+    atualizarRestricaoModoVibe('imp');
 }
 window.onImposicaoPrintModeChange = onImposicaoPrintModeChange;
 
@@ -34161,6 +34275,10 @@ function impQueueUpdateNum(itemId, osId, numId) {
     const item = itens.find(i => String(i.id) === String(itemId));
     if (!item) return;
     const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    if (numId && VersoDoModelo.erro(item, num?.print_mode)) {
+        renderImpOSQueue();
+        return toast(VersoDoModelo.erro(item, num?.print_mode), 'warning');
+    }
     if (num) {
         item.numeracao = num.name || num.tipo;
         item.numeracao_id = num.id;
@@ -34192,11 +34310,8 @@ function impQueueUpdateNum(itemId, osId, numId) {
 
         // Atualizar modo de verso baseado na numeração
         const isDuplex = typeof isNumeracaoDuplex === 'function' ? isNumeracaoDuplex(num) : false;
-        const novoVersoTipo = VersoDoModelo.resolver(item, num);
         
-        item.verso_tipo = novoVersoTipo;
         item.verso = isDuplex;
-        autoSaveOSItemField(itemId, osId, 'verso_tipo', novoVersoTipo);
 
         // Recalcular num_final
         let ticket_qtd = 1;
@@ -37072,6 +37187,11 @@ function onItemNumSelect(idx, osId, itemId) {
     const modoBadge = document.getElementById(`amostra-item-print-mode-${idx}`);
     if (modoBadge) modoBadge.textContent = `Modo de impressão: ${numObj ? rotuloDoModoDeImpressao(numObj) : '—'}`;
     const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
+    if (item && numId && VersoDoModelo.erro(item, numObj?.print_mode)) {
+        numSelect.value = numeracaoIdDoItem(item) || '';
+        if (modoBadge) modoBadge.textContent = 'Numeração não alterada: modo incompatível com o pedido.';
+        return toast(VersoDoModelo.erro(item, numObj?.print_mode), 'warning');
+    }
     
     let versoStateChanged = false;
     let limparAmostraVerso = false;
@@ -37107,9 +37227,6 @@ function onItemNumSelect(idx, osId, itemId) {
         gabarito_operacional: numNome || null,
         tipo_numeracao: numNome || null
     };
-    if (item && item.verso_tipo) {
-        dataToSave.verso_tipo = item.verso_tipo;
-    }
     if (limparAmostraVerso) {
         // _isExplicitRemove é obrigatório: sem ele o guard do saveAmostraToDB
         // descarta o null em silêncio e a amostra continuaria no banco.
@@ -37730,6 +37847,8 @@ window.resolveItemCorNumIds = resolveItemCorNumIds;
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
     // Salvar uma arte não pode devolver ao ERP uma quantidade antiga do cache.
     dataToUpdate = { ...dataToUpdate };
+    delete dataToUpdate.verso_tipo;
+    delete dataToUpdate.frente_verso;
     delete dataToUpdate.qtd;
     delete dataToUpdate.quantidade;
     if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Sem conexão para confirmar o salvamento.');
@@ -37842,7 +37961,7 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
             dbData.amostra_num_id = itemLocal.amostra_num_id;
         }
 
-        if ('verso_tipo' in dataToUpdate || 'amostra_num_id' in dataToUpdate) {
+        {
             const resumoVerso = VersoDoModelo.payload(dbData, itemLocal, state.numeracoes);
             delete dbData.verso_tipo;
             delete dbData.frente_verso;
@@ -40856,6 +40975,7 @@ window.editImposicaoCustomNumeracao = async function(fieldId) {
     window.customNumeracaoEditState = {
         view: 'imposicao',
         fieldId: fieldId,
+        osId: activeOSItem ? activeOSItem.osId : null,
         modeloName: impName,
         // O modelo de origem também aqui: sem ele, o `os_item_id` da numeração
         // gravada por este caminho saía `undefined`, e a regra do nome (que

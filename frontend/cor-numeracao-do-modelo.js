@@ -173,7 +173,7 @@
     }
 })(typeof window !== 'undefined' ? window : globalThis);
 
-// Contrato de persistencia: print_mode e a fonte; verso_tipo e seu resumo.
+// Vibe define se o pedido tem verso. A numeracao conserva o modo e os elementos.
 (function (root) {
     'use strict';
     const porModo = Object.freeze({
@@ -212,29 +212,51 @@
     }
     function aplicar(item, num) {
         const tipo = resolver(item, num);
-        if (tipo) {
-            item.verso_tipo = tipo;
-            item.verso = temVerso(tipo);
-        }
+        if (tipo) item.verso = doModo(num?.print_mode) ? num.print_mode !== 'front' : temVerso(tipo);
         return tipo;
     }
-    // Nao deduzir frente de catalogo ausente, modo desconhecido ou desvinculacao.
-    // A retirada do vinculo preserva o resumo salvo anteriormente.
+    function compativel(tipo, modo) {
+        const categoria = normalizar(tipo);
+        return !!categoria && !!doModo(modo) && (categoria === 'SÓ FRENTE') === (modo === 'front');
+    }
+    function erro(item, modo) {
+        if (!normalizar(item?.verso_tipo)) return 'Informe o tipo de impressão no Vibe e reabra o pedido.';
+        if (!compativel(item.verso_tipo, modo)) return 'Modo incompatível com o pedido (' + item.verso_tipo
+            + '). Para mudar entre só frente e com verso, altere primeiro no Vibe e reabra o pedido.';
+        return '';
+    }
+    function limitarSelect(select, itens) {
+        if (!select) return '';
+        const atuais = itens || [];
+        const valor = select.value;
+        for (const option of Array.from(select.options || [])) {
+            const permitido = !atuais.length || atuais.every(item => compativel(item.verso_tipo, option.value));
+            option.disabled = !permitido;
+            // Manter visivel a selecao incompatível, sem trocar por outra opcao.
+            option.hidden = !permitido && option.value !== valor;
+        }
+        select.value = valor;
+        const mensagem = atuais.map(item => erro(item, valor)).find(Boolean) || '';
+        if (select.setCustomValidity) select.setCustomValidity(mensagem);
+        return mensagem;
+    }
+    // O Imposition nunca escreve a categoria comercial por efeito de escolher numeracao.
     function payload(patch, item, numeracoes) {
         const result = { ...patch };
         const id = Object.prototype.hasOwnProperty.call(patch, 'amostra_num_id')
             ? patch.amostra_num_id : (item?.amostra_num_id || item?.numeracao_id);
         const num = (numeracoes || []).find(n => id != null && String(n.id) === String(id));
-        const tipo = doModo(num?.print_mode);
         delete result.verso_tipo;
         delete result.frente_verso;
-        if (tipo) {
-            result.verso_tipo = tipo;
-            result.frente_verso = temVerso(tipo);
+        if (Object.prototype.hasOwnProperty.call(patch, 'amostra_num_id') && id != null
+            && String(id) !== String(item?.amostra_num_id || item?.numeracao_id || '')) {
+            const mensagem = erro(item, num?.print_mode);
+            if (mensagem) throw new Error(mensagem);
         }
         return result;
     }
-    const api = Object.freeze({ doModo, normalizar, temVerso, resolver, modo, aplicar, payload });
+    const api = Object.freeze({ doModo, normalizar, temVerso, resolver, modo, aplicar, payload,
+        compativel, erro, limitarSelect });
     root.VersoDoModelo = api;
     if (typeof module !== 'undefined' && module.exports) module.exports.VersoDoModelo = api;
 })(typeof window !== 'undefined' ? window : globalThis);

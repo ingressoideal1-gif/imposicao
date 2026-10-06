@@ -55,7 +55,7 @@ const tipos = ['FRENTE E VERSO', 'FxVerso', 'VERSO COMUM', 'VERSO VARIÁVEL', 'V
 for (const tipo of tipos) {
     const atual = carregar(tipo, frente);
     assert.equal(atual.verso, false, tipo + ': numeração atual vence');
-    assert.equal(atual.verso_tipo, 'SÓ FRENTE', 'booleano e texto coerentes');
+    assert.equal(atual.verso_tipo, tipo, 'preservar solicitacao do Vibe mesmo quando a numeracao diverge');
     assert.equal(carregar(tipo, null).verso, true, 'sem numeração, preservar ' + tipo);
 }
 for (const tipo of ['Frente', 'SÓ FRENTE', 'SO FRENTE', '', null]) {
@@ -113,6 +113,7 @@ function selecionar(tipo, num) {
         state: { osItens: { os: [item] }, numeracoes: num ? [num] : [] },
         document: { getElementById: () => ({ value: num ? num.id : '' }) },
         pintarSelectDeNumeracao() {}, sincronizarNumeracaoDoItem() {},
+        numeracaoIdDoItem: i => i.amostra_num_id,
         isNumeracaoDuplex, rotuloDoModoDeImpressao: () => 'Sequencial', pdfViewerState: {}, toast() {},
         renderAmostrasOSItens() {}, renderItemAmostraCombinada() {},
         saveAmostraToDB(id, os, data) { saves.push(data); return Promise.resolve(); }
@@ -120,6 +121,11 @@ function selecionar(tipo, num) {
     vm.createContext(box);
     vm.runInContext(extrair(painel, 'onItemNumSelect'), box);
     box.onItemNumSelect(0, 'os', item.id);
+    if (num && !VersoDoModelo.compativel(tipo, num.print_mode)) {
+        assert.equal(saves.length, 0, 'selecao incompativel nao grava nem apaga arte');
+        assert.equal(item.verso_amostra_arte_base64, 'previa-antiga');
+        return {item, payload:null};
+    }
     assert.equal(saves.length, 1);
     assert.equal(item.verso_arte_url, bruto(tipo).verso_arte_url);
     assert.ok(!('verso_arte_url' in saves[0]));
@@ -128,14 +134,15 @@ function selecionar(tipo, num) {
 }
 for (const tipo of tipos) {
     const { item, payload } = selecionar(tipo, frente);
-    assert.equal(item.verso, false);
-    assert.equal(payload.verso_tipo, 'SÓ FRENTE', tipo + ': salvar a face corrigida');
-    assert.equal(payload.verso_amostra_arte_base64, null);
+    assert.equal(payload, null, 'Vibe com verso recusa numeracao Frente');
+    assert.equal(item.verso_tipo, tipo);
     const semNum = selecionar(tipo, null);
     assert.equal(semNum.item.verso, true, 'limpar seletor preserva verso');
     assert.ok(!('verso_amostra_arte_base64' in semNum.payload));
 }
-assert.equal(selecionar('Frente', { ...frente, print_mode: 'duplex_unico' }).item.verso, true);
+assert.equal(selecionar('Frente', { ...frente, print_mode: 'duplex_unico' }).payload, null);
+assert.equal(selecionar('VERSO FIXO', { ...frente, print_mode: 'duplex_unico' }).item.verso, true);
+assert.equal(selecionar('SÓ FRENTE', frente).payload.verso_amostra_arte_base64, null);
 
 // A recomposição do canvas não pode reativar o campo antigo após a seleção.
 const render = extrair(painel, 'desenharItemAmostraCombinada');
@@ -148,7 +155,7 @@ for (const tipo of tipos) {
     const item = { ...bruto(tipo), verso: true };
     atualizarCanvas(item, frente, isNumeracaoDuplex);
     assert.equal(item.verso, false);
-    assert.equal(item.verso_tipo, 'SÓ FRENTE');
+    assert.equal(item.verso_tipo, tipo, 'canvas nao modifica a solicitacao do Vibe');
     const semNum = { ...bruto(tipo), verso: true };
     atualizarCanvas(semNum, null, isNumeracaoDuplex);
     assert.equal(semNum.verso, true);

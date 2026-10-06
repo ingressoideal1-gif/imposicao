@@ -1617,8 +1617,9 @@ async function initClientePage(numero, token) {
                     // Mesma precedência do painel: a numeração resolvida manda.
                     // O modelo pode conservar FRENTE E VERSO de antes da edição.
                     // Sem numeração disponível, preservar a configuração salva.
-                    const versoTipo = VersoDoModelo.resolver(item, matchedNum);
-                    const itemVerso = versoTipo ? VersoDoModelo.temVerso(versoTipo) : (matchedNum ? numIsDuplex : !_semVerso(item.verso_tipo));
+                    const versoTipo = item.verso_tipo;
+                    const tipoEfetivo = VersoDoModelo.resolver(item, matchedNum);
+                    const itemVerso = tipoEfetivo ? VersoDoModelo.temVerso(tipoEfetivo) : (matchedNum ? numIsDuplex : !_semVerso(item.verso_tipo));
                     return {
                         ...item,
                         produto: item.nome_modelo || 'Modelo',

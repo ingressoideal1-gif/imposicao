@@ -26,6 +26,7 @@ function fixture(options={}) {
         impositionAbortController:null, supabaseClient:null,
         confirmarRetomadaImpressao:()=>true,
         confirmarIntegridadeDoTrabalho:async()=>{},
+        conferirModoVibeDoTrabalho:async()=>true, // Conferencia real exercitada em modo_compativel_vibe_harness.js.
         crypto:require("node:crypto").webcrypto, TextDecoder, setTimeout, clearTimeout,
         toast:(...args)=>calls.notices.push(args),
         showDirectoryPicker:async()=>({getFileHandle:async name=>({createWritable:async()=>({
