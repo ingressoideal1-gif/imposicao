@@ -1,20 +1,14 @@
-/* Reinício local. A geração qr-nuvem-947 limpa uma vez os dados de desenvolvimento
-   cuja perda foi autorizada. Esta geração NÃO acompanha as próximas versões. */
+/* Reinício local solicitado pelo operador. Atualizações preservam os dados. */
 (function () {
     'use strict';
     var botao = document.getElementById('reiniciar');
     var MARCA = 'ideal_control_fluxo_local', FLUXO = 'qr-nuvem-947';
     if (!botao) {
         if (!/^\/ic(?:\/|$)/.test(location.pathname)) return;
-        try { if (localStorage.getItem(MARCA) === FLUXO) return; } catch (_) {}
-        // Navegar para uma página isolada evita que callbacks da conta antiga
-        // regravem dados enquanto a limpeza acontece.
-        document.documentElement.style.visibility = 'hidden';
-        document.addEventListener('DOMContentLoaded', function (e) { e.stopImmediatePropagation(); }, true);
-        location.replace('/ic/reiniciar.html?fluxo=' + FLUXO);
+        // Atualização do leitor nunca apaga eventos, tokens ou entradas offline.
         return;
     }
-    var automatico = new URLSearchParams(location.search).get('fluxo') === FLUXO;
+    var automatico = false;
     var confirmar = document.getElementById('confirmar');
     var resultado = document.getElementById('resultado');
     var instalado = navigator.standalone === true

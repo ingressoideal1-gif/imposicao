@@ -296,11 +296,10 @@ def test_setor_bloqueado_nao_atrapalha_o_setor_vizinho():
     assert r["estado"] == "permitido"
 
 
-def test_o_sal_do_QR_IDEAL_sai_do_pedido_escrito_no_proprio_codigo():
-    """O conteudo e `pedido invertido + 8 caracteres`. 06581 invertido e 18560,
-    que e um pedido deste evento -- entao ha um sal certo e nao se tenta outro."""
+def test_prefixo_legado_prioriza_o_pedido_sem_excluir_outros_sais():
+    """O mesmo prefixo também pode ser o final invertido de um modelo v2."""
     r = chamar("saisParaTentar", "06581ABCDEFGH", carga())
-    assert r == ["bb" * 32]
+    assert r == ["bb" * 32, "aa" * 32]
 
 
 def test_codigo_comum_tenta_o_sal_de_cada_pedido_e_o_do_evento():

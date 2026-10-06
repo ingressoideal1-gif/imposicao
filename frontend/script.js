@@ -27228,18 +27228,25 @@ async function carregarModelosGlobais(exigirSucesso = false, numerosDaPesquisa =
  * folha quando isso acontece dentro de um trabalho, mas só o painel conhece o
  * pedido inteiro — é aqui que dá para avisar antes de alguém imprimir.
  */
-function conferirColunasQrIdealDosPedidos() {
+async function conferirColunasQrIdealDosPedidos() {
     if (typeof window.conferirColunasQrIdeal !== 'function'
         || typeof window.classificarModelosQrIdeal !== 'function') return;
     const avisados = [];
     const inconclusivos = [];
-    Object.keys(state.modelosGlobais || {}).forEach((pedido) => {
+    await Promise.all(Object.keys(state.modelosGlobais || {}).map(async (pedido) => {
         const classificacao = window.classificarModelosQrIdeal(
             state.modelosGlobais[pedido] || [], state.numeracoes || []
         );
         const modelos = classificacao.ativos;
-        const choques = modelos.length < 2
+        let choques = modelos.length < 2
             ? [] : window.conferirColunasQrIdeal(pedido, modelos);
+        if (choques.length) {
+            try {
+                const contratos = await api('GET', '/qr-ideal/contratos?pedido=' + encodeURIComponent(pedido));
+                const exclusivos = new Set((Array.isArray(contratos) ? contratos : []).filter(c => c.versao === 2).map(c => String(c.modelo)));
+                choques = choques.filter(c => c.modelos.some(m => !exclusivos.has(String(m))));
+            } catch (_) { /* Sem comprovação da reserva, manter o aviso legado. */ }
+        }
         choques.forEach(c => avisados.push(
             `pedido ${pedido}, coluna ${c.coluna}: modelos ${c.modelos.join(' e ')}`
         ));
@@ -27258,7 +27265,7 @@ function conferirColunasQrIdealDosPedidos() {
                 }
             });
         }
-    });
+    }));
     if (!avisados.length && !inconclusivos.length) return;
     if (avisados.length) console.warn('[QR Ideal] choque de coluna:', avisados);
     // Chamava `showToast`, que nao existe em lugar nenhum do frontend -- a

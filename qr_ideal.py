@@ -27,11 +27,15 @@ import hashlib
 import os
 import secrets
 import sys
+import threading
 
 COLUNAS = 100
 LINHAS = 30_000
 TAMANHO = 8
 TOTAL = COLUNAS * LINHAS  # 3.000.000
+POOL_SHA256 = "8e30409786113d484103cb66f88080a99bb67530a4817c245789c8929da35174"
+POOL_V2_SHA256 = "931cc39738a68b9eb814e3d9908962bd04e3782893234f881222a0526a6e6d51"
+POOL_V2_NOME = "qr_ideal_pool_qr12_d1.bin"
 
 NOME_ARQUIVO = "qr_ideal_pool.bin"
 
@@ -65,6 +69,31 @@ def prefixo(pedido) -> str:
     transformaria em 7202 — que invertido e outro pedido.
     """
     return str(pedido).strip()[::-1]
+
+
+def prefixo_modelo(modelo) -> str:
+    texto = str(modelo).strip()
+    if not texto.isascii() or not texto.isdigit():
+        raise ValueError("QR Ideal: modelo invalido")
+    return texto[-4:].zfill(4)[::-1]
+
+
+def indice_contrato(pedido, modelo, item, contrato):
+    if str(contrato.get("pedido")) != str(pedido) or str(contrato.get("modelo")) != str(modelo):
+        raise ValueError("QR Ideal: contrato de outro pedido/modelo")
+    versao = contrato.get("versao")
+    pos = int(item) - int(contrato["inicio"])
+    capacidade = int(contrato["capacidade"])
+    if not 0 <= pos < capacidade:
+        raise ValueError("QR Ideal: numero fora da reserva; confira o inicio e a tiragem")
+    if versao == 1 and contrato.get("pool_revisao") == "ideal-master-1":
+        return indice(pedido, modelo, item)
+    if versao != 2 or contrato.get("pool_revisao") != "ideal-qr12-d1":
+        raise ValueError("QR Ideal: contrato exige atualizacao da estacao")
+    offset = int(contrato["deslocamento"])
+    if not (0 <= pos < capacidade and 0 <= offset and offset + capacidade <= TOTAL):
+        raise ValueError("QR Ideal: numero fora da reserva; nenhuma volta da base e permitida")
+    return offset + pos
 
 
 def caminho_padrao() -> str:
@@ -146,12 +175,28 @@ class PoolQR:
                 f"esperado {TOTAL * TAMANHO}."
             )
         self._f = open(self.caminho, "rb")
+        self._lock = threading.Lock()
+        self._sha_conferido = None
+
+    def verificar_integridade(self, esperado=POOL_SHA256):
+        with self._lock:
+            if self._sha_conferido is None:
+                self._f.seek(0)
+                self._sha_conferido = hashlib.file_digest(self._f, "sha256").hexdigest()
+            if self._sha_conferido != esperado:
+                raise ValueError("QR Ideal: integridade da base privada nao confirmada")
 
     def codigo(self, pedido, modelo, item: int) -> str:
         """Os 8 caracteres do pool para este ingresso."""
         idx = indice(pedido, modelo, item)
-        self._f.seek(idx * TAMANHO)
-        bruto = self._f.read(TAMANHO)
+        return self.codigo_indice(idx)
+
+    def codigo_indice(self, idx: int) -> str:
+        if not 0 <= idx < TOTAL:
+            raise ValueError("QR Ideal: posicao fora da base")
+        with self._lock:
+            self._f.seek(idx * TAMANHO)
+            bruto = self._f.read(TAMANHO)
         if len(bruto) != TAMANHO:
             raise ValueError(f"Leitura curta do pool na posicao {idx}.")
         return bruto.decode("ascii")
@@ -175,3 +220,29 @@ class PoolQR:
 
     def __exit__(self, *exc):
         self.fechar()
+
+
+class PoolComContratos:
+    """Contrato obtido antes de gerar qualquer PDF; nenhum fallback de versão."""
+    def __init__(self, pool, contratos, pool_v2=None):
+        self.pool = pool
+        self.pool_v2 = pool_v2
+        self.contratos = {(str(c["pedido"]), str(c["modelo"])): dict(c) for c in contratos}
+
+    def contrato(self, pedido, modelo):
+        c = self.contratos.get((str(pedido), str(modelo)))
+        if c is None:
+            raise ValueError("QR Ideal: contrato de emissao ausente; conecte a estacao para conferir o modelo")
+        return c
+
+    def codigo(self, pedido, modelo, item):
+        c = self.contrato(pedido, modelo)
+        base = self.pool_v2 if c["versao"] == 2 else self.pool
+        if base is None:
+            raise ValueError("QR Ideal: base privada da versao contratada indisponivel")
+        return base.codigo_indice(indice_contrato(pedido, modelo, item, c))
+
+    def conteudo(self, pedido, modelo, item):
+        c = self.contrato(pedido, modelo)
+        pref = prefixo_modelo(modelo) if c["versao"] == 2 else prefixo(pedido)
+        return pref + self.codigo(pedido, modelo, item)

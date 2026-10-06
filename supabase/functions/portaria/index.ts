@@ -235,6 +235,7 @@ async function publicacaoDoEvento(eventoId: string) {
   return {
     versao: JSON.stringify(pedidos.map(p => [p.pedido_id_int, p.publicado_em, p.total_credenciais])),
     concluida: pedidos.length > 0 && pedidos.every(p => p.publicado_em && Number(p.total_credenciais) > 0),
+    leitor_minimo: await banco("POST", "rpc/producao_acesso_qr_leitor_evento", { p_evento: eventoId }),
   };
 }
 
@@ -242,10 +243,12 @@ async function publicacaoDoEvento(eventoId: string) {
 async function faixa(
   cabecalho: string | null,
   desdeBruto: string | null,
+  leitor = 1,
 ): Promise<Response> {
   const aparelho = await aparelhoDoToken(cabecalho);
   const eventoId = aparelho.evento_id;
   const publicacao = await publicacaoDoEvento(eventoId);
+  if (leitor < publicacao.leitor_minimo) return erro(426, "Atualize o Ideal Control e conclua o download antes de usar este evento offline.");
   const desde = Math.max(0, parseInt(desdeBruto ?? "0") || 0);
 
   const evento = ((await banco(
@@ -688,7 +691,7 @@ Deno.serve(async (req: Request) => {
     }
     if (req.method === "GET" && rota === "evento") return comCors(await dadosDoEvento(auth), origem);
     if (req.method === "GET" && rota === "faixa") {
-      return comCors(await faixa(auth, url.searchParams.get("desde")), origem);
+      return comCors(await faixa(auth, url.searchParams.get("desde"), Number(url.searchParams.get("leitor")) || 1), origem);
     }
     if (req.method === "POST" && rota === "leituras") {
       return comCors(await leituras(auth, await req.json()), origem);

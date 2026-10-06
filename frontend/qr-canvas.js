@@ -188,13 +188,13 @@
 
     function qrIdealConteudo(pedido, modelo, item) {
         if (!pedido || !modelo) return null;
-        var chave = pedido + '|' + modelo + '|' + (item || 1);
+        var chave = 'contrato-v2|' + pedido + '|' + modelo + '|' + (item == null ? 1 : item);
         if (_cache.has(chave)) return _cache.get(chave);
         _cache.set(chave, null);
 
         var base = (typeof raiz.API_BASE_URL !== 'undefined') ? raiz.API_BASE_URL : '';
         fetch(base + '/api/qr-ideal?pedido=' + encodeURIComponent(pedido)
-              + '&modelo=' + encodeURIComponent(modelo) + '&item=' + (item || 1))
+              + '&modelo=' + encodeURIComponent(modelo) + '&item=' + (item == null ? 1 : item))
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (j) {
                 if (j && j.conteudo) {

@@ -225,10 +225,11 @@ def itens_do_pedido(pedido, tiragem: dict, sal: str, pool, numeracoes: dict = No
             continue
 
         for numero in range(1, int(quantidade) + 1):
+            valor = int((num or {}).get("inicio", 1)) + (numero - 1) * int((num or {}).get("passo", 1)) + int((num or {}).get("posicao", 1)) - 1
             if usa_pool:
-                conteudo = pool.conteudo(pedido, modelo_id, numero)
+                conteudo = pool.conteudo(pedido, modelo_id, valor)
             else:
-                conteudo = conteudo_numeracao(num, numero)
+                conteudo = conteudo_numeracao(num, valor)
             yield {
                 "modelo_id": int(modelo_id),
                 "numero": numero,
@@ -246,9 +247,10 @@ def publicar(pedido, pool, numeracoes: dict = None) -> dict:
 
     enviadas = 0
     lote = []
+    limite = 100 if any(c["versao"] == 2 for c in getattr(pool, "contratos", {}).values()) else LOTE
     for item in itens_do_pedido(pedido, tiragem, sal, pool, numeracoes):
         lote.append(item)
-        if len(lote) >= LOTE:
+        if len(lote) >= limite:
             _post(f"pedidos/{pedido}/credenciais", {"itens": lote})
             enviadas += len(lote)
             lote = []

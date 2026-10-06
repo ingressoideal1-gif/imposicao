@@ -99,8 +99,12 @@ def _qrs_do_pdf(caminho):
 
 def _impor(tmp_path, pool, **extra):
     out = tmp_path / "qr_ideal.pdf"
+    base = tmp_path / "base_ticket_sintetico.pdf"
+    with fitz.open() as doc:
+        doc.new_page(width=100*72/25.4, height=50*72/25.4)
+        doc.save(base)
     cfg = ImpositionConfig(
-        base_file="base_ticket.pdf",
+        base_file=str(base),
         out_pdf=str(out),
         formato=FORMATO,
         numeracao=_numeracao(),
@@ -110,7 +114,10 @@ def _impor(tmp_path, pool, **extra):
         pool_qr=qr_ideal.PoolQR(pool),
         **extra,
     )
-    ImpositionEngine(cfg).process()
+    try:
+        ImpositionEngine(cfg).process()
+    finally:
+        cfg.pool_qr.fechar()
     return str(out)
 
 

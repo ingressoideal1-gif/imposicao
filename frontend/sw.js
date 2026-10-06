@@ -122,7 +122,24 @@ const ARQUIVOS = [
 ];
 
 self.addEventListener('install', e => {
-    e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting()));
+    e.waitUntil((async () => {
+        const c = await caches.open(CACHE);
+        await c.addAll(ARQUIVOS);
+        // Releases do painel podem versionar dependências compartilhadas sem
+        // mudar a geração do PWA. Guardar as URLs EXATAS que o HTML pede.
+        const extras = new Set();
+        for (const pagina of ['./', 'controle.html', 'portaria.html', 'reiniciar.html']) {
+            const resposta = await c.match(pagina);
+            if (!resposta) throw new Error('Página offline ausente: ' + pagina);
+            const html = await resposta.text();
+            for (const m of html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']/g)) {
+                const url = new URL(m[1], new URL(pagina, self.location));
+                if (url.origin === self.location.origin) extras.add(url.href);
+            }
+        }
+        await c.addAll(Array.from(extras));
+        await self.skipWaiting();
+    })());
 });
 
 self.addEventListener('activate', e => {

@@ -393,7 +393,7 @@ def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
     from canais_newprod import CANAL
     return {"version": LOCAL_AGENT_VERSION, "canal": CANAL, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
-            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_snapshot_v1"]}
+            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_snapshot_v1", "qr_ideal_contrato_v2"]}
 
 @app.get("/api/update/check")
 def consultar_atualizacao():
@@ -1175,9 +1175,18 @@ def _publicar_faixa_qr_ideal(config, data):
             return
         if acesso_publicacao._precisa_do_pool(numeracoes) and not _pool_qr_ou_none():
             return
-        acesso_publicacao.publicar_em_fundo(
-            data["pedido"], _pool_qr_ou_none, numeracoes
-        )
+        por_pedido = {}
+        for arte in (getattr(config, "multi_artes", None) or []):
+            if arte.get("modelo") not in (None, ""):
+                por_pedido.setdefault(str(arte.get("pedido") or data["pedido"]), set()).add(int(arte["modelo"]))
+        if not por_pedido:
+            por_pedido[str(data["pedido"])] = set(numeracoes)
+        pool = getattr(config, "pool_qr", None)
+        for pedido, modelos in por_pedido.items():
+            acesso_publicacao.publicar_em_fundo(
+                int(pedido), (lambda pool=pool: pool) if pool else _pool_qr_ou_none,
+                {m: n for m, n in numeracoes.items() if m in modelos}
+            )
     except Exception as e:
         print(f"[acesso] Nao consegui iniciar a publicacao da faixa: {e}", flush=True)
 
@@ -1211,6 +1220,9 @@ def _numeracoes_por_modelo(config):
                 els.extend(((arte.get(chave) or {}).get("elements")) or [])
             achatada = acesso_publicacao.numeracao_do_modelo(els)
             if achatada:
+                if hasattr(getattr(config, "pool_qr", None), "contrato") and achatada["tipo"] == "QR_IDEAL":
+                    c = config.pool_qr.contrato(arte.get("pedido") or config.pedido, modelo)
+                    achatada.update(inicio=c["inicio"], passo=c["passo"], posicao=c["posicao"])
                 mapa[int(modelo)] = achatada
         return mapa
 
@@ -1218,6 +1230,10 @@ def _numeracoes_por_modelo(config):
     if modelo in (None, ""):
         return {}
     achatada = acesso_publicacao.numeracao_do_modelo(config.elements)
+    if achatada:
+        if hasattr(getattr(config, "pool_qr", None), "contrato") and achatada["tipo"] == "QR_IDEAL":
+            c = config.pool_qr.contrato(config.pedido, modelo)
+            achatada.update(inicio=c["inicio"], passo=c["passo"], posicao=c["posicao"])
     return {int(modelo): achatada} if achatada else {}
 
 
@@ -1239,13 +1255,32 @@ def qr_ideal_previa(pedido: str, modelo: str, item: int = 1):
             detail="Pool do QR Ideal indisponivel nesta maquina."
         )
     import qr_ideal as _qi
-    idx = _qi.indice(pedido, modelo, item)
+    import qr_contratos
+    try:
+        contratos = qr_contratos.obter(pedido, cache_recente=True)
+        import qr_base_v2
+        base_v2 = qr_base_v2.obter(pool) if any(c["versao"] == 2 for c in contratos) else None
+        pool = _qi.PoolComContratos(pool, contratos, base_v2)
+        contrato = pool.contrato(pedido, modelo)
+        idx = _qi.indice_contrato(pedido, modelo, item, contrato)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     return {
         "codigo": pool.codigo(pedido, modelo, item),
         "conteudo": pool.conteudo(pedido, modelo, item),
-        "coluna": _qi.coluna_do_modelo(pedido, modelo),
+        "coluna": (idx // _qi.LINHAS) + 1,
+        "versao": contrato["versao"],
         "linha": (idx % _qi.LINHAS) + 1,
     }
+
+
+@app.get("/api/qr-ideal/contratos")
+def qr_ideal_contratos(pedido: int):
+    import acesso_publicacao
+    try:
+        return acesso_publicacao._post(f"pedidos/{pedido}/qr-status")
+    except Exception:
+        raise HTTPException(status_code=503, detail="Conferencia QR indisponivel; mantenha o bloqueio ate conectar a estacao") from None
 
 
 # ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
@@ -1664,6 +1699,8 @@ async def impose_file(
             arte_escala_v=data.get("arte_escala_v", 100)
         )
 
+        import qr_contratos
+        qr_contratos.preparar_config(config)
         wants_stream = data.get("stream", False)
 
         if wants_stream:

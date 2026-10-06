@@ -1,0 +1,513 @@
+{
+  "date": "2026-10-05",
+  "scope": "Analysis only. No implementation, deployment, production writes, real pool reads, or physical printing.",
+  "productionRead": {
+    "order": 23063,
+    "models": 22,
+    "quantity": 10300,
+    "affected": [
+      {
+        "id": 1001859,
+        "quantidade": 500,
+        "numeracao_inicio": 1,
+        "numeracao_fim": 500,
+        "status_impressao": null
+      },
+      {
+        "id": 1001959,
+        "quantidade": 800,
+        "numeracao_inicio": 1,
+        "numeracao_fim": 800,
+        "status_impressao": null
+      }
+    ],
+    "publicationsVisible": 0,
+    "credentialsVisible": 0,
+    "visibilityLimitation": "Anonymous reads are RLS-limited; empty results do not prove absence of issuance/publication."
+  },
+  "publicAssets": {
+    "checkedAt": "2026-10-05T23:11:20.831Z",
+    "results": [
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "portaria.html",
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "hash": "0f842dcb81209817025715f7368c641495912a41b606c3e97e88d4c6d4896b32",
+        "matchesLocal": true,
+        "versions": [
+          "948"
+        ]
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "controle.html",
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "hash": "5b65c9d022e6fbf1a6a446fe0609401aff5e8faf5254e9bfdd11a0c4ecea3179",
+        "matchesLocal": false,
+        "versions": [
+          "948",
+          "1010",
+          "1022"
+        ]
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "sw.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "6fbacd9a931f7471beeb8b606b764ed68b9d17413ffcb3198162b8d11abb760d",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "sw-registro.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "f046b2c19f41cd1a5aea29ebe84f6a3a538e8c4b7a38be6d17fc57af8bdcf497",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "qr-ideal-hash.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "f364618c6e7bd210c63ff11b0bcb6b1eff6b562146a49b759b0126dcae0eed9c",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "portaria-validacao.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "4703835d153cc9b0e241a16d2c715026378b98794526d51e1a55368f637688f8",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "portaria-deposito.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "9b4be04a3f0ee97c768852c83b87cc8e89e349e42f24dea1f5bb35c0d5371956",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "portaria-sincronismo.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "portaria.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "42c952fd65b140d2faf21a19d023af61280d93936933657140e604bf256a83f1",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "portaria-camera.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "25e1486ffe2beff7582b838bdc05acdf5db60f55aaa85a2da824ee4541fa9b7f",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "qr-canvas.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "efd133c55361636f606fd2e5d0553d73cf58564b69528c2d3c61c1f52e8db052",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposition.ai-ideal.com.br",
+        "file": "qr-ideal-colunas.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "eb2c5aff1425999339ca8fb7061325382639cb1ae09bad2f3eb63ad52e56e032",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "portaria.html",
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "hash": "0f842dcb81209817025715f7368c641495912a41b606c3e97e88d4c6d4896b32",
+        "matchesLocal": true,
+        "versions": [
+          "948"
+        ]
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "controle.html",
+        "status": 200,
+        "contentType": "text/html; charset=utf-8",
+        "hash": "5b65c9d022e6fbf1a6a446fe0609401aff5e8faf5254e9bfdd11a0c4ecea3179",
+        "matchesLocal": false,
+        "versions": [
+          "948",
+          "1010",
+          "1022"
+        ]
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "sw.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "6fbacd9a931f7471beeb8b606b764ed68b9d17413ffcb3198162b8d11abb760d",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "sw-registro.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "f046b2c19f41cd1a5aea29ebe84f6a3a538e8c4b7a38be6d17fc57af8bdcf497",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "qr-ideal-hash.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "f364618c6e7bd210c63ff11b0bcb6b1eff6b562146a49b759b0126dcae0eed9c",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "portaria-validacao.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "4703835d153cc9b0e241a16d2c715026378b98794526d51e1a55368f637688f8",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "portaria-deposito.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "9b4be04a3f0ee97c768852c83b87cc8e89e349e42f24dea1f5bb35c0d5371956",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "portaria-sincronismo.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "portaria.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "42c952fd65b140d2faf21a19d023af61280d93936933657140e604bf256a83f1",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "portaria-camera.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "25e1486ffe2beff7582b838bdc05acdf5db60f55aaa85a2da824ee4541fa9b7f",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "qr-canvas.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "efd133c55361636f606fd2e5d0553d73cf58564b69528c2d3c61c1f52e8db052",
+        "matchesLocal": true
+      },
+      {
+        "domain": "https://imposicao.pages.dev",
+        "file": "qr-ideal-colunas.js",
+        "status": 200,
+        "contentType": "application/javascript",
+        "hash": "eb2c5aff1425999339ca8fb7061325382639cb1ae09bad2f3eb63ad52e56e032",
+        "matchesLocal": true
+      }
+    ]
+  },
+  "formula": [
+    {
+      "name": "v2_length_and_leading_zeros",
+      "passed": true
+    },
+    {
+      "name": "23063_v1_overlap500_v2_overlap0",
+      "passed": true,
+      "old_overlap": 500,
+      "proposed_overlap": 0
+    },
+    {
+      "name": "shared_secret_suffix_remains",
+      "passed": true
+    },
+    {
+      "name": "same_order_model_plus10000_collision",
+      "passed": true
+    },
+    {
+      "name": "different_order_same_last2_and_model_last4_collision",
+      "passed": true
+    },
+    {
+      "name": "pool_column_boundary_overlap",
+      "passed": true
+    },
+    {
+      "name": "pool_wrap_repeats_same_model",
+      "passed": true
+    },
+    {
+      "name": "12_and13_have_same_qr_matrix_here",
+      "passed": true,
+      "geometry": [
+        {
+          "length": 13,
+          "pixels": [
+            210,
+            210
+          ],
+          "modules": 21
+        },
+        {
+          "length": 12,
+          "pixels": [
+            210,
+            210
+          ],
+          "modules": 21
+        },
+        {
+          "length": 12,
+          "pixels": [
+            210,
+            210
+          ],
+          "modules": 21
+        }
+      ]
+    }
+  ],
+  "cloud": [
+    {
+      "name": "python_deno_hash_36032TEST0001",
+      "pass": true
+    },
+    {
+      "name": "python_deno_hash_9581TEST0001",
+      "pass": true
+    },
+    {
+      "name": "python_deno_hash_0021TEST0001",
+      "pass": true
+    },
+    {
+      "name": "pedido23063_cloud_22_models",
+      "pass": true,
+      "detail": {
+        "models": 22,
+        "generated": 10300,
+        "oldDuplicates": 500,
+        "newDuplicates": 0
+      }
+    },
+    {
+      "name": "cloud_keeps_old_prefix_without_change",
+      "pass": true
+    },
+    {
+      "name": "existing_cloud_plan_has_no_protocol_version",
+      "pass": true
+    },
+    {
+      "name": "cloud_ticket_physical_quantity_and_position",
+      "pass": true
+    }
+  ],
+  "browser": {
+    "browser": "Chrome/150.0.7871.24",
+    "scope": "synthetic isolated localhost; actual JS/SW; no production API or real pool",
+    "checks": [
+      {
+        "name": "python_browser_hash_36032TEST0001",
+        "pass": true
+      },
+      {
+        "name": "python_browser_hash_9581TEST0001",
+        "pass": true
+      },
+      {
+        "name": "python_browser_hash_0021TEST0001",
+        "pass": true
+      },
+      {
+        "name": "v1_reconhecido",
+        "pass": true
+      },
+      {
+        "name": "v2_sem_pedido_homonimo_funciona_por_fallback",
+        "pass": true
+      },
+      {
+        "name": "v2_pedido_homonimo_escolhe_sal_errado",
+        "pass": true,
+        "detail": {
+          "observed": "desconhecido"
+        }
+      },
+      {
+        "name": "prova_conceitual_todos_sais_recupera_v2",
+        "pass": true
+      },
+      {
+        "name": "prova_conceitual_preserva_v1",
+        "pass": true
+      },
+      {
+        "name": "v1_quatro_digitos_indistinguivel_por_formato",
+        "pass": true
+      },
+      {
+        "name": "prefixos_v2_distintos_geram_hashes_distintos",
+        "pass": true
+      },
+      {
+        "name": "substituir_prefixo_preserva_sufixo_reutilizado",
+        "pass": true
+      },
+      {
+        "name": "antiga_consumida",
+        "pass": true
+      },
+      {
+        "name": "segunda_credencial_mesmo_ingresso_passaria",
+        "pass": true
+      },
+      {
+        "name": "todos_sais_precisam_preservar_ambiguidade",
+        "pass": true
+      },
+      {
+        "name": "troca_carga_bloqueada_com_fila_pendente",
+        "pass": true
+      },
+      {
+        "name": "jsqr_decodifica_13_caracteres",
+        "pass": true,
+        "detail": {
+          "characters": 13,
+          "modules": 21
+        }
+      },
+      {
+        "name": "jsqr_decodifica_12_caracteres",
+        "pass": true,
+        "detail": {
+          "characters": 12,
+          "modules": 21
+        }
+      },
+      {
+        "name": "tempo_tres_sais_desktop",
+        "pass": true,
+        "detail": {
+          "milliseconds": [
+            10,
+            9.900000035762787,
+            9.899999976158142,
+            10,
+            9.800000011920929
+          ],
+          "browserOnly": true
+        }
+      },
+      {
+        "name": "recursos_publicos_fora_precache",
+        "pass": true,
+        "detail": [
+          "supabase-config.js?v=1010",
+          "carregar-pedido.js?v=1022"
+        ]
+      },
+      {
+        "name": "recurso_fora_precache_falha_offline",
+        "pass": true
+      },
+      {
+        "name": "sw_novo_nao_troca_javascript_ja_aberto",
+        "pass": true,
+        "detail": {
+          "html": 948,
+          "sw": "v=949",
+          "cache": [
+            "ideal-control-949"
+          ],
+          "fila": 1,
+          "entradas": {
+            "old": "2026-10-05T17:00:00Z"
+          }
+        }
+      },
+      {
+        "name": "atualizacao_reabertura_offline_preserva_dados",
+        "pass": true,
+        "detail": {
+          "html": 949,
+          "fila": 1,
+          "entradas": {
+            "old": "2026-10-05T17:00:00Z"
+          },
+          "totais": {
+            "a": 1
+          },
+          "token": "synthetic-preserved",
+          "hashAvailable": true
+        }
+      }
+    ]
+  },
+  "existingTests": {
+    "command": "deno test --deny-net --allow-env=SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY --quiet tests/ideal_control_preparacao_test.ts",
+    "environment": "synthetic.invalid and fictitious key in isolated child process; fetch mocked",
+    "passed": 2,
+    "failed": 0
+  },
+  "sourceSha256": {
+    "qr_ideal.py": "d10c0ebce32d289f977b8ecf9d75c7ab8b384d92bb077e768c2d81e294bf8d23",
+    "engine.py": "580cd567adf24c500ff0c55e69abff32c32042b3db605b0904ad6aa170c45114",
+    "acesso_publicacao.py": "ec6ca927ace68dbd3f4e7a1b93a5a8427e21f62a4796ff0cd4e9fb3d4d16d671",
+    "app.py": "16946c3a2113b4aab9166dc1532dff229de05dbbd6a52cc19e60f5e459a1e192",
+    "frontend/portaria-validacao.js": "006599794894fc836a6bdd1af88aca377e1c79d747ed8856110386ba35fbf561",
+    "frontend/portaria.js": "f7e6f34ca948b6e5d4ea70ade83631ae3916c65cb0aaffecd0131f816e283add",
+    "frontend/portaria-deposito.js": "aeaef7d28a919cece6378d189df53ad8a117e001af435fbead555356fdee8718",
+    "frontend/portaria-sincronismo.js": "04cf9adea9cb9d7de0d74cbb46574f8927e862cc99830e4c35d9f713fff5b011",
+    "frontend/sw.js": "c05af42ee3dac8fdd6253f2a0791f1576a61473b3f69ac9e0ac71b5f40746826",
+    "frontend/sw-registro.js": "cbfabd7f2c47753e9e5c2cc4b457a436023d94d2f2b5d991a3a9b674d2ebb598",
+    "frontend/qr-canvas.js": "92d67450644308af6e276a80c9892d22c9dd211b5c8d1186acd04e9d5d9620dc",
+    "frontend/reiniciar.js": "771dd8058c179579ab481431b314373391990c89a1e32b32fb2a63a668919f6f",
+    "supabase/functions/_compartilhado/preparacao_codigos.ts": "3e6ba4c4b3cdaa9a855470e916897f471352fdda051b21862e2f591e07ff86ce",
+    "supabase/functions/_compartilhado/preparacao_nuvem.ts": "235b1ce78f7bd970785d785a2a8b5246526833845f9698ca123051eeecf8b560",
+    "supabase/functions/acesso-estacao/index.ts": "4d5dd6759739d8a40ba1bf747f6419e9635cdceb944df50184e0e29ad25f7062",
+    "supabase/functions/portaria/index.ts": "4930be887249107432a193f0c50fc570dc2c4bd431b66e67258b4524e291645e",
+    "sql/ideal_control_preparacao_nuvem.sql": "a7fc7eb2053c0ebb8886a237cbfdd74e3c0188c396dbb6381e2bcece81b4739c"
+  },
+  "reproductionDirectory": "C:/Users/Junior/AppData/Local/Temp/ideal-qr12-analise-20261005-cee21f",
+  "limitations": [
+    "Browser harness uses isolated HTML, actual published-matching validation/deposit/SW scripts and synthetic event; not full production UI or handset test.",
+    "Synthetic generation evaluates existing rules and proposed prefix; proposed protocol is not implemented.",
+    "Installed remote SQL/Edge body and all NewProd executables were not read.",
+    "No full pytest suite; pytest absent from available Python."
+  ]
+}
