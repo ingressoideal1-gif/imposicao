@@ -200,5 +200,71 @@ Não houve impressão física nem alteração dos ingressos já emitidos nesta e
 A base independente foi provisionada nas duas instalações locais, em pastas
 protegidas separadas. Outras estações precisam recebê-la por canal privado antes
 de emitir QR12. Atualizar o MSI sozinho não realiza esse provisionamento.
-O backup passa a incluir a base nova e os contratos de ambos os canais.
+O script de backup versionado inclui a base nova e os contratos de ambos os
+canais; o ensaio desta entrega executou essa versão a partir do checkout isolado.
 Os resultados finais de publicação, instalação e testes são registrados abaixo.
+
+- [PR 95](https://github.com/ingressoideal1-gif/imposicao/pull/95), fonte
+  `051b83241c66c2aed065f6319c74b7c110b062f3`, integrado em
+  `af9873aebfabdb1a9b4e88b4e26dfc72b3a83184` após os quatro checks obrigatórios.
+- 76 testes Python/SQL afetados passaram, incluindo dez cenários PostgreSQL de
+  reserva, concorrência, permissões, suspensão e piloto restrito. Quatro testes
+  Deno de protocolo/preparação e 326 regressões Deno passaram. A conferência dos
+  dois canais repetiu 389 aprovações e dois skips em cada um.
+- Base independente no bucket privado: download autenticado e hash conferidos,
+  acesso anônimo recusado. Edge finais: `acesso-estacao` 259, `portaria` 263 e
+  `acesso-interno` 263. Controle relido com `ativo=false`, `corte=infinity`,
+  revisão `ideal-qr12-1`, zero contratos e zero credenciais do pedido 23063.
+- Cloudflare confirmou a implantação `f297cc27-5c13-4918-90fe-84e9fcdebbc4`;
+  os mesmos 34 arquivos públicos foram novamente conferidos nos dois domínios.
+- Novo backup e ensaio: `backup-20261005-215124-be624240`, AES-256-GCM,
+  190.686.215 bytes, SHA-256
+  `e358fd2473fecc987bae87f79d55c61468331338c9102bca6778baf8c0497413`.
+  Restauração conferiu Git, 1.218 referências, 28 worktrees alteradas, 173 arquivos
+  não rastreados e dez arquivos de runtime, incluindo as bases independentes das
+  duas instalações. Cópia cifrada no Drive Desktop conferida; isso não comprova
+  a conclusão da sincronização remota do Drive.
+- A base independente tem também backup cifrado separado, com decifragem
+  conferida e cópia no Drive Desktop. SHA do pacote:
+  `20f921b6b4cdee3bb174be27079ae8301f7442819b553ec84ffce3288781e8f7`.
+- Os executáveis finais foram inspecionados: módulo de derivação ausente,
+  revisão/hash da base corretos, frontend correspondente e nenhum arquivo
+  privado incorporado. O servidor PostgreSQL de testes sintéticos foi encerrado.
+- [MSI final 1.2.358](https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProd_Setup_v1.2.358.msi):
+  157.282.304 bytes, SHA-256
+  `220880d8a2ef2124fd49d47806c4db8a8003d5ce74ebfb06785cac179ea52142`.
+  Download público conferido antes de promover `latest.json`; manifesto relido
+  com a versão 1.2.358 e esse hash. Tag `agente-v1.2.358` no commit integrado do PR 95.
+- Produção local: API 9000 em 1.2.358 e executável instalado SHA-256
+  `7794290651f08afd4e8266ea6a1d2bff5a866a00d7a87a8c976a02692e31d67c`.
+  Piloto: API 9001 em 1.2.358-piloto-local.27, executável SHA-256
+  `342f8b3144e3f06fcf4d680cb1d15f3113f4c3df5598b2c85695f3a8c583b0e3`.
+  Ambos com capacidade QR12, base independente provisionada e 22/22 arquivos
+  servidos conferidos. Fila do Piloto ociosa, coleta no estado anterior e sem erro
+  de catálogo; não foi executada impressão offline.
+
+## Ponto de retomada
+
+Conferência de 05/10/2026, 22h00 (Brasília): emissão v2 **desativada**, corte
+`infinity`, revisão `ideal-qr12-1`, nenhum contrato criado. Pedido 23063 permanece
+bloqueado. PC-JR-HOME e Piloto estão em 1.2.358; quatro outras estações online
+ainda anunciavam 1.2.357 e recebem a atualização pelo fluxo normal. FLEXO teve
+último sinal às 21h28; não se presume instalação nem causa da interrupção.
+
+Para a liberação operacional:
+
+1. Confirmar se o pedido 23063 teve qualquer impressão/entrega, inclusive offline.
+   Se houve ou a informação continuar desconhecida, preservar o bloqueio e tratar
+   eventual reemissão em escopo próprio, com cancelamento/auditoria.
+2. Conferir NewProd 1.2.358 e provisionar a base independente nas estações que
+   participarão do evento controlado. O pacote público não transporta a base.
+3. Com um pedido confirmado sem emissão anterior, registrar essa confirmação,
+   habilitar somente o piloto (`corte=infinity` com autorização daquele pedido)
+   e conferir os contratos/intervalos retornados. Não alterar sal nem credenciais.
+4. Atualizar os aparelhos online, baixar o evento completamente e validar papel,
+   leitura, repetição, modo offline e sincronização. Somente então ampliar o corte
+   para novas emissões gerais.
+
+Não foi necessária nova permissão para executar código, SQL ou publicação. Os
+itens pendentes são fatos e verificações operacionais indisponíveis nesta sessão.
+Evidências sanitizadas: [registro JSON](evidencia-entrega-qr12-2026-10-05.json).
