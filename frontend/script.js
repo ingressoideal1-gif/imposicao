@@ -2045,9 +2045,13 @@ async function apiSemConfirmacao(method, path, body = null) {
 
 
 
-    const baseUrl = typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '';
+    const consultaQrNaNuvem = path.split('?')[0] === '/qr-ideal/contratos'
+        && typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM;
+    const baseUrl = consultaQrNaNuvem ? API_PAINEL
+        : (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '');
 
     const opts = { method, headers: {} };
+    if (path.split('?')[0] === '/qr-ideal/contratos') opts.cache = 'no-store';
 
     if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
 
@@ -27225,17 +27229,23 @@ async function carregarModelosGlobais(exigirSucesso = false, numerosDaPesquisa =
  * Avisa quando dois modelos que USAM QR Ideal no mesmo pedido caem na mesma
  * coluna do pool. Modelos sem o elemento nao participam da conferencia.
  *
- * Dois modelos cujos `id` diferem em exatamente 100 recebem os MESMOS códigos,
+ * Na regra legada, modelos cujos `id` diferem em 100 recebem os MESMOS códigos,
  * e como o número do pedido gravado no QR é o mesmo para os dois, nada os
  * separa: sairiam dois ingressos idênticos no mesmo evento. O motor recusa a
  * folha quando isso acontece dentro de um trabalho, mas só o painel conhece o
  * pedido inteiro — é aqui que dá para avisar antes de alguém imprimir.
+ * Contratos QR12 usam reservas exclusivas: a coluna legada so identifica os
+ * candidatos, e a consulta autenticada confirma qual protocolo eles usam.
  */
 async function conferirColunasQrIdealDosPedidos() {
     if (typeof window.conferirColunasQrIdeal !== 'function'
         || typeof window.classificarModelosQrIdeal !== 'function') return;
+    const rodada = (conferirColunasQrIdealDosPedidos.rodada || 0) + 1;
+    conferirColunasQrIdealDosPedidos.rodada = rodada;
+    const usuario = window._currentUser?.id || window._acessoLocal || null;
     const avisados = [];
     const inconclusivos = [];
+    const contratosInconclusivos = [];
     await Promise.all(Object.keys(state.modelosGlobais || {}).map(async (pedido) => {
         const classificacao = window.classificarModelosQrIdeal(
             state.modelosGlobais[pedido] || [], state.numeracoes || []
@@ -27246,9 +27256,24 @@ async function conferirColunasQrIdealDosPedidos() {
         if (choques.length) {
             try {
                 const contratos = await api('GET', '/qr-ideal/contratos?pedido=' + encodeURIComponent(pedido));
-                const exclusivos = new Set((Array.isArray(contratos) ? contratos : []).filter(c => c.versao === 2).map(c => String(c.modelo)));
-                choques = choques.filter(c => c.modelos.some(m => !exclusivos.has(String(m))));
-            } catch (_) { /* Sem comprovação da reserva, manter o aviso legado. */ }
+                if (!Array.isArray(contratos) || contratos.some(c => !c || ![1, 2].includes(c.versao)
+                    || !/^\d+$/.test(String(c.modelo)) || String(c.pedido) !== String(pedido))
+                    || new Set(contratos.map(c => String(c.modelo))).size !== contratos.length) {
+                    throw new Error('Resposta de contratos inválida');
+                }
+                const porModelo = new Map(contratos.map(c => [String(c.modelo), c]));
+                choques = choques.flatMap(c => {
+                    if (c.modelos.some(m => !porModelo.has(String(m)))) {
+                        contratosInconclusivos.push(`pedido ${pedido}: modelos ${c.modelos.join(' e ')}`);
+                        return [];
+                    }
+                    const legados = c.modelos.filter(m => porModelo.get(String(m)).versao === 1);
+                    return legados.length > 1 ? [{ ...c, modelos: legados }] : [];
+                });
+            } catch (_) {
+                choques.forEach(c => contratosInconclusivos.push(`pedido ${pedido}: modelos ${c.modelos.join(' e ')}`));
+                choques = [];
+            }
         }
         choques.forEach(c => avisados.push(
             `pedido ${pedido}, coluna ${c.coluna}: modelos ${c.modelos.join(' e ')}`
@@ -27269,7 +27294,9 @@ async function conferirColunasQrIdealDosPedidos() {
             });
         }
     }));
-    if (!avisados.length && !inconclusivos.length) return;
+    if (rodada !== conferirColunasQrIdealDosPedidos.rodada
+        || usuario !== (window._currentUser?.id || window._acessoLocal || null)) return;
+    if (!avisados.length && !inconclusivos.length && !contratosInconclusivos.length) return;
     if (avisados.length) console.warn('[QR Ideal] choque de coluna:', avisados);
     // Chamava `showToast`, que nao existe em lugar nenhum do frontend -- a
     // funcao de aviso deste projeto chama-se `toast`. O guard `typeof` fazia
@@ -27288,6 +27315,13 @@ async function conferirColunasQrIdealDosPedidos() {
         toast(
             `⚠️ QR Ideal — não foi possível verificar a numeração de ${inconclusivos.join('; ')}. ` +
             `Recarregue o catálogo antes de imprimir com QR Ideal.`,
+            'warning'
+        );
+    }
+    if (contratosInconclusivos.length) {
+        toast(
+            `⚠️ QR Ideal — não foi possível confirmar os contratos de ${contratosInconclusivos.join('; ')}. ` +
+            `Não imprimir com QR Ideal antes de concluir a conferência.`,
             'warning'
         );
     }
