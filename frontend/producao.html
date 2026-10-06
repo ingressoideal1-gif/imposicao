@@ -1239,6 +1239,7 @@
                                     <select class="form-control" id="ped-print-mode" onchange="updatePedSummary()">
                                         <option value="front" selected>Frente</option>
                                         <option value="duplex">FxVerso</option>
+                                        <option value="duplex_unico">FxVersoUnico</option>
                                         <option value="pdf_duplicate_back">Duplicar para Verso</option>
                                     </select>
                                 </div>
@@ -1340,6 +1341,20 @@
                             <p id="ped-file-info"
                                 style="text-align:center;color:var(--blue);font-size:0.88rem;margin-top:10px;display:none;">
                             </p>
+
+                            <!-- Escolha temporária de faces, aplicada ao PDF antes da entrega. -->
+                            <div id="ped-print-faces" hidden>
+                                <div style="margin-top:16px;padding:10px;border:1px solid var(--border);border-radius:6px;">
+                                    <strong style="font-size:0.8rem;">Faces deste trabalho</strong>
+                                    <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;cursor:pointer;margin-top:8px;">
+                                        <input type="checkbox" id="ped-print-only-front" onchange="selecionarFaceDeImpressaoDoPedido('front')"> Apenas Frente
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;cursor:pointer;margin-top:8px;">
+                                        <input type="checkbox" id="ped-print-only-back" onchange="selecionarFaceDeImpressaoDoPedido('back')"> Apenas Verso
+                                    </label>
+                                    <small style="display:block;margin-top:6px;color:var(--text-dim);">Sem marcar: frente e verso. Vale para PDF, impressão direta e hotfolder.</small>
+                                </div>
+                            </div>
 
                             <div style="margin-top:24px;display:flex;gap:8px;">
                                 <button class="btn btn-primary" id="ped-btn-impose" onclick="runPedImposition()" style="flex:1;background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981;">
