@@ -1,0 +1,276 @@
+{
+  "fonte_commit": "249f789c8e6973d6b04e10a9a8aa869f6d164198",
+  "merge_commit": "0cac10147683e483a57b95eb288f443e4ae543d6",
+  "pr": "https://github.com/ingressoideal1-gif/imposicao/pull/94",
+  "web_versao": 1023,
+  "agent_versao": "1.2.357",
+  "web": [
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/arte-de-impressao.js",
+      "sha256": "63c869b3bc0254bab69ffb6be38483c6dffc3307b416c27b4bfa0de827437f42",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/cliente.html",
+      "sha256": "672aa8bd53fc2b90f2322e96f41d2aa785bbc8e8dbb4a5568bae8258040c50a8",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/controle.html",
+      "sha256": "5b343a703d185ef0d246ba0831527f73e937752e6aff0f63fecd6e315002199c",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/index.html",
+      "sha256": "5588d5ef81aade6f9fef3602502d1ada573c77b902c1ef1b26e67401f91f17ca",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/portaria-validacao.js",
+      "sha256": "995a20effbe5109326086f2088c815c3c582e921ecedbb5ed5baab8742880f99",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/portaria.html",
+      "sha256": "3614748db98216c360982e6b616224f8eb5072393b2e93dac85711fc1eba7522",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/portaria.js",
+      "sha256": "c43d9fb7e2870dd581c1112e434a59d91b4d58a28375e8e4d8bb1cf7ebc13ad5",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/producao.html",
+      "sha256": "c17c86c6622d7ef1b20013c9eb8a92aaa04b3af287381fd7dbca59b7d5c897b9",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/qr-canvas.js",
+      "sha256": "0842cce2ddd1567e3ef001ecc02dbead15ba0465b92a5e589939844f5d9d28e9",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/reiniciar.html",
+      "sha256": "f90ed2ca240ff7784e1073fda3ad64033c1d2b1ba6e5b0b931ff324dd1e61ddc",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/reiniciar.js",
+      "sha256": "7b0ee00bcdd96d0f30c2beb0dac1ad6edcaf2f381173822ff041bd0cf74461eb",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/script.js",
+      "sha256": "fb62184a051d901e6f2578c0c9161246f9a81d49908ac24a21e61ed8c22da52e",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/sw.js",
+      "sha256": "d27aa0b7a18ef5704af8cf8b7905efd120e1eb68ab57c7d8cb8ae75fd3aece82",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/qr-ideal-hash.js",
+      "sha256": "f364618c6e7bd210c63ff11b0bcb6b1eff6b562146a49b759b0126dcae0eed9c",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/portaria-deposito.js",
+      "sha256": "9b4be04a3f0ee97c768852c83b87cc8e89e349e42f24dea1f5bb35c0d5371956",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/portaria-sincronismo.js",
+      "sha256": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+      "confere": true
+    },
+    {
+      "domain": "imposition.ai-ideal.com.br",
+      "path": "/ic/sw-registro.js",
+      "sha256": "f046b2c19f41cd1a5aea29ebe84f6a3a538e8c4b7a38be6d17fc57af8bdcf497",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/arte-de-impressao.js",
+      "sha256": "63c869b3bc0254bab69ffb6be38483c6dffc3307b416c27b4bfa0de827437f42",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/cliente.html",
+      "sha256": "672aa8bd53fc2b90f2322e96f41d2aa785bbc8e8dbb4a5568bae8258040c50a8",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/controle.html",
+      "sha256": "5b343a703d185ef0d246ba0831527f73e937752e6aff0f63fecd6e315002199c",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/index.html",
+      "sha256": "5588d5ef81aade6f9fef3602502d1ada573c77b902c1ef1b26e67401f91f17ca",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/portaria-validacao.js",
+      "sha256": "995a20effbe5109326086f2088c815c3c582e921ecedbb5ed5baab8742880f99",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/portaria.html",
+      "sha256": "3614748db98216c360982e6b616224f8eb5072393b2e93dac85711fc1eba7522",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/portaria.js",
+      "sha256": "c43d9fb7e2870dd581c1112e434a59d91b4d58a28375e8e4d8bb1cf7ebc13ad5",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/producao.html",
+      "sha256": "c17c86c6622d7ef1b20013c9eb8a92aaa04b3af287381fd7dbca59b7d5c897b9",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/qr-canvas.js",
+      "sha256": "0842cce2ddd1567e3ef001ecc02dbead15ba0465b92a5e589939844f5d9d28e9",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/reiniciar.html",
+      "sha256": "f90ed2ca240ff7784e1073fda3ad64033c1d2b1ba6e5b0b931ff324dd1e61ddc",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/reiniciar.js",
+      "sha256": "7b0ee00bcdd96d0f30c2beb0dac1ad6edcaf2f381173822ff041bd0cf74461eb",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/script.js",
+      "sha256": "fb62184a051d901e6f2578c0c9161246f9a81d49908ac24a21e61ed8c22da52e",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/sw.js",
+      "sha256": "d27aa0b7a18ef5704af8cf8b7905efd120e1eb68ab57c7d8cb8ae75fd3aece82",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/qr-ideal-hash.js",
+      "sha256": "f364618c6e7bd210c63ff11b0bcb6b1eff6b562146a49b759b0126dcae0eed9c",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/portaria-deposito.js",
+      "sha256": "9b4be04a3f0ee97c768852c83b87cc8e89e349e42f24dea1f5bb35c0d5371956",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/portaria-sincronismo.js",
+      "sha256": "d36b3e7e3a8012edcfd16930ce36b7eac67b68f0d6fba73888ea72f774e92d73",
+      "confere": true
+    },
+    {
+      "domain": "imposicao.pages.dev",
+      "path": "/ic/sw-registro.js",
+      "sha256": "f046b2c19f41cd1a5aea29ebe84f6a3a538e8c4b7a38be6d17fc57af8bdcf497",
+      "confere": true
+    }
+  ],
+  "pwa": {
+    "online": {
+      "worker": "https://imposition.ai-ideal.com.br/ic/sw.js?v=1023",
+      "cache": 44,
+      "validador": true,
+      "html": true
+    },
+    "offline": {
+      "url": "https://imposition.ai-ideal.com.br/ic/controle.html",
+      "titulo": "Configurar o evento — Ideal Control",
+      "portaria_em_cache": true,
+      "css": true
+    },
+    "api_negocio": "bloqueada no navegador isolado",
+    "browser": "Chrome/150.0.7871.24"
+  },
+  "estacoes_locais": {
+    "versoes": [
+      {
+        "porta": 9000,
+        "versao": "NewProd 1.2.357",
+        "qr12": true
+      },
+      {
+        "porta": 9001,
+        "versao": "NewProd 1.2.357-piloto-local.27",
+        "qr12": true
+      }
+    ],
+    "assets": 22,
+    "conferidos": 22,
+    "divergencias": [],
+    "exe_producao_sha256": "6f787b762e619de92ef8e4543d84d323b1cbbdd40360139e72c89ff499d9e4c6"
+  },
+  "msi": {
+    "sha256": "c01622798960516460684f7a6d0be1104fa3b8b435678e84cd81f659b0e7d96b",
+    "bytes": 157282304,
+    "manifesto_conferido": true,
+    "publico_conferido": true
+  },
+  "edge": {
+    "portaria": 262,
+    "acesso-estacao": 258,
+    "acesso-interno": 262
+  },
+  "banco": {
+    "rls_4_tabelas": true,
+    "reservas_legadas": 539,
+    "aplicado": true,
+    "ativo": false,
+    "indice_identidade_valido": true
+  },
+  "pedido_23063": {
+    "confirmacao_impressao_anterior": "pendente",
+    "credenciais": 0,
+    "contratos": 0,
+    "liberado_para_qr_ideal": false
+  },
+  "limites": [
+    "sem impressao fisica",
+    "sem camera de celular",
+    "atualizacao de aparelhos offline nao comprovada"
+  ]
+}

@@ -47,10 +47,16 @@ if (-not $PSBoundParameters.ContainsKey('Runtime')) {
         $arquivo = Join-Path $instalacao $nomeArquivo
         if (Test-Path -LiteralPath $arquivo -PathType Leaf) { $arquivo }
     })
-    $dadosProtegidos = Join-Path $env:LOCALAPPDATA 'NewProd Dados Protegidos'
-    foreach ($nomeArquivo in @('qr_ideal_pool.bin','credencial-publicacao.json')) {
-        $arquivo = Join-Path $dadosProtegidos $nomeArquivo
-        if (Test-Path -LiteralPath $arquivo -PathType Leaf) { $Runtime += $arquivo }
+    foreach ($nomePasta in @('NewProd Dados Protegidos','NewProd Piloto Dados Protegidos')) {
+        $dadosProtegidos = Join-Path $env:LOCALAPPDATA $nomePasta
+        foreach ($nomeArquivo in @('qr_ideal_pool.bin','qr_ideal_pool_qr12_1.bin','credencial-publicacao.json')) {
+            $arquivo = Join-Path $dadosProtegidos $nomeArquivo
+            if (Test-Path -LiteralPath $arquivo -PathType Leaf) { $Runtime += $arquivo }
+        }
+        $contratos = Join-Path $dadosProtegidos 'qr-contratos'
+        if (Test-Path -LiteralPath $contratos -PathType Container) {
+            $Runtime += @(Get-ChildItem -LiteralPath $contratos -Filter '*.json' -File | Select-Object -ExpandProperty FullName)
+        }
     }
 }
 $nome = 'backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)

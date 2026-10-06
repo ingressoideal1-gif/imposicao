@@ -12,7 +12,7 @@ import acesso_publicacao as pub
 def contrato(modelo=1001859, offset=5000, **kw):
     return dict(pedido=23063, modelo=modelo, versao=2, inicio=7, passo=3, posicao=2,
                 quantidade=10, deslocamento=offset, capacidade=30,
-                pool_revisao="ideal-qr12-d1", fonte_hash="sintetico", **kw)
+                pool_revisao="ideal-qr12-1", fonte_hash="sintetico", **kw)
 
 
 class PoolSintetico:
@@ -20,14 +20,44 @@ class PoolSintetico:
         return f"{idx:08X}"
 
 
-def test_derivacao_repetivel_sem_reutilizar_codigos_antigos():
-    from qr_derivacao import blocos
-    legado=b"ABCDEFGH12345678"
-    a=b"".join(blocos(legado,10000));b=b"".join(blocos(legado,10000))
-    assert a==b and len(a)==80000
-    codigos={a[i:i+8] for i in range(0,len(a),8)}
-    assert len(codigos)==10000 and not codigos.intersection({b"ABCDEFGH",b"12345678"})
-    assert a!=b"".join(blocos(b"ABCDEFGH87654321",10000))
+def test_base_independente_ausente_nao_deriva_do_legado(monkeypatch,tmp_path):
+    import qr_base_v2,migracao_estacao
+    monkeypatch.setattr(qr_base_v2,"_pool",None)
+    monkeypatch.setattr(migracao_estacao,"pasta_dados",lambda:tmp_path)
+    monkeypatch.setattr(migracao_estacao,"proteger_pasta",lambda _:None)
+    with pytest.raises(ValueError,match="nao provisionada"):qr_base_v2.obter(PoolSintetico())
+    assert list(tmp_path.iterdir())==[]
+
+
+def test_base_provisionada_confere_integridade(monkeypatch,tmp_path):
+    import hashlib,qr_base_v2,migracao_estacao
+    monkeypatch.setattr(qr_base_v2,"_pool",None)
+    monkeypatch.setattr(qr,"TOTAL",2)
+    monkeypatch.setattr(migracao_estacao,"pasta_dados",lambda:tmp_path)
+    monkeypatch.setattr(migracao_estacao,"proteger_pasta",lambda _:None)
+    dados=b"ABCDEFGH12345678"
+    (tmp_path/qr.POOL_V2_NOME).write_bytes(dados)
+    with pytest.raises(ValueError,match="integridade"):qr_base_v2.obter(None)
+    monkeypatch.setattr(qr_base_v2,"POOL_V2_SHA256",hashlib.sha256(dados).hexdigest())
+    pool=qr_base_v2.obter(None)
+    try:assert pool.codigo_indice(1)=="12345678"
+    finally:pool.fechar()
+
+
+def test_provisionamento_privado_atomico_e_sem_sobrescrita(monkeypatch,tmp_path):
+    import hashlib,migracao_estacao
+    from ferramentas import provisionar_qr12 as p
+    dados=b"ABCDEFGH12345678"
+    monkeypatch.setattr(p,"TOTAL",2)
+    monkeypatch.setattr(p,"POOL_V2_SHA256",hashlib.sha256(dados).hexdigest())
+    monkeypatch.setattr(migracao_estacao,"proteger_pasta",lambda _:None)
+    origem=tmp_path/'recebida.bin';origem.write_bytes(dados)
+    destino=tmp_path/'protegida'/'base.bin'
+    p.provisionar(origem,destino);p.provisionar(origem,destino)
+    assert destino.read_bytes()==dados
+    destino.write_bytes(b"XXXXXXXXYYYYYYYY")
+    with pytest.raises(ValueError,match="divergente"):p.provisionar(origem,destino)
+    assert destino.read_bytes()==b"XXXXXXXXYYYYYYYY"
 
 
 def test_prefixos_12_caracteres_modelos_mesma_coluna_e_mesmo_final():

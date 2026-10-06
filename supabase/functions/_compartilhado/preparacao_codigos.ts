@@ -2,8 +2,8 @@
 export const POOL_BYTES = 24_000_000;
 export const POOL_SHA256 = "8e30409786113d484103cb66f88080a99bb67530a4817c245789c8929da35174";
 export const POOL_OBJETO = "ideal-control-master/qr_ideal_pool.bin";
-export const POOL_V2_SHA256 = "931cc39738a68b9eb814e3d9908962bd04e3782893234f881222a0526a6e6d51";
-export const POOL_V2_OBJETO = "ideal-control-master/qr_ideal_pool_qr12_d1.bin";
+export const POOL_V2_SHA256 = "6e968837c7f16a9acd0b0a46adfa84bbb1137dae75010f64512ca7f01351e1dc";
+export const POOL_V2_OBJETO = "ideal-control-master/qr_ideal_pool_qr12_1.bin";
 
 export function indiceQr(pedido: number, modelo: number, numero: number): number {
   const diferenca = ((pedido % 100 - modelo % 100) + 100) % 100;
@@ -25,7 +25,7 @@ export function indiceContrato(pedido: number, modelo: number, valor: number, c:
   const pos = valor - c.inicio, offset = c.deslocamento;
   if (!Number.isSafeInteger(pos) || pos < 0 || pos >= c.capacidade) throw new Error("Número fora da reserva QR.");
   if (c.versao === 1 && c.pool_revisao === "ideal-master-1") return indiceQr(pedido, modelo, valor);
-  if (c.versao !== 2 || c.pool_revisao !== "ideal-qr12-d1") throw new Error("Versão QR incompatível.");
+  if (c.versao !== 2 || c.pool_revisao !== "ideal-qr12-1") throw new Error("Versão QR incompatível.");
   if (!Number.isSafeInteger(pos) || pos < 0 || pos >= c.capacidade || offset === null ||
       !Number.isSafeInteger(offset) || offset < 0 || offset + c.capacidade > 3000000) {
     throw new Error("Número fora da reserva QR; base nunca pode dar a volta.");
