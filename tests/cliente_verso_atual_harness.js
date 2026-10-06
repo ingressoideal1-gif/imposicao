@@ -116,6 +116,7 @@ function selecionar(tipo, num) {
         numeracaoIdDoItem: i => i.amostra_num_id,
         isNumeracaoDuplex, rotuloDoModoDeImpressao: () => 'Sequencial', pdfViewerState: {}, toast() {},
         renderAmostrasOSItens() {}, renderItemAmostraCombinada() {},
+        avisoModoVibeDaAmostra() { return ''; },
         saveAmostraToDB(id, os, data) { saves.push(data); return Promise.resolve(); }
     };
     vm.createContext(box);
