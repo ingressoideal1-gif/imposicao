@@ -26656,6 +26656,9 @@ async function carregarPedidoPesquisado(numero) {
     // Consulta pontual; a lista ativa e os modelos abertos permanecem em memoria.
     const usuario = window._currentUser?.id || window._acessoLocal || null;
     try {
+        // O acesso local do NewProd nao autoriza a leitura dos tokens do cliente.
+        // Mesmo criterio da carga normal em carregarLinksExistentes().
+        const temSessao = await lerDadosLista(temSessaoDoSupabase(), 'sessão');
         const [artes, modelos, produtos, links] = await Promise.all([
             lerDadosLista(supabaseClient.from('pedidos_artes')
                 .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados')
@@ -26663,9 +26666,9 @@ async function carregarPedidoPesquisado(numero) {
             carregarModelosGlobais(true, [numero]),
             lerDadosLista(vibeClient.from('produtos_proposta').select('*')
                 .eq('id_int', numero).order('created_at', { ascending: false }), 'produtos do pedido'),
-            lerDadosLista(supabaseClient.from('pedidos_links_cliente')
+            temSessao ? lerDadosLista(supabaseClient.from('pedidos_links_cliente')
                 .select('os_id, numero_pedido, token, status_arte, arte_pronta_em, cliente_abriu_em')
-                .eq('os_id', `vibe_${numero}`).eq('ativo', true), 'links do pedido')
+                .eq('os_id', `vibe_${numero}`).eq('ativo', true), 'links do pedido') : { data: [] }
         ]);
         if (artes.error) throw artes.error;
         if (produtos.error) throw produtos.error;
