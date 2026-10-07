@@ -112,3 +112,26 @@ Worktree: `C:\ProjetosLocais\ideal-imposition-entrega-impacto-20261007`, branch
 preservado. A alteracao inclui ferramentas/CI e uma protecao de inicializacao
 do Piloto em `app.py`/`compatibilidade_painel.py`; a futura integracao deve
 contemplar os dois componentes, sem remover a barreira de escopo misto do script.
+
+### Preparacao da publicacao autorizada em 07/10/2026
+
+A base foi avancada sem conflito para `ff3620fd` (PR 113), preservando o checkout
+operacional. Implementacao registrada em `a81c4b0b`. As validacoes focadas e os
+111 testes PowerShell passaram novamente; a bateria dos dois canais foi refeita
+com a base atualizada. A publicacao do fluxo segue por PR e checks obrigatorios,
+sem usar o comando frontend para contornar seu bloqueio de escopo misto.
+
+Primeiro build real do Piloto auditado: **71,932 s**. Segunda preparacao com as
+mesmas entradas: **1,643 s**, acao `reutilizar`, sem recompilar. Medicao local da
+etapa de pacote; nao representa o tempo total da entrega ou de CI.
+
+- EXE: 146.594.217 bytes; SHA-256
+  `0395ee4439355353c6bf8ffbcb130dbd41e797aa5431292b10711cd4d010df5f`.
+- 353 arquivos do painel embutido conferidos por SHA-256 contra as entradas.
+- Protecao `painel_externo_validado` confirmada no modulo compilado.
+- Auditoria do pacote aprovada; base reutilizavel registrada no cache Git local.
+- Artefato inicial: `dist/piloto/compilar-d887401e61d3/NewProdPiloto.exe`.
+- Reutilizacao: `dist/piloto/reutilizar-abca66e6e0f0/NewProdPiloto.exe`.
+- Nenhum MSI, manifesto de atualizacao de producao ou instalacao foi alterado.
+  A base esta preparada para proximas entregas; publicacao do fluxo nao instala
+  esse executavel nas estacoes.
