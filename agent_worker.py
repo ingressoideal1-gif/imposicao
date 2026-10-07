@@ -445,9 +445,9 @@ def process_queue():
         if reserva is not None:
             reserva.liberar()
 
-# 30 min, nao 6h: num dia de correcao chegamos a publicar 5 versoes dentro de uma
-# unica janela de 6h, e as estacoes ficaram cegas a todas elas. O custo e baixo —
-# o manifesto tem ~300 bytes, entao sao 2 requisicoes por hora por estacao.
+# Decisao de 07/10/2026: verificar versoes a cada seis horas.
+# A primeira consulta automatica tambem aguarda esse intervalo.
+# O operador pode verificar e atualizar pelo menu antes desse prazo.
 INTERVALO_UPDATE_S = 6 * 60 * 60
 
 # O sync dos BINARIOS continua em 6h: sao ~140 MB na primeira vez e depois so o que
@@ -459,7 +459,7 @@ INTERVALO_FONTES_S = 6 * 3600
 # binarios e chamado na hora, sem esperar as 6h.
 INTERVALO_CATALOGO_S = 30 * 60
 
-# Painel a cada 30 min, como o manifesto: sao ~1,5 MB e a estacao precisa pegar
+# Painel legado a cada 30 min: sao ~1,5 MB e a estacao precisa pegar
 # a correcao publicada no mesmo dia. A primeira sincronizacao acontece 5s apos
 # subir — antes disso vale a copia que ja estava no disco.
 INTERVALO_PAINEL_S = 30 * 60
