@@ -330,7 +330,7 @@ def _semear_painel(destino: str, origem: str) -> bool:
 
 
 _PAINEL_DIR = _FRONTEND_DIR
-if getattr(sys, 'frozen', False):
+if getattr(sys, 'frozen', False) and os.environ.get('NEWPROD_RETORNO_ORIGINAL') != '1':
     _candidato = os.path.join(os.path.dirname(sys.executable), "painel")
     if _semear_painel(_candidato, _FRONTEND_DIR):
         _PAINEL_DIR = _candidato

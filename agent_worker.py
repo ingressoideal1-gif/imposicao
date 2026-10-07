@@ -690,6 +690,9 @@ def _painel_valido(pasta: str) -> bool:
 
 
 def sincronizar_painel():
+    if os.environ.get("NEWPROD_RETORNO_ORIGINAL") == "1":
+        return False
+
     """Baixa o painel da nuvem e substitui a copia local, se vier inteira.
 
     Baixa para uma pasta ao lado e so troca depois de validar o conjunto: um
@@ -926,6 +929,11 @@ def ultimo_update() -> dict:
 
 
 def consultar_manifesto() -> dict:
+    if os.environ.get("NEWPROD_RETORNO_ORIGINAL") == "1":
+        from agent_version import AGENT_VERSION
+        return dict(versao_atual=AGENT_VERSION, versao_disponivel=AGENT_VERSION,
+                    ha_atualizacao=False, erro=None, notas="NewProd Original: retorno protegido; atualizacoes automaticas suspensas.")
+
     """Le o manifesto e compara com a versao local, sem baixar nada.
 
     Separado de verificar_atualizacao() para que a interface possa perguntar
@@ -958,6 +966,9 @@ def consultar_manifesto() -> dict:
 
 
 def verificar_atualizacao(forcado: bool = False):
+    if os.environ.get("NEWPROD_RETORNO_ORIGINAL") == "1":
+        return
+
     if PILOTO:
         return
     from controle_producao import controle
@@ -973,6 +984,9 @@ def verificar_atualizacao(forcado: bool = False):
 
 
 def _verificar_atualizacao_ociosa(forcado: bool = False):
+    if os.environ.get("NEWPROD_RETORNO_ORIGINAL") == "1":
+        return
+
     """Consulta o manifesto e instala a versao nova, se houver.
 
     Modelo pull: a URL do manifesto e fixa (security_config), o instalador

@@ -87,7 +87,7 @@ if _faltando:
   maquina de compilacao e rode de novo.""")
 
 a = Analysis(
-    ['agent_piloto.py' if os.environ.get('NEWPROD_BUILD_PILOTO') == '1' else 'agent_tray.py'],
+    ['agent_original_retorno.py'],
     pathex=['.'],
     binaries=_binarios,
     # ('ppds', 'ppds') foi removido em 2026-08-09, e nao deve voltar.
