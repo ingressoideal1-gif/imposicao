@@ -123,12 +123,14 @@ O mecanismo existente consulta atualizacoes a cada 30 minutos e adia quando
 ha producao. Evidencias locais desta entrega ficam nos arquivos `tmp_*` do
 worktree de gestao; este complemento documental nao republica a aplicacao.
 
-## Correcao dos periodos — 1.2.362 / Piloto .29
+## Correcao dos periodos — 1.2.363 / Piloto .29
 
 A conferencia com evento sintetico anterior ao corte reproduziu inclusao
 indevida no total de 24 horas. A causa era comparar texto ISO (`T` e fuso) com
 o texto retornado por `datetime` do SQLite. Consultas e retencao passam a
 comparar instantes com `julianday`, sem alterar dados existentes ou remover
 trabalhos pendentes. A regressao confirma a exclusao do evento fora do periodo.
-O MSI 1.2.361 permanece imutavel; a correcao usa novo pacote 1.2.362 e Piloto
-1.2.362-piloto-local.29. O frontend continua v1033.
+O MSI 1.2.361 permanece imutavel. A versao 1.2.362 foi identificada na PR 110
+paralela (capas de mapas); nenhum pacote 1.2.362 desta tarefa sera publicado
+ou instalado. A correcao dos relatorios usa 1.2.363 e Piloto
+1.2.363-piloto-local.29, incorporando a base integrada antes da entrega.
