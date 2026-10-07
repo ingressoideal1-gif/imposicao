@@ -2015,7 +2015,7 @@ function drawPedPreview() {
 
                     const numCapa = multiArteItem ? numeracaoDaArteNaPreviaPedido(multiArteItem) : num;
                     const capaTeatro = window.TeatroBanco?.capa(numCapa?.csv_data || [], item_local_index ?? item_index,
-                        window.currentAssemblySets?.[currentSet - 1]?.num_sheets || total_sheets);
+                        window.currentAssemblySets?.[currentSet - 1]?.num_sheets || total_sheets, numCapa?.teatro_capa);
                     if (capaTeatro) {
                         const largura = ctx.measureText(capaTeatro.titulo).width;
                         ctx.fillText(capaTeatro.titulo, textX, textY);

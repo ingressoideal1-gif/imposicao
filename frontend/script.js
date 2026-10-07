@@ -11743,7 +11743,7 @@ function drawPreview() {
                     const textY = -ch/2 + (yPdf * MM2PT * scale);
                     
                     // CAMAROTE: usar "Camarote XX - de 1 a L_CAM" com C_INI como início
-                    const capaTeatro = window.TeatroBanco?.capa(linhasTeatro || [], item_index, total_sheets);
+                    const capaTeatro = window.TeatroBanco?.capa(linhasTeatro || [], item_index, total_sheets, bancoTeatro?.teatro_capa || num?.teatro_capa);
                     if (capaTeatro) {
                         const largura = ctx.measureText(capaTeatro.titulo).width;
                         ctx.fillText(capaTeatro.titulo, textX, textY);

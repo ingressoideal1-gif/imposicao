@@ -103,13 +103,13 @@
             return plano;
         });
     }
-    function capa(rows, indice, folhas) {
+    function capa(rows, indice, folhas, descricao) {
         const fonte = grupos(rows);
         if (!fonte) return null;
         if (!Number.isSafeInteger(folhas) || folhas < 1 || indice < 0 || indice >= rows.length) return null;
         const bloco = fonte.blocos.find(b => indice >= b.inicio && indice < b.inicio + b.quantidade);
         const primeiro = rows[bloco.inicio], ultimo = rows[bloco.inicio + bloco.quantidade - 1];
-        return { titulo: (primeiro.Conjunto || 'Fila') + ' ' + primeiro.Fila,
+        return { titulo: (descricao?.nomeConjunto || primeiro.Conjunto || 'Fila') + ' ' + primeiro.Fila,
             detalhe: ' - ' + (fonte.nomeSetor || 'Teatro') + ' - de ' + primeiro.Numero + ' a ' + ultimo.Numero
                 + ' (' + bloco.quantidade + ' lugares)' };
     }
@@ -214,6 +214,8 @@
         if (payload.formato?.has_cover && numeracoes.some(n => grupos(n?.csv_data || []))
                 && !info?.capabilities?.includes('teatro_capas_fila_v1')) throw Error('Atualize o NewProd desta estação para gerar uma capa por conjunto do mapa de teatro.');
         if (numeracoes.some(n => n?.teatro_modelo) && !info?.capabilities?.includes('teatro_snapshot_v1')) throw Error('Atualize o NewProd desta estação para gerar pelos snapshots do ERP.');
+        if (payload.formato?.has_cover && numeracoes.some(n => n?.teatro_modelo)
+                && !info?.capabilities?.includes('teatro_capa_descricao_atual_v1')) throw Error('Atualize o NewProd desta estação para usar a descrição editada nas capas dos mapas do ERP.');
         formData.set('payload', JSON.stringify(payload));
     }
     const api = { HEADERS, ORIGEM, linhaDeMapa, usa, revisao, preparar, grupos, montarSets, capa, configurarMontagem, configurarTela, validarAssociacoes, bancoIgual, importar, conferirMotor };

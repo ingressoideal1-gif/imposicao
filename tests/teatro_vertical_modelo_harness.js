@@ -104,6 +104,16 @@ c.currentPreviewPage = 4;
 c.drawPreview();
 assert.match(elements['preview-sheet-num'].textContent, /Folha 4 de 4/);
 assert.deepEqual(textosCapa.filter(t => /^Mesa \d+$/.test(t)), ['Mesa 25','Mesa 26','Mesa 27','Mesa 28']);
+// A descricao atual recebida na conferencia vale apenas na capa.
+c.numeracaoDoModelo(items[0]).teatro_capa = {nomeConjunto:'Mesa Editada'};
+textosCapa.length=0;
+c.drawPreview();
+assert.ok(textosCapa.includes('Mesa Editada 25'));
+elements['ped-preview-part-input'].value='capa';
+textosCapa.length=0;
+c.drawPedPreview();
+assert.ok(textosCapa.includes('Mesa Editada 25'));
+assert.equal(c.numeracaoDoModelo(items[0]).csv_data[0].Conjunto,'Mesa');
 items[0].qtd = 81;
 assert.match(c.bancoDeDadosIncompletoDoModelo(items[0]).texto, /quantidade/);
 console.log('OK: TEATRO automático, PRONTO sem falso bloqueio, 82/515 lugares, prévia por modelo e quantidade divergente recusada.');

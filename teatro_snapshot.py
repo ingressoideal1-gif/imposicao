@@ -83,4 +83,9 @@ def aplicar(payload, ler_mapa):
             avisos.append(f"Modelo {modelo['id']}: mapa alterado; usando snapshot histórico sem trocar a revisão.")
         if num.get("csv_data") != rows: raise ValueError("Os lugares enviados não correspondem ao snapshot do modelo.")
         num["csv_data"] = rows
+        # A descrição da capa é apresentação do mapa conferido, separada dos
+        # lugares e rótulos do snapshot histórico. Nunca confiar no texto enviado.
+        setor = next(s for s in atual["config"]["setores"] if s.get("id") == setor_id)
+        conjunto = setor.get("nomeConjunto") or modelo["mapa_teatro_snapshot"]["setor"].get("nomeConjunto") or "Fila"
+        num["teatro_capa"] = {"nomeConjunto": " ".join(str(conjunto).split())[:40] or "Fila"}
     return avisos

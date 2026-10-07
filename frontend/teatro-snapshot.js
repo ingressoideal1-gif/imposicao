@@ -3,6 +3,12 @@
     'use strict';
     const campos = ['mapa_teatro_id', 'mapa_teatro_setor_id', 'mapa_teatro_revisao', 'mapa_teatro_snapshot'];
     const tem = item => !!item && campos.some(k => item[k] != null);
+    function descricaoCapa(item, mapa) {
+        const s = typeof item.mapa_teatro_snapshot === 'string' ? JSON.parse(item.mapa_teatro_snapshot) : item.mapa_teatro_snapshot;
+        const setor = mapa?.id === item.mapa_teatro_id && mapa.config?.setores?.find(x => x.id === item.mapa_teatro_setor_id);
+        if (!setor) return null;
+        return { nomeConjunto: String(setor.nomeConjunto || s?.setor?.nomeConjunto || 'Fila').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Fila' };
+    }
     function banco(item) {
         if (!tem(item)) return null;
         let s = item.mapa_teatro_snapshot;
@@ -35,7 +41,7 @@
         for (const campo of campos) modelo[campo] = structuredClone(item[campo]);
         modelo.mapa_teatro_snapshot = structuredClone(s);
         return { id: 'snapshot:' + item.id, csv_data: setor.rows, csv_headers: setor.headers,
-            teatro_modelo: modelo, origem_snapshot: true };
+            teatro_modelo: modelo, teatro_capa: structuredClone(item._teatro_capa || null), origem_snapshot: true };
     }
     async function conferir(num, lerMapa) {
         if (!num?.teatro_modelo) return null;
@@ -47,6 +53,7 @@
         }
         m.config_canonica_atual = root.MapaTeatroRevisao.canonicalizar(atual.config);
         m.revisao_atual = await root.MapaTeatroRevisao.revisao(atual.config);
+        num.teatro_capa = descricaoCapa(m, atual);
         return m.revisao_atual !== m.mapa_teatro_revisao
             ? 'O mapa foi alterado. O modelo ' + m.id + ' será gerado com seu snapshot histórico, sem trocar a revisão.' : null;
     }
@@ -56,7 +63,7 @@
             const dados = banco(item, num);
             return { ...num, tipo: 'TEATRO', csv_data: dados.csv_data, csv_headers: dados.csv_headers,
                 csv_filename: dados.csv_filename, csv_url: '', mapa_teatro_snapshot_erp: true,
-                mapa_teatro_quantidade: dados.csv_data.length, teatro_modelo: dados.teatro_modelo };
+                mapa_teatro_quantidade: dados.csv_data.length, teatro_modelo: dados.teatro_modelo, teatro_capa: dados.teatro_capa };
         } catch (e) {
             // Nunca cair no CSV de outro pedido ou na numeração sequencial em erro.
             return { ...num, tipo: 'TEATRO', csv_data: [], csv_headers: [], csv_url: '',
@@ -88,6 +95,7 @@
     async function conferirPedido(itens, cliente) {
         const modelos = (itens || []).filter(tem);
         if (!modelos.length) return;
+        modelos.forEach(item => { delete item._teatro_capa; });
         const ids = [...new Set(modelos.map(item => item.mapa_teatro_id).filter(Boolean))];
         let timer;
         const controle = new AbortController();
@@ -102,7 +110,9 @@
             ]);
             if (error || !Array.isArray(data)) throw error || Error('Mapa atual indisponível.');
             await Promise.all(modelos.map(async item => {
-                item._mapa_teatro_aviso = await conferirRevisao(item, data.find(mapa => mapa.id === item.mapa_teatro_id));
+                const mapa = data.find(mapa => mapa.id === item.mapa_teatro_id);
+                item._mapa_teatro_aviso = await conferirRevisao(item, mapa);
+                item._teatro_capa = descricaoCapa(item, mapa);
             }));
         } catch {
             modelos.forEach(item => { item._mapa_teatro_aviso = 'Não foi possível conferir a revisão atual do mapa. Os lugares vêm da versão salva no pedido.'; });
