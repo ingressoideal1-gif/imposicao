@@ -289,7 +289,7 @@ _GRAVADORES = {
 }
 
 
-def soltar(pasta: str, nome: str, dados: bytes, metodo: str = None) -> str:
+def _soltar(pasta: str, nome: str, dados: bytes, metodo: str = None) -> str:
     """Grava o PDF na pasta e devolve o caminho final.
 
     O arquivo e CRIADO ja com o nome final. Nao ha .tmp e nao ha renomeacao —
@@ -370,6 +370,30 @@ def soltar(pasta: str, nome: str, dados: bytes, metodo: str = None) -> str:
         if destino is None:
             raise OSError(f"nao consegui um nome livre para {nome_final} em {pasta}")
 
+    return destino
+
+
+def soltar(pasta: str, nome: str, dados: bytes, metodo: str = None) -> str:
+    import gestao_estacoes as gestao
+    if gestao._thread is None:
+        return _soltar(pasta,nome,dados,metodo)
+    import hashlib
+    h=gestao.historico()
+    ident=h.iniciar(pasta,'hotfolder',hashlib.sha256(dados).hexdigest())
+    h.transicao(ident,'envio_iniciado')
+    try:
+        destino=_soltar(pasta,nome,dados,metodo)
+    except BaseException as erro:
+        h.transicao(ident,'incerto',erro=type(erro).__name__)
+        raise
+    h.transicao(ident,'enviado')
+    def observar():
+        import time
+        time.sleep(SEGUNDOS_ATE_CONFERIR)
+        # Ausencia na pasta nao comprova consumo do RIP nem papel impresso.
+        h.evento('hotfolder_arquivo_presente' if os.path.exists(destino) else 'hotfolder_arquivo_ausente',trabalho=ident)
+        h.transicao(ident,'incerto')
+    threading.Thread(target=observar,daemon=True,name='GestaoHotFolder').start()
     return destino
 
 

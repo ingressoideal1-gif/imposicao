@@ -20,11 +20,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import io
 
-DIAG_LOGS = []
+from collections import deque
+DIAG_LOGS = deque(maxlen=500)
 _IMPOSE_TASKS = set()
 def log_diag(msg: str):
     import datetime
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    from gestao_estacoes import texto_seguro
+    msg = texto_seguro(msg)
     DIAG_LOGS.append(f"[{now}] {msg}")
     print(f"[{now}] {msg}")
 from engine import ImpositionConfig, ImpositionEngine
@@ -65,6 +68,8 @@ if os.environ.get('NEWPROD_PILOTO_LOCAL') == '1':
     piloto_pacotes = configurar_piloto(app, ocupado=controle_producao_local.ocupado)
 from propostas_api import router as propostas_router
 app.include_router(propostas_router)
+from gestao_estacoes_api import router as gestao_estacoes_router
+app.include_router(gestao_estacoes_router)
 
 @app.middleware('http')
 async def proteger_api_local(request: Request, call_next):
@@ -2029,7 +2034,7 @@ if __name__ == "__main__":
 
 @app.get("/api/diag")
 def get_diag():
-    return {"logs": DIAG_LOGS}
+    return {"logs": list(DIAG_LOGS)}
 
 @app.get("/api/print-config/{produto_id}")
 async def get_print_config_endpoint(produto_id: str):

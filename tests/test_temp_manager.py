@@ -201,7 +201,7 @@ def test_fila_limpa_download_incompleto_e_excecao(raiz, falha):
         return True, "ok"
     def nuvem(metodo, *args):
         return [{"id": "sintetico", "file_url": "simulada", "printer_name": "simulada"}]
-    ns = dict(temp_manager=tm, AGENT_ID="sintetico", _supabase_request=nuvem,
+    ns = dict(PILOTO=False, temp_manager=tm, AGENT_ID="sintetico", _supabase_request=nuvem,
               download_file=baixar, print_service=SimpleNamespace(send_print_job_windows=enviar),
               titulo_do_job=lambda *_: "sintetico")
     carregar_funcao("agent_worker.py", "process_queue", ns)()
@@ -212,12 +212,21 @@ def ambiente_impose(engine):
     from fastapi import HTTPException
     from starlette.responses import StreamingResponse
     return dict(temp_manager=tm, json=json, os=os, io=io, base64=base64,
+                db=SimpleNamespace(get_mapa_teatro_para_conferencia=lambda *_: pytest.fail('Payload sintetico sem mapa nao deve consultar banco')),
                 HTTPException=HTTPException, StreamingResponse=StreamingResponse,
                 security_config=SimpleNamespace(is_cloud_runtime=lambda: False),
-                _embed_system_fonts=lambda *_: None, _pool_qr_ou_none=lambda: None,
+                _embed_system_fonts=lambda *_, resolver_recurso=None: None, _pool_qr_ou_none=lambda: None,
                 log_diag=lambda *_: None,
                 _publicar_faixa_qr_ideal=lambda *_: None, _IMPOSE_TASKS=set(),
-                ImpositionConfig=lambda **kw: SimpleNamespace(**kw), ImpositionEngine=engine)
+                ImpositionConfig=lambda **kw: SimpleNamespace(**{'total_items': 1, **kw}), ImpositionEngine=engine)
+
+
+def test_fila_remota_vazia_nao_reinicia_ociosidade_do_backup(monkeypatch):
+    import controle_producao
+    controle=SimpleNamespace(reservar=lambda:pytest.fail('Consulta vazia nao deve reservar producao'))
+    monkeypatch.setattr(controle_producao,'controle',controle)
+    ns=dict(PILOTO=False,AGENT_ID='sintetico',_supabase_request=lambda *_:[])
+    carregar_funcao('agent_worker.py','process_queue',ns)()
 
 
 PAYLOAD = {"formato": {"name": "sintetico"}, "saida": {"name": "sintetico"},
@@ -232,7 +241,7 @@ def test_stream_desconectado_preserva_arquivos_ate_motor_terminar(raiz, antes_do
     inicio = threading.Event(); continuar = threading.Event(); terminou = threading.Event()
     caminhos = []
     class Motor:
-        def __init__(self, cfg, on_file_generated=None):
+        def __init__(self, cfg, on_file_generated=None, resolver_recurso=None):
             self.cfg = cfg; self.callback = on_file_generated
         def process(self):
             p = Path(self.cfg.out_pdf); caminhos.append(p)
@@ -279,7 +288,7 @@ def test_stream_desconectado_preserva_arquivos_ate_motor_terminar(raiz, antes_do
 def test_impose_sincrono_limpa_pdf_e_erro(raiz, falha):
     from fastapi import HTTPException
     class Motor:
-        def __init__(self, cfg): self.cfg = cfg
+        def __init__(self, cfg, resolver_recurso=None): self.cfg = cfg
         def process(self):
             Path(self.cfg.out_pdf).write_bytes(b"PDF sintetico")
             if falha: raise ValueError("falha sintetica")
@@ -325,11 +334,13 @@ def test_relatorio_estacoes_distingue_ausencia_e_medicao_parcial():
 
 def test_diagnostico_carrega_no_heartbeat_sem_varrer_disco(monkeypatch):
     import datetime
+    import gestao_estacoes
+    monkeypatch.setattr(gestao_estacoes, 'resumo_publico', lambda: {})
     monkeypatch.setattr(tm, "_diagnostico", {"estado": "coletado", "gerenciados": {"bytes": 123}})
     snapshot = tm.diagnostico()
     snapshot["gerenciados"]["bytes"] = 999
     enviados = []
-    ns = dict(temp_manager=tm, datetime=datetime, AGENT_ID="teste", AGENT_NAME="teste",
+    ns = dict(PILOTO=False, temp_manager=tm, datetime=datetime, AGENT_ID="teste", AGENT_NAME="teste",
               print_service=SimpleNamespace(get_printers=lambda: []), versao_do_painel=lambda: {},
               get_local_ip=lambda: "127.0.0.1", _acesso_base=lambda: "",
               diagnostico_fontes=lambda: {}, diagnostico_impressao=lambda: {}, ultimo_update=lambda: {},

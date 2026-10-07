@@ -44340,7 +44340,7 @@ async function checkPrinterAgent() {
 
             if (consulta) {
                 const { data } = await consulta.limit(1);
-                if (data && data.length > 0) {
+                if (data && data.length > 0 && data[0].printers_json?.recebe_fila_remota !== false) {
                     _printerAgentActive = true;
                     window._activeAgentData = data[0];
                 } else if (getEstacaoEscolhida()) {
@@ -44799,6 +44799,8 @@ async function sendPrintJob() {
 
         try {
             options.integridade_sha256 = await hashArquivoImpressao(item.blob);
+            item._gestaoEnvioId ||= crypto.randomUUID();
+            options.gestao_envio_id = item._gestaoEnvioId;
             if (isLocalMode) {
                 const formData = new FormData();
                 formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
@@ -46086,6 +46088,8 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
 
         try {
             itemOptions.integridade_sha256 = await hashArquivoImpressao(item.blob);
+            item._gestaoEnvioId ||= crypto.randomUUID();
+            itemOptions.gestao_envio_id = item._gestaoEnvioId;
             if (isLocalMode && hotFolder) {
                 // O prefixo de ordem (00001_, 00002_...) passa a servir a dois
                 // donos: o titulo do job no spooler e a ordem alfabetica em que
@@ -48165,7 +48169,7 @@ async function listarEstacoesOnline() {
             .eq('status', 'online')
             .gte('last_seen', doisMinAtras)
             .order('last_seen', { ascending: false });
-        return data || [];
+        return (data || []).filter(a => a.printers_json?.recebe_fila_remota !== false);
     } catch (e) {
         console.error('[Agente] Erro ao listar estações online:', e);
         return [];

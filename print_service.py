@@ -193,6 +193,7 @@ def send_print_job(printer_name, pdf_path, selected_options_codes, job_title="im
             # We specify type 'RAW' so Windows doesn't try to parse it, passing it directly to the PostScript interpreter on the printer.
             hJob = win32print.StartDocPrinter(hPrinter, 1, (job_title, None, "RAW"))
             try:
+                __import__('gestao_estacoes').spool_iniciado(hJob)
                 win32print.StartPagePrinter(hPrinter)
                 win32print.WritePrinter(hPrinter, ps_bytes)
                 win32print.EndPagePrinter(hPrinter)
@@ -432,6 +433,7 @@ def _send_pdf_raw(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
 
             hJob = win32print.StartDocPrinter(hPrinter, 1, (job_title, None, "RAW"))
             try:
+                __import__('gestao_estacoes').spool_iniciado(hJob)
                 win32print.StartPagePrinter(hPrinter)
                 with open(pdf_path, "rb") as f:
                     pdf_bytes = f.read()
@@ -517,6 +519,7 @@ def _send_ps_ghostscript(printer_name, pdf_path, devmode, job_title, cor_cfg=Non
 
             hJob = win32print.StartDocPrinter(hPrinter, 1, (job_title, None, "RAW"))
             try:
+                __import__('gestao_estacoes').spool_iniciado(hJob)
                 win32print.StartPagePrinter(hPrinter)
                 with open(ps_path, "rb") as f:
                     win32print.WritePrinter(hPrinter, f.read())
@@ -646,7 +649,8 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
             hdc = win32gui.CreateDC("WINSPOOL", printer_name, dm)
             dc = win32ui.CreateDCFromHandle(hdc)
             try:
-                dc.StartDoc(job_title)
+                spool_id = dc.StartDoc(job_title)
+                __import__('gestao_estacoes').spool_iniciado(spool_id)
                 print_w = dc.GetDeviceCaps(win32con.HORZRES)
                 print_h = dc.GetDeviceCaps(win32con.VERTRES)
                 dpi_x   = dc.GetDeviceCaps(win32con.LOGPIXELSX)
@@ -743,7 +747,7 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
         return False, err
 
 
-def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao.pdf"):
+def _send_print_job_windows(printer_name, pdf_path, options, job_title="impressao.pdf"):
     """
     Pipeline de impressão com suporte a múltiplas estratégias.
 
@@ -802,6 +806,8 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
     if ok:
         return True, msg + sufixo_aviso
     errors.append(f"PDF-RAW: {msg}")
+    if not __import__('gestao_estacoes').envio_pode_repetir():
+        return False, 'Envio iniciado no Windows; confira a fila antes de repetir.'
     print(f"[print] PDF RAW falhou, tentando Ghostscript...")
 
     # Estratégia 2: Ghostscript PS (vetorial, universal)
@@ -809,6 +815,8 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
     if ok:
         return True, msg + sufixo_aviso
     errors.append(f"GS-PS: {msg}")
+    if not __import__('gestao_estacoes').envio_pode_repetir():
+        return False, 'Envio iniciado no Windows; confira a fila antes de repetir.'
     print(f"[print] Ghostscript falhou, usando GDI raster (fallback)...")
 
     # Estratégia 3: GDI Raster (fallback seguro)
@@ -819,3 +827,20 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
 
     all_errors = " | ".join(errors)
     return False, f"Todas as estrategias de impressao falharam: {all_errors}"
+
+
+def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao.pdf"):
+    import gestao_estacoes as gestao
+    # Ferramentas e testes isolados nao inicializam persistencia da estacao.
+    if gestao._thread is None:
+        return _send_print_job_windows(printer_name, pdf_path, options, job_title)
+    try:
+        with gestao.acompanhar_envio(printer_name, 'windows', options.get('integridade_sha256'), options.get('gestao_envio_id')) as ident:
+            ok, msg = _send_print_job_windows(printer_name, pdf_path, options, job_title)
+            estado = ('enviado' if HAS_WIN32 else 'simulado') if ok else ('falha' if gestao.envio_pode_repetir() else 'incerto')
+            gestao.historico().transicao(ident, estado, erro=None if ok else 'Falha no envio; confira a fila e os logs locais.')
+            return ok, msg
+    except gestao.EnvioRepetido as repetido:
+        if repetido.estado in ('enviado','na_fila','imprimindo','conferido','simulado'):
+            return True, 'Tentativa ja recebida; nenhum arquivo foi reenviado.'
+        return False, 'Tentativa ja registrada com estado '+repetido.estado+'. Confira o historico antes de iniciar outro envio.'

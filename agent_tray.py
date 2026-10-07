@@ -9,6 +9,13 @@ import webbrowser
 import socket
 import time
 
+if len(sys.argv) == 4 and sys.argv[1] == '--restaurar-gestao':
+    from pathlib import Path
+    from canais_newprod import pasta_local
+    from backup_gestao import restaurar
+    restaurar(sys.argv[2], pasta_local() / 'gestao' / 'backup-chave.dpapi', sys.argv[3])
+    sys.exit(0)
+
 if len(sys.argv) == 3 and sys.argv[1] == '--preparar-upgrade':
     from migracao_estacao import executar_upgrade
     sys.exit(executar_upgrade(sys.argv[2]))
@@ -39,7 +46,9 @@ if getattr(sys, 'frozen', False):
     # Redirecionar stdout/stderr para log
     _log_path = os.path.join(EXE_DIR, "agent_log.txt")
     try:
-        _log_file = open(_log_path, "w", encoding="utf-8", buffering=1)
+        from canais_newprod import pasta_local
+        from logs_estacao import instalar
+        _log_file = instalar(pasta_local() / 'gestao' / 'logs')
         sys.stdout = _log_file
         sys.stderr = _log_file
     except Exception:
