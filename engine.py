@@ -3035,7 +3035,8 @@ class ImpositionEngine:
                         "print_mode": cfg.print_mode,
                         "tipo": cfg.num_tipo,
                         "ticket_qtd": cfg.ticket_qtd,
-                        "ticket_logica": cfg.ticket_logica
+                        "ticket_logica": cfg.ticket_logica,
+                        "teatro_capa": (cfg.numeracao or {}).get("teatro_capa")
                     },
                     "numeracao_2": cfg.numeracao_2,
                     "pdf_url": None,
@@ -3332,6 +3333,7 @@ class ImpositionEngine:
                         # A linha do banco deste item, e o aviso de que esta arte
                         # tem banco proprio. Ver _linha_do_banco().
                         "csv_proprio": bool(art_csv),
+                        "teatro_capa": (num1_obj or {}).get("teatro_capa"),
                         "csv_row": (art_csv[i] if art_csv and i < len(art_csv) else None),
                         # O modelo DESTA arte. O QR Ideal tira uma coluna do pool
                         # por modelo, e sem isto aqui o item nao tinha como dizer
@@ -4654,7 +4656,8 @@ class ImpositionEngine:
         if (item_start.get("csv_row") or {}).get("Origem") == "Mapa de Teatro":
             row_start, row_end = item_start["csv_row"], item_end["csv_row"]
             qtd = item_end["local_idx"] - item_start["local_idx"] + 1
-            bloco_str = f"{row_start.get('Conjunto') or 'Fila'} {row_start['Fila']}"
+            descricao = (item_start.get("teatro_capa") or {}).get("nomeConjunto")
+            bloco_str = f"{descricao or row_start.get('Conjunto') or 'Fila'} {row_start['Fila']}"
             setor = row_start.get("Setor") or "Teatro"
             sufixo_str = f" - {setor} - de {row_start['Numero']} a {row_end['Numero']} ({qtd} lugares)"
         elif getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
