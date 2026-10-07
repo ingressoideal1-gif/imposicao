@@ -55,8 +55,10 @@ e 11 arquivos de runtime. A chave permanece fora do repositorio.
 
 Testes sinteticos cobrem dois canais, navegador, autorizacao, redacao,
 rotacao, idempotencia, spool reciclado, backup cifrado e historico. Nove falhas
-antigas em `test_temporarios_newprod.py` foram reproduzidas na base anterior;
-nao foram ocultadas nem alteradas como parte desta entrega.
+antigas em `test_temp_manager.py` foram reproduzidas na base anterior.
+Os contextos sinteticos foram atualizados com o canal e a dependencia de
+mapas, sem alterar as verificacoes nem consultar banco real. A suite de
+temporarios passa a integrar a conferencia obrigatoria dos dois canais.
 
 Na instalacao, preservar a escolha de Junior: Piloto principal e original
 disponivel para recuperacao. Preservar trabalhos Windows 4, 5, 6 e 9, que ja
