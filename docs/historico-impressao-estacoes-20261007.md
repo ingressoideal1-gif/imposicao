@@ -68,3 +68,10 @@ O teste antigo test_destino_impressao_modal.py pressupoe AGENTE_LOCAL_URL
 literal na fonte e ja falha na base 4f970597, onde a URL depende do canal.
 O novo historico_impressao_harness.js exercita o envio real do modal com
 dependencias simuladas e confere destino, metadados e nao duplicacao.
+
+Validacao final local: 525 passed, 2 skipped e 2 subtests em cada um dos
+tres canais, mais harnesses de navegador; seis testes da Edge passaram.
+O complemento sql/historico_impressao_permissoes.sql removeu privilegios
+herdados de service_role; INSERT permitido e DELETE recusado conferidos.
+O executavel final teve codigo compilado comparado a fonte nos sete modulos
+afetados, alem da auditoria do pacote sem arquivos privados.

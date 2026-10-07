@@ -70,7 +70,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Autorizacao, empresa, origem e revisao
         shell: pwsh
-        run: ./node_modules/@deno/win32-x64/deno.exe test --no-config --node-modules-dir=none --allow-env --allow-read --quiet supabase/functions/_compartilhado/piloto_catalogo_test.ts supabase/functions/_compartilhado/piloto_estacao_test.ts supabase/functions/_compartilhado/piloto_local_test.ts supabase/functions/_compartilhado/piloto_vinculo_test.ts supabase/functions/_compartilhado/piloto_pedido_test.ts supabase/functions/_compartilhado/piloto_multiplas_estacoes_test.ts
+        run: ./node_modules/@deno/win32-x64/deno.exe test --no-config --node-modules-dir=none --allow-env --allow-read --quiet supabase/functions/_compartilhado/piloto_catalogo_test.ts supabase/functions/_compartilhado/piloto_estacao_test.ts supabase/functions/_compartilhado/piloto_local_test.ts supabase/functions/_compartilhado/piloto_vinculo_test.ts supabase/functions/_compartilhado/piloto_pedido_test.ts supabase/functions/_compartilhado/piloto_multiplas_estacoes_test.ts supabase/functions/_compartilhado/historico_impressao_test.ts
   validacao-local:
     needs: [compatibilidade-dois-canais, consulta-piloto]
     name: Windows - seguranca e recuperacao
