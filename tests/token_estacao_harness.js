@@ -3,12 +3,12 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('frontend/supabase-config.js','utf8');
 const code = source.slice(source.indexOf('(function () {', source.indexOf('// ─── Toda chamada ao motor')));
-function context(origin, localToken='token-local-sintetico', bearer='jwt-sintetico') {
+function context(origin, localToken='token-local-sintetico', bearer='jwt-sintetico', sessaoStatus=200) {
     const calls=[], events=[];
     const win={location:new URL(origin), dispatchEvent:e=>events.push(e.type),
-        fetch: async (url,options={})=>{ calls.push({url,headers:new Headers(options.headers)}); return {ok:true,status:String(url).includes('recusado')?401:200,json:async()=>({cancelado:true})}; }};
+        fetch: async (url,options={})=>{ calls.push({url,headers:new Headers(options.headers)}); return {ok:true,status:String(url).includes('/api/local/sessao')?sessaoStatus:String(url).includes('recusado')?401:200,json:async()=>({cancelado:true})}; }};
     const c={window:win, sessionStorage:{getItem:()=>JSON.stringify({token:localToken})},
-        Headers, Request, URL, Event, API_PAINEL:'https://projeto.supabase.co/functions/v1/painel',
+        Headers, Request, URL, Event, AbortController, setTimeout, clearTimeout, API_PAINEL:'https://projeto.supabase.co/functions/v1/painel',
         supabaseClient:{auth:{getSession:async()=>({data:{session:{access_token:bearer}}})}}};
     vm.createContext(c); vm.runInContext(code,c);
     return {fetch:win.fetch,calls,events,c};
@@ -69,7 +69,14 @@ function context(origin, localToken='token-local-sintetico', bearer='jwt-sinteti
         assert.equal(local.calls.at(-1).headers.get('X-NewProd-Sessao'),null);
         assert.equal(local.calls.at(-1).headers.get('Authorization'),null);
     }
-    await local.fetch('/api/recusado'); assert.deepEqual(local.events,['newprod-sessao-expirada']);
+    await local.fetch('/api/recusado'); assert.deepEqual(local.events,[], '401 de um servico nao encerra sessao local valida');
+    const expirada=context('http://127.0.0.1:9001/', 'token-vencido', null, 401);
+    await expirada.fetch('/api/recusado'); assert.deepEqual(expirada.events,['newprod-sessao-expirada']);
+    const indisponivel=context('http://127.0.0.1:9001/', 'token-valido', null, 503);
+    await indisponivel.fetch('/api/recusado'); assert.deepEqual(indisponivel.events,[]);
+    const antigo=context('http://127.0.0.1:9001/', 'token-novo', null, 401);
+    await antigo.fetch('/api/recusado',{headers:{'X-NewProd-Sessao':'token-antigo'}});
+    assert.deepEqual(antigo.events,[], 'resposta de token antigo nao encerra login novo');
     const cloud=context('https://imposition.ai-ideal.com.br/');
     await cloud.fetch('http://127.0.0.1:9000/api/print/submit');
     assert.equal(cloud.calls.at(-1).headers.get('Authorization'),'Bearer jwt-sintetico');
