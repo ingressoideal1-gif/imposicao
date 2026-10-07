@@ -24,7 +24,7 @@ def requisicao(url, *, dados=None, chave=None, substituir=False):
     return urllib.request.urlopen(urllib.request.Request(url, data=dados, headers=headers), timeout=600)
 
 
-def publicar(msi, estacoes=None, ativar=False, bootstrap=False):
+def publicar(msi, estacoes=None, ativar=False, bootstrap=False, promover=False):
     msi=Path(msi).resolve(strict=True)
     m=re.fullmatch(r'NewProdPiloto_Oficial_v(\d+\.\d+\.\d+)\.msi',msi.name)
     if not m:raise ValueError('Nome MSI oficial invalido')
@@ -41,19 +41,14 @@ def publicar(msi, estacoes=None, ativar=False, bootstrap=False):
     manifest['estacoes']=estacoes
     validar(manifest)
     chave=os.environ['SUPABASE_SERVICE_KEY']
-    upload=manifest['url'].replace('/object/public/','/object/')
-    print('Enviando pacote imutavel: '+msi.name,flush=True)
-    try:
-        with requisicao(upload,dados=dados,chave=chave) as r:r.read()
-    except urllib.error.HTTPError as e:
-        if e.code not in (400,409):raise RuntimeError('Upload HTTP '+str(e.code)) from None
-        # Somente bytes identicos permitem retomar uma publicacao interrompida.
-        print('Objeto pode existir; conferindo download sem sobrescrever.',flush=True)
-    print('Conferindo download publico completo...',flush=True)
-    with requisicao(manifest['url']) as r:
-        h=hashlib.sha256();total=0
-        while chunk:=r.read(1024*1024):h.update(chunk);total+=len(chunk)
-    if h.hexdigest()!=digest or total!=len(dados):raise ValueError('Download publico divergente')
+    if promover:
+        if not ativar:raise ValueError('Promocao exige ativacao')
+        prova=json.loads((msi.parent/(msi.stem+'-publicacao.json')).read_text(encoding='utf-8'))
+        if not prova.get('download_conferido') or any(prova.get(k)!=manifest[k] for k in ('version','sha256','bytes','url')):
+            raise ValueError('Pacote sem download previamente conferido')
+        print('Promovendo o mesmo pacote ja conferido; sem reenviar binario.',flush=True)
+    else:
+        conferir_upload(msi, manifest, dados, chave)
     resultado={**manifest,'download_conferido':True,'ativado':False,'bootstrap_legado':False}
     if ativar:
         for nome in ['newprod-piloto-oficial.json']+(['latest.json'] if bootstrap else []):
@@ -72,10 +67,27 @@ def publicar(msi, estacoes=None, ativar=False, bootstrap=False):
     return resultado
 
 
+def conferir_upload(msi, manifest, dados, chave):
+    upload=manifest['url'].replace('/object/public/','/object/')
+    print('Enviando pacote imutavel: '+msi.name,flush=True)
+    try:
+        with requisicao(upload,dados=dados,chave=chave) as r:r.read()
+    except urllib.error.HTTPError as e:
+        if e.code not in (400,409):raise RuntimeError('Upload HTTP '+str(e.code)) from None
+        # Somente bytes identicos permitem retomar uma publicacao interrompida.
+        print('Objeto pode existir; conferindo download sem sobrescrever.',flush=True)
+    print('Conferindo download publico completo...',flush=True)
+    with requisicao(manifest['url']) as r:
+        h=hashlib.sha256();total=0
+        while chunk:=r.read(1024*1024):h.update(chunk);total+=len(chunk)
+    if h.hexdigest()!=manifest['sha256'] or total!=len(dados):raise ValueError('Download publico divergente')
+
+
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--msi',required=True);p.add_argument('--estacao',action='append')
     p.add_argument('--ativar',action='store_true');p.add_argument('--bootstrap-legado',action='store_true')
+    p.add_argument('--promover',action='store_true')
     args=p.parse_args()
     if args.bootstrap_legado and not args.ativar:p.error('bootstrap exige --ativar')
-    publicar(args.msi,args.estacao,args.ativar,args.bootstrap_legado)
+    publicar(args.msi,args.estacao,args.ativar,args.bootstrap_legado,args.promover)

@@ -114,3 +114,25 @@ e necessario concluir o release para que o agente receba a alteracao.
 
 O desligamento e a versao final da grafica precisam ser comprovados por
 heartbeat recente com produto_oficial e painel HTTP saudavel, por estacao.
+
+## Liberacao de 07/10/2026, 13h24 BRT
+
+1.2.368 liberada nos manifestos oficial e de transicao para PC-JR-HOME,
+LASER-01, LASER-02, LASER-04, TEX-01, FLEXO, GUSTAVO-PROD e LAPTOP-9BSK81S0.
+Junior recebeu 366 -> 367 -> 368 pelo pull do proprio agente, sem POST manual
+de atualizacao; ultimo_update registrou validado e HTTP confirmou a versao.
+Identidade original e os quatro jobs antigos foram preservados.
+
+MSI: NewProdPiloto_Oficial_v1.2.368.msi, 194719744 bytes.
+SHA-256: 9c5aaeb20036da623568aa2d3d227003269035596f9e50479178a4321851aa69.
+Download publico integral conferido antes de ativar. Os manifestos anteriores
+ficaram preservados em dist/*.antes-*. --promover amplia a liberacao do mesmo
+MSI somente com prova local do download correspondente, sem reenviar binario.
+Regressoes: 511 testes + 2 subtests em cada canal, 2 skips, harnesses JS/browser;
+mais 2 testes do publicador. CI passa a incluir explicitamente o canal oficial.
+
+A primeira compilacao do preservador 368 foi recusada pela auditoria por faltar
+win32timezone. O componente foi incluido e o MSI so foi publicado depois de
+passar na mesma auditoria. A versao 368 publicada inclui essa correcao de pacote.
+A confirmacao final da frota e registrada separadamente, conforme heartbeats
+chegam; liberacao remota por si so nao comprova instalacao em todas as estacoes.

@@ -10,7 +10,7 @@ from entrega_impacto import impacto_testes, plano
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
-    'test_perfil_oficial.py','test_transicao_piloto.py','test_atualizador_oficial.py','test_auditoria_transicao_piloto.py','test_manifesto_oficial.py','test_controle_producao.py',
+    'test_perfil_oficial.py','test_transicao_piloto.py','test_atualizador_oficial.py','test_publicar_pacote_oficial.py','test_auditoria_transicao_piloto.py','test_manifesto_oficial.py','test_controle_producao.py',
     'test_instalador_piloto.py',
     'test_gestao_estacoes.py', 'test_gdi_id_spool.py', 'test_temp_manager.py',
     'test_hotfolder_dialogo.py','test_motor_piloto.py',
