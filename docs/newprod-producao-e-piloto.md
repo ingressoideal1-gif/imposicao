@@ -14,7 +14,7 @@ antiga de outro checkout.
 | Dados protegidos | NewProd Dados Protegidos | NewProd Piloto Dados Protegidos |
 | Coleta experimental | Desativada | Catalogo/pacotes/diario preservados em NewProd Piloto/dados |
 | Fila remota e heartbeat | Comportamento normal | Publica presenca com identidade propria; nao consome fila remota |
-| Atualizacao | Manifesto padrao e sincronismo web | Pacote proprio completo; nao usa o manifesto nem sincronismo padrao |
+| Atualizacao | Manifesto padrao e sincronismo web | Executavel proprio ou painel com base comprovada; nao usa o manifesto nem sincronismo padrao |
 | Consulta de pacotes | Fluxo normal existente | Edge Function independente piloto-local, somente leitura |
 
 O Piloto verifica a revisao ao abrir ou reabrir o pedido e preserva os dados completos do
@@ -77,12 +77,16 @@ Ver [registro da revisao por pedido](registro-2026-10-05-piloto-revisao-pedido.m
 1. Trabalhar em checkout isolado atualizado, preservando alteracoes existentes.
 2. Aplicar a correcao na fonte comum. Mudanca exclusiva do Piloto exige guarda
    de canal e teste comprovando que o comportamento padrao continua preservado.
-3. Rodar `python ferramentas/conferir_duas_versoes.py`. O CI executa producao e
-   piloto separadamente; o check de seguranca obrigatorio depende dos dois.
+3. Rodar `python ferramentas/conferir_duas_versoes.py --base origin/main` para
+   selecionar por impacto; sem `--base`, a bateria continua completa. O CI
+   executa producao e piloto separadamente; seguranca depende dos dois.
 4. Gerar o pacote independente com `ferramentas/compilar-piloto.ps1 -Python ...`.
    O publicar_agente.ps1 exige ambos os testes e este pacote antes do MSI normal.
-5. Entrega web tambem exige a conferencia comum e pacote do Piloto atualizado,
-   pois o painel experimental e distribuido inteiro no seu executavel.
+5. Entrega web exige a conferencia comum e artefato do Piloto atualizado.
+   O fluxo compara fontes, dependencias, protocolo e hash do executavel auditado:
+   reutiliza o pacote identico ou prepara somente o painel compativel. Sem base
+   comprovada, compila. A entrega separada do painel usa a pasta externa ja
+   suportada pelo agente, mantendo o executavel. Ver [entrega por impacto](entrega-por-impacto.md).
 6. Provisionar configuracoes e dados protegidos separadamente, sem inclui-los
    no executavel, repositorio ou pacote de distribuicao.
 7. Instalar em nova pasta versionada, com backup cifrado dos dados e verificacao
