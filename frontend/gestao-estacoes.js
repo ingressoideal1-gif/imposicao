@@ -6,6 +6,15 @@
     const tamanho = n => Number.isFinite(n) ? (n / 1073741824).toLocaleString('pt-BR', {maximumFractionDigits:2}) + ' GiB' : 'não informado';
     const quando = v => v ? new Date(v).toLocaleString('pt-BR') : 'não informado';
     let modal, timer, busy = false, tab = 'frota', ultimaResposta, lista = [], mensagem = '';
+    let cursorCentral = null;
+    async function consultarCentral(dias) {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient?.functions) throw Error('Entre com sua conta administrativa para consultar o histórico central.');
+        const body = {dias, antes:cursorCentral};
+        for (const k of ['pedido','modelo','estacao']) body[k] = modal.querySelector(`[data-filtro="${k}"]`).value.trim();
+        const {data,error} = await supabaseClient.functions.invoke('historico-impressao/consultar', {body});
+        if (error || !data || !Array.isArray(data.eventos)) throw Error('Não foi possível consultar o histórico central. Confira sua sessão e tente novamente.');
+        return data;
+    }
     function el(tag, texto, pai) { const e = document.createElement(tag); if (texto != null) e.textContent = String(texto); if (pai) pai.append(e); return e; }
     async function api(path, dados) {
         const headers = {'Content-Type':'application/json'};
@@ -58,15 +67,23 @@
         const abertura=modal, aba=tab;
         try {
             const dias=Number(modal.querySelector('select').value);
-            const d=aba==='frota'?await frota():await api(aba==='historico'?`relatorio?dias=${dias}`:aba==='disco'?'resumo':aba);
+            const d=aba==='central'?await consultarCentral(dias):aba==='frota'?await frota():await api(aba==='historico'?`relatorio?dias=${dias}`:aba==='disco'?'resumo':aba);
             if(modal!==abertura || tab!==aba) return;
             ultimaResposta=d;
             const body=modal.querySelector('[data-corpo]'); body.replaceChildren();
             mensagem='Atualizado às '+new Date().toLocaleTimeString('pt-BR'); mostrarMensagem();
-            if(aba==='frota') {
+            if(aba==='central') {
+                el('p','Eventos recebidos da estação; saída da fila não comprova papel impresso. Modelos de uma seleção combinada compartilham o trabalho. Registros antigos podem estar sem identificação. O envio pendente por falta de internet aparecerá após sincronização.',body);
+                tabela([['Quando',r=>quando(r.quando)],['Recebido',r=>quando(r.recebido_em)],['Estação','estacao'],
+                    ['Pedido / modelo',r=>(r.contexto?.alvos||[]).map(a=>`${a.pedido} / ${a.modelo}`).join(', ')||'Sem identificação'],
+                    ['Parte',r=>r.contexto?.tipo],['Reimpressão',r=>r.contexto?.reimpressao?'Sim':'Não informada'],
+                    ['Evento','codigo'],['Detalhe',r=>r.dados?.motivo||''],['Impressora','impressora'],['ID Windows','spool_id'],['Trabalho','trabalho']],d.eventos,body);
+                if(d.proximo) botao(body,'Próxima página',async()=>{cursorCentral=d.proximo;await atualizar();});
+                if(cursorCentral) botao(body,'Voltar aos recentes',async()=>{cursorCentral=null;await atualizar();});
+            } else if(aba==='frota') {
                 lista=d;
                 el('p','Presença central: atualização a cada 30 segundos. Versões antigas podem não informar gestão. O Piloto não recebe a fila remota.',body);
-                tabela([['Estação',r=>r.apelido||r.name],['Canal',r=>r.printers_json?.canal||'não informado'],['Presença',r=>!r.last_seen?'sem sinal':Date.now()-Date.parse(r.last_seen)<120000?'online':'sem sinal recente'],['Último sinal',r=>quando(r.last_seen)],['Versão',r=>r.printers_json?.version||'não informada'],['Disco livre',r=>tamanho(r.printers_json?.armazenamento?.disco_temp_livre_bytes)],['Fila',r=>JSON.stringify(r.printers_json?.gestao?.fila||'não monitorada')]],d,body);
+                tabela([['Estação',r=>r.apelido||r.name],['Canal',r=>r.printers_json?.canal||'não informado'],['Presença',r=>!r.last_seen?'sem sinal':Date.now()-Date.parse(r.last_seen)<120000?'online':'sem sinal recente'],['Painel HTTP',r=>r.printers_json?.gestao?.painel?.estado||'não monitorado'],['Histórico central',r=>r.printers_json?.gestao?.historico_central?.estado||'não disponível nesta versão'],['Produto oficial',r=>r.printers_json?.produto_oficial===true?'sim':'ainda não migrado'],['Último sinal',r=>quando(r.last_seen)],['Versão',r=>r.printers_json?.version||'não informada'],['Disco livre',r=>tamanho(r.printers_json?.armazenamento?.disco_temp_livre_bytes)],['Fila',r=>JSON.stringify(r.printers_json?.gestao?.fila||'não monitorada')]],d,body);
                 d.forEach(r=>{const a=r.printers_json?.armazenamento; if(a?.disco_temp_total_bytes && (a.disco_temp_livre_bytes/a.disco_temp_total_bytes<0.1 || a.disco_temp_livre_bytes<5368709120))el('p','Atenção: pouco espaço em '+(r.apelido||r.name),body);});
                 el('h3','Produção informada por estação — até 30 dias',body);
                 const corte=new Date(Date.now()-Math.min(dias,30)*86400000).toISOString().slice(0,10);
@@ -107,15 +124,20 @@
         const header=el('header',null,modal);el('h2','Gerenciamento das estações',header);
         botao(header,'Fechar',()=>modal.close());
         const nav=el('nav',null,modal);
-        const abas=local?['frota','resumo','fila','historico','disco','logs']:['frota'];
-        abas.forEach(a=>botao(nav,({frota:'Todas as estações',resumo:'Esta estação',fila:'Fila ao vivo',historico:'Histórico e relatórios',disco:'Disco e manutenção',logs:'Logs'})[a],()=>{tab=a;ultimaResposta=null;modal.querySelector('[data-corpo]').replaceChildren();return atualizar();}));
+        const abas=local?['frota','central','resumo','fila','historico','disco','logs']:['frota','central'];
+        abas.forEach(a=>botao(nav,({frota:'Todas as estações',central:'Histórico por pedido',resumo:'Esta estação',fila:'Fila ao vivo',historico:'Histórico e relatórios',disco:'Disco e manutenção',logs:'Logs'})[a],()=>{tab=a;cursorCentral=null;ultimaResposta=null;modal.querySelector('[data-corpo]').replaceChildren();modal.querySelector('[data-filtros]').hidden=a!=='central';return atualizar();}));
         const select=el('select',null,nav); select.setAttribute('aria-label','Período do relatório');[1,7,30,90].forEach(n=>{const o=el('option',n+' dias',select);o.value=n;o.selected=n===7;});select.onchange=atualizar;
         botao(nav,'Atualizar',atualizar);botao(nav,'Exportar JSON',exportar);botao(nav,'Exportar CSV',exportarCSV);
+        const filtros=el('div',null,modal);filtros.dataset.filtros='';filtros.hidden=true;
+        for(const [k,nome] of [['pedido','Pedido'],['modelo','Modelo'],['estacao','Estação']]) {
+            const label=el('label',nome+' ',filtros), input=el('input',null,label);input.dataset.filtro=k;input.setAttribute('aria-label',nome);input.maxLength=k==='estacao'?80:16;
+        }
+        botao(filtros,'Consultar histórico',async()=>{cursorCentral=null;await atualizar();});
         const status=el('p',null,modal);status.setAttribute('role','status');
         const body=el('div',null,modal);body.dataset.corpo='';
         modal.addEventListener('close',()=>{clearInterval(timer);modal.remove();modal=null;ultimaResposta=null;});
         let ciclos=0;
-        modal.showModal();atualizar();timer=setInterval(()=>{ciclos++;if(!document.hidden && (tab!=='frota'||ciclos%6===0))atualizar();},5000);
+        modal.showModal();atualizar();timer=setInterval(()=>{ciclos++;if(!document.hidden && tab!=='central' && (tab!=='frota'||ciclos%6===0))atualizar();},5000);
     }
     const style=el('style',`.gestao-estacoes{width:94vw;max-width:1400px;height:88vh;background:#142132;color:#eef4fb;border:1px solid #688096;border-radius:12px;padding:20px}.gestao-estacoes::backdrop{background:#000a}.gestao-estacoes header,.gestao-estacoes nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.gestao-estacoes header{justify-content:space-between}.gestao-estacoes button,.gestao-estacoes select{padding:8px 12px;border:1px solid #688096;border-radius:6px;background:#243c56;color:white;cursor:pointer}.gestao-estacoes button:disabled{opacity:.4}.gestao-estacoes table{width:100%;border-collapse:collapse;margin:18px 0}.gestao-estacoes td,.gestao-estacoes th{text-align:left;padding:9px;border-bottom:1px solid #38516b}.gestao-estacoes pre{white-space:pre-wrap;overflow-wrap:anywhere}.gestao-estacoes [role=status]{color:#ffd37d}`,document.head);
     let entrada;

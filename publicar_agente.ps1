@@ -45,6 +45,11 @@ param(
 $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $raiz
+if (Test-Path -LiteralPath (Join-Path $raiz 'agent_oficial.py')) {
+    if ($Codigo) { throw 'Rollback oficial exige revisao da fonte e nova versao; nao restaura codigo automaticamente.' }
+    & "$raiz\ferramentas\publicar-oficial.ps1" -Versao $Versao -Notas $Notas -Simular:$Simular
+    exit $LASTEXITCODE
+}
 Import-Module "$raiz\ferramentas\Publicacao.psm1"   -Force
 Import-Module "$raiz\ferramentas\VersaoAgente.psm1" -Force
 

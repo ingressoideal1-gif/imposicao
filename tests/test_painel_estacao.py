@@ -19,6 +19,7 @@ Os tres buracos que permitiram isso estao cobertos aqui:
 """
 
 import os
+import pytest
 import re
 import sys
 import time
@@ -113,7 +114,8 @@ def test_semear_substitui_o_arquivo_mais_velho_que_o_embutido(tmp_path):
     assert (destino / "index.html").read_text(encoding="utf-8") == "<html>novo</html>"
 
 
-def test_semear_preserva_o_arquivo_recem_sincronizado(tmp_path):
+@pytest.mark.parametrize('oficial', [False, True])
+def test_semear_preserva_o_arquivo_recem_sincronizado(tmp_path, monkeypatch, oficial):
     """O caminho inverso, que nao pode quebrar.
 
     O painel baixado da nuvem e sempre mais novo que o embutido no executavel.
@@ -121,6 +123,8 @@ def test_semear_preserva_o_arquivo_recem_sincronizado(tmp_path):
     volta para a versao do build — o congelamento que este trabalho conserta.
     """
     import app
+    import canais_newprod
+    monkeypatch.setattr(canais_newprod, 'OFICIAL', oficial)
 
     origem = tmp_path / "embutido"
     destino = tmp_path / "painel"
@@ -133,7 +137,8 @@ def test_semear_preserva_o_arquivo_recem_sincronizado(tmp_path):
     os.utime(origem / "index.html", (antigo, antigo))
 
     assert app._semear_painel(str(destino), str(origem)) is True
-    assert (destino / "index.html").read_text(encoding="utf-8") == "<html>sincronizado</html>"
+    esperado = "<html>do build</html>" if oficial else "<html>sincronizado</html>"
+    assert (destino / "index.html").read_text(encoding="utf-8") == esperado
 
 
 # ─── 3. O navegador da estacao nao pode segurar o HTML ────────────────────────

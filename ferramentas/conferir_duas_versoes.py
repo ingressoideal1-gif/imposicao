@@ -10,8 +10,10 @@ from entrega_impacto import impacto_testes, plano
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
+    'test_historico_impressao.py',
+    'test_perfil_oficial.py','test_transicao_piloto.py','test_atualizador_oficial.py','test_publicar_pacote_oficial.py','test_auditoria_transicao_piloto.py','test_manifesto_oficial.py','test_controle_producao.py',
     'test_instalador_piloto.py',
-    'test_gestao_estacoes.py', 'test_temp_manager.py',
+    'test_gestao_estacoes.py', 'test_gdi_id_spool.py', 'test_temp_manager.py',
     'test_hotfolder_dialogo.py','test_motor_piloto.py',
     'test_canais_newprod.py','test_seguranca_estacao.py','test_integridade_impressao.py',
     'test_numeracao_compatibilidade.py',
@@ -21,7 +23,7 @@ TESTES = [
     'test_coleta_autonoma.py','test_conferencia_piloto.py','test_auditoria_piloto.py',
     'test_diario_local.py','test_pacotes_api.py','test_selecao_piloto.py','test_revisao_pedido_piloto.py',
     'test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
-HARNESSES = ['gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
+HARNESSES = ['historico_impressao_harness.js','gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
              'foto_piloto_harness.js','foto_lib_harness.js',
              'selecao_piloto_harness.js','integridade_impressao_harness.js',
              'token_estacao_harness.js','ticket_condicoes_harness.js',
@@ -68,7 +70,7 @@ def conferir(canais=('producao','piloto'), paths=None, relatorio=None):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('canal', nargs='?', choices=['producao', 'piloto'])
+    parser.add_argument('canal', nargs='?', choices=['producao', 'piloto', 'oficial'])
     parser.add_argument('--base')
     parser.add_argument('--relatorio')
     args = parser.parse_args()

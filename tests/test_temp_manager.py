@@ -201,7 +201,7 @@ def test_fila_limpa_download_incompleto_e_excecao(raiz, falha):
         return True, "ok"
     def nuvem(metodo, *args):
         return [{"id": "sintetico", "file_url": "simulada", "printer_name": "simulada"}]
-    ns = dict(PILOTO=False, temp_manager=tm, AGENT_ID="sintetico", _supabase_request=nuvem,
+    ns = dict(PILOTO=False,OFICIAL=False, temp_manager=tm, AGENT_ID="sintetico", _supabase_request=nuvem,
               download_file=baixar, print_service=SimpleNamespace(send_print_job_windows=enviar),
               titulo_do_job=lambda *_: "sintetico")
     carregar_funcao("agent_worker.py", "process_queue", ns)()
@@ -225,7 +225,7 @@ def test_fila_remota_vazia_nao_reinicia_ociosidade_do_backup(monkeypatch):
     import controle_producao
     controle=SimpleNamespace(reservar=lambda:pytest.fail('Consulta vazia nao deve reservar producao'))
     monkeypatch.setattr(controle_producao,'controle',controle)
-    ns=dict(PILOTO=False,AGENT_ID='sintetico',_supabase_request=lambda *_:[])
+    ns=dict(PILOTO=False,OFICIAL=False,AGENT_ID='sintetico',_supabase_request=lambda *_:[])
     carregar_funcao('agent_worker.py','process_queue',ns)()
 
 
@@ -340,7 +340,7 @@ def test_diagnostico_carrega_no_heartbeat_sem_varrer_disco(monkeypatch):
     snapshot = tm.diagnostico()
     snapshot["gerenciados"]["bytes"] = 999
     enviados = []
-    ns = dict(PILOTO=False, temp_manager=tm, datetime=datetime, AGENT_ID="teste", AGENT_NAME="teste",
+    ns = dict(PILOTO=False,OFICIAL=False, temp_manager=tm, datetime=datetime, AGENT_ID="teste", AGENT_NAME="teste",
               print_service=SimpleNamespace(get_printers=lambda: []), versao_do_painel=lambda: {},
               get_local_ip=lambda: "127.0.0.1", _acesso_base=lambda: "",
               diagnostico_fontes=lambda: {}, diagnostico_impressao=lambda: {}, ultimo_update=lambda: {},

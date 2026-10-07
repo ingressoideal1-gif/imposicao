@@ -122,7 +122,7 @@ def test_heartbeat_piloto_independente_da_fila(historico):
     tree=ast.parse(Path('agent_worker.py').read_text(encoding='utf-8'))
     fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='sync_heartbeat')
     capturados=[]
-    contexto=dict(PILOTO=True,AGENT_ID='piloto-id',AGENT_NAME='PC-TESTE',datetime=dt,
+    contexto=dict(PILOTO=True,OFICIAL=False,AGENT_ID='piloto-id',AGENT_NAME='PC-TESTE',datetime=dt,
         print_service=SimpleNamespace(get_printers=lambda:[],get_printer_capabilities=lambda _:{}),
         versao_do_painel=lambda:{},get_local_ip=lambda:'127.0.0.1',_acesso_base=lambda:'',diagnostico_fontes=lambda:{},
         temp_manager=SimpleNamespace(diagnostico=lambda:{}),diagnostico_impressao=lambda:{},ultimo_update=lambda:{},

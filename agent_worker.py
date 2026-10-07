@@ -24,7 +24,7 @@ import hotfolder
 # uma linha nova em print_agents. Uma unica maquina chegou a acumular 21
 # registros, todos com status "online", porque nada nunca os remove.
 _APPDATA = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
-from canais_newprod import PILOTO, pasta_local
+from canais_newprod import PILOTO, OFICIAL, pasta_local
 _CONFIG_DIR = str(pasta_local())
 try:
     os.makedirs(_CONFIG_DIR, exist_ok=True)
@@ -214,7 +214,8 @@ def sync_heartbeat():
             "impressao": diagnostico_impressao(),
             "ultimo_update": ultimo_update(),
             "canal": 'piloto' if PILOTO else 'producao',
-            "recebe_fila_remota": not PILOTO,
+            "recebe_fila_remota": not PILOTO or OFICIAL,
+            "produto_oficial": OFICIAL,
             "gestao": __import__('gestao_estacoes').resumo_publico()
         }
 
@@ -224,7 +225,7 @@ def sync_heartbeat():
         # UPSERT via POST com Prefer: resolution=merge-duplicates
         payload = {
             "id": AGENT_ID,
-            "name": AGENT_NAME + (' [Piloto]' if PILOTO else ''),
+            "name": AGENT_NAME + (' [Piloto]' if PILOTO and not OFICIAL else ''),
             "status": "online",
             "last_seen": now_iso,
             "printers_json": printers_json
@@ -326,7 +327,7 @@ def titulo_do_job(file_url, job_id):
     return f"Job {job_id[:8]}"
 
 
-def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
+def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str, contexto=None):
     """Larga o PDF baixado numa pasta observada pelo RIP. (sucesso, mensagem).
 
     A lista branca vale aqui tambem, e nao e formalidade: no relay o caminho vem
@@ -340,7 +341,7 @@ def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
         with open(pdf_path, "rb") as f:
             dados = f.read()
         destino = hotfolder.soltar(pasta, nome, dados,
-                                   metodo=db.metodo_hot_folder(pasta))
+                                   metodo=db.metodo_hot_folder(pasta), contexto=contexto)
 
         # O Edge Print importa e remove o arquivo. Sobrando arquivo, o watcher
         # provavelmente nao esta rodando. Pelo relay nao ha ninguem olhando a
@@ -359,7 +360,7 @@ def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
 
 
 def process_queue():
-    if PILOTO:
+    if PILOTO and not OFICIAL:
         return
     job_id = None
     reivindicado = False
@@ -423,7 +424,7 @@ def process_queue():
                 pasta = (ppd_options or {}).get("hot_folder_path") if isinstance(ppd_options, dict) else None
                 if pasta:
                     success, msg = _soltar_no_hot_folder(
-                        pasta, titulo_do_job(file_url, job_id), temp_pdf.name)
+                        pasta, titulo_do_job(file_url, job_id), temp_pdf.name, ppd_options.get('historico_contexto'))
                 else:
                     # Chamar diretamente a impressão via Windows GDI com as opções enviadas
                     success, msg = print_service.send_print_job_windows(
@@ -447,7 +448,7 @@ def process_queue():
 # 30 min, nao 6h: num dia de correcao chegamos a publicar 5 versoes dentro de uma
 # unica janela de 6h, e as estacoes ficaram cegas a todas elas. O custo e baixo —
 # o manifesto tem ~300 bytes, entao sao 2 requisicoes por hora por estacao.
-INTERVALO_UPDATE_S = 30 * 60
+INTERVALO_UPDATE_S = 60 if OFICIAL else 30 * 60
 
 # O sync dos BINARIOS continua em 6h: sao ~140 MB na primeira vez e depois so o que
 # faltar.
@@ -934,12 +935,22 @@ def consultar_manifesto() -> dict:
     import security_config
     from agent_version import AGENT_VERSION, como_tupla
 
-    if PILOTO:
+    if PILOTO and not OFICIAL:
         return {"versao_atual": AGENT_VERSION, "versao_disponivel": AGENT_VERSION,
                 "ha_atualizacao": False, "erro": None, "canal": "piloto",
                 "notas": "Atualização pelo pacote próprio do Piloto."}
     resultado = {"versao_atual": AGENT_VERSION, "versao_disponivel": None,
                  "ha_atualizacao": False, "erro": None}
+    if OFICIAL:
+        try:
+            from manifesto_oficial import consultar
+            manifesto = consultar()
+            resultado.update(versao_disponivel=manifesto['version'],
+                ha_atualizacao=manifesto['liberado'] and como_tupla(manifesto['version']) > como_tupla(AGENT_VERSION),
+                liberado_para_estacao=manifesto['liberado'], produto_oficial=True)
+        except Exception:
+            resultado['erro'] = 'Manifesto oficial indisponivel ou recusado.'
+        return resultado
     try:
         url = f"{security_config.MANIFEST_URL}?t={int(time.time())}"
         req = urllib.request.Request(url, headers={"User-Agent": "NewProd Agent",
@@ -958,7 +969,7 @@ def consultar_manifesto() -> dict:
 
 
 def verificar_atualizacao(forcado: bool = False):
-    if PILOTO:
+    if PILOTO and not OFICIAL:
         return
     from controle_producao import controle
     if not controle.download_lock.acquire(blocking=False):
@@ -995,11 +1006,18 @@ def _verificar_atualizacao_ociosa(forcado: bool = False):
     # O MSI nao precisa disto — o nome do arquivo ja muda a cada versao.
     url_manifesto = f"{security_config.MANIFEST_URL}?t={int(time.time())}"
     try:
-        req = urllib.request.Request(url_manifesto,
-                                     headers={"User-Agent": "NewProd Agent",
-                                              "Cache-Control": "no-cache"})
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            manifesto = json.loads(resp.read().decode("utf-8"))
+        if OFICIAL:
+            from manifesto_oficial import consultar
+            manifesto = consultar()
+            if not manifesto['liberado']:
+                _registrar_update('aguardando_liberacao', versao_alvo=manifesto['version'])
+                return
+        else:
+            req = urllib.request.Request(url_manifesto,
+                                         headers={"User-Agent": "NewProd Agent",
+                                                  "Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                manifesto = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
         print(f"[update] Manifesto indisponivel: {e}", flush=True)
         _registrar_update("manifesto_indisponivel", erro=e)
@@ -1028,8 +1046,16 @@ def _verificar_atualizacao_ociosa(forcado: bool = False):
     destino = os.path.join(tempfile.gettempdir(), f"NewProd_Setup_{versao_nova}.msi")
     try:
         req = urllib.request.Request(url_msi, headers={"User-Agent": "NewProd Agent"})
-        with urllib.request.urlopen(req, timeout=600) as resp, open(destino, "wb") as f:
-            f.write(resp.read())
+        from pacotes_download import SemRedirecionamento
+        abrir = urllib.request.build_opener(SemRedirecionamento()).open if OFICIAL else urllib.request.urlopen
+        with abrir(req, timeout=600) as resp, open(destino, "wb") as f:
+            limite = manifesto['bytes'] if OFICIAL else 512*1024**2
+            total = 0
+            while bloco := resp.read(1024*1024):
+                total += len(bloco)
+                if total > limite: raise ValueError('Instalador excede tamanho declarado')
+                f.write(bloco)
+            if OFICIAL and total != limite: raise ValueError('Instalador incompleto')
     except Exception as e:
         print(f"[update] Falha no download: {e}", flush=True)
         _registrar_update("download_falhou", versao_alvo=versao_nova, erro=e)
@@ -1063,6 +1089,11 @@ def _verificar_atualizacao_ociosa(forcado: bool = False):
 
 def _iniciar_instalador(destino, versao_nova):
     import subprocess
+    if OFICIAL:
+        from atualizador_oficial import iniciar
+        _registrar_update('instalando', versao_alvo=versao_nova)
+        iniciar(destino, sys.executable, versao_nova)
+        return
     # O MSI nao consegue substituir o exe enquanto ele roda, e o pacote nao tem
     # CloseApplication configurado — por isso um script solto encerra o agente,
     # instala em silencio e sobe a versao nova.
@@ -1076,7 +1107,7 @@ def _iniciar_instalador(destino, versao_nova):
     _registrar_update("instalando", versao_alvo=versao_nova)
     print(f"[update] sha256 conferido. Instalando {versao_nova} e reiniciando...", flush=True)
     subprocess.Popen([bat_path], shell=True,
-                     creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
 
 
 def _script_de_update(exe_path, destino):
@@ -1109,8 +1140,10 @@ def _script_de_update(exe_path, destino):
 timeout /t 3 /nobreak > nul
 taskkill /IM "{nome}" /F > nul 2>&1
 msiexec /i "{destino}" /qn
+set "NEWPROD_MSI_RESULTADO=%ERRORLEVEL%"
 {limpeza}
 start "" "{exe}"
+if not "%NEWPROD_MSI_RESULTADO%"=="0" if not "%NEWPROD_MSI_RESULTADO%"=="3010" exit /b %NEWPROD_MSI_RESULTADO%
 del "{destino}" > nul 2>&1
 del "%~f0"
 """.format(nome=os.path.basename(exe_path), destino=destino,

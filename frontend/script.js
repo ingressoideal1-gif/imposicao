@@ -32968,8 +32968,25 @@ window.confirmarImpressaoModelos = confirmarImpressaoModelos;
  */
 function marcarConfirmacaoPendente(alvos) {
     window._printConfirmTargets = (alvos || []).filter(a => a && a.itemId);
+    window._printHistoryContext = contextoHistoricoImpressao(alvos);
 }
 window.marcarConfirmacaoPendente = marcarConfirmacaoPendente;
+
+function contextoHistoricoImpressao(alvos, reimpressao = false) {
+    const lista = [];
+    for (const a of alvos || []) {
+        const modelo = String(a.itemId || ''), pedido = String(a.osId || '').replace(/^vibe_/, '');
+        if (/^[1-9][0-9]{0,15}$/.test(modelo) && /^[1-9][0-9]{0,15}$/.test(pedido)
+            && !lista.some(x => x.modelo === modelo && x.pedido === pedido)) lista.push({pedido, modelo});
+    }
+    return {alvos: lista, lote: crypto.randomUUID(), reimpressao: !!reimpressao};
+}
+function contextoHistoricoArquivo(contexto, nome) {
+    const n = String(nome || '').toLowerCase();
+    const tipo = /_contracapa(?:[_.]|$)/.test(n) ? 'contracapa' : /_capa(?:[_.]|$)/.test(n) ? 'capa'
+        : /_(?:miolo|bloco)(?:[_.\d]|$)/.test(n) ? 'miolo' : 'nao_identificado';
+    return {...(contexto || {alvos: []}), tipo};
+}
 
 // -------------------------------------------------------------------------------
 // MATCHING INTELIGENTE -- OS → Catálogo do Imposition
@@ -44613,6 +44630,7 @@ function closePrintModal() {
     _printQueueIndex = 0;
     // Modal fechado sem enviar: descartar a confirmação pendente
     window._printConfirmTargets = null;
+    window._printHistoryContext = null;
 }
 
 // Recarregar lista de impressoras manualmente
@@ -44799,6 +44817,7 @@ async function sendPrintJob() {
             options.integridade_sha256 = await hashArquivoImpressao(item.blob);
             item._gestaoEnvioId ||= crypto.randomUUID();
             options.gestao_envio_id = item._gestaoEnvioId;
+            options.historico_contexto = contextoHistoricoArquivo(window._printHistoryContext, item.name);
             if (isLocalMode) {
                 const formData = new FormData();
                 formData.append('file', item.blob, nomeParaSpool(i + 1, item.name));
@@ -46031,7 +46050,7 @@ async function processPrintQueueOptions(queue, options) {
 // `sendPrintJobDirect` continua com a mesma assinatura, agora escrito em cima
 // disto — os caminhos que já têm a fila inteira na mão (o fallback sem
 // streaming, o modal) não mudaram de comportamento.
-function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
+function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historicoContexto = null } = {}) {
     const { printerName, options } = getPedPrintOptions();
     if (apenasUmaFace) options.duplex = 1;
     const hotFolder = options.hot_folder_path || '';
@@ -46088,6 +46107,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
             itemOptions.integridade_sha256 = await hashArquivoImpressao(item.blob);
             item._gestaoEnvioId ||= crypto.randomUUID();
             itemOptions.gestao_envio_id = item._gestaoEnvioId;
+            itemOptions.historico_contexto = contextoHistoricoArquivo(historicoContexto, item.name);
             if (isLocalMode && hotFolder) {
                 // O prefixo de ordem (00001_, 00002_...) passa a servir a dois
                 // donos: o titulo do job no spooler e a ordem alfabetica em que
@@ -46096,6 +46116,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false } = {}) {
                 formData.append('file', item.blob, nomeParaSpool(ordem, item.name));
                 formData.append('folder', hotFolder);
                 formData.append('sha256', itemOptions.integridade_sha256);
+                formData.append('historico_contexto', JSON.stringify(itemOptions.historico_contexto));
                 const res = await fetch('/api/hotfolder/drop', { method: 'POST', body: formData, signal: AbortSignal.timeout(600000) });
                 if (!res.ok) {
                     let motivo = `HTTP ${res.status}`;
@@ -46213,8 +46234,8 @@ window.criarEntregaDeImpressao = criarEntregaDeImpressao;
 
 // Envia os blobs gerados diretamente para a impressora configurada no painel lateral
 // sem abrir o modal (modo "print sem modal")
-async function sendPrintJobDirect(queue, { apenasUmaFace = false } = {}) {
-    const entrega = criarEntregaDeImpressao({ total: (queue || []).length, apenasUmaFace });
+async function sendPrintJobDirect(queue, { apenasUmaFace = false, historicoContexto = null } = {}) {
+    const entrega = criarEntregaDeImpressao({ total: (queue || []).length, apenasUmaFace, historicoContexto });
     if (!entrega) return false;
     try {
         await entrega.entregar(queue);
@@ -48313,9 +48334,11 @@ async function verificarAtualizacaoAgente(instalar = false) {
             const resp = await fetch(`${base}/api/status`);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const info = await resp.json();
-            aviso(`${info.version}. Atualizações do Piloto usam o pacote próprio do Piloto.`, 'info');
-        } catch (_) { aviso('O Piloto não respondeu nesta estação.', 'error'); }
-        return;
+            if (!info.produto_oficial) {
+                aviso(`${info.version}. Esta instalação anterior exige o pacote próprio de migração para o NewProd Piloto oficial.`, 'info');
+                return;
+            }
+        } catch (_) { aviso('O Piloto não respondeu nesta estação.', 'error'); return; }
     }
 
     let info;

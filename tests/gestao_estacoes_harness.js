@@ -25,9 +25,17 @@ const assert=require('assert/strict');
    await page.goto(`http://127.0.0.1:${porta}/app/`);
    await page.evaluate(()=>{window._currentPerms={perm_admin_view:true};sessionStorage.setItem('newprod_acesso_local',JSON.stringify({token:'sessao-sintetica'}));window.supabaseClient={from(){const q={select(){return q},order(){return q},range(){return Promise.resolve({data:[{name:'Estacao sintetica',last_seen:new Date().toISOString(),printers_json:{version:'teste',gestao:{fila:{},totais_30d:[]}}}],error:null})}};return q}};});
    await page.addScriptTag({content:fs.readFileSync('frontend/gestao-estacoes.js','utf8')});
+   await page.evaluate(()=>{window.historicoConsultas=[];window.supabaseClient.functions={async invoke(nome,{body}){
+     window.historicoConsultas.push({nome,body});return {data:{eventos:[{id:123,estacao:'LASER-TESTE',codigo:'trabalho_enviado',contexto:{tipo:'capa',alvos:[{pedido:'23143',modelo:'1002240'}]}}],proximo:body.antes?null:123}};
+   }};});
    await page.waitForSelector('#gestao-estacoes-abrir',{visible:true});await page.click('#gestao-estacoes-abrir');
    await page.waitForFunction(()=>document.querySelector('dialog')?.textContent.includes('Estacao sintetica'));
    async function clicar(text){await page.evaluate(t=>[...document.querySelectorAll('dialog button')].find(b=>b.textContent===t).click(),text);}
+   await clicar('Histórico por pedido');await page.waitForFunction(()=>document.querySelector('dialog')?.textContent.includes('LASER-TESTE'));
+   await page.type('[data-filtro="pedido"]','23143');await clicar('Consultar histórico');
+   await page.waitForFunction(()=>window.historicoConsultas.some(c=>c.body.pedido==='23143'));
+   await clicar('Próxima página');await page.waitForFunction(()=>window.historicoConsultas.some(c=>c.body.antes===123));
+   assert.equal(comandos.length,0);
    await clicar('Fila ao vivo');await page.waitForFunction(()=>document.querySelector('dialog')?.textContent.includes('Teste <script>'));
    assert.equal(await page.evaluate(()=>[...document.querySelectorAll('dialog button')].find(b=>b.textContent==='pausar').disabled),true);
    assert.equal(comandos.length,0);

@@ -85,7 +85,7 @@ def updater(tmp_path, monkeypatch):
         assert c.reservar() is None, 'instalacao bloqueia nova producao'
         if ns.get('falhar_instalador'): raise OSError('simulado')
         installs.append(args)
-    ns = dict(sys=SimpleNamespace(frozen=True), json=json, os=__import__('os'), time=SimpleNamespace(time=lambda: 1),
+    ns = dict(PILOTO=False, OFICIAL=False, sys=SimpleNamespace(frozen=True), json=json, os=__import__('os'), time=SimpleNamespace(time=lambda: 1),
               tempfile=SimpleNamespace(gettempdir=lambda: str(tmp_path)),
               urllib=SimpleNamespace(request=SimpleNamespace(Request=lambda *a, **k: a[0], urlopen=urlopen)),
               _registrar_update=lambda status, **kwargs: log.append(status), _iniciar_instalador=install)
@@ -140,7 +140,7 @@ def test_sincronizacao_do_painel_respeita_producao(tmp_path, monkeypatch, quando
         if quando_ocupar == 'download': reservations.append(c.reservar())
         stream = io.BytesIO(b'<html>novo</html>'); stream.status = 200
         return stream
-    ns = dict(PAINEL_DIR=str(pasta), os=__import__('os'), shutil=__import__('shutil'),
+    ns = dict(PILOTO=False, OFICIAL=False, PAINEL_DIR=str(pasta), os=__import__('os'), shutil=__import__('shutil'),
               time=SimpleNamespace(time=lambda: 1), _painel_valido=lambda _: True,
               urllib=SimpleNamespace(request=SimpleNamespace(Request=lambda *a, **k: a[0], urlopen=urlopen)))
     tree = ast.parse(Path('agent_worker.py').read_text(encoding='utf-8'))

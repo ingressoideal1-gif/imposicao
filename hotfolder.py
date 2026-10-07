@@ -373,13 +373,13 @@ def _soltar(pasta: str, nome: str, dados: bytes, metodo: str = None) -> str:
     return destino
 
 
-def soltar(pasta: str, nome: str, dados: bytes, metodo: str = None) -> str:
+def soltar(pasta: str, nome: str, dados: bytes, metodo: str = None, contexto=None) -> str:
     import gestao_estacoes as gestao
     if gestao._thread is None:
         return _soltar(pasta,nome,dados,metodo)
     import hashlib
     h=gestao.historico()
-    ident=h.iniciar(pasta,'hotfolder',hashlib.sha256(dados).hexdigest())
+    ident=h.iniciar(pasta,'hotfolder',hashlib.sha256(dados).hexdigest(),contexto=contexto)
     h.transicao(ident,'envio_iniciado')
     try:
         destino=_soltar(pasta,nome,dados,metodo)

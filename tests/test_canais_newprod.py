@@ -35,7 +35,7 @@ def test_piloto_nao_consumira_fila_nem_instalara_release_padrao():
     assert len(funcoes)==len(nomes)
     # Imports desses modulos sao de configuracao pura; qualquer acesso seguinte
     # sem a guarda do canal encontraria dependencias ausentes e reprovaria.
-    env = {'PILOTO':True}
+    env = {'PILOTO':True, 'OFICIAL':False}
     exec(compile(ast.Module(body=funcoes,type_ignores=[]),'worker_isolado','exec'),env)
     for nome in nomes - {'consultar_manifesto'}:
         assert env[nome]() in (None,False)

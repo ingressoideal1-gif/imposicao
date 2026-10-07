@@ -649,7 +649,8 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
             hdc = win32gui.CreateDC("WINSPOOL", printer_name, dm)
             dc = win32ui.CreateDCFromHandle(hdc)
             try:
-                spool_id = dc.StartDoc(job_title)
+                # PyCDC.StartDoc retorna None; win32print preserva o ID real da fila.
+                spool_id = win32print.StartDoc(hdc, (job_title, None, None, 0))
                 __import__('gestao_estacoes').spool_iniciado(spool_id)
                 print_w = dc.GetDeviceCaps(win32con.HORZRES)
                 print_h = dc.GetDeviceCaps(win32con.VERTRES)
@@ -835,7 +836,7 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
     if gestao._thread is None:
         return _send_print_job_windows(printer_name, pdf_path, options, job_title)
     try:
-        with gestao.acompanhar_envio(printer_name, 'windows', options.get('integridade_sha256'), options.get('gestao_envio_id')) as ident:
+        with gestao.acompanhar_envio(printer_name, 'windows', options.get('integridade_sha256'), options.get('gestao_envio_id'), options.get('historico_contexto')) as ident:
             ok, msg = _send_print_job_windows(printer_name, pdf_path, options, job_title)
             estado = ('enviado' if HAS_WIN32 else 'simulado') if ok else ('falha' if gestao.envio_pode_repetir() else 'incerto')
             gestao.historico().transicao(ident, estado, erro=None if ok else 'Falha no envio; confira a fila e os logs locais.')
