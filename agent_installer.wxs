@@ -4,10 +4,10 @@
   <!--  NewProd Agent - WiX Toolset Installer Script (.MSI)        -->
   <!-- ============================================================ -->
   <Product Id="*" 
-           Name="NewProd Agent" 
+           Name="NewProd Piloto"
            Language="1046" 
            Codepage="65001"
-           Version="1.2.363.0"
+           Version="1.2.368"
            Manufacturer="Ingresso Ideal" 
            UpgradeCode="A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D">
 
@@ -26,6 +26,13 @@
     <MajorUpgrade
         DowngradeErrorMessage="Uma versao mais recente do NewProd Agent ja esta instalada."
         Schedule="afterInstallInitialize" />
+
+    <!-- Retira tambem o MSI independente antigo; seus dados fora dos componentes
+         MSI permanecem e o preflight impede troca com agente ainda executando. -->
+    <Upgrade Id="D47E72A1-416E-4416-939F-78F0B127E818">
+      <UpgradeVersion Minimum="0.0.0" Maximum="1.2.368" IncludeMinimum="yes"
+                      IncludeMaximum="no" Property="PILOTO_ANTERIOR" />
+    </Upgrade>
 
     <!-- ─── Diretórios de Instalação (Pasta do Usuário / LocalAppData) ────── -->
     <Directory Id="TARGETDIR" Name="SourceDir">
@@ -53,7 +60,8 @@
         <!-- Atalho no Menu Iniciar -->
         <Shortcut Id="StartMenuShortcut" 
                   Directory="ApplicationProgramsFolder" 
-                  Name="NewProd Agent" 
+                  Name="NewProd Piloto"
+                  Target="[#NewProdExe]"
                   Description="Agente de Imposicao e Impressao Local" 
                   WorkingDirectory="INSTALLFOLDER" 
                   Icon="AgentIcon.ico" 
@@ -62,7 +70,8 @@
         <!-- Atalho na Area de Trabalho -->
         <Shortcut Id="DesktopShortcut" 
                   Directory="DesktopFolder" 
-                  Name="NewProd Agent" 
+                  Name="NewProd Piloto"
+                  Target="[#NewProdExe]"
                   Description="Agente de Imposicao e Impressao Local" 
                   WorkingDirectory="INSTALLFOLDER" 
                   Icon="AgentIcon.ico" 

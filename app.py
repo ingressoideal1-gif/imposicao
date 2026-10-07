@@ -304,11 +304,11 @@ def _semear_painel(destino: str, origem: str) -> bool:
     """
     try:
         from compatibilidade_painel import renovar_conjunto, painel_externo_validado
-        from canais_newprod import PILOTO
+        from canais_newprod import PILOTO, OFICIAL
         import sys
-        if PILOTO and getattr(sys, 'frozen', False) and painel_externo_validado(destino, sys.executable):
+        if PILOTO and not OFICIAL and getattr(sys, 'frozen', False) and painel_externo_validado(destino, sys.executable):
             return True
-        renovar = renovar_conjunto(destino, origem)
+        renovar = OFICIAL or renovar_conjunto(destino, origem)
         if PILOTO and os.path.isfile(os.path.join(os.path.dirname(destino), 'manifesto-painel.json')):
             # Overlay recusado: restaurar o conjunto embutido, sem confiar em mtime.
             renovar = True
@@ -393,9 +393,9 @@ def read_root():
     passar por agente. Não é configurável de fora de propósito: quem controlasse
     a configuração poderia fazer a nuvem se declarar estação de novo.
     """
-    from canais_newprod import CANAL, NOME, PORTA
+    from canais_newprod import CANAL, NOME, PORTA, OFICIAL
     return {"status": "running", "message": NOME + " ativo", "version": LOCAL_AGENT_VERSION,
-            "canal": CANAL, "porta": PORTA,
+            "canal": CANAL, "porta": PORTA, "produto_oficial": OFICIAL,
             "sessao_local_protocolo": 1,
             "agent_id": _agent_id_local(), "capabilities": ["impose", "print"],
             "onde": "nuvem" if security_config.is_cloud_runtime() else "local"}

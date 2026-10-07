@@ -97,6 +97,19 @@ Não oculte erros nem repita verificações sem motivo. Informe falhas preexiste
 
 ### NewProd de producao e Piloto
 
+Decisao humana de 07/10/2026: NewProd Piloto substitui o produto original.
+A entrega oficial usa agent_oficial.py, porta 9001, NewProd.exe e identidade
+original preservada. O MSI oficial usa UpgradeCode original para transportar
+a migracao; este caso foi expressamente autorizado pelo usuario. O Piloto
+independente permanece apenas como origem de migracao e recuperacao, sem novos
+releases de produto separados. Leia docs/transicao-newprod-piloto-oficial.md.
+Validar o canal oficial e os contratos dos dois canais antigos na transicao.
+Publicar por publicar_agente.ps1 (encaminha ao fluxo oficial) ou
+ferramentas/publicar-oficial.ps1. O manifesto oficial e liberado por estacao;
+latest.json serve somente como ponte inicial para instalacoes legadas.
+As regras abaixo descrevem a coexistencia anterior e continuam aplicaveis a
+pacotes legados, salvo o transporte oficial explicitamente autorizado acima.
+
 Existem dois canais da mesma fonte: producao em 9000/NewProd.exe e Piloto em
 9001/NewProdPiloto.exe. Leia docs/newprod-producao-e-piloto.md ao alterar frontend,
 motor, agente, seguranca ou entrega. Correcao compartilhada exige validacao nos

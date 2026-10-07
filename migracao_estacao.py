@@ -8,8 +8,8 @@ import tempfile
 
 
 def pasta_dados():
-    from canais_newprod import PILOTO
-    return Path(os.environ['LOCALAPPDATA']) / ('NewProd Piloto Dados Protegidos' if PILOTO else 'NewProd Dados Protegidos')
+    from canais_newprod import PILOTO, OFICIAL
+    return Path(os.environ['LOCALAPPDATA']) / ('NewProd Piloto Dados Protegidos' if PILOTO and not OFICIAL else 'NewProd Dados Protegidos')
 
 
 def proteger_pasta(path):

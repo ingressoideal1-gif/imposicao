@@ -649,7 +649,8 @@ def _send_gdi_raster(printer_name, pdf_path, devmode, job_title, cor_cfg=None):
             hdc = win32gui.CreateDC("WINSPOOL", printer_name, dm)
             dc = win32ui.CreateDCFromHandle(hdc)
             try:
-                spool_id = dc.StartDoc(job_title)
+                # PyCDC.StartDoc retorna None; win32print preserva o ID real da fila.
+                spool_id = win32print.StartDoc(hdc, (job_title, None, None, 0))
                 __import__('gestao_estacoes').spool_iniciado(spool_id)
                 print_w = dc.GetDeviceCaps(win32con.HORZRES)
                 print_h = dc.GetDeviceCaps(win32con.VERTRES)

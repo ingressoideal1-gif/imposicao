@@ -39,7 +39,7 @@ def _executar(raiz, instalacao, *, proteger=None, recuperar=None):
     if len(chave)!=32: raise ValueError('Chave invalida')
     fontes={}
     for origem, prefixo in ((raiz,'canal'),(instalacao,'instalacao')):
-        for nome in ('formats_db.json','acessos_locais.json','print_configs.json','hot_folders.json','agent_config.json','versao-ativa.json','iniciar-piloto.ps1','token-local.dpapi'):
+        for nome in ('formats_db.json','acessos_locais.json','print_configs.json','hot_folders.json','printer_icc_map.json','printer_ppd_map.json','agent_config.json','versao-ativa.json','perfil-oficial.json','iniciar-piloto.ps1','token-local.dpapi'):
             p=origem/nome
             if p.is_file(): fontes[prefixo+'/'+nome]=p
     # Bases SQLite recebem snapshot consistente pela API backup, nunca copia WAL parcial.

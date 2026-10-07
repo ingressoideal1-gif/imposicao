@@ -58,8 +58,7 @@ else:
     EXE_DIR = BASE_DIR
     os.chdir(BASE_DIR)
 
-from canais_newprod import PILOTO, PORTA, NOME, CHAVE_INICIO, pasta_local, url_painel
-from canais_newprod import PILOTO, PORTA, NOME, CHAVE_INICIO, pasta_local, url_painel
+from canais_newprod import PILOTO, OFICIAL, PORTA, NOME, CHAVE_INICIO, pasta_local, url_painel
 import agent_worker
 
 server_thread = None
@@ -124,9 +123,13 @@ def start_server_thread():
     while time.time() < _deadline:
         try:
             with socket.create_connection(("127.0.0.1", PORTA), timeout=1):
-                break
+                from gestao_estacoes import saude_painel
+                if saude_painel()['estado'] == 'saudavel':
+                    return True
         except OSError:
-            time.sleep(0.5)
+            pass
+        time.sleep(0.5)
+    return False
 
 
 
@@ -145,7 +148,7 @@ def add_to_startup(icon=None, item=None):
             0, winreg.KEY_SET_VALUE
         )
         command = f'"{exe_path}"'
-        if PILOTO:
+        if PILOTO and not OFICIAL:
             launcher = pasta_local() / 'iniciar-piloto.ps1'
             command = f'powershell.exe -NoProfile -WindowStyle Hidden -File "{launcher}"'
         winreg.SetValueEx(key, CHAVE_INICIO, 0, winreg.REG_SZ, command)
@@ -303,11 +306,21 @@ def main():
     # Iniciar servidor e worker ANTES do icon.run()
     # (o AllocConsole/FreeConsole no topo ja garantiu o Win32 message pump)
     print("[agent] Iniciando worker e servidor...")
-    start_server_thread()
-    print("[agent] Worker e servidor iniciados com sucesso!")
+    pronto = start_server_thread()
+    if pronto:
+        print("[agent] Servidor HTTP validado; painel disponivel.")
+        if OFICIAL:
+            from perfil_oficial import confirmar_partida
+            try:
+                confirmar_partida()
+            except Exception as erro:
+                print('[agent] Falha confirmando migracao/startup: ' + type(erro).__name__)
+    else:
+        print("[agent] ERRO: servidor HTTP indisponivel; heartbeat nao comprova painel saudavel.")
 
     # Abrir o painel automaticamente ao iniciar
-    threading.Thread(target=open_panel, daemon=True).start()
+    if pronto:
+        threading.Thread(target=open_panel, daemon=True).start()
 
     icon.run(setup=setup_tray)
 

@@ -15,7 +15,7 @@ if (-not (Test-Path "dist\NewProd.exe")) {
 $pythonPacote = if (Test-Path '.venv\Scripts\python.exe') { '.\.venv\Scripts\python.exe' }
                 elseif (Test-Path 'venv\Scripts\python.exe') { '.\venv\Scripts\python.exe' }
                 else { throw 'Python do projeto ausente para conferir o pacote publico.' }
-& $pythonPacote -m PyInstaller --onefile --noconsole --noconfirm --name PreservarNewProd --paths . --exclude-module acesso_segredo --hidden-import PyInstaller.archive.readers ferramentas/migrar_estacao_instalador.py
+& $pythonPacote -m PyInstaller --onefile --noconsole --noconfirm --name PreservarNewProd --specpath build --paths . --exclude-module acesso_segredo --hidden-import PyInstaller.archive.readers --hidden-import win32timezone ferramentas/migrar_estacao_instalador.py
 if ($LASTEXITCODE -ne 0) { throw 'Build do preservador falhou.' }
 & $pythonPacote ferramentas/conferir_pacote_agente.py --exe dist/NewProd.exe --migrador dist/PreservarNewProd.exe
 if ($LASTEXITCODE -ne 0) { throw 'Binarios publicos recusados.' }
@@ -74,10 +74,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilacao WiX falhou.' }
 
 # 4. Enlincar .wixobj -> NewProd_Setup_v<versao>.msi
 # A versao precisa bater com Version= em agent_installer.wxs e com
-# LOCAL_AGENT_VERSION em app.py — o MSI usa esse campo para decidir se o
+# LOCAL_AGENT_VERSION em app.py â€” o MSI usa esse campo para decidir se o
 # upgrade se aplica, e o frontend compara o valor reportado pelo agente.
 Write-Host "Etapa 2/2: Gerando pacote final MSI (.wixobj -> .msi)..." -ForegroundColor Green
-$msiOutput = "dist\NewProd_Setup_v1.2.363.msi"
+$msiOutput = "dist\NewProdPiloto_Oficial_v1.2.368.msi"
 & $wixLight -ext WixUIExtension -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
 if ($LASTEXITCODE -ne 0) { throw 'Geracao MSI falhou.' }
 

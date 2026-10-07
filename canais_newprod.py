@@ -3,12 +3,13 @@ import os
 from pathlib import Path
 import tempfile
 
-PILOTO = os.environ.get('NEWPROD_CANAL') == 'piloto'
+OFICIAL = os.environ.get('NEWPROD_CANAL') == 'oficial'
+PILOTO = OFICIAL or os.environ.get('NEWPROD_CANAL') == 'piloto'
 CANAL = 'piloto' if PILOTO else 'producao'
 PORTA = 9001 if PILOTO else 9000
-NOME_PASTA = 'NewProd Piloto' if PILOTO else 'NewProd Agent'
+NOME_PASTA = 'NewProd Piloto' if PILOTO and not OFICIAL else 'NewProd Agent'
 NOME = 'NewProd Piloto' if PILOTO else 'NewProd Agent'
-CHAVE_INICIO = 'NewProdPiloto' if PILOTO else 'NewProdAgent'
+CHAVE_INICIO = 'NewProdPiloto' if PILOTO and not OFICIAL else 'NewProdAgent'
 
 def pasta_local():
     return Path(os.environ.get('LOCALAPPDATA') or tempfile.gettempdir()) / NOME_PASTA

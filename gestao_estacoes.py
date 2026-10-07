@@ -248,6 +248,22 @@ def snapshot():
     with _lock: return json.loads(json.dumps(_snapshot))
 
 
+def saude_painel():
+    import urllib.request
+    from canais_newprod import PORTA, CANAL
+    from agent_version import AGENT_VERSION
+    try:
+        # Somente loopback, sem proxy ou redirecionamento para outra origem.
+        from pacotes_download import SemRedirecionamento
+        abrir = urllib.request.build_opener(urllib.request.ProxyHandler({}), SemRedirecionamento()).open
+        with abrir(f'http://127.0.0.1:{PORTA}/api/version', timeout=2) as r:
+            dados = json.loads(r.read(8193))
+        ok = dados.get('version') == 'NewProd ' + AGENT_VERSION and dados.get('canal') == CANAL
+        return dict(estado='saudavel' if ok else 'versao_divergente', porta=PORTA, conferido_em=agora())
+    except Exception:
+        return dict(estado='indisponivel', porta=PORTA, conferido_em=agora())
+
+
 def iniciar_monitor():
     global _thread
     with _lock:
@@ -269,7 +285,7 @@ def iniciar_monitor():
                         historico().amostra(discos)
                         ultimo_disco = time.monotonic()
                     from canais_newprod import CANAL
-                    novo = dict(estado='ativo', canal=CANAL, coletado_em=agora(), spool=spool,
+                    novo = dict(estado='ativo', canal=CANAL, coletado_em=agora(), spool=spool, painel=saude_painel(),
                                 backup=historico().controle('backup'), manutencao=historico().controle('manutencao'),armazenamento=discos)
                     with _lock: _snapshot = novo
                     backup_periodico()
@@ -296,7 +312,7 @@ def resumo_publico():
         s['estado'] = 'historico_indisponivel'
     backup=s.get('backup')
     if backup: backup={k:backup.get(k) for k in ('quando','verificado','arquivos','bytes','copia_externa_confirmada')}
-    return dict(schema=1, estado=s['estado'], coletado_em=s.get('coletado_em'),
+    return dict(schema=2, estado=s['estado'], coletado_em=s.get('coletado_em'), painel=s.get('painel'),
                 fila_disponivel=spool.get('disponivel', False), fila=estados,
                 erros_24h=erros, totais_30d=contagens, backup=backup, manutencao=s.get('manutencao'))
 

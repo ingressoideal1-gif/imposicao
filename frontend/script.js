@@ -48313,9 +48313,11 @@ async function verificarAtualizacaoAgente(instalar = false) {
             const resp = await fetch(`${base}/api/status`);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const info = await resp.json();
-            aviso(`${info.version}. Atualizações do Piloto usam o pacote próprio do Piloto.`, 'info');
-        } catch (_) { aviso('O Piloto não respondeu nesta estação.', 'error'); }
-        return;
+            if (!info.produto_oficial) {
+                aviso(`${info.version}. Esta instalação anterior exige o pacote próprio de migração para o NewProd Piloto oficial.`, 'info');
+                return;
+            }
+        } catch (_) { aviso('O Piloto não respondeu nesta estação.', 'error'); return; }
     }
 
     let info;

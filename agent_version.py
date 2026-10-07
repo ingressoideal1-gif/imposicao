@@ -6,10 +6,10 @@ em compilar_msi.ps1: o MSI usa aquele campo para decidir se o upgrade se
 aplica, e o auto-update compara este valor com o do manifesto.
 """
 
-from canais_newprod import PILOTO
-AGENT_VERSION = "1.2.363"
-if PILOTO:
-    AGENT_VERSION += "-piloto-local.29"
+from canais_newprod import PILOTO, OFICIAL
+AGENT_VERSION = "1.2.368"
+if PILOTO and not OFICIAL:
+    AGENT_VERSION += "-piloto-local.30"
 
 
 def como_tupla(texto: str) -> tuple:
