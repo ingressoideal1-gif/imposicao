@@ -22,6 +22,8 @@ def test_snapshot_js_python_identicos_e_historico_preservado(fonte):
     avisos = teatro_snapshot.aplicar(p, lambda _: fonte['atual'])
     assert len(avisos) == 1 and 'snapshot histórico' in avisos[0]
     assert p == anterior
+    assert p['numeracao']['teatro_capa'] == {'nomeConjunto':'Fila'}
+    assert p['numeracao']['csv_data'][0]['Conjunto'] == 'Mesa'
     assert [(r['Fila'], r['Lugar']) for r in p['numeracao']['csv_data']] == [('A','1'), ('A','3'), ('B','Z')]
 
 

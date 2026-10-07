@@ -17,8 +17,9 @@ As capas recebem `teatro_capa.nomeConjunto`, metadado separado dos lugares.
 A abertura do pedido confere o mapa e resolve essa apresentação; a geração
 relê o mapa e recalcula o texto no backend a partir da configuração conferida.
 O texto enviado pelo navegador não substitui o valor conferido pelo motor.
-Quando o mapa não tem descrição explícita, mantém-se a descrição do snapshot
-ou `Fila`. Falha ao abrir elimina o metadado de uma abertura anterior.
+Quando o mapa não tem descrição explícita, usa-se `Fila`, o mesmo padrão
+do PDF do mapa, mesmo que o snapshot tenha outra descrição histórica.
+Falha ao abrir elimina o metadado de uma abertura anterior.
 
 CSV, filas, lugares, quantidades, snapshot e revisão histórica permanecem
 iguais. O miolo e a imposição vertical permanecem iguais. Os avisos de revisão

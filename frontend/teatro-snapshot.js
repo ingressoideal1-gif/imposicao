@@ -4,10 +4,9 @@
     const campos = ['mapa_teatro_id', 'mapa_teatro_setor_id', 'mapa_teatro_revisao', 'mapa_teatro_snapshot'];
     const tem = item => !!item && campos.some(k => item[k] != null);
     function descricaoCapa(item, mapa) {
-        const s = typeof item.mapa_teatro_snapshot === 'string' ? JSON.parse(item.mapa_teatro_snapshot) : item.mapa_teatro_snapshot;
         const setor = mapa?.id === item.mapa_teatro_id && mapa.config?.setores?.find(x => x.id === item.mapa_teatro_setor_id);
         if (!setor) return null;
-        return { nomeConjunto: String(setor.nomeConjunto || s?.setor?.nomeConjunto || 'Fila').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Fila' };
+        return { nomeConjunto: String(setor.nomeConjunto || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Fila' };
     }
     function banco(item) {
         if (!tem(item)) return null;

@@ -75,6 +75,15 @@ async function executar() {
     assert.deepEqual(legado,salvo); assert.deepEqual(numeracaoLegada.csv_data,bancoLegado.csv_data);
     assert.equal(numeracaoLegada.csv_data[0].Conjunto,'Fila');
     assert.equal(T.capa(numeracaoLegada.csv_data,0,1,numeracaoLegada.teatro_capa).titulo,'Mesa VIP A');
+    const historico=modelo(), bancoHistorico=S.banco(historico);
+    const numHistorico={csv_data:bancoHistorico.csv_data,teatro_modelo:bancoHistorico.teatro_modelo};
+    const mapaSemDescricao={id:'mapa1',config:{setores:[{id:'s1',nome:'Plateia',cadeiras:{}}]}};
+    await S.conferir(numHistorico,async()=>mapaSemDescricao);
+    const pdfContext={window:{}};
+    vm.runInNewContext(fs.readFileSync(__dirname+'/../frontend/mapas-teatro-pdf.js','utf8'),pdfContext);
+    const planoPDF=pdfContext.window.MapasTeatroPdf.preparar(mapaSemDescricao);
+    assert.equal(numHistorico.teatro_capa.nomeConjunto,planoPDF.setores[0].nomeConjunto);
+    assert.equal(numHistorico.csv_data[0].Conjunto,'Mesa','Descricao historica dos lugares preservada');
     const cliente={from(){return {select(){return this;},in(){return Promise.resolve({data:[mapaEditado]});}};}};
     await S.conferirPedido([legado],cliente);
     const previa=S.resolver({tipo:'TEATRO'},legado);
