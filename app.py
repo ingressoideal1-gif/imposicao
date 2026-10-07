@@ -303,8 +303,15 @@ def _semear_painel(destino: str, origem: str) -> bool:
     build por causa desta função.
     """
     try:
-        from compatibilidade_painel import renovar_conjunto
+        from compatibilidade_painel import renovar_conjunto, painel_externo_validado
+        from canais_newprod import PILOTO
+        import sys
+        if PILOTO and getattr(sys, 'frozen', False) and painel_externo_validado(destino, sys.executable):
+            return True
         renovar = renovar_conjunto(destino, origem)
+        if PILOTO and os.path.isfile(os.path.join(os.path.dirname(destino), 'manifesto-painel.json')):
+            # Overlay recusado: restaurar o conjunto embutido, sem confiar em mtime.
+            renovar = True
         os.makedirs(destino, exist_ok=True)
         for pasta, _, arquivos in os.walk(origem, followlinks=False):
             for nome in arquivos:

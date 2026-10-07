@@ -19,12 +19,17 @@ jobs:
         canal: [producao, piloto]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.14'
+          cache: pip
+          cache-dependency-path: requirements-windows.lock
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '22'
+          cache: npm
       - name: Dependencias fixadas
         shell: pwsh
         run: |
@@ -33,12 +38,16 @@ jobs:
           npm ci --ignore-scripts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Contratos comuns e recursos do Piloto
+        env:
+          ENTREGA_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         shell: pwsh
         run: |
           $navegadores = @('C:\Program Files\Google\Chrome\Application\chrome.exe', 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe')
           $env:PUPPETEER_EXECUTABLE_PATH = $navegadores | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           if (-not $env:PUPPETEER_EXECUTABLE_PATH) { throw 'Navegador de regressao ausente' }
-          python ferramentas/conferir_duas_versoes.py ${{ matrix.canal }}
+          $argumentos = @('ferramentas/conferir_duas_versoes.py', '${{ matrix.canal }}', '--relatorio', 'dist/entrega/tempos-canais.json')
+          if ($env:ENTREGA_BASE -and $env:ENTREGA_BASE -notmatch '^0+$') { $argumentos += @('--base', $env:ENTREGA_BASE) }
+          python @argumentos
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   consulta-piloto:
     name: Piloto - consulta autenticada sem escrita
@@ -119,6 +128,8 @@ jobs:
       - name: Freios da publicacao
         shell: pwsh
         run: |
+          python -m unittest discover -s tests -p test_entrega_impacto.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) { Register-PSRepository -Default }
           if (-not (Get-Module -ListAvailable Pester | Where-Object Version -eq ([version]'5.9.0'))) { Install-Module Pester -RequiredVersion 5.9.0 -Scope CurrentUser -Repository PSGallery -Force }
           Import-Module Pester -RequiredVersion 5.9.0 -Force

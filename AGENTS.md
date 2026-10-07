@@ -100,11 +100,17 @@ Não oculte erros nem repita verificações sem motivo. Informe falhas preexiste
 Existem dois canais da mesma fonte: producao em 9000/NewProd.exe e Piloto em
 9001/NewProdPiloto.exe. Leia docs/newprod-producao-e-piloto.md ao alterar frontend,
 motor, agente, seguranca ou entrega. Correcao compartilhada exige validacao nos
-dois canais com ferramentas/conferir_duas_versoes.py e pacote atualizado do
-Piloto. Funcao exclusiva do Piloto deve permanecer opt-in e preservar o padrao.
+dois canais com ferramentas/conferir_duas_versoes.py e artefato atualizado do
+Piloto. A selecao por impacto preserva os contratos obrigatorios; logica ou
+arquivo desconhecido exige bateria completa. Funcao exclusiva do Piloto deve
+permanecer opt-in e preservar o padrao.
 Instalacao, identidade, dados, caches e atualizacoes sao separados; nunca usar
 o MSI, executavel, manifesto ou inicializador da producao para instalar o Piloto.
-Uma entrega web tambem precisa atualizar o pacote do painel experimental.
+Uma entrega web tambem precisa conferir o painel experimental. Reutilizar
+executavel auditado quando fontes e dependencias coincidem; entregar somente
+painel quando a base do agente, protocolo e conjunto de arquivos coincidem.
+Sem prova de compatibilidade/cache valido, compilar. Preparar artefato nao
+comprova instalacao. Ver docs/entrega-por-impacto.md.
 
 Revise o diff e os arquivos não rastreados, confira escopo e ausência de segredos. Relate de forma breve: resultado, arquivos alterados, validações/resultados e pendências reais. Não declare publicação, migração aplicada, envio real ou notificação agendada sem confirmação da execução. Uma entrega local pode estar concluída enquanto implantação ou configuração externa permanece pendente, desde que isso fique explícito.
 

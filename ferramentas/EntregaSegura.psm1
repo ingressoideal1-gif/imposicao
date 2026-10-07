@@ -28,7 +28,7 @@ function Get-EscopoEntrega {
 
     $tipos = @()
     foreach ($original in @($Caminhos)) {
-        $caminho = ([string]$original).Replace('\', '/').TrimStart('./')
+        $caminho = ([string]$original).Replace('\', '/') -replace '^\./', ''
         if (-not $caminho) { continue }
 
         if ($caminho -like 'supabase/functions/*') { $tipos += 'EdgeFunctions'; continue }
@@ -41,7 +41,7 @@ function Get-EscopoEntrega {
             $tipos += 'NewProd'; continue
         }
         if ($caminho -eq 'entrega-segura.ps1' -or $caminho -like 'ferramentas/*.psm1' -or
-            $caminho -like 'ferramentas/*.ps1' -or $caminho -eq 'ferramentas/sincronizar_git.py') {
+            $caminho -like 'ferramentas/*.ps1' -or $caminho -in @('ferramentas/sincronizar_git.py', 'ferramentas/entrega_impacto.py', 'ferramentas/conferir_duas_versoes.py') -or $caminho -eq '.github/workflows/integridade.yml') {
             $tipos += 'Operacional'; continue
         }
         # Testes e documentacao acompanham o codigo principal. So definem o
@@ -72,7 +72,7 @@ function Test-CaminhoNoEscopo {
         [Parameter(Mandatory)][string]$Escopo
     )
 
-    $p = $Caminho.Replace('\', '/').TrimStart('./')
+    $p = $Caminho.Replace('\', '/') -replace '^\./', ''
     if ($p -like 'tests/*' -or $p -like 'docs/*' -or $p -match '^(CHANGELOG|GUIA_AGENTE)\.md$') {
         return $true
     }
@@ -82,7 +82,7 @@ function Test-CaminhoNoEscopo {
         'Documentacao'  { return $p -like 'docs/*' -or $p -match '^[^/]+\.md$' }
         'Operacional'   {
             return $p -eq 'entrega-segura.ps1' -or $p -like 'ferramentas/*.psm1' -or
-                   $p -like 'ferramentas/*.ps1' -or $p -eq 'ferramentas/sincronizar_git.py'
+                   $p -like 'ferramentas/*.ps1' -or $p -in @('ferramentas/sincronizar_git.py', 'ferramentas/entrega_impacto.py', 'ferramentas/conferir_duas_versoes.py') -or $p -eq '.github/workflows/integridade.yml' -or $p -eq 'AGENTS.md'
         }
         default         { return $false }
     }

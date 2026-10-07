@@ -45,6 +45,15 @@ Describe 'Nome e escopo da entrega segura' {
         Test-ArtefatoDeBuildEntrega 'dist/NewProd.exe' | Should -Be $true
         Test-ArtefatoDeBuildEntrega 'frontend/script.js' | Should -Be $false
     }
+
+    It 'aceita as ferramentas de impacto somente no escopo operacional' {
+        foreach ($arquivo in @('ferramentas/entrega_impacto.py', 'ferramentas/conferir_duas_versoes.py', '.github/workflows/integridade.yml')) {
+            Get-EscopoEntrega @($arquivo) | Should -Be 'Operacional'
+            Test-CaminhoNoEscopo $arquivo 'Operacional' | Should -Be $true
+            Test-CaminhoNoEscopo $arquivo 'Frontend' | Should -Be $false
+        }
+        Test-CaminhoNoEscopo 'AGENTS.md' 'Operacional' | Should -Be $true
+    }
 }
 
 Describe 'Versao e cache dos assets' {

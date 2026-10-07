@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Prepara, verifica e publica entregas isoladas do Ideal Imposition.
 
@@ -53,6 +53,30 @@ $script:Raiz = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:IntegracaoConcluida = $false
 $script:EfeitoRemotoIniciado = $false
 $script:BranchEnviada = $false
+$script:Tempos = [Collections.Generic.List[object]]::new()
+
+function Invoke-Etapa {
+    param([string]$NomeEtapa, [scriptblock]$Executar)
+    $relogio = [Diagnostics.Stopwatch]::StartNew()
+    $sucesso = $false
+    try { & $Executar; $sucesso = $true }
+    finally {
+        $relogio.Stop()
+        $script:Tempos.Add([pscustomobject]@{ etapa=$NomeEtapa; segundos=[Math]::Round($relogio.Elapsed.TotalSeconds, 3); sucesso=$sucesso })
+        Write-Host "  TEMPO: $NomeEtapa = $($relogio.Elapsed.TotalSeconds.ToString('F2'))s; sucesso=$sucesso"
+    }
+}
+
+function Get-PythonEntrega {
+    if ($Python) { return (Resolve-Path -LiteralPath $Python).Path }
+    foreach ($base in @($script:Raiz, (Get-CheckoutPrincipal))) {
+        foreach ($ambiente in @('.venv', 'venv')) {
+            $candidato = Join-Path $base "$ambiente\Scripts\python.exe"
+            if (Test-Path -LiteralPath $candidato -PathType Leaf) { return $candidato }
+        }
+    }
+    throw 'Informe -Python com o ambiente de validacao e compilacao existente.'
+}
 
 Import-Module (Join-Path $script:Raiz 'ferramentas\Publicacao.psm1') -Force
 Import-Module (Join-Path $script:Raiz 'ferramentas\EntregaSegura.psm1') -Force
@@ -230,9 +254,8 @@ function Invoke-TesteDeclarado {
         return $normalizado
     }
     if ($normalizado -match '\.py$') {
-        $python = Join-Path $script:Raiz 'venv\Scripts\python.exe'
-        if (-not (Test-Path -LiteralPath $python)) { throw 'O venv do projeto nao existe nesta worktree.' }
-        & $python -m pytest -n 0 $absoluto
+        $interpretadorTeste = Get-PythonEntrega
+        & $interpretadorTeste -m pytest -n 0 $absoluto
         if ($LASTEXITCODE -ne 0) { throw "Pytest falhou: $normalizado" }
         return $normalizado
     }
@@ -487,8 +510,13 @@ function Test-ArquivosPublicos {
 function Invoke-Publicar {
     if (-not $Mensagem) { throw 'Informe -Mensagem para publicar.' }
     Write-Titulo 'SINCRONIZANDO ANTES DA PUBLICACAO'
-    Invoke-Git @('fetch', 'origin', '--prune') | ForEach-Object { Write-Host "  $_" }
-    $plano = Invoke-Validacao $Escopo
+    Invoke-Etapa 'fetch' { Invoke-Git @('fetch', 'origin', '--prune') | ForEach-Object { Write-Host "  $_" } }
+    $plano = Invoke-Etapa 'validacao' { Invoke-Validacao $Escopo }
+    if ($plano.Escopo -eq 'Frontend' -and (-not $Simular -or $Python)) {
+        $pythonCanais = Get-PythonEntrega
+        & $pythonCanais (Join-Path $script:Raiz 'ferramentas\entrega_impacto.py') plano --base origin/main
+        if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel determinar o impacto.' }
+    }
     $versao = 0
     $bumpados = @()
 
@@ -533,7 +561,7 @@ function Invoke-Publicar {
         Update-ReferenciasDeAssets -Raiz $script:Raiz -Assets $plano.Assets -Versao $versao |
             Out-Null
         Write-Host "  Cache preparado em v$versao. Revalidando a entrega..."
-        $plano = Invoke-Validacao $Escopo
+        $plano = Invoke-Etapa 'validacao-cache' { Invoke-Validacao $Escopo }
     }
 
     $arquivos = @(Get-ArquivosDaEntrega)
@@ -544,23 +572,23 @@ function Invoke-Publicar {
         $inesperados = @($staged | Where-Object { $_.Replace('\', '/') -notin $arquivos })
         if ($inesperados.Count -gt 0) { throw "Arquivo staged fora da entrega: $($inesperados -join ', ')" }
         $mensagemCommit = if ($versao -gt 0) { "$Mensagem (v$versao)" } else { $Mensagem }
-        Invoke-Git @('commit', '-m', $mensagemCommit) | ForEach-Object { Write-Host "  $_" }
+        Invoke-Etapa 'commit' { Invoke-Git @('commit', '-m', $mensagemCommit) | ForEach-Object { Write-Host "  $_" } }
     }
 
     if ($plano.Escopo -eq 'Frontend') {
-        $pythonCanais = @((Join-Path $script:Raiz '.venv\Scripts\python.exe'),
-                         (Join-Path $script:Raiz 'venv\Scripts\python.exe')) |
-            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-        if (-not $pythonCanais) { throw 'Python do projeto necessario para validar as duas variantes.' }
-        & $pythonCanais (Join-Path $script:Raiz 'ferramentas\conferir_duas_versoes.py')
-        if ($LASTEXITCODE -ne 0) { throw 'Entrega bloqueada por regressao na producao ou Piloto.' }
-        & (Join-Path $script:Raiz 'ferramentas\compilar-piloto.ps1') -Python $pythonCanais
-        if ($LASTEXITCODE -ne 0) { throw 'Pacote atualizado do Piloto nao foi gerado.' }
+        Invoke-Etapa 'testes-dois-canais' {
+            & $pythonCanais (Join-Path $script:Raiz 'ferramentas\conferir_duas_versoes.py') --base origin/main --relatorio (Join-Path $script:Raiz 'dist\entrega\tempos-canais.json')
+            if ($LASTEXITCODE -ne 0) { throw 'Entrega bloqueada por regressao na producao ou Piloto.' }
+        }
+        Invoke-Etapa 'pacote-piloto' {
+            & (Join-Path $script:Raiz 'ferramentas\compilar-piloto.ps1') -Python $pythonCanais -PermitirPainel
+            if ($LASTEXITCODE -ne 0) { throw 'Artefato atualizado do Piloto nao foi preparado.' }
+        }
     }
-    if ($plano.Escopo -eq 'EdgeFunctions') { Invoke-DeployEdge -Arquivos $arquivos }
+    if ($plano.Escopo -eq 'EdgeFunctions') { Invoke-Etapa 'deploy-edge' { Invoke-DeployEdge -Arquivos $arquivos } }
 
     $branch = Get-BranchAtual
-    Invoke-Git @('push', '-u', 'origin', $branch) | ForEach-Object { Write-Host "  $_" }
+    Invoke-Etapa 'push-branch' { Invoke-Git @('push', '-u', 'origin', $branch) | ForEach-Object { Write-Host "  $_" } }
     $script:BranchEnviada = $true
 
     if ($Integracao -eq 'PR') {
@@ -577,15 +605,17 @@ function Invoke-Publicar {
                 --body 'Entrega preparada e validada por entrega-segura.ps1.')
             if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel criar o pull request.' }
         }
-        & gh pr merge $urlPr.Trim() --merge
-        if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel integrar o PR: $($urlPr.Trim())" }
+        Invoke-Etapa 'integracao-pr' {
+            & gh pr merge $urlPr.Trim() --merge
+            if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel integrar o PR: $($urlPr.Trim())" }
+        }
     } else {
         Invoke-Git @('fetch', 'origin', '--prune') | Out-Null
         $divergencia = Get-DivergenciaOriginMain
         if ($divergencia.Atras -gt 0) { throw 'origin/main avancou antes da integracao direta; nada foi empurrado para main.' }
         $ancestral = @(Invoke-Git -Argumentos @('merge-base', '--is-ancestor', 'origin/main', 'HEAD') -PermitirFalha)
         if ($LASTEXITCODE -ne 0) { throw 'A integracao direta nao seria fast-forward.' }
-        Invoke-Git @('push', 'origin', 'HEAD:main') | ForEach-Object { Write-Host "  $_" }
+        Invoke-Etapa 'integracao-direta' { Invoke-Git @('push', 'origin', 'HEAD:main') | ForEach-Object { Write-Host "  $_" } }
     }
 
     Invoke-Git @('fetch', 'origin', '--prune') | Out-Null
@@ -613,17 +643,17 @@ function Invoke-Publicar {
 
     if ($plano.Escopo -eq 'Frontend') {
         Write-Titulo 'AGUARDANDO CLOUDFLARE PAGES'
-        $detalhes = Wait-CloudflarePages -Commit $integrado
+        $detalhes = Invoke-Etapa 'propagacao-cloudflare' { Wait-CloudflarePages -Commit $integrado }
         Write-Host "  Cloudflare Pages: sucesso ($detalhes)" -ForegroundColor Green
         Write-Titulo 'COMPARANDO ARQUIVOS PUBLICOS'
-        Test-ArquivosPublicos -Arquivos $arquivos -Versao $versao | Out-Null
+        Invoke-Etapa 'hashes-publicos' { Test-ArquivosPublicos -Arquivos $arquivos -Versao $versao | Out-Null }
     }
 
     Write-Host ''
     Write-Host "  Commit integrado: $integrado" -ForegroundColor Green
     if ($versao -gt 0) { Write-Host "  Tag: v$versao" -ForegroundColor Green }
     Write-Host '  Frontend publicado nao comprova NewProd nem impressao fisica.'
-    $sincronia = Invoke-SincronizarPrincipal
+    $sincronia = Invoke-Etapa 'sincronia-principal' { Invoke-SincronizarPrincipal }
     if ($sincronia -ne 0) {
         Write-Host 'ESTADO: PUBLICADA_E_VERIFICADA_SINCRONIA_PENDENTE' -ForegroundColor Yellow
         return 2
@@ -665,4 +695,14 @@ try {
         Write-Host 'ESTADO: FALHA_ANTES_DA_PUBLICACAO' -ForegroundColor Red
     }
     exit 1
+} finally {
+    if ($script:Tempos.Count -gt 0) {
+        try {
+            $gitTempos = ([string](& git -C $script:Raiz rev-parse --absolute-git-dir)).Trim()
+            if ($LASTEXITCODE -ne 0 -or -not $gitTempos) { throw 'Diretorio Git ausente.' }
+            $pastaTempos = Join-Path $gitTempos 'entrega-tempos'
+            New-Item -ItemType Directory -Path $pastaTempos -Force | Out-Null
+            $script:Tempos | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $pastaTempos 'tempos-entrega.json') -Encoding UTF8
+        } catch { Write-Warning 'Nao foi possivel salvar os tempos; consulte a saida do comando.' }
+    }
 }

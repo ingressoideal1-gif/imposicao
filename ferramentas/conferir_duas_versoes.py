@@ -3,6 +3,10 @@ from pathlib import Path
 import os
 import subprocess
 import sys
+import argparse
+import json
+import time
+from entrega_impacto import impacto_testes, plano
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
@@ -25,7 +29,31 @@ HARNESSES = ['gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.j
              'mapas_teatro_harness.js','mapas_teatro_browser_harness.js',
              'teatro_snapshot_harness.js','teatro_vertical_modelo_harness.js']
 
-def conferir(canais=('producao','piloto')):
+def selecionar(paths=None):
+    perfil = plano(paths)['perfil'] if paths is not None else 'completo'
+    if perfil == 'completo':
+        return TESTES, HARNESSES
+    # Os contratos de isolamento, seguranca e painel nunca sao dispensados.
+    obrigatorios = ['test_canais_newprod.py', 'test_seguranca_estacao.py',
+                    'test_compatibilidade_painel.py', 'test_painel_estacao.py']
+    return obrigatorios, HARNESSES if perfil == 'visual' else ['token_estacao_harness.js']
+
+
+def conferir(canais=('producao','piloto'), paths=None, relatorio=None):
+    testes, harnesses = selecionar(paths)
+    tempos = []
+    def executar(cmd, env, etapa):
+        inicio = time.monotonic()
+        sucesso = False
+        try:
+            subprocess.run(cmd, cwd=ROOT, env=env, check=True)
+            sucesso = True
+        finally:
+            tempos.append({'etapa': etapa, 'segundos': round(time.monotonic()-inicio, 3), 'sucesso': sucesso})
+            print('TEMPO=' + json.dumps(tempos[-1]), flush=True)
+            if relatorio:
+                Path(relatorio).parent.mkdir(parents=True, exist_ok=True)
+                Path(relatorio).write_text(json.dumps(tempos, indent=2), encoding='utf-8')
     for canal in canais:
         env = dict(os.environ)
         for nome in ('SUPABASE_SERVICE_KEY','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ACCESS_TOKEN',
@@ -33,12 +61,17 @@ def conferir(canais=('producao','piloto')):
             env.pop(nome,None)
         env['NEWPROD_CANAL']=canal
         print('CANAL=' + canal,flush=True)
-        subprocess.run([sys.executable,'-m','pytest','-n','0','-q','--tb=short',
-                        *('tests/'+n for n in TESTES)],cwd=ROOT,env=env,check=True)
-        for nome in HARNESSES:
-            subprocess.run(['node','tests/'+nome],cwd=ROOT,env=env,check=True)
+        executar([sys.executable,'-m','pytest','-n','0','-q','--tb=short',
+                  *('tests/'+n for n in testes)], env, canal + '/pytest')
+        for nome in harnesses:
+            executar(['node','tests/'+nome], env, canal + '/' + nome)
 
 if __name__=='__main__':
-    canais = (sys.argv[1],) if len(sys.argv)>1 else ('producao','piloto')
-    if any(c not in ('producao','piloto') for c in canais): raise SystemExit('Canal invalido')
-    conferir(canais)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('canal', nargs='?', choices=['producao', 'piloto'])
+    parser.add_argument('--base')
+    parser.add_argument('--relatorio')
+    args = parser.parse_args()
+    paths = impacto_testes(ROOT, args.base) if args.base else None
+    print(json.dumps(plano(paths) if paths is not None else {'perfil': 'completo'}), flush=True)
+    conferir((args.canal,) if args.canal else ('producao','piloto'), paths, args.relatorio)
