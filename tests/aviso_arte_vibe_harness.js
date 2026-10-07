@@ -90,6 +90,13 @@ function extract(name) {
         }
         await page.evaluate(() => { item.verso_tipo = 'SÓ FRENTE'; renderAmostrasOSItens('23291'); });
         assert.equal(await page.$(warning), null);
+        for (const tipo of [null, '', 'INDEFINIDO']) {
+            await page.evaluate(tipo => { item.verso_tipo = tipo; renderAmostrasOSItens('23291'); }, tipo);
+            assert.equal(await page.$(warning), null, 'tipo não reconhecido com numeração front não avisa incompatibilidade');
+            assert.equal(await page.evaluate(() => item.verso_tipo), tipo, 'renderização não regrava o valor do Vibe');
+            const conflito = await page.evaluate(tipo => avisoModoVibeDaAmostra({verso_tipo:tipo},{print_mode:'duplex'}), tipo);
+            assert(conflito.includes('SÓ FRENTE'), 'conflito usa a categoria assumida, não null/texto desconhecido');
+        }
         console.log('OK: cartao real de arte, vinculo por nome, faixa visivel, atualizacao parcial e matriz de compatibilidade.');
     } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

@@ -45,7 +45,6 @@ async function tests() {
         [x=>x.items[0].formato_id=null,'Formato'],
         [x=>{x.items[0].saida_id=null;x.c.state.formatos[0].default_saida_id=null;},'Saída'],
         [x=>{x.items[0].modo_impressao=null;x.c.state.formatos[0].default_schema=null;},'Modo de impressão'],
-        [x=>{x.items[0].verso_tipo=null;x.c.state.numeracoes[0].print_mode=null;},'Frente/verso'],
         [x=>x.items[0].num_final=4,'incompatível'],
     ];
     for(const mode of ['pdf','print']) {
@@ -68,6 +67,13 @@ async function tests() {
         assert(multi.calls.notices.some(x=>String(x[0]).includes('Modelo 97')));
     }
     const valid=single(), model=valid.items[0], num=valid.c.state.numeracoes[0];
+    for(const tipo of [null,undefined,'','INDEFINIDO']) {
+        const legado=single();legado.items[0].verso_tipo=tipo;
+        legado.c.state.numeracoes[0].print_mode=null;
+        delete legado.items[0].frente_verso;
+        assert.equal(legado.c.camposPendentesDoModelo(legado.items[0]).length,0,
+            'tipo ausente ou desconhecido não é campo obrigatório: assumir só frente');
+    }
     model.num_inicial=0;model.num_final=4;
     assert.equal(valid.c.camposPendentesDoModelo(model).length,0,'zero é um início válido');
     num.tipo='TICKET';num.ticket_qtd=3;model.num_final=14;
