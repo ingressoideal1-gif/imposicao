@@ -183,8 +183,6 @@ def _acesso_base() -> str:
 
 
 def sync_heartbeat():
-    if PILOTO:
-        return
     try:
         printers = print_service.get_printers()
         capabilities = {}
@@ -214,7 +212,10 @@ def sync_heartbeat():
             "fontes": diagnostico_fontes(),
             "armazenamento": temp_manager.diagnostico(),
             "impressao": diagnostico_impressao(),
-            "ultimo_update": ultimo_update()
+            "ultimo_update": ultimo_update(),
+            "canal": 'piloto' if PILOTO else 'producao',
+            "recebe_fila_remota": not PILOTO,
+            "gestao": __import__('gestao_estacoes').resumo_publico()
         }
 
         # Formato UTC explícito com timezone, exigido pelo Supabase
@@ -223,7 +224,7 @@ def sync_heartbeat():
         # UPSERT via POST com Prefer: resolution=merge-duplicates
         payload = {
             "id": AGENT_ID,
-            "name": AGENT_NAME,
+            "name": AGENT_NAME + (' [Piloto]' if PILOTO else ''),
             "status": "online",
             "last_seen": now_iso,
             "printers_json": printers_json
@@ -1131,6 +1132,8 @@ def run_loop():
 
     print(f"Iniciando Agent Worker (Cloud Relay) - ID: {AGENT_ID}", flush=True)
     temp_manager.iniciar_manutencao()
+    from gestao_estacoes import iniciar_monitor
+    iniciar_monitor()
     heartbeat_timer = 0
     update_timer = 60   # primeira checagem 1 min apos subir
     catalogo_timer = 10  # a LISTA antes dos binarios: e ela que diz o que baixar

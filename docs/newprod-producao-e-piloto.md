@@ -13,7 +13,7 @@ antiga de outro checkout.
 | Identidade e cache | NewProd Agent | NewProd Piloto |
 | Dados protegidos | NewProd Dados Protegidos | NewProd Piloto Dados Protegidos |
 | Coleta experimental | Desativada | Catalogo/pacotes/diario preservados em NewProd Piloto/dados |
-| Fila remota e heartbeat | Comportamento normal | Nao consume nem publica na fila de producao |
+| Fila remota e heartbeat | Comportamento normal | Publica presenca com identidade propria; nao consome fila remota |
 | Atualizacao | Manifesto padrao e sincronismo web | Pacote proprio completo; nao usa o manifesto nem sincronismo padrao |
 | Consulta de pacotes | Fluxo normal existente | Edge Function independente piloto-local, somente leitura |
 

@@ -28,9 +28,9 @@ def test_canais_tem_identidade_pastas_e_portas_distintas(canal,porta,nome):
     assert Path(resultado[5]).parents[1] == Path(resultado[2])
     assert not (ROOT/'nao-criar').exists()
 
-def test_piloto_nao_consumira_fila_nem_publicara_heartbeat_nem_instalara_release_padrao():
+def test_piloto_nao_consumira_fila_nem_instalara_release_padrao():
     tree = ast.parse((ROOT/'agent_worker.py').read_text(encoding='utf-8'))
-    nomes = {'process_queue','sync_heartbeat','sincronizar_painel','verificar_atualizacao','consultar_manifesto'}
+    nomes = {'process_queue','sincronizar_painel','verificar_atualizacao','consultar_manifesto'}
     funcoes = [n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in nomes]
     assert len(funcoes)==len(nomes)
     # Imports desses modulos sao de configuracao pura; qualquer acesso seguinte

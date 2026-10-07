@@ -39,7 +39,9 @@ if getattr(sys, 'frozen', False):
     # Redirecionar stdout/stderr para log
     _log_path = os.path.join(EXE_DIR, "agent_log.txt")
     try:
-        _log_file = open(_log_path, "w", encoding="utf-8", buffering=1)
+        from canais_newprod import pasta_local
+        from logs_estacao import instalar
+        _log_file = instalar(pasta_local() / 'gestao' / 'logs')
         sys.stdout = _log_file
         sys.stderr = _log_file
     except Exception:
