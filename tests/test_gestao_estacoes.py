@@ -146,8 +146,9 @@ def test_backup_cifrado_verificado_sintetico(tmp_path):
     from backup_gestao import executar, restaurar
     raiz=tmp_path/'estacao';raiz.mkdir();inst=tmp_path/'inst';inst.mkdir()
     (inst/'formats_db.json').write_text('{"sintetico":true}')
+    g.Historico(raiz/'gestao').evento('backup_sintetico')
     result=executar(raiz,inst,proteger=lambda t,p:{'teste':t},recuperar=lambda e,p:e['teste'])
-    assert result['verificado'] and result['arquivos']==1
+    assert result['verificado'] and result['arquivos']==2
     assert result['copia_externa_confirmada'] is False
     data=(raiz/'gestao/backups'/result['arquivo']).read_bytes()
     assert b'sintetico' not in data
@@ -155,5 +156,7 @@ def test_backup_cifrado_verificado_sintetico(tmp_path):
     r=restaurar(raiz/'gestao/backups'/result['arquivo'],raiz/'gestao/backup-chave.dpapi',destino,recuperar=lambda e,p:e['teste'])
     assert r['aplicado_na_estacao'] is False
     assert (destino/'instalacao/formats_db.json').read_text()=='{"sintetico":true}'
+    assert (destino/'bases/gestao/gestao.sqlite3').is_file()
+    assert not list((raiz/'gestao/backups').glob('backup-*'))
     with pytest.raises(ValueError,match='pasta nova'):
         restaurar(raiz/'gestao/backups'/result['arquivo'],raiz/'gestao/backup-chave.dpapi',destino)

@@ -1,5 +1,6 @@
 """Backup local cifrado de configuracao/historico, verificacao e retencao propria."""
 from datetime import datetime, timezone
+from contextlib import closing
 import base64
 import hashlib
 import json
@@ -64,7 +65,7 @@ def _executar(raiz, instalacao, *, proteger=None, recuperar=None):
             for i,p in enumerate(bases):
                 _sem_links(p)
                 copia=tmp/f'{i}.sqlite3'
-                with sqlite3.connect(p.as_uri()+'?mode=ro',uri=True) as origem_db, sqlite3.connect(copia) as alvo:
+                with closing(sqlite3.connect(p.as_uri()+'?mode=ro',uri=True)) as origem_db, closing(sqlite3.connect(copia)) as alvo:
                     origem_db.backup(alvo)
                     if alvo.execute('PRAGMA integrity_check').fetchone()[0]!='ok': raise ValueError('Base local inconsistente')
                 n='bases/'+str(p.relative_to(raiz)).replace('\\','/')
