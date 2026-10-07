@@ -27,8 +27,11 @@ Imposição e nos PDFs de capas. Multi-Artes leva o metadado por modelo.
 
 O motor anuncia `teatro_capa_descricao_atual_v1`; geração de capas de snapshots
 ERP exige essa capacidade. Isso impede que a web nova use silenciosamente
-o motor anterior, que ignora o novo metadado. Entrega web v1033, NewProd
-1.2.361 e Piloto independente 1.2.361-piloto-local.27.
+o motor anterior, que ignora o novo metadado. Entrega web v1034, NewProd
+1.2.362 e Piloto independente 1.2.362-piloto-local.28. A base integra a gestão
+das estações já instalada no Junior, preparada no PR 109, para preservar seus
+controles e a escolha do Piloto como principal. A integração pública depende
+da entrada dessa base em main antes da correção de capas.
 
 ## Validação
 
@@ -45,7 +48,8 @@ PDFs técnicos com 80 capas de mesas e 30 de plateia, sem arte e sem imprimir.
 Esses documentos comprovam rótulos e quantidades; não são a tiragem final.
 
 Validação dos dois canais por `ferramentas/conferir_duas_versoes.py`: 405
-testes aprovados e dois skips por canal, além dos harnesses e navegador.
+testes aprovados e dois skips por canal, além dos harnesses e navegador, na
+base anterior à integração da gestão. A base integrada será validada novamente.
 O aviso de depreciação Starlette e os skips existentes permanecem.
 
 ## Entrega segura e limites
