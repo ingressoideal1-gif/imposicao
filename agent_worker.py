@@ -448,7 +448,7 @@ def process_queue():
 # 30 min, nao 6h: num dia de correcao chegamos a publicar 5 versoes dentro de uma
 # unica janela de 6h, e as estacoes ficaram cegas a todas elas. O custo e baixo —
 # o manifesto tem ~300 bytes, entao sao 2 requisicoes por hora por estacao.
-INTERVALO_UPDATE_S = 60 if OFICIAL else 30 * 60
+INTERVALO_UPDATE_S = 6 * 60 * 60
 
 # O sync dos BINARIOS continua em 6h: sao ~140 MB na primeira vez e depois so o que
 # faltar.
@@ -1171,7 +1171,7 @@ def run_loop():
     from gestao_estacoes import iniciar_monitor
     iniciar_monitor()
     heartbeat_timer = 0
-    update_timer = 60   # primeira checagem 1 min apos subir
+    update_timer = INTERVALO_UPDATE_S  # primeira checagem automatica tambem apos 6h
     catalogo_timer = 10  # a LISTA antes dos binarios: e ela que diz o que baixar
     fontes_timer = 20   # sync de fontes logo no inicio
     painel_timer = 5    # painel quase de imediato: e o que o operador ve
