@@ -56,6 +56,10 @@ A consulta exige JWT validado em auth/v1/user, permissao administrativa e
 empresa conferida no servidor. Consulta paginada de 100 eventos, periodo
 de 1 a 90 dias, filtros por pedido/modelo/estacao e exportacao da pagina.
 
+Na base legada sem empresa_id, o namespace e PILOTO_LOCAL_EMPRESA do servidor,
+como no catalogo existente. Havendo empresa_id na permissao, o ID configurado
+deve coincidir; nunca aceitar a empresa declarada pelo navegador/agente.
+
 ## Recuperacao e validacao
 
 Desativar a coleta central nao interfere na impressao; conserva pendencias

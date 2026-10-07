@@ -10,10 +10,12 @@ function exigir(ok: unknown, mensagem = 'historico invalido'): asserts ok {
 }
 
 export function empresaHistorico(permissoes: any, empresa: string | undefined, empresaId: string | undefined) {
-  if (!empresa || !empresaId) throw new Recusa(503, 'empresa do historico nao configurada');
+  if (!empresa?.trim()) throw new Recusa(503, 'empresa do historico nao configurada');
   const id = permissoes?.empresa_id ?? permissoes?.id_empresa;
-  if (id != null && String(id) !== empresaId) throw new Recusa(403, 'empresa divergente');
-  return empresaId;
+  if (id != null && (!empresaId || String(id) !== empresaId)) throw new Recusa(403, 'empresa divergente');
+  // Mesmo contrato do catalogo Piloto: base legada sem coluna empresa_id usa
+  // o namespace configurado no servidor, nunca uma empresa enviada no corpo.
+  return empresaId || empresa;
 }
 
 export async function receberHistorico(corpo: any, empresa: string, consultar = banco) {

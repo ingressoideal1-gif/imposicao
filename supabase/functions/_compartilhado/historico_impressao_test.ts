@@ -32,7 +32,9 @@ Deno.test('historico: consulta por empresa, modelo e pedido no mesmo alvo, pagin
 });
 Deno.test('historico: isolamento e ausencia de configuracao falham fechados',()=>{
   assert.throws(()=>empresaHistorico({empresa_id:'outra'},'Teste','empresa'));
-  assert.throws(()=>empresaHistorico({},'Teste',undefined));
+  assert.throws(()=>empresaHistorico({},undefined,undefined));
+  assert.throws(()=>empresaHistorico({empresa_id:'empresa'},'Teste',undefined));
+  assert.equal(empresaHistorico({},'Teste',undefined),'Teste');
   assert.equal(empresaHistorico({empresa_id:'empresa'},'Teste','empresa'),'empresa');
 });
 Deno.test('historico: sessao, permissao administrativa, origem e empresa verificadas',async()=>{
