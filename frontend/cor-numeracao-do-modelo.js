@@ -190,7 +190,8 @@
         if (['FXVERSO', 'FRENTE E VERSO', 'VERSO COMUM'].includes(v)) return 'FRENTE E VERSO';
         if (v === 'VERSO FIXO') return v;
         if (['VERSO VARIÁVEL', 'VERSO VARIAVEL'].includes(v)) return 'VERSO VARIÁVEL';
-        return null;
+        // Valores ausentes ou fora do contrato comercial significam só frente.
+        return 'SÓ FRENTE';
     }
     function temVerso(valor) {
         const tipo = normalizar(valor);
@@ -220,8 +221,7 @@
         return !!categoria && !!doModo(modo) && (categoria === 'SÓ FRENTE') === (modo === 'front');
     }
     function erro(item, modo) {
-        if (!normalizar(item?.verso_tipo)) return 'Informe o tipo de impressão no Vibe e reabra o pedido.';
-        if (!compativel(item.verso_tipo, modo)) return 'Modo incompatível com o pedido (' + item.verso_tipo
+        if (!compativel(item?.verso_tipo, modo)) return 'Modo incompatível com o pedido (' + normalizar(item?.verso_tipo)
             + '). Para mudar entre só frente e com verso, altere primeiro no Vibe e reabra o pedido.';
         return '';
     }

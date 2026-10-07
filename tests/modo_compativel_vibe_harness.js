@@ -8,7 +8,19 @@ const modos=['front','duplex','duplex_unico','pdf_odd_even','pdf_duplicate_back'
 for(const categoria of ['SÓ FRENTE','FRENTE E VERSO','VERSO FIXO','VERSO VARIÁVEL']) {
  for(const modo of modos) assert.equal(V.compativel(categoria,modo),categoria==='SÓ FRENTE'?modo==='front':modo!=='front');
 }
-for(const categoria of [null,'','INDEFINIDO']) for(const modo of modos) assert.equal(V.compativel(categoria,modo),false);
+const tiposSemVersoReconhecido = [null, undefined, '', '   ', 'INDEFINIDO', 'outro tipo', 0, false];
+for(const categoria of tiposSemVersoReconhecido) {
+ assert.equal(V.normalizar(categoria),'SÓ FRENTE');
+ assert.equal(V.temVerso(categoria),false);
+ for(const modo of modos) assert.equal(V.compativel(categoria,modo),modo==='front');
+ const item={verso_tipo:categoria,verso:true,frente_verso:true};
+ assert.equal(V.modo(item,null),'front','fallback não herda booleano antigo');
+ assert.equal(V.erro(item,'front'),'','entrada sem tipo reconhecido permite só frente');
+ assert.equal(V.modo(item,{print_mode:'duplex_unico'}),'duplex_unico','modo vinculado continua sendo a fonte técnica');
+ assert.equal(item.verso_tipo,categoria,'normalização não altera o dado persistido');
+ const patch=V.payload({amostra_num_id:'frente'},{...item,amostra_num_id:'anterior'},[{id:'frente',print_mode:'front'}]);
+ assert.deepEqual(patch,{amostra_num_id:'frente'},'vínculo só frente não reescreve a categoria');
+}
 assert.equal(V.compativel('SÓ FRENTE','desconhecido'),false);
 
 function ambiente(options={}) {
@@ -32,6 +44,15 @@ function ambiente(options={}) {
 }
 (async()=>{
  const ok=ambiente();assert.equal(await ok.box.conferirModoVibeDoTrabalho('ped'),true);
+ for(const tipo of tiposSemVersoReconhecido) {
+  const s=ambiente({row:{verso_tipo:tipo},modo:'front',selected:'front'});
+  s.item.verso_tipo=tipo;
+  assert.equal(await s.box.conferirModoVibeDoTrabalho('ped','front'),true,'fallback libera geração só frente');
+  s.box.window.customNumeracaoEditState={osId:'vibe_10',itemId:1};
+  await s.box.conferirModoVibeDaNumeracao('n','front');
+  assert.equal(s.notices.length,0);
+  assert.equal(s.item.verso_tipo,tipo);
+ }
  assert.equal(await ambiente().box.conferirModoVibeDoTrabalho('ped','front'),false,'payload anterior a troca de modo bloqueado');
  const incompleta=ambiente();incompleta.box.itensDaImposicao=()=>[];
  assert.equal(await incompleta.box.conferirModoVibeDoTrabalho('ped'),false,'pedido sem modelo carregado nao e avulso');
@@ -71,12 +92,20 @@ function ambiente(options={}) {
    s.value='duplex';VersoDoModelo.limitarSelect(s,[{verso_tipo:'SÓ FRENTE'}]);
    const frente={value:s.value,permitidos:[...s.options].filter(o=>!o.disabled).map(o=>o.value)};
    VersoDoModelo.limitarSelect(s,[]);
-   return {anterior,frente,catalogo:[...s.options].every(o=>!o.disabled&&!o.hidden)};
+   const catalogo=[...s.options].every(o=>!o.disabled&&!o.hidden);
+   const fallback=[null,'','INDEFINIDO'].map(tipo=>{
+    s.value='front';const aviso=VersoDoModelo.limitarSelect(s,[{verso_tipo:tipo}]);
+    return {aviso,valido:s.checkValidity(),permitidos:[...s.options].filter(o=>!o.disabled).map(o=>o.value)};
+   });
+   return {anterior,frente,catalogo,fallback};
   });
   assert.equal(result.anterior.value,'front');assert(result.anterior.aviso);
   assert.equal(result.anterior.options[0].d,true);assert.equal(result.anterior.options[0].h,false);
   assert(result.anterior.options.slice(1).every(o=>!o.d&&!o.h));
   assert.equal(result.frente.value,'duplex');assert.deepEqual(result.frente.permitidos,['front']);assert(result.catalogo);
+  for(const fallback of result.fallback) {
+   assert.equal(fallback.aviso,'');assert.equal(fallback.valido,true);assert.deepEqual(fallback.permitidos,['front']);
+  }
  }finally{await browser.close();}
  console.log('OK: matriz 4x5; DOM real; Vibe alterado; modo e vínculo alterados; falha de rede; compartilhamento paginado; geração e salvamento.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

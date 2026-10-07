@@ -28095,9 +28095,7 @@ function camposPendentesDoModelo(item) {
     if (!presente(item.modo_impressao) && !presente(item.blocos) && !presente(fmt?.default_schema)) {
         faltam.push('Modo de impressão');
     }
-    if (!presente(num?.print_mode) && !presente(item.verso_tipo) && typeof item.frente_verso !== 'boolean') {
-        faltam.push('Frente/verso');
-    }
+    // verso_tipo ausente ou desconhecido assume só frente; não é pendência.
     const camarote = num?.tipo === 'CAMAROTE';
     const banco = !!num?.csv_data?.length || (typeof vinculoDeBancoDoModelo === 'function' && !!vinculoDeBancoDoModelo(item));
     if (camarote) {
@@ -35353,7 +35351,7 @@ function avisoModoVibeDaAmostra(item, numeracao) {
         || VersoDoModelo.compativel(item.verso_tipo, numeracao.print_mode)) return '';
     return `<div role="alert" style="margin:12px 16px 0;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:rgba(245,158,11,.12);color:#fbbf24;font-size:.85rem;line-height:1.5;">
         <strong>⚠️ Modo de impressão incompatível</strong><br>
-        Pedido no Vibe: <b>${escapeHtml(item.verso_tipo)}</b> · Numeração: <b>${escapeHtml(rotuloDoModoDeImpressao(numeracao))}</b>.<br>
+        Pedido no Vibe: <b>${escapeHtml(VersoDoModelo.normalizar(item.verso_tipo))}</b> · Numeração: <b>${escapeHtml(rotuloDoModoDeImpressao(numeracao))}</b>.<br>
         Selecione uma numeração compatível. Para mudar entre só frente e com verso, altere primeiro o pedido no Vibe e reabra-o.
     </div>`;
 }
