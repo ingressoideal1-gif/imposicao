@@ -221,6 +221,14 @@ def ambiente_impose(engine):
                 ImpositionConfig=lambda **kw: SimpleNamespace(**{'total_items': 1, **kw}), ImpositionEngine=engine)
 
 
+def test_fila_remota_vazia_nao_reinicia_ociosidade_do_backup(monkeypatch):
+    import controle_producao
+    controle=SimpleNamespace(reservar=lambda:pytest.fail('Consulta vazia nao deve reservar producao'))
+    monkeypatch.setattr(controle_producao,'controle',controle)
+    ns=dict(PILOTO=False,AGENT_ID='sintetico',_supabase_request=lambda *_:[])
+    carregar_funcao('agent_worker.py','process_queue',ns)()
+
+
 PAYLOAD = {"formato": {"name": "sintetico"}, "saida": {"name": "sintetico"},
            "numeracao": {"elements": []}, "suggested_filename": "mesmo.pdf",
            "integridade": {"version": 1, "job_id": "12345678-1234-1234-1234-123456789abc",

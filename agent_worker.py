@@ -366,13 +366,16 @@ def process_queue():
     reserva = None
     try:
         from controle_producao import controle
-        reserva = controle.reservar()
-        if reserva is None:
-            return
         path = f"print_queue?agent_id=eq.{AGENT_ID}&status=eq.pending&order=created_at.asc&limit=1"
         jobs = _supabase_request("GET", path)
         
         if not jobs:
+            return
+
+        # Consultar fila vazia nao e atividade de producao. A reserva continua
+        # obrigatoria antes da reivindicacao atomica e de qualquer envio.
+        reserva = controle.reservar()
+        if reserva is None:
             return
 
         for job in jobs:
