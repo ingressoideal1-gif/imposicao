@@ -8,10 +8,18 @@ import secrets
 import shutil
 import sqlite3
 import tempfile
+import threading
 import zipfile
 
+_mutex = threading.Lock()
 
 def executar(raiz, instalacao, *, proteger=None, recuperar=None):
+    # A agenda e o botao manual compartilham chave/destino nesta instancia.
+    with _mutex:
+        return _executar(raiz, instalacao, proteger=proteger, recuperar=recuperar)
+
+
+def _executar(raiz, instalacao, *, proteger=None, recuperar=None):
     from segredos_estacao import proteger_texto, recuperar_texto
     from persistencia_local import gravar_json_atomico
     from pacotes_locais import _sem_links
