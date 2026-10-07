@@ -243,6 +243,39 @@ async function definirStatusProposta(pedido, status) {
 //    recebe a sessao Supabase. Nenhum desses tokens segue para outro destino.
 (function () {
     const fetchOriginal = window.fetch.bind(window);
+    let conferenciaDeSessao = null;
+
+    function tokenAtualDaEstacao() {
+        try { return JSON.parse(sessionStorage.getItem('newprod_acesso_local') || 'null')?.token || ''; }
+        catch (_) { return ''; }
+    }
+
+    async function confirmarSessaoExpirada(token, caminho) {
+        if (!token || tokenAtualDaEstacao() !== token) return;
+        let expirada = caminho === '/api/local/sessao';
+        if (!expirada) {
+            // Uma ponte para a nuvem tambem pode responder 401. Somente o agente
+            // local confirma a validade da sessao; nao repetir a operacao recusada.
+            if (!conferenciaDeSessao || conferenciaDeSessao.token !== token) {
+                const controller = new AbortController();
+                const prazo = setTimeout(() => controller.abort(), 5000);
+                const consulta = { token };
+                consulta.promessa = fetchOriginal('/api/local/sessao', {
+                    headers: { 'X-NewProd-Sessao': token }, signal: controller.signal,
+                    cache: 'no-store'
+                }).then(r => r.status === 401).catch(() => false).finally(() => {
+                    clearTimeout(prazo);
+                    if (conferenciaDeSessao === consulta) conferenciaDeSessao = null;
+                });
+                conferenciaDeSessao = consulta;
+            }
+            expirada = await conferenciaDeSessao.promessa;
+        }
+        // Uma resposta atrasada de outro login nao pode encerrar a sessao nova.
+        if (expirada && tokenAtualDaEstacao() === token) {
+            window.dispatchEvent(new Event('newprod-sessao-expirada'));
+        }
+    }
 
     function eDoNossoMotor(url) {
         const u = String(url || '');
@@ -282,9 +315,10 @@ async function definirStatusProposta(pedido, status) {
                 if (!cabecalhos.has('X-NewProd-Sessao')) cabecalhos.set('X-NewProd-Sessao', sessao.token);
                 opcoes = Object.assign({}, opcoes || {}, { headers: cabecalhos });
             }
-            return fetchOriginal(entrada, opcoes).then(function (resposta) {
+            const tokenEnviado = new Headers((opcoes && opcoes.headers) || (entrada && entrada.headers) || {}).get('X-NewProd-Sessao');
+            return fetchOriginal(entrada, opcoes).then(async function (resposta) {
                 if (resposta.status === 401 && !destino.pathname.startsWith('/api/local/login')) {
-                    window.dispatchEvent(new Event('newprod-sessao-expirada'));
+                    await confirmarSessaoExpirada(tokenEnviado, destino.pathname);
                 }
                 return resposta;
             });

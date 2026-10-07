@@ -88,7 +88,10 @@ O protocolo legado nao fornece reserva atomica entre processos: a migracao
 inicial depende dessas observacoes; atualizacoes futuras no oficial usam a
 reserva de producao do proprio processo antes de instalar.
 
-O atualizador oficial consulta a cada 60 segundos, valida manifesto/URL/tamanho
+O atualizador oficial consulta a cada 6 horas, inclusive na primeira checagem
+apos iniciar; o menu permite verificar e atualizar manualmente a qualquer momento.
+A instalacao manual tambem respeita a protecao contra trabalhos em andamento.
+Valida manifesto/URL/tamanho
 e SHA-256, baixa sem redirecionamento e revalida ociosidade antes de reservar
 a instalacao. Encerra apenas PIDs conferidos pelo caminho; MSI tem log local,
 retorno registrado e reinicio com ambiente PyInstaller limpo. Falha conserva
