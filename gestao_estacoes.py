@@ -115,8 +115,8 @@ class Historico:
         with self.banco() as con:
             con.execute('INSERT OR REPLACE INTO amostras VALUES (?,?,?)', (int(time.time() // 300), agora(), json.dumps(dados)))
             # Retencao somente da telemetria; trabalhos incertos nunca sao apagados.
-            con.execute("DELETE FROM amostras WHERE quando < datetime('now','-90 days')")
-            con.execute("DELETE FROM eventos WHERE quando < datetime('now','-90 days') AND (trabalho IS NULL OR trabalho IN (SELECT id FROM trabalhos WHERE estado IN ('conferido','cancelado','falha','simulado')))")
+            con.execute("DELETE FROM amostras WHERE julianday(quando) < julianday('now','-90 days')")
+            con.execute("DELETE FROM eventos WHERE julianday(quando) < julianday('now','-90 days') AND (trabalho IS NULL OR trabalho IN (SELECT id FROM trabalhos WHERE estado IN ('conferido','cancelado','falha','simulado')))")
 
     def reconciliar(self, spool):
         # Falha de consulta nao transforma ausencia em conclusao.
@@ -146,10 +146,10 @@ class Historico:
         if type(dias) is not int or not 1 <= dias <= 90 or type(limite) is not int or not 1 <= limite <= 1000:
             raise ValueError('Periodo ou limite invalido')
         with self.banco() as con:
-            eventos = [dict(r) for r in con.execute("SELECT * FROM eventos WHERE quando >= datetime('now',?) AND seq < ? ORDER BY seq DESC LIMIT ?", (f'-{dias} days', antes or 9223372036854775807, limite))]
-            trabalhos = [dict(r) for r in con.execute("SELECT * FROM trabalhos WHERE criado >= datetime('now',?) OR estado IN ('incerto','erro_fila','pausado','envio_iniciado','enviado','na_fila','imprimindo') ORDER BY atualizado DESC LIMIT ?", (f'-{dias} days', limite))]
-            totais = [dict(r) for r in con.execute("SELECT substr(criado,1,10) dia,estado,count(*) quantidade FROM trabalhos WHERE criado >= datetime('now',?) GROUP BY dia,estado", (f'-{dias} days',))]
-            amostras = [dict(r) for r in con.execute("SELECT * FROM amostras WHERE quando >= datetime('now',?) ORDER BY minuto DESC LIMIT 288", (f'-{dias} days',))]
+            eventos = [dict(r) for r in con.execute("SELECT * FROM eventos WHERE julianday(quando) >= julianday('now',?) AND seq < ? ORDER BY seq DESC LIMIT ?", (f'-{dias} days', antes or 9223372036854775807, limite))]
+            trabalhos = [dict(r) for r in con.execute("SELECT * FROM trabalhos WHERE julianday(criado) >= julianday('now',?) OR estado IN ('incerto','erro_fila','pausado','envio_iniciado','enviado','na_fila','imprimindo') ORDER BY atualizado DESC LIMIT ?", (f'-{dias} days', limite))]
+            totais = [dict(r) for r in con.execute("SELECT substr(criado,1,10) dia,estado,count(*) quantidade FROM trabalhos WHERE julianday(criado) >= julianday('now',?) GROUP BY dia,estado", (f'-{dias} days',))]
+            amostras = [dict(r) for r in con.execute("SELECT * FROM amostras WHERE julianday(quando) >= julianday('now',?) ORDER BY minuto DESC LIMIT 288", (f'-{dias} days',))]
         for e in eventos: e['dados'] = json.loads(e['dados'])
         for a in amostras: a['dados'] = json.loads(a['dados'])
         return dict(gerado_em=agora(), dias=dias, eventos=eventos, trabalhos=trabalhos, totais=totais, amostras=amostras,
@@ -289,8 +289,8 @@ def resumo_publico():
     contagens, erros = [], None
     try:
         with historico().banco() as con:
-            contagens=[dict(r) for r in con.execute("SELECT substr(criado,1,10) dia,estado,count(*) quantidade FROM trabalhos WHERE criado >= datetime('now','-30 days') GROUP BY dia,estado")]
-            erros=con.execute("SELECT count(*) FROM eventos WHERE nivel='erro' AND quando >= datetime('now','-1 day')").fetchone()[0]
+            contagens=[dict(r) for r in con.execute("SELECT substr(criado,1,10) dia,estado,count(*) quantidade FROM trabalhos WHERE julianday(criado) >= julianday('now','-30 days') GROUP BY dia,estado")]
+            erros=con.execute("SELECT count(*) FROM eventos WHERE nivel='erro' AND julianday(quando) >= julianday('now','-1 day')").fetchone()[0]
     except (OSError, sqlite3.Error):
         # A indisponibilidade do historico nao deve ocultar a presenca da estacao.
         s['estado'] = 'historico_indisponivel'

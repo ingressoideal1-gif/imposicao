@@ -104,6 +104,18 @@ def test_heartbeat_publico_nao_inclui_logs_ou_trabalhos(historico,monkeypatch):
     assert ident not in json.dumps(r) and 'impressora privada' not in json.dumps(r)
 
 
+def test_periodo_respeita_horas_do_dia_limite(historico):
+    from datetime import datetime, timedelta, timezone
+    # Data ISO anterior ao corte, sem comparar texto com o formato SQL.
+    corte=datetime.now(timezone.utc)-timedelta(days=1)
+    antigo=corte-timedelta(minutes=1)
+    historico.evento('fora_do_periodo','erro')
+    with historico.banco() as con:
+        con.execute('UPDATE eventos SET quando=?',(antigo.isoformat(),))
+    assert g.resumo_publico()['erros_24h']==0
+    assert historico.relatorio(dias=1)['eventos']==[]
+
+
 def test_heartbeat_piloto_independente_da_fila(historico):
     from datetime import datetime, timezone
     import datetime as dt
