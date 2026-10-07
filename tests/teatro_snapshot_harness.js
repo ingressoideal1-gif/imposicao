@@ -23,7 +23,11 @@ async function conferirClienteLexical() {
     const form=new FormData();form.set('payload',JSON.stringify({schema:'cut_stack',modelo:'m1',numeracao:{tipo:'TEATRO',elements:[{type:'TEATRO_COMBO'}],csv_data:b.csv_data,teatro_modelo:b.teatro_modelo}}));
     await ctx.TeatroBanco.conferirMotor(form,'http://motor');
     assert.equal(leituras,1);assert.equal(JSON.parse(form.get('payload')).numeracao.teatro_modelo.revisao_atual,await J.revisao(atual.config));
-    caps.pop();await assert.rejects(()=>ctx.TeatroBanco.conferirMotor(form,'http://motor'),/snapshots do ERP/);
+    const capa=JSON.parse(form.get('payload'));capa.formato={has_cover:true};form.set('payload',JSON.stringify(capa));
+    caps.push('teatro_capas_fila_v1');
+    await assert.rejects(()=>ctx.TeatroBanco.conferirMotor(form,'http://motor'),/descrição editada/);
+    caps.push('teatro_capa_descricao_atual_v1');await ctx.TeatroBanco.conferirMotor(form,'http://motor');
+    caps.splice(caps.indexOf('teatro_snapshot_v1'),1);await assert.rejects(()=>ctx.TeatroBanco.conferirMotor(form,'http://motor'),/snapshots do ERP/);
 }
 async function executar() {
     const m = modelo(), copia = structuredClone(m), fonte = S.banco(m);
@@ -61,6 +65,32 @@ async function executar() {
     assert.equal(c.bancoTeatroDoModelo({...m,quantidade:4}).csv_data.length,0);
     assert.match(c.bancoTeatroDoModelo({...m,quantidade:4}).erro,/quantidade/);
     await conferirClienteLexical();
+    // ERP legado omite nomeConjunto: a capa usa o nome editado do mapa atual,
+    // enquanto CSV, lugares e snapshot permanecem históricos.
+    const legado=modelo(); delete legado.mapa_teatro_snapshot.setor.nomeConjunto;
+    const salvo=structuredClone(legado), bancoLegado=S.banco(legado);
+    const mapaEditado={id:'mapa1',config:{setores:[{id:'s1',nome:'Plateia',nomeConjunto:'  Mesa   VIP  ',cadeiras:{}}]}};
+    const numeracaoLegada={csv_data:bancoLegado.csv_data,teatro_modelo:bancoLegado.teatro_modelo};
+    await S.conferir(numeracaoLegada,async()=>mapaEditado);
+    assert.deepEqual(legado,salvo); assert.deepEqual(numeracaoLegada.csv_data,bancoLegado.csv_data);
+    assert.equal(numeracaoLegada.csv_data[0].Conjunto,'Fila');
+    assert.equal(T.capa(numeracaoLegada.csv_data,0,1,numeracaoLegada.teatro_capa).titulo,'Mesa VIP A');
+    const historico=modelo(), bancoHistorico=S.banco(historico);
+    const numHistorico={csv_data:bancoHistorico.csv_data,teatro_modelo:bancoHistorico.teatro_modelo};
+    const mapaSemDescricao={id:'mapa1',config:{setores:[{id:'s1',nome:'Plateia',cadeiras:{}}]}};
+    await S.conferir(numHistorico,async()=>mapaSemDescricao);
+    const pdfContext={window:{}};
+    vm.runInNewContext(fs.readFileSync(__dirname+'/../frontend/mapas-teatro-pdf.js','utf8'),pdfContext);
+    const planoPDF=pdfContext.window.MapasTeatroPdf.preparar(mapaSemDescricao);
+    assert.equal(numHistorico.teatro_capa.nomeConjunto,planoPDF.setores[0].nomeConjunto);
+    assert.equal(numHistorico.csv_data[0].Conjunto,'Mesa','Descricao historica dos lugares preservada');
+    const cliente={from(){return {select(){return this;},in(){return Promise.resolve({data:[mapaEditado]});}};}};
+    await S.conferirPedido([legado],cliente);
+    const previa=S.resolver({tipo:'TEATRO'},legado);
+    assert.equal(T.capa(previa.csv_data,0,1,previa.teatro_capa).titulo,'Mesa VIP A');
+    assert.deepEqual(legado.mapa_teatro_snapshot,salvo.mapa_teatro_snapshot);
+    await S.conferirPedido([legado],{from(){return {select(){return this;},in(){return Promise.reject(Error('offline'));}};}});
+    assert.equal(Object.hasOwn(legado,'_teatro_capa'),false,'Falha de consulta nao conserva descricao de outra abertura');
     console.log('OK: snapshot v1, prioridade sobre banco, etiquetas, apagadas, quantidade, revisão histórica e fonte completa');
 }
 if(process.argv.includes('--payload')) {
