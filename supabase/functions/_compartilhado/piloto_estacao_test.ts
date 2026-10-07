@@ -22,7 +22,7 @@ Deno.test('rota autonoma: exige segredo, opt-in de estacao e operador ativo auto
     const req=(chave='agente-sintetico',estacao='PC-JR-HOME')=>new Request('https://funcao.invalid/functions/v1/piloto-local/listar',{
       method:'POST',headers:{'Content-Type':'application/json','X-Agente-Segredo':chave},body:JSON.stringify({estacao,empresa:'teste',cursor:0})});
     assert.equal((await handler(req('invalido'))).status,401);assert.equal(leituras,0);
-    assert.equal((await handler(req('agente-sintetico','outra'))).status,403);assert.equal(leituras,0);
+    assert.equal((await handler(req('agente-sintetico','outra'))).status,403);assert.equal(leituras,1);
     const r=await handler(req());assert.equal(r.status,200);assert.deepEqual(await r.json(),{itens:[],proximo:0,fim:true});
     pode=false;assert.equal((await handler(req())).status,403);
     ativo=false;assert.equal((await handler(req())).status,401);

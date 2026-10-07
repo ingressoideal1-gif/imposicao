@@ -1,0 +1,32 @@
+NEWPROD PILOTO - instalacao independente 1.2.363-piloto-local.29
+
+1. Na LASER-01, entre na mesma conta Windows utilizada pelo NewProd original.
+2. Aguarde concluir a preparacao/envio de trabalhos no painel.
+3. Execute NewProdPiloto_Setup_v1.2.363.29.msi normalmente, sem trocar de usuario.
+4. Apos concluir, abra o novo atalho "NewProd Piloto" na area de trabalho.
+5. Confira o selo Piloto e a versao .29 no painel da porta 9001.
+6. Entre com o acesso habitual. Em Copia local, retome a coleta quando desejar.
+
+O instalador copia apenas configuracoes e dados protegidos da propria estacao.
+Cria uma identidade independente. Nao inclui dados ou credenciais do Junior.
+O primeiro inicio deixa a coleta pausada. O Piloto nao recebe a fila remota do
+NewProd original. A habilitacao da coleta na nuvem e especifica da estacao.
+
+O NewProd original, a porta 9000 e os trabalhos Windows permanecem intactos.
+O atalho original continua disponivel. O novo atalho abre o Piloto; os dois
+agentes podem permanecer ativos, com identidades diferentes.
+
+RECUPERACAO: feche o Piloto pelo icone da bandeja e abra o atalho original.
+Para remover o inicio automatico e atalhos do MSI, desinstale "NewProd Piloto"
+pelas Configuracoes do Windows. Configuracoes, versoes de runtime e historico
+ficam preservados em LocalAppData\NewProd Piloto; nao sao apagados pelo MSI.
+O backup inicial fica em instalacao\antes-*.dpapi.json e so pode ser recuperado
+pela mesma conta Windows. Nunca transfira esse backup como configuracao de
+outra estacao. A copia original nao foi alterada pelo instalador.
+
+Se houver outro Piloto previamente instalado, o MSI recusa a substituicao.
+Falha de preparacao cancela o MSI, sem encerrar impressoras nem alterar o
+original. Nao repetir envios de impressao para testar a instalacao.
+
+Disponibilidade do MSI nao comprova instalacao: conferir a versao local e o
+registro LASER-01 [Piloto] no gerenciamento depois de executar na estacao.

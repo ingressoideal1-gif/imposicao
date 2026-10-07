@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="NewProd Piloto" Language="1046" Codepage="65001"
+    Version="1.2.363.29" Manufacturer="Ingresso Ideal"
+    UpgradeCode="D47E72A1-416E-4416-939F-78F0B127E818">
+    <Package InstallerVersion="300" Compressed="yes" InstallScope="perUser"
+      Description="Piloto independente; preserva o NewProd original" />
+    <MediaTemplate EmbedCab="yes" />
+    <MajorUpgrade DowngradeErrorMessage="Um instalador mais recente do Piloto ja esta instalado." />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="PILOTOROOT" Name="NewProd Piloto">
+          <Directory Id="INSTALLFOLDER" Name="instalador-msi" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder"><Directory Id="PilotMenu" Name="NewProd Piloto" /></Directory>
+      <Directory Id="DesktopFolder" />
+    </Directory>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="Launcher" Guid="11D4F017-C3A1-4372-A071-CA8183FDFDF7">
+        <File Id="LauncherExe" Source="$(var.Pacote)\IniciarNewProdPiloto.exe" KeyPath="yes" />
+        <Shortcut Id="PilotDesktop" Directory="DesktopFolder" Name="NewProd Piloto"
+          Arguments="--abrir" WorkingDirectory="INSTALLFOLDER" Icon="PilotIcon" Advertise="no" />
+        <Shortcut Id="PilotStartMenu" Directory="PilotMenu" Name="NewProd Piloto"
+          Arguments="--abrir" WorkingDirectory="INSTALLFOLDER" Icon="PilotIcon" Advertise="no" />
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run"
+          Name="NewProdPilotoMSI" Value="&quot;[INSTALLFOLDER]IniciarNewProdPiloto.exe&quot; --iniciar" Type="string" />
+      </Component>
+      <Component Id="PilotPayload" Guid="44DFD6AA-1F3B-45E2-863A-C550FA6678F2">
+        <File Id="PilotExe" Source="$(var.Pacote)\NewProdPiloto.exe" KeyPath="yes" />
+        <File Id="PilotManifest" Source="$(var.Pacote)\pacote-piloto.json" />
+        <File Id="PilotInstructions" Source="$(var.Pacote)\LEIA-ME.txt" />
+      </Component>
+    </DirectoryRef>
+    <DirectoryRef Id="PilotMenu">
+      <Component Id="PilotMenuCleanup" Guid="AA27E429-808B-44CA-B377-68E151924166">
+        <RemoveFolder Id="RemovePilotMenu" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\NewProdPilotoMSI" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <!-- Copias privadas sao feitas somente na conta da estacao. Nenhum segredo integra o MSI.
+         O original nunca e encerrado, removido ou modificado. Falha aborta o MSI. -->
+    <CustomAction Id="PrepararPiloto" FileKey="LauncherExe" ExeCommand="--preparar"
+      Execute="deferred" Impersonate="yes" Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="PrepararPiloto" After="InstallFiles">NOT REMOVE~="ALL"</Custom>
+    </InstallExecuteSequence>
+    <Icon Id="PilotIcon" SourceFile="agent_icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="PilotIcon" />
+    <UIRef Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+    <Feature Id="MainFeature" Title="NewProd Piloto" Level="1">
+      <ComponentRef Id="Launcher" /><ComponentRef Id="PilotPayload" /><ComponentRef Id="PilotMenuCleanup" />
+    </Feature>
+  </Product>
+</Wix>
