@@ -6465,7 +6465,8 @@ async function executarPedImposition(mode, isRefazer) {
     // tiragem inteira — e o motor deriva daqui também os nomes `_setN_02_miolo`.
     const baseFilename = modeloNum ? modeloNum : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}`;
     const faceDoTrabalho = folha1 ? folha1.face : faceDeImpressaoDoPedido();
-    const opcoesDeFace = { apenasUmaFace: faceDoTrabalho !== 'both' };
+    const opcoesDeFace = { apenasUmaFace: faceDoTrabalho !== 'both',
+        historicoContexto: mode === 'print' ? contextoHistoricoImpressao(isRefazer || folha1 ? [state.activeOSItem].filter(Boolean) : alvosDoTrabalho, isRefazer) : null };
     const sufixoFace = faceDoTrabalho === 'both' ? '' : faceDoTrabalho === 'front' ? '_frente' : '_verso';
     const defaultFilename = `${baseFilename}${refazer.sufixo || ''}${sufixoFace}.pdf`;
 

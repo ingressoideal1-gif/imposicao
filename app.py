@@ -2203,6 +2203,7 @@ async def hotfolder_drop(
     file: UploadFile = File(...),
     folder: str = Form(...),
     sha256: str | None = Form(None),
+    historico_contexto: str | None = Form(None),
 ):
     """Grava o PDF na pasta observada. So aceita pasta ja registrada."""
     if not db.hot_folder_registrada(folder):
@@ -2215,8 +2216,9 @@ async def hotfolder_drop(
         if isinstance(sha256, str):
             from integridade_impressao import validar_pdf_para_entrega
             validar_pdf_para_entrega(dados, sha256)
+        contexto = json.loads(historico_contexto) if isinstance(historico_contexto, str) else None
         caminho = hotfolder.soltar(folder, file.filename or "impressao.pdf", dados,
-                                   metodo=db.metodo_hot_folder(folder))
+                                   metodo=db.metodo_hot_folder(folder), contexto=contexto)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"ok": True, "path": caminho}

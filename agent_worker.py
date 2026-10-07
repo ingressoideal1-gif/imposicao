@@ -327,7 +327,7 @@ def titulo_do_job(file_url, job_id):
     return f"Job {job_id[:8]}"
 
 
-def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
+def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str, contexto=None):
     """Larga o PDF baixado numa pasta observada pelo RIP. (sucesso, mensagem).
 
     A lista branca vale aqui tambem, e nao e formalidade: no relay o caminho vem
@@ -341,7 +341,7 @@ def _soltar_no_hot_folder(pasta: str, nome: str, pdf_path: str):
         with open(pdf_path, "rb") as f:
             dados = f.read()
         destino = hotfolder.soltar(pasta, nome, dados,
-                                   metodo=db.metodo_hot_folder(pasta))
+                                   metodo=db.metodo_hot_folder(pasta), contexto=contexto)
 
         # O Edge Print importa e remove o arquivo. Sobrando arquivo, o watcher
         # provavelmente nao esta rodando. Pelo relay nao ha ninguem olhando a
@@ -424,7 +424,7 @@ def process_queue():
                 pasta = (ppd_options or {}).get("hot_folder_path") if isinstance(ppd_options, dict) else None
                 if pasta:
                     success, msg = _soltar_no_hot_folder(
-                        pasta, titulo_do_job(file_url, job_id), temp_pdf.name)
+                        pasta, titulo_do_job(file_url, job_id), temp_pdf.name, ppd_options.get('historico_contexto'))
                 else:
                     # Chamar diretamente a impressão via Windows GDI com as opções enviadas
                     success, msg = print_service.send_print_job_windows(

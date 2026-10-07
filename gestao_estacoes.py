@@ -53,6 +53,8 @@ class Historico:
             con.execute('CREATE TABLE IF NOT EXISTS amostras (minuto INTEGER PRIMARY KEY, quando TEXT NOT NULL, dados TEXT NOT NULL)')
             con.execute('CREATE TABLE IF NOT EXISTS controles (nome TEXT PRIMARY KEY, dados TEXT NOT NULL)')
             con.execute('CREATE TABLE IF NOT EXISTS requisicoes (chave TEXT PRIMARY KEY, trabalho TEXT NOT NULL UNIQUE)')
+            from historico_impressao import preparar
+            preparar(con)
             yield con
             con.commit()
         except BaseException:
@@ -66,10 +68,12 @@ class Historico:
         permitidos = {'tipo', 'etapa', 'quantidade', 'bytes', 'estado', 'operador', 'spool_id', 'motivo'}
         dados = {k: texto_seguro(v) if isinstance(v, str) else v for k, v in dados.items() if k in permitidos}
         with self.banco() as con:
-            con.execute('INSERT INTO eventos(quando,nivel,codigo,trabalho,dados) VALUES (?,?,?,?,?)',
+            con.execute("INSERT INTO eventos(seq,quando,nivel,codigo,trabalho,dados) SELECT MAX(COALESCE((SELECT MAX(seq) FROM eventos),0),COALESCE((SELECT CAST(dados AS INTEGER) FROM controles WHERE nome='historico_cursor'),0))+1,?,?,?,?,?",
                         (agora(), nivel, codigo[:100], trabalho, json.dumps(dados)))
 
-    def iniciar(self, impressora, origem, digest=None, chave=None):
+    def iniciar(self, impressora, origem, digest=None, chave=None, contexto=None):
+        from historico_impressao import contexto_validado
+        contexto = contexto_validado(contexto)
         if chave is not None and (not isinstance(chave,str) or not re.fullmatch('[a-zA-Z0-9_-]{16,100}',chave)):
             raise ValueError('Identificador de tentativa invalido')
         ident = str(uuid.uuid4())
@@ -83,6 +87,7 @@ class Historico:
             con.execute('INSERT INTO trabalhos VALUES (?,?,?,?,?,?,?,?,?,?)',
                         (ident, agora(), agora(), 'preparado', impressora[:256], None, origem[:40], digest, None, None))
             if chave: con.execute('INSERT INTO requisicoes VALUES (?,?)',(chave,ident))
+            con.execute('INSERT INTO contexto_impressao VALUES (?,?)', (ident, json.dumps(contexto)))
         self.evento('trabalho_preparado', trabalho=ident)
         return ident
 
@@ -90,14 +95,17 @@ class Historico:
         if estado not in {'preparado','envio_iniciado','enviado','na_fila','imprimindo','erro_fila','pausado','incerto','conferido','cancelado','falha','simulado','consumido_rip'}:
             raise ValueError('Estado invalido')
         with self.banco() as con:
-            row = con.execute('SELECT estado FROM trabalhos WHERE id=?', (ident,)).fetchone()
+            row = con.execute('SELECT estado,spool_id,paginas FROM trabalhos WHERE id=?', (ident,)).fetchone()
             if not row: raise ValueError('Trabalho inexistente')
             if row['estado'] in {'conferido','cancelado','falha','simulado'}:
+                return
+            if row['estado'] == estado and (spool_id is None or row['spool_id'] == spool_id) and (paginas is None or row['paginas'] == paginas) and not erro:
                 return
             con.execute('UPDATE trabalhos SET estado=?,atualizado=?,spool_id=COALESCE(?,spool_id),paginas=COALESCE(?,paginas),erro=? WHERE id=?',
                         (estado, agora(), spool_id, paginas, texto_seguro(erro) if erro else None, ident))
         if row['estado'] != estado:
-            self.evento('trabalho_' + estado, 'erro' if estado in {'falha','erro_fila','incerto'} else 'info', trabalho=ident, spool_id=spool_id)
+            self.evento('trabalho_' + estado, 'erro' if estado in {'falha','erro_fila','incerto'} else 'info', trabalho=ident, spool_id=spool_id,
+                        motivo=texto_seguro(erro) if erro else None)
 
     def recuperar(self):
         with self.banco() as con:
@@ -116,7 +124,7 @@ class Historico:
             con.execute('INSERT OR REPLACE INTO amostras VALUES (?,?,?)', (int(time.time() // 300), agora(), json.dumps(dados)))
             # Retencao somente da telemetria; trabalhos incertos nunca sao apagados.
             con.execute("DELETE FROM amostras WHERE julianday(quando) < julianday('now','-90 days')")
-            con.execute("DELETE FROM eventos WHERE julianday(quando) < julianday('now','-90 days') AND (trabalho IS NULL OR trabalho IN (SELECT id FROM trabalhos WHERE estado IN ('conferido','cancelado','falha','simulado')))")
+            con.execute("DELETE FROM eventos WHERE julianday(quando) < julianday('now','-90 days') AND (trabalho IS NULL OR (seq <= COALESCE((SELECT CAST(dados AS INTEGER) FROM controles WHERE nome='historico_cursor'),0) AND trabalho IN (SELECT id FROM trabalhos WHERE estado IN ('conferido','cancelado','falha','simulado'))))")
 
     def reconciliar(self, spool):
         # Falha de consulta nao transforma ausencia em conclusao.
@@ -294,6 +302,8 @@ def iniciar_monitor():
                 time.sleep(5)
         _thread = threading.Thread(target=ciclo, daemon=True, name='GestaoEstacoes')
         _thread.start()
+    from historico_impressao import iniciar
+    iniciar(historico())
 
 
 def resumo_publico():
@@ -302,11 +312,12 @@ def resumo_publico():
     spool = s.get('spool', {})
     estados = {}
     for j in spool.get('trabalhos', []): estados[j['estado']] = estados.get(j['estado'], 0) + 1
-    contagens, erros = [], None
+    contagens, erros, sincronizacao = [], None, None
     try:
         with historico().banco() as con:
             contagens=[dict(r) for r in con.execute("SELECT substr(criado,1,10) dia,estado,count(*) quantidade FROM trabalhos WHERE julianday(criado) >= julianday('now','-30 days') GROUP BY dia,estado")]
             erros=con.execute("SELECT count(*) FROM eventos WHERE nivel='erro' AND julianday(quando) >= julianday('now','-1 day')").fetchone()[0]
+        sincronizacao = historico().controle('historico_sync')
     except (OSError, sqlite3.Error):
         # A indisponibilidade do historico nao deve ocultar a presenca da estacao.
         s['estado'] = 'historico_indisponivel'
@@ -314,13 +325,14 @@ def resumo_publico():
     if backup: backup={k:backup.get(k) for k in ('quando','verificado','arquivos','bytes','copia_externa_confirmada')}
     return dict(schema=2, estado=s['estado'], coletado_em=s.get('coletado_em'), painel=s.get('painel'),
                 fila_disponivel=spool.get('disponivel', False), fila=estados,
-                erros_24h=erros, totais_30d=contagens, backup=backup, manutencao=s.get('manutencao'))
+                erros_24h=erros, totais_30d=contagens, backup=backup, manutencao=s.get('manutencao'),
+                historico_central=sincronizacao)
 
 
 @contextmanager
-def acompanhar_envio(impressora, origem='local', digest=None, chave=None):
+def acompanhar_envio(impressora, origem='local', digest=None, chave=None, contexto=None):
     h = historico()
-    ident = h.iniciar(impressora, origem, digest, chave)
+    ident = h.iniciar(impressora, origem, digest, chave, contexto)
     _contexto.trabalho = ident
     _contexto.spool_iniciado = False
     h.transicao(ident, 'envio_iniciado')

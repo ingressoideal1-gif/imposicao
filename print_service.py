@@ -836,7 +836,7 @@ def send_print_job_windows(printer_name, pdf_path, options, job_title="impressao
     if gestao._thread is None:
         return _send_print_job_windows(printer_name, pdf_path, options, job_title)
     try:
-        with gestao.acompanhar_envio(printer_name, 'windows', options.get('integridade_sha256'), options.get('gestao_envio_id')) as ident:
+        with gestao.acompanhar_envio(printer_name, 'windows', options.get('integridade_sha256'), options.get('gestao_envio_id'), options.get('historico_contexto')) as ident:
             ok, msg = _send_print_job_windows(printer_name, pdf_path, options, job_title)
             estado = ('enviado' if HAS_WIN32 else 'simulado') if ok else ('falha' if gestao.envio_pode_repetir() else 'incerto')
             gestao.historico().transicao(ident, estado, erro=None if ok else 'Falha no envio; confira a fila e os logs locais.')
