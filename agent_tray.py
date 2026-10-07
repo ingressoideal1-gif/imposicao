@@ -9,6 +9,13 @@ import webbrowser
 import socket
 import time
 
+if len(sys.argv) == 4 and sys.argv[1] == '--restaurar-gestao':
+    from pathlib import Path
+    from canais_newprod import pasta_local
+    from backup_gestao import restaurar
+    restaurar(sys.argv[2], pasta_local() / 'gestao' / 'backup-chave.dpapi', sys.argv[3])
+    sys.exit(0)
+
 if len(sys.argv) == 3 and sys.argv[1] == '--preparar-upgrade':
     from migracao_estacao import executar_upgrade
     sys.exit(executar_upgrade(sys.argv[2]))

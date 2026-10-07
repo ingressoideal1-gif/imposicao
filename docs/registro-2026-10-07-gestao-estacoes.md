@@ -38,6 +38,9 @@ Este registro distingue implementacao de comprovacao de instalacao/publicacao.
 - Backup diario local de configuracoes e SQLite apos cinco minutos ociosos,
   cifra, snapshots SQLite e ensaio de leitura/hash. Backup manual disponivel.
   A chave DPAPI exige a mesma conta Windows; nao substitui backup portatil.
+  Recuperacao: `NewProd.exe --restaurar-gestao arquivo.iib pasta-nova` (ou
+  `NewProdPiloto.exe` no Piloto), sob a conta original. Confere cifra, inventario,
+  caminhos e hashes antes de extrair; nao aplica sobre o runtime existente.
 - Exportacao JSON/CSV, totais diarios por estado, eventos paginados, periodo
   1/7/30/90 dias. A consulta limita trabalhos a 500 (API ate 1000), metricas
   a 288 amostras e eventos por pagina. Registros de trabalho ficam persistidos;

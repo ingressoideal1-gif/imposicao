@@ -38,7 +38,7 @@ def _executar(raiz, instalacao, *, proteger=None, recuperar=None):
     if len(chave)!=32: raise ValueError('Chave invalida')
     fontes={}
     for origem, prefixo in ((raiz,'canal'),(instalacao,'instalacao')):
-        for nome in ('formats_db.json','acessos_locais.json','agent_config.json','versao-ativa.json','iniciar-piloto.ps1','token-local.dpapi'):
+        for nome in ('formats_db.json','acessos_locais.json','print_configs.json','hot_folders.json','agent_config.json','versao-ativa.json','iniciar-piloto.ps1','token-local.dpapi'):
             p=origem/nome
             if p.is_file(): fontes[prefixo+'/'+nome]=p
     # Bases SQLite recebem snapshot consistente pela API backup, nunca copia WAL parcial.
@@ -80,3 +80,38 @@ def _executar(raiz, instalacao, *, proteger=None, recuperar=None):
                 bytes=destino.stat().st_size,sha256=sha256(destino),arquivo=destino.name,
                 copia_externa_confirmada=False,escopo='Configuracoes e SQLite; nao inclui PDFs, pools QR, executavel ou banco da nuvem.',
                 recuperacao='Exige backup-chave.dpapi e a mesma conta Windows. Backup portatil completo e separado.')
+
+
+def restaurar(arquivo, chave_path, destino, *, recuperar=None):
+    """Extrai para pasta NOVA; nunca aplica configuracao sobre uma estacao viva."""
+    from pathlib import PurePosixPath
+    from segredos_estacao import recuperar_texto
+    from ferramentas.backup_portatil import decifrar
+    from pacotes_locais import _sem_links
+    destino=Path(destino).absolute()
+    _sem_links(destino)
+    if destino.exists(): raise ValueError('A recuperacao exige pasta nova')
+    recuperar=recuperar or recuperar_texto
+    chave=base64.b64decode(recuperar(json.loads(Path(chave_path).read_text(encoding='utf-8')),'backup-gestao'),validate=True)
+    destino.mkdir(parents=False)
+    # A pasta de ensaio fica na mesma area privada escolhida pelo operador.
+    with tempfile.TemporaryDirectory(prefix='ensaio-',dir=destino) as tmp:
+        claro=Path(tmp)/'runtime.zip'
+        decifrar(arquivo,claro,chave)
+        with zipfile.ZipFile(claro) as z:
+            if z.testzip() is not None: raise ValueError('Arquivo corrompido')
+            inventario=json.loads(z.read('inventario.json'))
+            if not isinstance(inventario,dict): raise ValueError('Inventario invalido')
+            if len(z.namelist())!=len(set(z.namelist())) or set(z.namelist())!=set(inventario)|{'inventario.json'}:
+                raise ValueError('Entradas inesperadas')
+            for nome,digest in inventario.items():
+                p=PurePosixPath(nome)
+                if p.is_absolute() or '..' in p.parts or '\\' in nome or ':' in nome or not p.parts or p.parts[0] not in ('canal','instalacao','bases'):
+                    raise ValueError('Caminho invalido no backup')
+                if hashlib.sha256(z.read(nome)).hexdigest()!=digest: raise ValueError('Hash divergente')
+            for nome in inventario:
+                alvo=destino.joinpath(*PurePosixPath(nome).parts)
+                _sem_links(alvo)
+                alvo.parent.mkdir(parents=True,exist_ok=True)
+                with alvo.open('xb') as f: f.write(z.read(nome))
+    return {'arquivos':len(inventario),'destino':str(destino),'aplicado_na_estacao':False}
