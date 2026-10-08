@@ -143,6 +143,13 @@
             </div>
 
             <div style="flex-grow: 1;"></div>
+            <section aria-label="Atualização do NewProd" style="padding:12px 0;border-top:1px solid var(--border);">
+                <strong style="font-size:0.85rem;">NewProd desta estação</strong>
+                <button type="button" class="btn btn-ghost btn-sm btn-full" data-newprod-update onclick="verificarAtualizacaoAgente()">Verificar atualização</button>
+                <button type="button" class="btn btn-primary btn-sm btn-full" data-newprod-update onclick="verificarAtualizacaoAgente(true)">Atualizar agora</button>
+                <p id="newprod-update-status" role="status" aria-live="polite" style="font-size:0.75rem;margin:8px 0;">Atualize manualmente a qualquer momento. A verificação automática ocorre a cada 6 horas.</p>
+                <a href="http://127.0.0.1:9001/app/" style="font-size:0.75rem;">Abrir painel desta estação</a>
+            </section>
             <div class="user-profile-bar" id="user-profile-bar" style="margin-top:auto; padding: 12px 0; border-top: 1px solid var(--border); display:none;">
                 <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="user-email-display">—</div>
                 <button class="btn btn-ghost btn-sm btn-full btn-danger" onclick="handleSignOut()" style="padding: 4px 8px; font-size: 0.75rem;">🚪 Sair</button>
@@ -2178,7 +2185,7 @@
     <script src="/mapa-teatro-do-pedido.js?v=1034"></script>
     <script src="/csv-editor.js?v=954"></script>
     <script src="/pedido-colunas.js?v=982"></script>
-    <script src="/script.js?v=1037-historico1"></script>
+    <script src="/script.js?v=1039"></script>
     <script src="/acesso-estacao.js?v=1010"></script>
     <script src="/dashboard-arte.js?v=978"></script>
     <script src="/criador-arte.js?v=964"></script>
