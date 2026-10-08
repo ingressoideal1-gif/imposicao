@@ -113,20 +113,20 @@ function extrair(nome, async = false) {
         await page.waitForSelector('#modal-email-sucesso[open]');
         assert.equal(await page.$eval('#modal-email-sucesso-destinatario', e=>e.textContent),'cliente@example.com');
         assert.equal(await page.evaluate(() => retornos.length),0,'Aguarda confirmação do operador');
-        await page.evaluate(() => { opcoes.erroStatus = true; });
-        await page.click('#modal-email-sucesso button');
-        await page.waitForFunction(() => retornos.length === 1);
-        assert.equal(await page.evaluate(() => state.amostrasOSAtivo),'vibe_11','Falha mantém pedido aberto');
-        assert.match(await page.$eval('#modal-email-sucesso', e=>e.textContent),/e-mail já foi enviado/);
-        await page.evaluate(() => { opcoes.erroStatus = false; });
         await page.click('#modal-email-sucesso button');
         await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
-        assert.equal(await page.evaluate(() => state.amostrasOSAtivo),null,'Confirmação devolve ao Atendimento');
-        assert.deepEqual(await page.evaluate(() => retornos),[{osId:'vibe_11',numero:11},{osId:'vibe_11',numero:11}]);
-        assert.equal(await page.evaluate(() => envios.length),1,'Repetir o retorno não reenvia e-mail');
+        assert.equal(await page.evaluate(() => state.amostrasOSAtivo),null,'Confirmação fecha o pedido');
+        assert.deepEqual(await page.evaluate(() => gravacoes),[],'Envio e confirmação não gravam status');
+        assert.deepEqual(await page.evaluate(() => retornos),[],'Confirmação não prepara registro de arte');
+        assert.equal(await page.evaluate(() => envios.length),1);
         assert.deepEqual(await page.evaluate(() => classificarPedidoNaArte(state.ordens[0])),
-            {statusCalculado:'Em Aprovação',fila:'aprovacao'},'Classificação real muda imediatamente de card/status');
-        assert.equal(await page.evaluate(() => state.linksClienteData.vibe_11.cliente_abriu_em),undefined,'Envio não inventa acesso do cliente');
+            {statusCalculado:'Enviar Arte',fila:'aprovacao'},'Sem interação permanece Enviar Arte');
+        await page.evaluate(() => {
+            state.linksClienteData = {vibe_11:{cliente_abriu_em:'2026-10-08T12:00:00Z'}};
+        });
+        assert.deepEqual(await page.evaluate(() => classificarPedidoNaArte(state.ordens[0])),
+            {statusCalculado:'Em Aprovação',fila:'aprovacao'},'Visualização do cliente muda o status');
+        await page.evaluate(() => { state.linksClienteData = {}; });
         await page.evaluate(() => { state.amostrasOSAtivo = 'vibe_11'; });
         await page.evaluate(() => gerarLinkClienteBanner());
         assert.equal(await page.evaluate(() => envios.length),1,'Novo clique após aceite não duplica mensagem');
@@ -163,6 +163,7 @@ function extrair(nome, async = false) {
         await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
         assert.equal(await page.evaluate(() => state.amostrasOSAtivo),'vibe_99','Retorno do envio não fecha outro pedido');
         assert.equal(await page.evaluate(() => fechamentos),1);
+        assert.deepEqual(await page.evaluate(() => gravacoes),[],'Escape também não grava status');
         assert.equal(await page.evaluate(() => envios.length),3,'Escape conclui sem reenviar');
         assert.deepEqual(erros,[]);
         console.log('OK: banner envia sem editor; sucesso após aceite, duplicidade, cadastro inválido, preparo e falha');
