@@ -43363,7 +43363,7 @@ async function gerarLinkClienteBanner() {
             const mensagem = montarMensagemEmailCliente(activeOSId, osNum, linkUrl, cliente);
             await enviarMensagemEmailCliente({ os_id: activeOSId, link_url: linkUrl,
                 to: mensagem.clienteEmail, subject: mensagem.subject, body_text: mensagem.bodyText }, botao,
-                () => concluirEnvioLinkParaAtendimento(activeOSId, osNum));
+                () => concluirEnvioLinkParaAtendimento(activeOSId));
         } finally {
             if (botao) botao.textContent = textoOriginal;
         }
@@ -43371,47 +43371,9 @@ async function gerarLinkClienteBanner() {
 }
 window.gerarLinkClienteBanner = gerarLinkClienteBanner;
 
-// O envio já foi aceito. Repetir esta etapa nunca dispara outro e-mail nem
-// prepara novamente a arte (o retorno manual prepara e marca "Enviar Arte").
-async function concluirEnvioLinkParaAtendimento(osId, numero) {
-    const numInt = Number(numero);
-    const novoStatus = 'Em Aprovação';
-    if (!osId || !Number.isInteger(numInt) || numInt <= 0) throw new Error('Pedido inválido para retornar ao atendimento.');
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Supabase não configurado.');
-    if (!await garantirLinhaDePedidoArte(numInt)) throw new Error('Não foi possível preparar o registro da arte.');
-
-    const { data: links, error: erroLink } = await supabaseClient.from('pedidos_links_cliente')
-        .update({ status_arte: novoStatus }).eq('os_id', osId).eq('ativo', true)
-        .select('id, os_id, status_arte');
-    if (erroLink) throw erroLink;
-    if (!Array.isArray(links) || links.length !== 1 || links[0].os_id !== osId || links[0].status_arte !== novoStatus) {
-        throw new Error('O banco não confirmou o status no link do pedido.');
-    }
-    if (!osId.startsWith('vibe_')) {
-        const { data, error } = await supabaseClient.from('producao_ordens_servico')
-            .update({ status: novoStatus }).eq('id', osId).select('id, status');
-        if (error) throw error;
-        if (!Array.isArray(data) || data.length !== 1 || data[0].id !== osId || data[0].status !== novoStatus) {
-            throw new Error('O banco não confirmou o status da ordem de serviço.');
-        }
-    }
-    const artes = await atualizarPedidoArteConfirmado(numInt, { status: novoStatus });
-    const linkPersistido = await buscarLinkClienteAtivo(osId);
-    if (!linkPersistido || linkPersistido.status_arte !== novoStatus) {
-        throw new Error('Não foi possível conferir o status salvo no link do pedido.');
-    }
-
-    // A classificação usa todasArtes antes do status da OS: atualizar ambos
-    // evita manter o card antigo até o próximo carregamento da lista.
-    const anteriores = state.todasArtes || [];
-    state.todasArtes = anteriores.filter(arte => Number(arte.id_int) !== numInt)
-        .concat(artes.map(arte => ({ ...anteriores.find(anterior => anterior.id === arte.id), ...arte, id_int: numInt })));
-    if (!state.linksClienteData) state.linksClienteData = {};
-    state.linksClienteData[osId] = linkPersistido;
-    const os = typeof findOSInState === 'function' ? findOSInState(osId) : state.ordens?.find(o => o.id === osId);
-    if (os) { os.status = novoStatus; os.status_calculado = novoStatus; }
-    gravarStatusOverride(osId, novoStatus);
-
+// Confirmar o envio apenas fecha o pedido. "Em Aprovação" depende da
+// abertura e interação do cliente no portal, registradas por link_cliente_visto.
+async function concluirEnvioLinkParaAtendimento(osId) {
     // O envio pode terminar depois de o operador abrir outro pedido.
     if (state.amostrasOSAtivo === osId) clearAmostrasOS();
 }
