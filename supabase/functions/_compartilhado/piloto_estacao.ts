@@ -5,12 +5,17 @@ import { listarPiloto } from './piloto_catalogo.ts';
 import { banco } from './banco.ts';
 import { conferirPedidoPiloto } from './piloto_pedido.ts';
 
+// Windows preserva a grafia do hostname, mas sua identidade nao depende da caixa.
+function mesmaEstacao(a: unknown, b: string): boolean {
+  return typeof a === 'string' && a.toUpperCase() === b.toUpperCase();
+}
+
 export async function conferirVinculoPiloto(operador: Record<string, unknown>, estacao: string,
   empresa: string | undefined, consultar = banco): Promise<Record<string, unknown>> {
   const id = operador.piloto_usuario_id;
   if (id === undefined) return operador; // Operadores existentes sem vínculo explícito.
   if (typeof id !== 'string' || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)
-      || operador.piloto_estacao !== estacao || !empresa || operador.piloto_empresa !== empresa) {
+      || !mesmaEstacao(operador.piloto_estacao, estacao) || !empresa || operador.piloto_empresa !== empresa) {
     throw new Recusa(403, 'vinculo do piloto divergente');
   }
   let rows;
@@ -70,17 +75,17 @@ export async function operadorDaEstacaoPiloto(estacao: unknown, legada: string, 
   if (typeof estacao !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(estacao)) {
     throw new Recusa(403, 'estacao fora do piloto');
   }
-  if (estacao === legada) return await operadorLocalPropostas(codigo, consultar);
+  if (mesmaEstacao(estacao, legada)) return await operadorLocalPropostas(codigo, consultar);
   let rows;
   try {
     rows = await consultar('GET', 'imposition_acessos_locais?ativo=eq.true'
-      + `&permissoes->>piloto_estacao=eq.${encodeURIComponent(estacao)}`
+      + `&permissoes->>piloto_estacao=ilike.${encodeURIComponent(estacao.replaceAll('_', '\\_'))}`
       + '&permissoes->>piloto_instalacao_autorizada=eq.true&select=role,permissoes&limit=2');
   } catch { throw new Recusa(503, 'habilitacao da estacao indisponivel'); }
   if (!Array.isArray(rows) || rows.length !== 1) throw new Recusa(403, 'estacao fora do piloto');
   const p = rows[0].permissoes;
   if (!p || typeof p !== 'object' || Array.isArray(p) || p.piloto_instalacao_autorizada !== true
-      || p.piloto_estacao !== estacao || typeof p.piloto_usuario_id !== 'string'
+      || !mesmaEstacao(p.piloto_estacao, estacao) || typeof p.piloto_usuario_id !== 'string'
       || p.perm_producao_view !== true || p.perm_imprimir !== true) {
     throw new Recusa(403, 'vinculo da estacao invalido');
   }
