@@ -104,6 +104,29 @@ async function casos() {
             'manifesto corresponde aos arquivos enviados, sem verso separado');
         ok(c.modelo.verso_arte_url.endsWith('/back'), 'preserva cadastro do verso anterior');
     }
+    for (const residual of [false, true]) {
+        const c = montar({ modo: 'pdf_odd_even' });
+        const entrada = JSON.parse(c.fd.get('payload'));
+        entrada.print_mode = 'duplex';
+        entrada.schema = 'pdf_multiple';
+        entrada.pdf_expected_items = 3;
+        c.fd.set('payload', JSON.stringify(entrada));
+        if (residual) c.fd.set('file_verso', arte, 'verso-residual.pdf');
+        const baixar = globalThis.fetch;
+        globalThis.fetch = async url => {
+            if (url.endsWith('/back')) throw new Error('PDF em pares não deve baixar verso separado');
+            return baixar(url);
+        };
+        await c.executar();
+        const p = JSON.parse(c.fd.get('payload'));
+        ok(c.fd.has('file') && !c.fd.has('file_verso'), 'PDF em pares envia somente o original');
+        ok(p.integridade.faces[0].front && !p.integridade.faces[0].back,
+            'manifesto dos pares não inclui upload de verso');
+        ok(!p.integridade.arquivos.file_verso, 'hashes não incluem verso descartado');
+        ok(p.print_mode === 'duplex' && p.numeracao.print_mode === 'pdf_odd_even',
+            'preserva modo técnico e impressão das duas faces');
+        ok(c.modelo.verso_arte_url.endsWith('/back'), 'preserva verso histórico no cadastro');
+    }
     {
         const c = montar({ frente: null, numeracao: false });
         c.fd.set('file', arte, 'residual.pdf'); await c.executar();

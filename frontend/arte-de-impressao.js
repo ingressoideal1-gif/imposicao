@@ -374,9 +374,11 @@
                     const esperada = (estado.numeracoes || []).find(n => String(n.id) === String(enviada.id));
                     conferirNumeracaoEnviada(esperada, enviada);
                 }
-                // Neste modo o verso usa a própria arte da frente. Um original
-                // antigo de verso não pode voltar ao payload na conferência.
-                if (dados.print_mode === 'pdf_duplicate_back') {
+                // Estes modos usam o mesmo PDF para as duas faces. No modo
+                // ímpar/par, print_mode é duplex; a numeração identifica os pares.
+                // Um verso antigo não pode voltar ao payload na conferência.
+                if (dados.print_mode === 'pdf_duplicate_back'
+                    || alvo.numeracao?.print_mode === 'pdf_odd_even') {
                     urlVerso = null;
                     fd.delete(verso);
                 }
