@@ -40,11 +40,11 @@ function context(origin, localToken='token-local-sintetico', bearer='jwt-sinteti
     };
     for(const origin of ['http://127.0.0.1:9001','http://localhost:9001']) {
         const calls=[],notices=[],footer={style:{}},w={location:new URL(origin)};
-        const pilot={window:w,URL,AbortController,setTimeout:()=>1,clearTimeout:()=>{},
-            document:{getElementById:()=>footer},toast:m=>notices.push(m),
+        const pilot={window:w,URL,AbortController,AbortSignal,atualizacaoManualEmAndamento:false,setTimeout:()=>1,clearTimeout:()=>{},
+            document:{getElementById:()=>footer,querySelectorAll:()=>[]},toast:m=>notices.push(m),
             getEstacaoEscolhida:()=>assert.fail('Piloto nao usa estacao de producao salva'),
             _agentIdLocalCache:null,_agentIdLocalEm:0,
-            fetch:async url=>{calls.push(url);return {ok:true,json:async()=>({version:'NewProd 1.2.356-piloto-local.17',agent_id:'piloto-sintetico',onde:'local'})};}};
+            fetch:async url=>{calls.push(url);return {ok:true,json:async()=>({version:'NewProd 1.2.356-piloto-local.17',agent_id:'piloto-sintetico',onde:'local',canal:'piloto',produto_oficial:false})};}};
         vm.createContext(pilot);
         vm.runInContext(base+['showAgentUpdateWarning','_baseDoAgenteAgora','atualizarVersaoAgenteRodape','descobrirAgentIdLocal','verificarAtualizacaoAgente'].map(extract).join('\n'),pilot);
         pilot.showAgentUpdateWarning('http://127.0.0.1:9000','99.0');
@@ -54,8 +54,8 @@ function context(origin, localToken='token-local-sintetico', bearer='jwt-sinteti
         assert.equal(await pilot.descobrirAgentIdLocal(),'piloto-sintetico');
         await pilot.verificarAtualizacaoAgente(false);
         await pilot.verificarAtualizacaoAgente(true);
-        assert(notices.every(m=>m.includes('pacote próprio')));
-        assert.equal(notices.length,2);
+        assert.equal(notices.filter(m=>m.includes('precisa migrar')).length,2);
+        assert.equal(notices.length,4);
         assert(calls.every(u=>u===origin+'/api/status'));
     }
     const local=context('http://127.0.0.1:9000/');

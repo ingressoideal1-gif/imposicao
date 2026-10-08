@@ -48323,55 +48323,59 @@ async function descobrirAgentIdLocal() {
     return null;
 }
 
-// ──── Verificar / instalar atualização do agente (painel da estação) ──────
-// Duas operações separadas de propósito: consultar é barato e informa; instalar
-// baixa ~47 MB e reinicia o agente. O operador decide entre uma e outra.
+// ──── Atualização manual: independente do intervalo automático do agente ────
+let atualizacaoManualEmAndamento = false;
 async function verificarAtualizacaoAgente(instalar = false) {
-    const base = AGENTE_LOCAL_URL;
-    const aviso = (msg, tipo) => (typeof toast === 'function' ? toast(msg, tipo) : alert(msg));
-    if (window.location.port === '9001') {
-        try {
-            const resp = await fetch(`${base}/api/status`);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const info = await resp.json();
-            if (!info.produto_oficial) {
-                aviso(`${info.version}. Esta instalação anterior exige o pacote próprio de migração para o NewProd Piloto oficial.`, 'info');
-                return;
-            }
-        } catch (_) { aviso('O Piloto não respondeu nesta estação.', 'error'); return; }
+    if (atualizacaoManualEmAndamento) return;
+    const local = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+        && ['9000', '9001', '8080'].includes(window.location.port);
+    const base = local ? window.location.origin : 'http://127.0.0.1:9001';
+    const aviso = (msg, tipo) => {
+        const status = document.getElementById('newprod-update-status');
+        if (status) status.textContent = msg;
+        if (typeof toast === 'function') toast(msg, tipo);
+    };
+    const botoes = document.querySelectorAll('[data-newprod-update], #btn-verificar-update');
+    atualizacaoManualEmAndamento = true;
+    botoes.forEach(btn => { btn.disabled = true; });
+    async function pedir(caminho, method = 'GET') {
+        const resp = await fetch(`${base}${caminho}`, { method, signal: AbortSignal.timeout(30000) });
+        if (resp.status === 401) throw new Error('Entre no painel desta estação para atualizar o NewProd.');
+        if (resp.status === 403) throw new Error('A atualização exige um usuário com permissão de administração.');
+        if (resp.status === 409) throw new Error('Há trabalho em andamento. Aguarde terminar e clique em Atualizar agora novamente.');
+        if (!resp.ok) throw new Error(`O NewProd recusou a solicitação (HTTP ${resp.status}).`);
+        return resp.json();
     }
-
-    let info;
     try {
-        const resp = await fetch(`${base}/api/update/check`, { mode: 'cors' });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        info = await resp.json();
+        aviso('Verificando atualização nesta estação…', 'info');
+        const estado = await pedir('/api/status');
+        if (estado.canal === 'piloto' && !estado.produto_oficial) {
+            aviso('Este Piloto antigo precisa migrar para o NewProd Piloto oficial.', 'warning');
+            return;
+        }
+        const info = await pedir('/api/update/check');
+        if (info.erro) throw new Error(`Não foi possível verificar: ${info.erro}`);
+        if (info.liberado_para_estacao === false) {
+            aviso(`Versão ${info.versao_disponivel} ainda não liberada para esta estação. Atual: ${info.versao_atual}.`, 'warning');
+            return;
+        }
+        if (!info.ha_atualizacao) {
+            aviso(`NewProd atualizado: ${info.versao_atual}.`, 'success');
+            return;
+        }
+        if (!instalar) {
+            aviso(`Versão ${info.versao_disponivel} disponível. Atual: ${info.versao_atual}. Clique em Atualizar agora.`, 'info');
+            return;
+        }
+        await pedir('/api/update', 'POST');
+        aviso(`Solicitação aceita para atualizar para ${info.versao_disponivel}. O NewProd fará o download e reiniciará quando puder instalar.`, 'info');
     } catch (e) {
-        aviso('Agente local não respondeu. Ele está em execução?', 'error');
-        return;
-    }
-
-    if (info.erro) {
-        aviso(`Não foi possível verificar: ${info.erro}`, 'error');
-        return;
-    }
-    if (!info.ha_atualizacao) {
-        aviso(`Agente já está na versão mais recente (${info.versao_atual}).`, 'success');
-        return;
-    }
-    if (!instalar) {
-        const querInstalar = confirm(
-            `Versão ${info.versao_disponivel} disponível (atual ${info.versao_atual}).\n\n` +
-            `${info.notas || ''}\n\nInstalar agora? O agente será reiniciado.`);
-        if (!querInstalar) return;
-    }
-
-    try {
-        await fetch(`${base}/api/update`, { method: 'POST' });
-        aviso(`Baixando a versão ${info.versao_disponivel}. O agente vai reiniciar sozinho.`, 'success');
-    } catch (e) {
-        // O agente encerra durante a instalação, então falha de rede aqui é esperada
-        aviso('Atualização iniciada. O agente vai reiniciar.', 'success');
+        aviso(e instanceof TypeError || e.name === 'TimeoutError'
+            ? 'Não foi possível confirmar a solicitação. Confira se o NewProd está aberto e entre no painel desta estação.'
+            : e.message, 'error');
+    } finally {
+        atualizacaoManualEmAndamento = false;
+        botoes.forEach(btn => { btn.disabled = false; });
     }
 }
 window.verificarAtualizacaoAgente = verificarAtualizacaoAgente;
