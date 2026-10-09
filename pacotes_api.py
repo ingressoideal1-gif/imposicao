@@ -258,6 +258,10 @@ class ServicoPacotes:
             self.preparador.pausar(pausado)
             if pausado and self.coleta_autonoma:
                 self.coleta_autonoma.cancelar_manual()
+            if not pausado:
+                if self.coleta_autonoma:
+                    self.coleta_autonoma.solicitar()
+                self._acordar.set()
         finally:
             con.close()
 
@@ -528,6 +532,7 @@ class ServicoPacotes:
                     continue
         self._thread = threading.Thread(target=ciclo, daemon=True, name='CatalogoPacotesPiloto')
         self._thread.start()
+        self._acordar.set()  # primeira descoberta independe de janela/clique/timer
 
     def encerrar(self):
         self._stop.set()

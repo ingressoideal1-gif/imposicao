@@ -157,7 +157,7 @@ def test_thread_descobre_e_baixa_sem_navegador(tmp_path):
     s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste',
         abrir=lambda *a,**k:io.BytesIO(b'arquivo sintetico'),
         conferir=lambda *_: (_ for _ in ()).throw(AssertionError('Nao usa sessao')))
-    s.intervalo_catalogo = .01
+    s.intervalo_catalogo = 3600  # primeiro ciclo deve acordar sem esperar o timer
     s.coleta_autonoma = ColetaAutonoma(s, Cliente(), agora=lambda:datetime(2026,9,26,10,tzinfo=timezone.utc))
     s.iniciar()
     try:
@@ -267,17 +267,16 @@ def test_varredura_concluida_espera_mas_lote_continua(tmp_path):
     assert coleta.estado['estado']=='concluida'
 
 
-def test_spool_impede_novo_lote(tmp_path):
-    s,c,coleta,tempo=ambiente(tmp_path)
+def test_spool_ocupado_nao_impede_download_automatico(tmp_path):
+    s,c,coleta,tempo=ambiente(tmp_path,hora=10)
     coleta.spool_livre=lambda:False
-    coleta.rodar();assert not c.cursores
+    coleta.rodar();assert c.cursores == [0]
+    assert coleta.estado['modo'] == 'automatico'
 
 
 def test_inicio_manual_copia_imediatamente_com_spool_ocupado_e_continua_lotes(tmp_path):
     s,c,coleta,_=ambiente(tmp_path,hora=10)
     coleta.spool_livre=lambda:False
-    coleta.rodar()
-    assert not c.cursores and coleta.estado['estado']=='aguardando_spool'
     s.iniciar_copia()
     coleta.rodar()
     assert c.cursores==list(range(8)) and coleta.estado['modo']=='manual'
@@ -289,7 +288,7 @@ def test_inicio_manual_copia_imediatamente_com_spool_ocupado_e_continua_lotes(tm
     assert c.cursores==list(range(16))
     s.pausar(False)
     coleta.rodar()
-    assert c.cursores==list(range(16)) and coleta.estado['estado']=='aguardando_spool'
+    assert c.cursores==list(range(17)) and coleta.estado['modo']=='automatico'
 
 
 def test_inicio_manual_prioriza_marcados_antes_dos_outros_abertos(tmp_path):

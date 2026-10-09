@@ -148,6 +148,8 @@ def add_to_startup(icon=None, item=None):
             0, winreg.KEY_SET_VALUE
         )
         command = f'"{exe_path}"'
+        if OFICIAL:
+            command += ' --background'
         if PILOTO and not OFICIAL:
             launcher = pasta_local() / 'iniciar-piloto.ps1'
             command = f'powershell.exe -NoProfile -WindowStyle Hidden -File "{launcher}"'
@@ -290,7 +292,7 @@ def main():
         pystray.MenuItem("Iniciar com o Windows", add_to_startup),
         pystray.MenuItem("Remover do Inicio", remove_from_startup),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Encerrar Agente", quit_agent),
+        pystray.MenuItem("Encerrar agente e parar downloads", quit_agent),
     )
 
     icon = pystray.Icon(
@@ -319,7 +321,7 @@ def main():
         print("[agent] ERRO: servidor HTTP indisponivel; heartbeat nao comprova painel saudavel.")
 
     # Abrir o painel automaticamente ao iniciar
-    if pronto:
+    if pronto and '--background' not in sys.argv:
         threading.Thread(target=open_panel, daemon=True).start()
 
     icon.run(setup=setup_tray)

@@ -193,12 +193,9 @@ class ColetaAutonoma:
         self.limite_ciclo = self.relogio() + 120
         try:
             self._checkpoint()
-            # O clique solicita somente copia de arquivos; nao imprime nem
-            # modifica o spool. A coleta automatica mantem a espera pelo spool.
-            if not manual and not self.spool_livre():
-                self.estado = {**self.estado, 'estado':'aguardando_spool',
-                    'motivo':getattr(self.spool_livre, 'motivo', 'Aguardando spool livre.')}
-                return
+            # Copiar recursos nao imprime nem modifica trabalhos do Windows.
+            # A producao ativa do NewProd continua protegida pelo checkpoint.
+            # Um job pausado/antigo no spool nao pode bloquear downloads para sempre.
         except ColetaPausada:
             self.estado = {**self.estado, 'estado':'pausada'}
             return
