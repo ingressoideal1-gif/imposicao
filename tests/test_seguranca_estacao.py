@@ -53,6 +53,14 @@ def client(operador):
     def nova_rota():
         pytest.fail('Rota nova nasceu aberta')
 
+    @app.get('/api/update/check')
+    def consultar_update():
+        return {'ha_atualizacao': True}
+
+    @app.post('/api/update')
+    def atualizar():
+        return {'status': 'checking'}
+
     with TestClient(app) as cliente:
         yield cliente
 
@@ -67,6 +75,28 @@ def test_catalogo_publico_do_portal_continua_legivel(client):
     assert client.get('/api/formatos').json() == [{'nome': 'Formato sintetico'}]
     assert auth.exige_identidade('GET', '/api/formatos/novo/privado')
     assert auth.exige_identidade('POST', '/api/formatos')
+
+
+def test_atualizacao_liberada_ao_operador_sem_permissao_administrativa(client, operador):
+    operador['permissoes'] = {}
+    assert client.get('/api/update/check').status_code == 401
+    assert client.post('/api/update').status_code == 401
+    login = client.post('/api/local/login', json={'codigo': 'ABC123'}).json()
+    headers = {'X-NewProd-Sessao': login['token']}
+    assert client.get('/api/update/check', headers=headers).status_code == 200
+    assert client.post('/api/update', headers=headers).status_code == 200
+    assert client.post('/api/acessos-locais', headers=headers).status_code == 403
+    assert client.post('/api/nova-rota', headers=headers).status_code == 403
+    operador['ativo'] = False
+    assert client.post('/api/update', headers=headers).status_code == 401
+
+
+@pytest.mark.parametrize('metodo,caminho', [('DELETE', '/api/update'),
+    ('POST', '/api/update/check'), ('POST', '/api/update/configuracao')])
+def test_liberacao_de_update_nao_abre_rotas_ou_metodos_administrativos(metodo, caminho):
+    with pytest.raises(HTTPException) as erro:
+        auth.autorizar({'permissoes': {}}, metodo, caminho)
+    assert erro.value.status_code == 403
 
 
 def test_login_token_permissoes_revogacao_e_logout(client, operador):

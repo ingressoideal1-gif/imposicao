@@ -40,7 +40,7 @@ const source = script.slice(script.indexOf('let atualizacaoManualEmAndamento = f
                     ['blocked',true,'não liberada',0],
                     ['legacy',true,'precisa migrar',0],
                     ['401',true,'Entre no painel',1],
-                    ['403',true,'permissão de administração',1],
+                    ['403',true,'ícone do NewProd',1],
                     ['409',true,'Há trabalho em andamento',1],
                     ['500',true,'HTTP 500',1],
                     ['network',true,'Não foi possível confirmar',1],
