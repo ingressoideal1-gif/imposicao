@@ -49,6 +49,64 @@ def test_selecao_confere_baixa_le_do_disco_e_revalida_mesma_url(tmp_path):
     assert p.ler('10', r['revisao'], 'frente') == BYTES
 
 
+def test_pdf_grande_prepara_le_do_cache_e_preserva_hash(tmp_path):
+    import hashlib
+    from pacotes_locais import PacoteInvalido
+    # Transporte maior que o teto antigo, sem rede real ou impressão.
+    tamanho = 151 * 1024 * 1024
+    class ArquivoSintetico:
+        headers = {'Content-Length': str(tamanho)}
+        def __init__(self): self.restante = tamanho
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, n):
+            n = min(n, self.restante); self.restante -= n
+            return b'x' * n
+    s, _, dados = ambiente(tmp_path)
+    s.preparador.armazenamento.abrir = lambda *a, **k: ArquivoSintetico()
+    p = SelecaoPiloto(s)
+    r = p.preparar_pedido({'pedido': '99', 'modelos': [
+        {'modelo': '10', 'digest': dados['digest']}]})['pacotes'][0]
+    def sem_rede(*a, **k): raise AssertionError('Leitura local não baixa novamente')
+    s.preparador.armazenamento.abrir = sem_rede
+    conteudo = p.ler('10', r['revisao'], 'frente')
+    assert len(conteudo) == tamanho
+    assert hashlib.sha256(conteudo).hexdigest() == r['hashes']['frente']
+    del conteudo
+    manifesto = s.obter_coleta(s.catalogo()[0]['manifesto'])
+    manifesto['modelo'] = '11'
+    manifesto['configuracao']['recursos_motor'] = {'origem-sintetica': 'frente'}
+    s.local.preparar(manifesto, {})
+    resolver = s.local.resolver_para_motor('teste', '11', r['revisao'])
+    assert len(resolver('origem-sintetica')) == tamanho
+    objeto = s.local._pasta('teste') / 'objetos' / r['hashes']['frente']
+    with objeto.open('r+b') as f: f.write(b'z')
+    with pytest.raises(PacoteInvalido, match='alterado'):
+        p.ler('10', r['revisao'], 'frente')
+
+
+@pytest.mark.parametrize('declarado', [None, '100'])
+def test_rota_informa_limite_sem_urls_e_remove_download_parcial(tmp_path, monkeypatch, declarado):
+    import antecipacao_local
+    monkeypatch.setattr(antecipacao_local, 'LIMITE_RECURSO_BYTES', 8)
+    s, _, dados = ambiente(tmp_path)
+    def abrir(*a, **k):
+        r = io.BytesIO(b'x' * 100)
+        r.headers = {} if declarado is None else {'Content-Length': declarado}
+        return r
+    s.preparador.armazenamento.abrir = abrir
+    app = FastAPI(); app.include_router(criar_router_estatisticas(s))
+    headers = {'Origin': f'http://127.0.0.1:{PORTA}', 'Sec-Fetch-Site': 'same-origin', 'X-Piloto-Painel': '1'}
+    with TestClient(app, base_url=f'http://127.0.0.1:{PORTA}', client=('127.0.0.1', 55)) as c:
+        r = c.post('/api/pacotes-locais/preparar-pedido-painel', headers=headers,
+                   json={'pedido': '99', 'modelos': [{'modelo': '10', 'digest': dados['digest']}]})
+    assert r.status_code == 413
+    assert r.json()['detail'] == {'codigo': 'limite_recurso', 'tamanho_bytes': 100,
+        'limite_bytes': 8, 'modelo': '10', 'escopo': 'arquivo'}
+    assert not list((s.local.raiz / 'antecipacao').iterdir())
+    assert not s.obter_coleta(s.catalogo()[0]['manifesto'])
+
+
 @pytest.mark.parametrize('tipo', ['digest', 'removido', 'mudou'])
 def test_nao_libera_selecao_divergente(tmp_path, tipo):
     s, estado, dados = ambiente(tmp_path)

@@ -11,7 +11,8 @@ import urllib.request
 from pathlib import Path
 
 from pacotes_download import validar_url, SemRedirecionamento
-from pacotes_locais import _sem_links
+from pacotes_locais import (_sem_links, LIMITE_RECURSO_BYTES, LIMITE_TOTAL_BYTES,
+                            LimiteRecursoExcedido)
 
 
 def _etag_forte(valor):
@@ -66,7 +67,7 @@ class AntecipadorRecursos:
             for nome, url in manifesto['configuracao']['fontes'].items():
                 checkpoint()
                 validar_url(url, self.host)
-                if shutil.disk_usage(area).free < self.local.reserva_bytes + 128 * 1024 * 1024:
+                if shutil.disk_usage(area).free < self.local.reserva_bytes + 2 * LIMITE_RECURSO_BYTES:
                     raise OSError('Reserva de disco insuficiente.')
                 antigo = anterior['configuracao'].get('validadores_http', {}).get(nome) if reutilizavel else None
                 versao = (self.versoes_fontes or {}).get(nome)
@@ -102,6 +103,11 @@ class AntecipadorRecursos:
                         continue
                     if getattr(resposta, 'status', 200) != 200:
                         raise ValueError('Recurso remoto incompleto.')
+                    declarado = getattr(resposta, 'headers', {}).get('Content-Length', '')
+                    if str(declarado).isascii() and str(declarado).isdigit():
+                        declarado = int(declarado)
+                        if declarado > LIMITE_RECURSO_BYTES:
+                            raise LimiteRecursoExcedido(declarado, LIMITE_RECURSO_BYTES, manifesto['modelo'])
                     etag = getattr(resposta, 'headers', {}).get('ETag')
                     if versao and (not isinstance(etag,str) or etag.strip('"') != versao['etag'].strip('"')):
                         raise ValueError('Versao do arquivo nao corresponde ao Storage.')
@@ -118,8 +124,12 @@ class AntecipadorRecursos:
                                 break
                             tamanho += len(bloco)
                             total += len(bloco)
-                            if tamanho > 64 * 1024 * 1024 or total > 256 * 1024 * 1024:
-                                raise ValueError('Limite da antecipação excedido.')
+                            if tamanho > LIMITE_RECURSO_BYTES:
+                                raise LimiteRecursoExcedido(tamanho, LIMITE_RECURSO_BYTES, manifesto['modelo'])
+                            if total > LIMITE_TOTAL_BYTES:
+                                raise LimiteRecursoExcedido(total, LIMITE_TOTAL_BYTES, manifesto['modelo'], 'conjunto')
+                            if shutil.disk_usage(area).free < self.local.reserva_bytes + 2 * len(bloco):
+                                raise OSError('Reserva de disco insuficiente durante a cópia.')
                             digest.update(bloco)
                             destino.write(bloco)
                         if not tamanho:

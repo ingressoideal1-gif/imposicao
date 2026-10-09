@@ -18,6 +18,19 @@ class PacoteInvalido(ValueError):
     pass
 
 
+LIMITE_RECURSO_BYTES = 256 * 1024 * 1024
+LIMITE_TOTAL_BYTES = 256 * 1024 * 1024
+
+
+class LimiteRecursoExcedido(PacoteInvalido):
+    """Detalhe público composto somente por identidade e tamanhos, sem URLs."""
+    def __init__(self, tamanho, limite, modelo, escopo='arquivo'):
+        self.detalhe = {'codigo': 'limite_recurso', 'tamanho_bytes': tamanho,
+                        'limite_bytes': limite, 'escopo': escopo,
+                        'modelo': str(modelo) if re.fullmatch(r'[1-9][0-9]{0,14}', str(modelo)) else ''}
+        super().__init__(f'Limite de {escopo} excedido: {tamanho} bytes; máximo {limite} bytes.')
+
+
 def _json(valor):
     return json.dumps(valor, ensure_ascii=False, sort_keys=True,
                       separators=(",", ":"), allow_nan=False)
@@ -241,8 +254,10 @@ class ArmazemPacotes:
         if (m['empresa'], m['modelo'], m['revisao']) != (empresa, modelo, revisao):
             raise PacoteInvalido('Identidade divergente.')
         info = m['arquivos'].get(nome)
-        if not info or info['bytes'] > 64 * 1024 * 1024:
-            raise PacoteInvalido('Recurso ausente ou excede limite de leitura do piloto.')
+        if not info:
+            raise PacoteInvalido('Recurso ausente.')
+        if info['bytes'] > LIMITE_RECURSO_BYTES:
+            raise LimiteRecursoExcedido(info['bytes'], LIMITE_RECURSO_BYTES, modelo)
         caminho = pasta / 'objetos' / info['sha256']
         _sem_links(caminho)
         with caminho.open('rb') as f:
@@ -284,8 +299,8 @@ class ArmazemPacotes:
             if origem not in mapa:
                 raise PacoteInvalido('Dependência não declarada no pacote local.')
             info = m['arquivos'][mapa[origem]]
-            if info['bytes'] > 64 * 1024 * 1024:
-                raise PacoteInvalido('Dependência excede limite de leitura do piloto.')
+            if info['bytes'] > LIMITE_RECURSO_BYTES:
+                raise LimiteRecursoExcedido(info['bytes'], LIMITE_RECURSO_BYTES, modelo)
             arquivo = pasta / 'objetos' / info['sha256']
             _sem_links(arquivo)
             with arquivo.open('rb') as entrada:

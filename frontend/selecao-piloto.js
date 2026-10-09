@@ -97,7 +97,28 @@
             body:JSON.stringify({pedido:String(pedido.numero), modelos}),
             signal:AbortSignal.timeout(600000)
         });
-        if (!r.ok) throw Error('Conferência do pedido não concluída. Reabra o pedido para tentar novamente.');
+        if (!r.ok) {
+            let detalhe;
+            try { detalhe = (await r.json()).detail; } catch (_) { /* Resposta sem JSON. */ }
+            if (r.status === 413 && detalhe?.codigo === 'limite_recurso'
+                && Number.isSafeInteger(detalhe.tamanho_bytes) && detalhe.tamanho_bytes > 0
+                && Number.isSafeInteger(detalhe.limite_bytes) && detalhe.limite_bytes > 0) {
+                const mib = bytes => (bytes / (1024 * 1024)).toFixed(2).replace('.', ',');
+                const modelo = /^[1-9][0-9]{0,14}$/.test(detalhe.modelo) ? ' do modelo ' + detalhe.modelo : '';
+                const alvo = detalhe.escopo === 'conjunto' ? 'Conjunto de arquivos' : 'Arquivo';
+                throw Error(alvo + modelo + ' excede o limite: pelo menos ' + mib(detalhe.tamanho_bytes)
+                    + ' MiB; limite de ' + mib(detalhe.limite_bytes) + ' MiB. Reabrir o pedido não resolve esse limite.');
+            }
+            const motivos = {
+                403: 'Acesso à conferência local recusado. Abra pelo painel desta estação.',
+                409: 'Não foi possível confirmar a revisão do pedido. Aguarde e reabra para conferir.',
+                413: 'O pedido excede o limite de preparação local.',
+                422: 'Os dados ou arquivos do pedido são incompatíveis com a preparação local.',
+                507: 'Não foi possível gravar os arquivos do pedido. Confira o espaço disponível no disco.'
+            };
+            throw Error('Conferência do pedido não concluída. ' + (motivos[r.status]
+                || 'O serviço local falhou. Tente novamente e, se persistir, consulte o diagnóstico da estação.'));
+        }
         const resposta = await r.json();
         if (!atual() || contexto !== pedidoAtual) return null;
         const pacotes = resposta.pacotes;

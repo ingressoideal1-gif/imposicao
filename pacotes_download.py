@@ -4,7 +4,8 @@ import tempfile
 import urllib.request
 from urllib.parse import urlsplit, unquote
 
-from pacotes_locais import _manifesto, _sem_links, _hash_arquivo
+from pacotes_locais import (_manifesto, _sem_links, _hash_arquivo, LIMITE_RECURSO_BYTES,
+                            LIMITE_TOTAL_BYTES, LimiteRecursoExcedido)
 
 
 class SemRedirecionamento(urllib.request.HTTPRedirectHandler):
@@ -38,6 +39,15 @@ class ArmazemComDownload:
 
     def preparar(self, manifesto, fontes, *, checkpoint=None):
         m = _manifesto(manifesto)
+        total = 0
+        for info in m['arquivos'].values():
+            if info is None:
+                continue
+            if info['bytes'] > LIMITE_RECURSO_BYTES:
+                raise LimiteRecursoExcedido(info['bytes'], LIMITE_RECURSO_BYTES, m['modelo'])
+            total += info['bytes']
+        if total > LIMITE_TOTAL_BYTES:
+            raise LimiteRecursoExcedido(total, LIMITE_TOTAL_BYTES, m['modelo'], 'conjunto')
         # Reuso validado não requer fonte nem rede.
         if self.local.consultar(m['empresa'], m['modelo'], m['revisao'], checkpoint=checkpoint)['estado'] == 'local_validado':
             # Ainda compara o manifesto imutável, impedindo reutilização de revisão alterada.

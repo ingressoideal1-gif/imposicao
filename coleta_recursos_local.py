@@ -13,12 +13,13 @@ import urllib.request
 
 from engine import ImpositionEngine
 from pacotes_download import SemRedirecionamento, validar_url
-from pacotes_locais import _manifesto, _json, _sem_links
+from pacotes_locais import (_manifesto, _json, _sem_links, LIMITE_RECURSO_BYTES,
+                            LIMITE_TOTAL_BYTES)
 
 
 class ColetorRecursos:
     def __init__(self, armazenamento, *, host, abrir=None,
-                 limite_recurso=64 * 1024 * 1024, limite_total=256 * 1024 * 1024):
+                 limite_recurso=LIMITE_RECURSO_BYTES, limite_total=LIMITE_TOTAL_BYTES):
         self.local = armazenamento
         self.host = host
         self.abrir = abrir or urllib.request.build_opener(SemRedirecionamento()).open
