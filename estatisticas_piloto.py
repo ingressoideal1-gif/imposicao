@@ -144,6 +144,7 @@ def criar_router_estatisticas(servico):
         except OSError:
             raise HTTPException(507, 'Não foi possível preparar os arquivos locais.') from None
 
+    @router.post('/api/pacotes-locais/abrir-pedido-painel')
     @router.post('/api/pacotes-locais/preparar-pedido-painel')
     async def preparar_pedido(request: Request):
         exigir_painel(request, escrita=True)
@@ -153,7 +154,8 @@ def criar_router_estatisticas(servico):
             if len(corpo) > 65536:
                 raise HTTPException(413, 'Pedido excede limite de preparação.')
         try:
-            resultado = await run_in_threadpool(selecao.preparar_pedido, json.loads(corpo))
+            operacao = selecao.abrir_pedido if request.url.path.endswith('/abrir-pedido-painel') else selecao.preparar_pedido
+            resultado = await run_in_threadpool(operacao, json.loads(corpo))
             return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
         except ConferenciaIndisponivel:
             raise HTTPException(409, 'Pedido não conferido. Reabra e tente novamente.') from None

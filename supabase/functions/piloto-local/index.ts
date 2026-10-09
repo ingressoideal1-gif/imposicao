@@ -60,7 +60,7 @@ export async function handler(req: Request): Promise<Response> {
   if (req.method!=='POST') return resposta(405,{detail:'metodo recusado'});
   const acao = new URL(req.url).pathname.split('/').filter(Boolean).at(-1);
   try {
-    if (acao==='listar' || acao==='conferir' || acao==='conferir-pedido') return resposta(200,await operarPilotoEstacao(acao,req,conferirAgente));
+    if (acao==='listar' || acao==='conferir' || acao==='conferir-pedido' || acao==='abrir-pedido') return resposta(200,await operarPilotoEstacao(acao,req,conferirAgente));
     if (acao==='conferir-sessao') return resposta(200,await conferirSessao(req));
     return resposta(404,{detail:'operacao inexistente'});
   } catch(e) {

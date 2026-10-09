@@ -60,3 +60,19 @@ Deno.test('pedido: URL sem objeto ou sem versao/ETag nunca dispensa revalidacao'
  a.snapshot.recursos=[{url:a.modelo.arte_url,objeto:{version:'',metadata:{eTag:'abc'}}}];
  assert.equal((await a.chamar() as any).itens[0].versoes_fontes.frente,null);
 });
+
+Deno.test('pedido v2: sinal persistido usa RPC propria, snapshot inicial e recibo compacto',async()=>{
+ const a=ambiente();const chamadas:any[]=[];
+ const snapshot={...a.snapshot,bancos:[],vinculos:[],artes:[],mapas:[]};
+ const ler=async(m:string,q:string,b:any)=>{
+  chamadas.push(q);assert.equal(q,'rpc/piloto_snapshot_pedido_v2');
+  return {protocolo:2,pedido:'20',revisao:'a'.repeat(64),sem_mudanca:b.p_revisao==='a'.repeat(64),snapshot};
+ };
+ const abrir=(revisao:string)=>conferirPedidoPiloto({empresa:'teste',pedido:'20',revisao},permissoes,ler,'teste',undefined,'test.supabase.co',true);
+ const inicial:any=await abrir('');assert.deepEqual(inicial.snapshot,snapshot);assert.equal(inicial.protocolo,2);
+ const igual:any=await abrir('a'.repeat(64));assert.equal(igual.sem_mudanca,true);assert.ok(!('snapshot' in igual));
+ assert.equal(chamadas.length,2);
+ await assert.rejects(conferirPedidoPiloto({empresa:'teste',pedido:'20',revisao:''},permissoes,
+  async()=>({pedido:'20',revisao:'a'.repeat(64),sem_mudanca:false,snapshot}),
+  'teste',undefined,'test.supabase.co',true),{status:503});
+});

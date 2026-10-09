@@ -34,6 +34,25 @@ function montar() {
     return c;
 }
 (async()=>{
+    const local=montar(); const row={id:10,id_int:99};
+    local.getOSItens()[0]._modeloOnline=row;
+    const digestLocal=Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([row,[]])))).toString('hex');
+    local.supabaseClient={from(){throw Error('Consulta de numeracao/modelo proibida');}};
+    local.fetch=async(url,opts)=>{
+        local.chamadas.push(url);
+        assert.equal(url,'/api/pacotes-locais/abrir-pedido-painel');
+        assert.deepEqual(JSON.parse(opts.body),{pedido:'99'});
+        return {ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),sem_arte:[],
+          snapshot:{modelos:[row],numeracoes:[],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]},
+          pacotes:[{modelo:'10',digest:digestLocal,revisao:'b'.repeat(64),origem:'local'}]})};
+    };
+    const abertura=local.PilotoSelecao.iniciarPedido('vibe_99');
+    await local.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,abertura);
+    await local.PilotoSelecao.conferirPedido('vibe_99',()=>true,abertura);
+    assert.equal(local.chamadas.length,1);
+    local.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
+    assert.equal(local.PilotoSelecao.snapshotPedido('outro'),null);
+
     for (const [status, detail, esperado] of [
         [413, {codigo:'limite_recurso', tamanho_bytes:300*1024*1024, limite_bytes:256*1024*1024, modelo:'10'}, /modelo 10.*300,00 MiB.*256,00 MiB/],
         [507, null, /espaço disponível/],

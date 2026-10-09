@@ -7,7 +7,7 @@ const normal = (v: unknown) => String(v ?? '').trim().toUpperCase();
 const aprovados = new Set(['APROVADO','APROVADA','APROVADA_CLIENTE','LIBERADA','ARTE_APROVADA','ARTE APROVADA']);
 export async function conferirPedidoPiloto(entrada: any, permissoes: any, consultar = banco,
   empresa = Deno.env.get('PILOTO_LOCAL_EMPRESA'), empresaId = Deno.env.get('PILOTO_LOCAL_EMPRESA_ID'),
-  host = new URL(Deno.env.get('SUPABASE_URL') || 'https://invalido.invalid').host) {
+  host = new URL(Deno.env.get('SUPABASE_URL') || 'https://invalido.invalid').host, persistida = false) {
   if (!empresa || permissoes?.perm_producao_view !== true || permissoes?.perm_imprimir !== true)
     throw new Recusa(403,'piloto sem empresa ou permissoes');
   const vinculo = permissoes.empresa_id ?? permissoes.id_empresa;
@@ -18,19 +18,21 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
     || Number(entrada.pedido)>2147483647 || typeof entrada.revisao !== 'string'
     || entrada.revisao !== '' && !/^[a-f0-9]{64}$/.test(entrada.revisao)) throw new Recusa(422,'pedido invalido');
   let resposta;
-  try { resposta = await consultar('POST','rpc/piloto_snapshot_pedido',{
+  try { resposta = await consultar('POST',persistida ? 'rpc/piloto_snapshot_pedido_v2' : 'rpc/piloto_snapshot_pedido',{
     p_pedido:entrada.pedido,p_empresa_id:empresaId || '',p_host:host,p_revisao:entrada.revisao}); }
   catch { throw new Recusa(503,'revisao do pedido indisponivel'); }
+  if (persistida && resposta?.protocolo !== 2) throw new Recusa(503,'sinal persistido indisponivel');
   if (!resposta || resposta.pedido !== entrada.pedido || !/^[a-f0-9]{64}$/.test(resposta.revisao)
     || typeof resposta.sem_mudanca !== 'boolean' || resposta.sem_mudanca !== (resposta.revisao === entrada.revisao))
     throw new Recusa(503,'revisao incompleta');
   const recibo = {empresa,pedido:entrada.pedido,revisao:resposta.revisao,sem_mudanca:resposta.sem_mudanca,
     conferido_em:new Date().toISOString(),execucao_offline:false};
-  if (resposta.sem_mudanca) return recibo;
+  if (resposta.sem_mudanca) return persistida ? {...recibo,protocolo:2} : recibo;
   const d = resposta.snapshot;
   if (!d || ['modelos','numeracoes','origens','produtos','pedidos','prazos','recursos'].some(k=>!Array.isArray(d[k]))
     || d.modelos.length>128 || d.pedidos.length !== 1) throw new Recusa(409,'pedido incompleto');
-  for (const row of [...d.modelos,...d.numeracoes,...d.origens,...d.produtos]) {
+  for (const row of [...d.modelos,...d.numeracoes,...d.origens,...d.produtos,
+    ...(persistida ? [...(d.bancos || []),...(d.artes || []),...(d.mapas || [])] : [])]) {
     const id = row.empresa_id ?? row.id_empresa;
     if (id != null && String(id) !== empresaId) throw new Recusa(403,'empresa divergente');
   }
@@ -69,5 +71,6 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
       setor:String(produto?.setor_pcp || ''),prazo_erp:d.prazos[0]?.data_termino || null,
       observacao:{digest:await digestPiloto([m,nums]),aprovacao:normal(m.status_arte)}});
   }
-  return {...recibo,itens};
+  if (persistida && ['bancos','vinculos','artes','mapas'].some(k=>!Array.isArray(d[k]))) throw new Recusa(503,'snapshot local incompleto');
+  return {...recibo,itens,...(persistida ? {protocolo:2,snapshot:d} : {})};
 }

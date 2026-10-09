@@ -91,7 +91,7 @@
         return '';
     }
 
-    async function conferirPedido(itens, cliente) {
+    async function conferirPedido(itens, cliente, mapasLocais) {
         const modelos = (itens || []).filter(tem);
         if (!modelos.length) return;
         modelos.forEach(item => { delete item._teatro_capa; });
@@ -99,8 +99,8 @@
         let timer;
         const controle = new AbortController();
         try {
-            if (!ids.length || !cliente) throw Error('Mapa atual indisponível.');
-            const consulta = cliente.from('producao_mapas_teatro').select('id,config').in('id', ids);
+            if (!ids.length || (!cliente && !Array.isArray(mapasLocais))) throw Error('Mapa atual indisponível.');
+            const consulta = Array.isArray(mapasLocais) ? Promise.resolve({data:mapasLocais}) : cliente.from('producao_mapas_teatro').select('id,config').in('id', ids);
             const { data, error } = await Promise.race([
                 consulta.abortSignal ? consulta.abortSignal(controle.signal) : consulta,
                 new Promise((_, reject) => { timer = setTimeout(() => {
