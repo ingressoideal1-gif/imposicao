@@ -12,7 +12,7 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from pacotes_locais import ArmazemPacotes, _manifesto, _sem_links
+from pacotes_locais import ArmazemPacotes, _manifesto, _sem_links, LIMITE_TOTAL_BYTES
 from pacotes_download import ArmazemComDownload, validar_url
 from preparacao_local import PreparadorLocal
 from coleta_recursos_local import ColetorRecursos
@@ -400,7 +400,7 @@ class ServicoPacotes:
             if not isinstance(campo, str) or campo != esperado or not re.fullmatch(
                     r'file|file_verso|csv_file|ma_file_\d+|ma_verso_\d+', campo):
                 raise ValueError('Mapeamento de recurso inválido.')
-        if sum(info['bytes'] for info in m['arquivos'].values() if info is not None) > 64 * 1024 * 1024:
+        if sum(info['bytes'] for info in m['arquivos'].values() if info is not None) > LIMITE_TOTAL_BYTES:
             raise ValueError('Entrada excede limite do piloto.')
         agenda = cfg.get('agendamento') or {}
         if not isinstance(agenda, dict):
@@ -610,7 +610,7 @@ def criar_router(servico, token):
             tamanho = 0
             async for bloco in request.stream():
                 tamanho += len(bloco)
-                if tamanho > 68 * 1024 * 1024:
+                if tamanho > LIMITE_TOTAL_BYTES + 4 * 1024 * 1024:
                     raise MultiPartException('Entrada excede limite.')
                 yield bloco
         form = None

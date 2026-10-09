@@ -34,6 +34,17 @@ function montar() {
     return c;
 }
 (async()=>{
+    for (const [status, detail, esperado] of [
+        [413, {codigo:'limite_recurso', tamanho_bytes:300*1024*1024, limite_bytes:256*1024*1024, modelo:'10'}, /modelo 10.*300,00 MiB.*256,00 MiB/],
+        [507, null, /espaço disponível/],
+        [403, '<script>segredo<\/script>', /Acesso.*recusado/],
+        [500, null, /serviço local falhou/]
+    ]) {
+        const erro=montar();
+        erro.fetch=async()=>({ok:false,status,json:async()=>({detail})});
+        await assert.rejects(erro.PilotoSelecao.conferirPedido('vibe_99',()=>true), esperado);
+        assert.throws(()=>erro.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]));
+    }
     // A linha bruta pertence ao digest; a forma normalizada pertence à tela
     // e à conferência final. Não apagar METADATA antes de conferir a origem.
     const met=montar();met.getOSItens()[0]._modeloOnline.amostra_num_id=7;

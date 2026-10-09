@@ -147,3 +147,36 @@ def test_etag_fraco_nao_substitui_hash_dos_bytes(tmp_path):
     p._atualizar_ao_abrir.add(('teste','10',m['revisao']))
     p.preparar(m, {})
     assert chamadas == [None, None]
+
+
+@pytest.mark.parametrize('tamanho, limite_total, falha', [(16, 32, False), (17, 64, True), (16, 31, True)])
+def test_limites_por_arquivo_e_conjunto(tmp_path, monkeypatch, tamanho, limite_total, falha):
+    import antecipacao_local
+    from pacotes_locais import LimiteRecursoExcedido
+    monkeypatch.setattr(antecipacao_local, 'LIMITE_RECURSO_BYTES', 16)
+    monkeypatch.setattr(antecipacao_local, 'LIMITE_TOTAL_BYTES', limite_total)
+    s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste',
+                       abrir=lambda *a, **k: io.BytesIO(b'x' * tamanho))
+    item = candidato(); item['fontes']['verso'] = item['fontes']['frente'] + '-verso'
+    s.antecipar(item)
+    m = s.catalogo()[0]['manifesto']
+    if falha:
+        with pytest.raises(LimiteRecursoExcedido): s.preparador.armazenamento.preparar(m, {})
+        assert not s.obter_coleta(m)
+    else:
+        assert s.preparador.armazenamento.preparar(m, {})['estado'] == 'local_validado'
+    assert not list((s.local.raiz / 'antecipacao').iterdir())
+
+
+def test_reserva_disco_preservada_durante_download(tmp_path, monkeypatch):
+    import antecipacao_local
+    from types import SimpleNamespace
+    s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste',
+                       abrir=lambda *a, **k: io.BytesIO(BYTES))
+    s.antecipar(candidato()); m = s.catalogo()[0]['manifesto']
+    espacos = iter([10 * 1024**3, 0])
+    monkeypatch.setattr(antecipacao_local.shutil, 'disk_usage', lambda _: SimpleNamespace(free=next(espacos)))
+    with pytest.raises(OSError, match='durante a cópia'):
+        s.preparador.armazenamento.preparar(m, {})
+    assert not s.obter_coleta(m)
+    assert not list((s.local.raiz / 'antecipacao').iterdir())

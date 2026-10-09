@@ -7,7 +7,7 @@ import json
 import math
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, Response
-from pacotes_locais import _sem_links
+from pacotes_locais import _sem_links, LimiteRecursoExcedido
 
 
 def resumo(servico):
@@ -137,6 +137,8 @@ def criar_router_estatisticas(servico):
             return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
         except ConferenciaIndisponivel:
             raise HTTPException(409, 'Modelo não conferido. Aguarde a preparação e selecione novamente.') from None
+        except LimiteRecursoExcedido as erro:
+            raise HTTPException(413, erro.detalhe) from None
         except (ValueError, KeyError, TypeError, StopIteration):
             raise HTTPException(422, 'Seleção ou pacote local incompatível.') from None
         except OSError:
@@ -155,6 +157,8 @@ def criar_router_estatisticas(servico):
             return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
         except ConferenciaIndisponivel:
             raise HTTPException(409, 'Pedido não conferido. Reabra e tente novamente.') from None
+        except LimiteRecursoExcedido as erro:
+            raise HTTPException(413, erro.detalhe) from None
         except (ValueError, KeyError, TypeError, StopIteration):
             raise HTTPException(422, 'Pedido ou pacote local incompatível.') from None
         except OSError:
