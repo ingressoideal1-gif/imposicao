@@ -306,6 +306,23 @@ def iniciar_monitor():
     iniciar(historico())
 
 
+def resumo_coleta():
+    """Le somente memoria do agente ja iniciado; nao importa app nem consulta rede."""
+    import sys
+    servico = getattr(sys.modules.get('app'), 'piloto_pacotes', None)
+    coleta = getattr(servico, 'coleta_autonoma', None)
+    if coleta is None:
+        return {'habilitada': False}
+    estado = dict(coleta.estado)
+    permitidos = ('habilitada', 'estado', 'modo', 'fase', 'recebidos',
+                  'lotes_consultados', 'lotes_catalogo', 'ultima_consulta')
+    resultado = {k: estado[k] for k in permitidos if k in estado}
+    resultado['fila'] = servico.preparador.resumo()
+    resultado['thread_ativa'] = bool(servico._thread and servico._thread.is_alive())
+    resultado['erro_catalogo'] = bool(servico.erro_catalogo)
+    return resultado
+
+
 def resumo_publico():
     """Somente metricas operacionais no heartbeat existente, sem logs/pedidos."""
     s = snapshot()
@@ -326,7 +343,7 @@ def resumo_publico():
     return dict(schema=2, estado=s['estado'], coletado_em=s.get('coletado_em'), painel=s.get('painel'),
                 fila_disponivel=spool.get('disponivel', False), fila=estados,
                 erros_24h=erros, totais_30d=contagens, backup=backup, manutencao=s.get('manutencao'),
-                historico_central=sincronizacao)
+                historico_central=sincronizacao, coleta=resumo_coleta())
 
 
 @contextmanager

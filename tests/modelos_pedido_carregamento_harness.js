@@ -55,6 +55,21 @@ function contexto() {
 }
 const testes=[];
 function teste(nome,fn){testes.push([nome,fn]);}
+teste('snapshot local abre sem consultar modelos, artes ou numeracoes',async()=>{
+    const c=contexto(); c.structuredClone=structuredClone;
+    c.normalizarNumeracaoLida=n=>n;
+    c.mesclarNumeracoesNoCatalogo=()=>{};
+    c.supabaseClient.from=()=>{throw Error('Consulta remota proibida na abertura local');};
+    c.recarregarNumeracoesDoPedido=()=>{throw Error('Numeracao remota proibida');};
+    c.window.PilotoSelecao={iniciarPedido:()=>({}),
+      carregarPedidoLocal:async()=>({modelos,origens:produtos,produtos:[],artes:[],mapas:[],numeracoes:[]}),
+      conferirPedido:async()=>{}};
+    await c.abrirImposicaoDoPedido('vibe_99001');
+    assert.equal(c.desenhos,1);
+    assert.equal(c.consultas,0);
+    assert.equal(c.escritas,0);
+    assert.deepEqual(Array.from(c.state.osItens.vibe_99001,x=>x.qtd),[12,10,2]);
+});
 teste('abertura carrega três modelos e conserva divisão 10 + 2 impressos',async()=>{
     const c=contexto(); await c.abrirImposicaoDoPedido('vibe_99001');
     assert.deepEqual(Array.from(c.getOSItens('vibe_99001'),i=>[i.id,i.qtd,i.impressao]),[[101,12,'Aguardando'],[102,10,'Aguardando'],[103,2,'IMPRESSO']]);

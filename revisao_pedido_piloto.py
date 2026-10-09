@@ -43,8 +43,10 @@ class CacheRevisaoPedido:
         finally:
             con.close()
 
-    def salvar(self, pedido, revisao, itens, pacotes):
+    def salvar(self, pedido, revisao, itens, pacotes, snapshot=None):
         registro = {'empresa':self.servico.empresa,'pedido':pedido,'revisao':revisao,'itens':itens,'pacotes':pacotes}
+        if snapshot is not None:
+            registro.update(protocolo=2, snapshot=snapshot)
         con = self.servico._db()
         try:
             con.execute('INSERT OR REPLACE INTO revisoes_pedidos_piloto VALUES (?,?)',

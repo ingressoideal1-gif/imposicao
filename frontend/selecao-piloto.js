@@ -71,6 +71,33 @@
         return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
             .map(b => b.toString(16).padStart(2, '0')).join('');
     }
+    const snapshots = new Map();
+    function snapshotPedido(osId) {
+        return pedidoAtual?.osId === String(osId) ? snapshots.get(String(osId)) : null;
+    }
+    async function carregarPedidoLocal(osId, atual, contexto) {
+        const pedido = findOSInState(osId);
+        if (!pedido || contexto !== pedidoAtual) throw Error('Pedido nao identificado.');
+        snapshots.delete(String(osId));
+        const r = await fetch('/api/pacotes-locais/abrir-pedido-painel', {
+            method:'POST', headers:{'Content-Type':'application/json','X-Piloto-Painel':'1'},
+            body:JSON.stringify({pedido:String(pedido.numero)}), signal:AbortSignal.timeout(600000)
+        });
+        if (!r.ok) {
+            throw Error('Nao foi possivel abrir a revisao local (HTTP ' + r.status + '). Confira a atualizacao do agente e do sinal no banco.');
+        }
+        const resposta = await r.json();
+        if (!atual() || contexto !== pedidoAtual) return null;
+        if (resposta.protocolo !== 2 || resposta.pedido !== String(pedido.numero)
+                || !/^[a-f0-9]{64}$/.test(resposta.revisao_pedido || '')
+                || !resposta.snapshot || ['modelos','numeracoes','origens','produtos','bancos','vinculos','artes','mapas']
+                    .some(k => !Array.isArray(resposta.snapshot[k]))) throw Error('Snapshot local incompleto.');
+        const snapshot = structuredClone(resposta.snapshot);
+        if (snapshot.modelos.some(m => String(m.id_int) !== String(pedido.numero))) throw Error('Snapshot de outro pedido.');
+        contexto.preparado = resposta;
+        snapshots.set(String(osId), snapshot);
+        return snapshot;
+    }
     async function conferirPedido(osId, atual, contexto = iniciarPedido(osId)) {
         const pedido = findOSInState(osId);
         if (!pedido || contexto !== pedidoAtual) throw Error('Pedido de produção não identificado.');
@@ -78,8 +105,8 @@
         if (!itens.length || itens.some(i => !i._modeloOnline)) throw Error('Modelos completos indisponíveis.');
         toast('Conferindo o pedido e preparando os arquivos locais. Aguarde.', 'info');
         const ids = [...new Set(itens.map(i => i._modeloOnline.amostra_num_id || i._modeloOnline.numeracao_id).filter(Boolean))];
-        let nums = [];
-        if (ids.length) {
+        let nums = contexto.preparado ? structuredClone(contexto.preparado.snapshot.numeracoes) : [];
+        if (!contexto.preparado && ids.length) {
             const r = await lerDadosLista(supabaseClient.from('producao_numeracoes').select('*').in('id', ids)
                 .abortSignal(AbortSignal.timeout(30000)), 'numerações do pedido');
             if (r.error || ids.some(id => !r.data?.some(n => String(n.id) === String(id)))) throw Error('Numeração não conferida.');
@@ -92,7 +119,7 @@
             const id = item._modeloOnline.amostra_num_id || item._modeloOnline.numeracao_id;
             return {modelo:String(item.id), digest:await digest([modelo, nums.filter(n => String(n.id) === String(id))])};
         }));
-        const r = await fetch('/api/pacotes-locais/preparar-pedido-painel', {
+        const r = contexto.preparado ? {ok:true,json:async () => contexto.preparado} : await fetch('/api/pacotes-locais/preparar-pedido-painel', {
             method:'POST', headers:{'Content-Type':'application/json','X-Piloto-Painel':'1'},
             body:JSON.stringify({pedido:String(pedido.numero), modelos}),
             signal:AbortSignal.timeout(600000)
@@ -207,7 +234,7 @@
         if (new Set(locais.map(l => l.hash)).size > 1) throw Error('Revisões locais divergentes. Reabra o pedido.');
         return locais[0]?.chave || url;
     }
-    window.PilotoSelecao = {iniciarPedido, conferirPedido, conferir, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
+    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, iniciarPedido, conferirPedido, conferir, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
     // A injeção exclusiva do Piloto ocorre depois do script principal. Manter
     // o fluxo original e acompanhar também seus retornos antecipados e erros.
     const abrirPedido = window.abrirImposicaoDoPedido;

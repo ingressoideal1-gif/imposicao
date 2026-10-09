@@ -23,7 +23,7 @@ def _etag_forte(valor):
 
 class AntecipadorRecursos:
     def __init__(self, integrado, local, host, obter, salvar, abrir=None, *, relogio=time.monotonic, intervalo=300,
-                 versoes_fontes=None):
+                 versoes_fontes=None, recursos_anteriores=None):
         self.integrado, self.local, self.host = integrado, local, host
         self.obter, self.salvar = obter, salvar
         self.abrir = abrir or urllib.request.build_opener(SemRedirecionamento()).open
@@ -32,6 +32,7 @@ class AntecipadorRecursos:
         self._atualizar_ao_abrir = set()
         self.somente_ao_abrir = False
         self.versoes_fontes = versoes_fontes
+        self.recursos_anteriores = recursos_anteriores or {}
 
     @property
     def habilitado(self):
@@ -69,6 +70,15 @@ class AntecipadorRecursos:
                 validar_url(url, self.host)
                 if shutil.disk_usage(area).free < self.local.reserva_bytes + 2 * LIMITE_RECURSO_BYTES:
                     raise OSError('Reserva de disco insuficiente.')
+                reuso = self.recursos_anteriores.get(nome)
+                if reuso:
+                    info, etag_reuso = reuso
+                    total += info['bytes']
+                    if total > LIMITE_TOTAL_BYTES:
+                        raise LimiteRecursoExcedido(total, LIMITE_TOTAL_BYTES, manifesto['modelo'], 'conjunto')
+                    arquivos[nome] = deepcopy(info)
+                    validadores[nome] = etag_reuso
+                    continue
                 antigo = anterior['configuracao'].get('validadores_http', {}).get(nome) if reutilizavel else None
                 versao = (self.versoes_fontes or {}).get(nome)
                 if versao and _etag_forte(antigo) and antigo.strip('"') == versao['etag'].strip('"'):

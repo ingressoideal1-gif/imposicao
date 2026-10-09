@@ -77,7 +77,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilacao WiX falhou.' }
 # LOCAL_AGENT_VERSION em app.py â€” o MSI usa esse campo para decidir se o
 # upgrade se aplica, e o frontend compara o valor reportado pelo agente.
 Write-Host "Etapa 2/2: Gerando pacote final MSI (.wixobj -> .msi)..." -ForegroundColor Green
-$msiOutput = "dist\NewProdPiloto_Oficial_v1.2.376.msi"
+$msiOutput = "dist\NewProdPiloto_Oficial_v1.2.378.msi"
 & $wixLight -ext WixUIExtension -nologo -sval "dist\agent_installer.wixobj" -out $msiOutput
 if ($LASTEXITCODE -ne 0) { throw 'Geracao MSI falhou.' }
 
