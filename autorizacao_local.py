@@ -132,6 +132,11 @@ def exige_identidade(metodo, caminho):
 def autorizar(operador, metodo, caminho):
     if caminho in ('/api/local/sessao', '/api/local/logout'):
         return
+    # Atualizar o produto oficial e uma operacao de qualquer operador ativo.
+    # A identidade ja foi validada pelo middleware; nao libera administracao
+    # nem outras rotas/metodos. A origem fixa, hash e ociosidade ficam no updater.
+    if (metodo, caminho) in (('GET', '/api/update/check'), ('POST', '/api/update')):
+        return
     if metodo == 'GET' and operador.get('uid') and caminho == '/api/user/permissions/' + operador['uid']:
         return
     permissoes = operador['permissoes']

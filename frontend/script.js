@@ -48303,7 +48303,7 @@ async function verificarAtualizacaoAgente(instalar = false) {
     async function pedir(caminho, method = 'GET') {
         const resp = await fetch(`${base}${caminho}`, { method, signal: AbortSignal.timeout(30000) });
         if (resp.status === 401) throw new Error('Entre no painel desta estação para atualizar o NewProd.');
-        if (resp.status === 403) throw new Error('A atualização exige um usuário com permissão de administração.');
+        if (resp.status === 403) throw new Error('Esta versão recusou a atualização pelo painel. Na estação, clique com o botão direito no ícone do NewProd ao lado do relógio e escolha Atualizar agora.');
         if (resp.status === 409) throw new Error('Há trabalho em andamento. Aguarde terminar e clique em Atualizar agora novamente.');
         if (!resp.ok) throw new Error(`O NewProd recusou a solicitação (HTTP ${resp.status}).`);
         return resp.json();
