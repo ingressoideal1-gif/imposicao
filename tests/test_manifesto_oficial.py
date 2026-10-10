@@ -3,8 +3,8 @@ from manifesto_oficial import BASE, validar
 
 
 def manifesto():
-    return dict(schema=1,produto='NewProdPilotoOficial',version='1.2.366',
-                url=BASE+'NewProdPiloto_Oficial_v1.2.366.msi',sha256='a'*64,
+    return dict(schema=1,produto='NewProdPilotoTeste',version='1.2.366',
+                url=BASE+'NewProdPiloto_Teste_v1.2.366.msi',sha256='a'*64,
                 bytes=153000000,estacoes=['PC-JR-HOME'])
 
 

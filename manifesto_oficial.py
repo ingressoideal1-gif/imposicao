@@ -6,11 +6,11 @@ import time
 import urllib.request
 
 BASE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/'
-URL = BASE + 'newprod-piloto-oficial.json'
+URL = BASE + 'newprod-piloto-teste.json'
 
 
 def validar(dados, estacao=None):
-    if not isinstance(dados, dict) or dados.get('schema') != 1 or dados.get('produto') != 'NewProdPilotoOficial':
+    if not isinstance(dados, dict) or dados.get('schema') != 1 or dados.get('produto') != 'NewProdPilotoTeste':
         raise ValueError('Manifesto nao pertence ao produto oficial.')
     versao = dados.get('version')
     if not isinstance(versao, str) or not re.fullmatch(r'\d{1,3}\.\d{1,3}\.\d{1,5}', versao):
@@ -18,7 +18,7 @@ def validar(dados, estacao=None):
     a,b,c = map(int,versao.split('.'))
     if a>255 or b>255 or c>65535:
         raise ValueError('Versao fora dos limites MSI.')
-    if dados.get('url') != BASE + 'NewProdPiloto_Oficial_v' + versao + '.msi':
+    if dados.get('url') != BASE + 'NewProdPiloto_Teste_v' + versao + '.msi':
         raise ValueError('Instalador fora do destino oficial.')
     if not isinstance(dados.get('sha256'),str) or not re.fullmatch('[0-9a-f]{64}',dados['sha256']):
         raise ValueError('Hash oficial invalido.')
