@@ -26956,7 +26956,7 @@ async function carregarOrdensDados(opcoes = {}) {
                 console.log('[OS] Carregando do Vibecode...');
                 // Passamos os produtos já carregados em paralelo para o loadOrdensFromVibecode
                 const loaded = await loadOrdensFromVibecode(pedidosComerciais, produtos,
-                    { ...opcoes, propostasPreloaded: produtosResult.propostas });
+                    { ...opcoes, propostasPreloaded: produtosResult.propostas, propagarErro: true });
                 if (loaded) {
                     await carregarModelosGlobais(true);
                     state.listaArteSomenteAtivos = !!opcoes.somenteArteAtiva || !!opcoes.recorteGrafica;
@@ -27650,7 +27650,10 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
 
         // A data e a hora são campos distintos no ERP. Sem hora, manter só a data.
         try {
-            const horasPorPedido = await lerDadosLista(carregarHorasDosPrazos(vibeClient, Object.keys(prazosPorPedido)), 'horários dos prazos');
+            // Na estacao, cada hora exige uma ida autenticada ao ERP. Completar
+            // depois do primeiro desenho; uma hora lenta nao invalida a lista.
+            const horasPorPedido = typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false && !opcoes.numeroPedido
+                ? {} : await lerDadosLista(sinal => carregarHorasDosPrazos(vibeClient, Object.keys(prazosPorPedido), sinal), 'horários dos prazos');
             for (const id of Object.keys(prazosPorPedido)) {
                 prazosPorPedido[id] = comporPrazoDoERP(prazosPorPedido[id], horasPorPedido[id]);
             }
@@ -27795,9 +27798,13 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         });
 
         console.log(`[Vibecode] ${state.ordens.length} OS carregadas, ${produtos.length} itens totais`);
+        if (typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
+            completarHorasDaLista(state.ordens, prazosPorPedido);
+        }
         return true;
     } catch (e) {
         console.error('[Vibecode] Erro na leitura:', e);
+        if (opcoes.propagarErro) throw e;
         return false;
     }
 }
@@ -29630,7 +29637,25 @@ function comporPrazoDoERP(data, hora) {
     return horario ? `${dia[0]}T${horario[1]}:${horario[2]}:00` : dia[0];
 }
 
-async function carregarHorasDosPrazos(client, ids) {
+function completarHorasDaLista(ordens, datas) {
+    const usuario = window._currentUser?.id || window._acessoLocal || null;
+    // A nova lista cancela a anterior, sem aplicar horas a outro usuario/recorte.
+    completarHorasDaLista.controle?.abort();
+    const controle = new AbortController();
+    completarHorasDaLista.controle = controle;
+    const relogio = setTimeout(() => controle.abort(), 30000);
+    const ids = Object.keys(datas);
+    const tarefa = carregarHorasDosPrazos(vibeClient, ids, controle.signal).then(horas => {
+        if (state.ordens !== ordens || usuario !== (window._currentUser?.id || window._acessoLocal || null)) return;
+        for (const os of ordens) {
+            const id = String(os.numero);
+            if (datas[id]) os.prazo_entrega = comporPrazoDoERP(datas[id], horas[id]);
+        }
+    }).finally(() => clearTimeout(relogio));
+    return iniciarComplementoLista(controle, () => tarefa);
+}
+
+async function carregarHorasDosPrazos(client, ids, signal) {
     const horas = {};
     // O login local do NewProd não cria sessão Supabase. A tabela dos setores
     // fica invisível ao anon; na estação, usar a rota autenticada pelo agente.
@@ -29638,9 +29663,10 @@ async function carregarHorasDosPrazos(client, ids) {
         let proximo = 0;
         async function carregarProximo() {
             while (proximo < ids.length) {
+                if (signal?.aborted) break;
                 const id = String(ids[proximo++]);
                 try {
-                    const resposta = await fetch(`/api/peso-setores/${encodeURIComponent(id)}`);
+                    const resposta = await fetch(`/api/peso-setores/${encodeURIComponent(id)}`, { signal });
                     if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
                     const corpo = await resposta.json();
                     const linha = (corpo.setores || []).find(setor => setor && setor.hora != null);
