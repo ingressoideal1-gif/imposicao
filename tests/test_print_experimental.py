@@ -115,11 +115,23 @@ def test_mesma_tentativa_aceita_nao_duplica(job, hardware):
     assert hardware[0].count('StartDoc') == 1
 
 
-def test_papel_menor_recusa_antes_do_startdoc(job, hardware):
+def test_papel_menor_avisa_e_envia_sem_reduzir_escala(job, hardware):
     hardware[2]['PHYSICALWIDTH'] = 600
-    with pytest.raises(ValueError, match='excede'): experimental.enviar('Sintetica', *job)
-    assert 'StartDoc' not in hardware[0]
+    result = experimental.enviar('Sintetica', *job)
+    assert len(result['avisos']) == 2
+    assert 'PDF excede' in result['avisos'][0]
+    assert 'StartDoc' in hardware[0] and 'EndDoc' in hardware[0]
+    draws = [c[1] for c in hardware[0] if isinstance(c, tuple) and c[0] == 'draw']
+    assert all(r[2] - r[0] == 1200 and r[3] - r[1] == 2400 for r in draws)
     assert hardware[0][-1] == 'DeleteDC'
+
+
+def test_orientacao_divergente_avisa_e_envia(job, hardware, monkeypatch):
+    monkeypatch.setattr(service, '_apply_devmode_options', lambda *a:
+                        SimpleNamespace(Copies=1, PaperSize=9, DefaultSource=7, Duplex=2, Color=2, Orientation=2))
+    result = experimental.enviar('Sintetica', *job)
+    assert 'orientation' in result['avisos'][0]
+    assert 'EndDoc' in hardware[0]
 
 
 def test_driver_nao_confirma_opcoes_bloqueia(job, hardware, monkeypatch):

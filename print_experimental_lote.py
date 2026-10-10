@@ -47,16 +47,20 @@ def enviar(printer_name, paths, options):
         with gestao.acompanhar_envio(printer_name, 'experimental_lote_' + options['modo'],
                                     digest, options['gestao_envio_id'], contexto=options.get('historico_contexto')) as ident:
             raster_bytes = 0
+            avisos = []
             for _ in range(options['copies']):
                 for path, item, metrics in preparados:
                     result = experimental._renderizar(service, gestao, printer_name, path, item, metrics, lote=lote)
                     raster_bytes += result['raster_rgb_bytes']
+                    for aviso in result.get('avisos', []):
+                        if aviso not in avisos:
+                            avisos.append(aviso)
             lote['dc'].EndDoc()
             lote['started'] = False
             gestao.historico().transicao(ident, 'enviado')
         return {'estado': 'enviado', 'spool_id': lote['spool_id'], 'teste_id': options['gestao_envio_id'],
                 'arquivos': len(paths), 'folhas': plano['folhas_por_copia'] * options['copies'],
-                'raster_rgb_bytes': raster_bytes}
+                'raster_rgb_bytes': raster_bytes, 'avisos': avisos}
     except gestao.EnvioRepetido:
         raise ValueError('Este teste ja foi registrado. Confira a fila antes de iniciar outro teste.') from None
     finally:

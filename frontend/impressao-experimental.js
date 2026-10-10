@@ -151,6 +151,7 @@
                 `Modo: ${$('mode').selectedOptions[0].textContent}\n` +
                 `${result.paginas} página(s). PDF: ${(result.pdf_bytes / 1048576).toFixed(2)} MiB.\n` + details +
                 `Preparação e envio ao Windows: ${result.envio_seconds}s.\n` +
+                (result.avisos?.length ? `Avisos: ${result.avisos.join('\n')}\n` : '') +
                 'Confira o tamanho na fila e o tempo até sair papel. O envio não comprova impressão física.');
         } catch (error) {
             status(`${error.message}\nNenhum reenvio automático foi feito. Confira a fila e as folhas antes de preparar outro teste.`);

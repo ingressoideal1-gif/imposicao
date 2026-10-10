@@ -142,6 +142,7 @@
                         const data = await res.json();
                         if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Falha no trabalho único.');
                         enviados = fila.length;
+                        if (data.avisos?.length) toast(data.avisos.join('\n'), 'warning');
                         toast(`Teste enviado em um trabalho (spool ${data.spool_id}). Confira as folhas; o pedido não foi marcado como impresso.`, 'info');
                         return true;
                     } catch (error) {

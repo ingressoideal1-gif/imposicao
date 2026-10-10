@@ -135,6 +135,10 @@ def _pdf_raw(service, gestao, printer_name, pdf_path, options, metrics):
 
 def _renderizar(service, gestao, printer_name, pdf_path, options, metrics, *, preflight=False, lote=None):
     started = time.perf_counter()
+    metrics = dict(metrics, avisos=[])
+    def avisar(message):
+        metrics['avisos'].append(message)
+        print('[print][EXPERIMENTAL][AVISO]', message)
     # Mesmo DEVMODE por trabalho e mesma geometria do envio atual. Nao usa SetPrinter.
     devmode = service._apply_devmode_options(printer_name, options)
     if devmode is None:
@@ -143,6 +147,10 @@ def _renderizar(service, gestao, printer_name, pdf_path, options, metrics, *, pr
                              ('tray', 'DefaultSource'), ('duplex', 'Duplex'),
                              ('color', 'Color'), ('orientation', 'Orientation')]:
         if getattr(devmode, attribute, None) != options[field]:
+            if field in ('paper_size', 'orientation'):
+                avisar('Driver diverge em %s: solicitado=%s, retornado=%s. Teste prossegue.' %
+                       (field, options[field], getattr(devmode, attribute, None)))
+                continue
             raise ValueError('O driver nao confirmou a opcao %s; nenhum teste foi enviado.' % field)
     cor_cfg, aviso = service.color_profiles.resolver_config(printer_name)
     transform = None
@@ -188,7 +196,11 @@ def _renderizar(service, gestao, printer_name, pdf_path, options, metrics, *, pr
                     caps['HORZRES'], caps['VERTRES'], caps['PHYSICALWIDTH'], caps['PHYSICALHEIGHT'],
                     caps['PHYSICALOFFSETX'], caps['PHYSICALOFFSETY'])
                 if not rect[4]:
-                    raise ValueError('O PDF excede o papel selecionado. O teste nao ajusta a escala.')
+                    avisar('Pagina %d: PDF %.2f x %.2f mm; papel do driver %.2f x %.2f mm. '
+                           'PDF excede o papel; teste prossegue em escala 100%%, podendo cortar a imagem.' %
+                           (page.number + 1, page.rect.width * 25.4 / 72, page.rect.height * 25.4 / 72,
+                            caps['PHYSICALWIDTH'] * 25.4 / caps['LOGPIXELSX'],
+                            caps['PHYSICALHEIGHT'] * 25.4 / caps['LOGPIXELSY']))
                 rectangles.append(rect)
             if preflight:
                 return metrics
