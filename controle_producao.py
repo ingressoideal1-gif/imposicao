@@ -58,7 +58,8 @@ controle = ControleProducao()
 
 class ProtegerProducaoMiddleware:
     """Mantém reserva até o fim do envio HTTP, inclusive StreamingResponse."""
-    CAMINHOS = {'/api/impose', '/api/print/submit', '/api/hotfolder/drop'}
+    CAMINHOS = {'/api/impose', '/api/print/submit', '/api/hotfolder/drop',
+                '/api/print/experimental/submit', '/api/print/experimental/submit-lote'}
 
     def __init__(self, app, controlador=None):
         self.app = app

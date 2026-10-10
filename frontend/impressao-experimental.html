@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NewProd — impressão experimental</title>
+  <style>
+    body{margin:0;background:#101827;color:#e5e7eb;font:16px system-ui,sans-serif}
+    [hidden]{display:none!important}
+    main{max-width:780px;margin:32px auto;padding:24px}h1{font-size:1.6rem}
+    p{line-height:1.5;color:#cbd5e1}fieldset{border:1px solid #475569;border-radius:8px;padding:20px}
+    label{display:block;margin:14px 0}select,input[type=file]{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:9px;background:#1e293b;color:white;border:1px solid #64748b;border-radius:5px}
+    button{padding:12px 18px;margin:10px 8px 0 0;background:#2563eb;color:white;border:0;border-radius:6px;font:inherit;cursor:pointer}
+    button:disabled{opacity:.45;cursor:default}.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}
+    output{display:block;white-space:pre-wrap;line-height:1.6;margin-top:20px;padding:16px;background:#1e293b;border-radius:8px}
+    @media(max-width:550px){main{margin:0;padding:16px}.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body><main>
+  <h1>Impressão experimental</h1>
+  <p><a href="index.html" style="color:#93c5fd">Voltar ao painel do NewProd</a></p>
+  <p>Teste separado da impressão normal. Selecione o PDF imposicionado já salvo: sem limite de páginas ou tamanho do PDF; uma cópia neste formulário. Este envio não marca pedidos como impressos e não salva configurações.</p>
+  <p>Compare as três saídas usando o mesmo PDF, impressora e papel. Cada clique envia somente o modo escolhido, sem tentar outro modo em caso de erro. Confira QR codes, letras pequenas, cores e frente/verso nas folhas.</p>
+  <form id="exp-form">
+    <fieldset id="exp-fields" disabled>
+      <legend>Configuração deste teste</legend>
+      <label>Modo de envio <select id="exp-mode" required>
+        <option value="">Selecione o modo…</option>
+        <option value="gdi_atual">1 — GDI atual: resolução do driver</option>
+        <option value="experimental_gdi">2 — GDI experimental: 300 ou 600 DPI</option>
+        <option value="pdf_raw">3 — PDF direto ao RIP (RAW)</option>
+      </select></label>
+      <p id="exp-description">Selecione o modo de envio para ver as opções.</p>
+      <label>PDF imposicionado <input id="exp-file" type="file" accept="application/pdf,.pdf" required></label>
+      <label>Impressora desta estação <select id="exp-printer" required><option value="">Selecione…</option></select></label>
+      <div id="exp-driver" class="grid">
+        <label id="exp-dpi-label">Resolução experimental <select id="exp-dpi"><option value="600">600 DPI — maior definição</option><option value="300">300 DPI — menor volume</option></select></label>
+        <label>Papel <select id="exp-paper" required></select></label>
+        <label>Bandeja <select id="exp-tray" required></select></label>
+        <label>Frente e verso <select id="exp-duplex"><option value="1">Somente frente</option><option value="2">Duplex — borda longa</option><option value="3">Duplex — borda curta</option></select></label>
+        <label>Cor <select id="exp-color"><option value="2">Colorido</option><option value="1">Preto e branco</option></select></label>
+        <label>Orientação <select id="exp-orientation"><option value="1">Retrato</option><option value="2">Paisagem</option></select></label>
+      </div>
+      <label id="exp-raw-label" hidden><input type="checkbox" id="exp-raw"> Confirmei que esta fila/RIP aceita PDF nativo e que seu preset está configurado para uma cópia, escala 100%, papel, bandeja, orientação, cor e duplex desejados.</label>
+      <label><input type="checkbox" id="exp-confirm" required> Conferi que a fila está vazia e quero imprimir uma cópia de teste em escala 100%.</label>
+      <button id="exp-send" type="submit" disabled>Enviar teste experimental</button>
+    </fieldset>
+  </form>
+  <button id="exp-new" type="button" hidden>Conferi a fila e as folhas — preparar outro teste</button>
+  <button id="exp-stop" type="button" hidden>Encerrar experimento</button>
+  <output id="exp-status" aria-live="polite">Verificando o agente local…</output>
+  <script src="impressao-experimental.js?v=2"></script>
+</main></body></html>

@@ -1913,8 +1913,7 @@
 
                                 <!-- ── DIREITA: as acoes, separadas por tipo ──────────────── -->
                                 <div class="ped-janela-direita">
-<div class="ped-acoes-topo">
-<div class="jg jg-aberto" id="jg-imprimir">
+<div class="ped-acoes-topo"><div class="jg jg-aberto" id="jg-imprimir">
                                         <button type="button" class="jg-botao" aria-expanded="true" aria-controls="jg-imprimir-corpo" onclick="alternarGrupoDaJanela('jg-imprimir')">
                                             <span>&#128424; Imprimir e PDF</span>
                                             <span class="jg-seta">&#9650;</span>
@@ -1928,6 +1927,7 @@
                                                     <span>&#128424;</span> Imprimir
                                                 </button>
                                             </div>
+                                            <a id="ped-preview-btn-experimental" class="btn btn-secondary" href="impressao-experimental.html" style="display:flex;justify-content:center;margin-top:8px;">Teste de impressão — experimental</a>
                                             <!-- Existia no codigo e nunca aparecia: morava
                                                  dentro do bloco escondido do formulario
                                                  antigo, entao cancelar um envio em andamento
@@ -1952,8 +1952,7 @@
                                             Guarda nesta esta&ccedil;&atilde;o a pasta observada, a configura&ccedil;&atilde;o de impress&atilde;o,
                                             a entrega por bloco e o gerenciamento de cores.
                                         </div>
-                                    </div>
-</div>
+                                    </div></div>
 <div class="ped-config-rolagem">
 
                                     <!-- 1) IMPRIMIR + PDF — o unico par da tela.
@@ -2316,8 +2315,7 @@
                                          sem saida ja custou caro nesta tela. -->
 
 
-
-</div>
+                                </div>
 </div><!-- /ped-janela-direita -->
                             </div><!-- /ped-janela-corpo -->
                         </div>
@@ -3471,6 +3469,7 @@
                         <h1>🖨️ Impressoras</h1>
                         <p>Gerencie impressoras instaladas, perfis PPD e impressão direta via agente local.</p>
                     </div>
+                    <a id="btn-teste-impressao" class="btn btn-primary" href="impressao-experimental.html">Teste de impressão</a>
                 </div>
 
                 <!-- Status do Agente -->
@@ -3530,6 +3529,7 @@
                             <div>
                                 <h3 style="margin:0;font-size:1.1rem;font-weight:700;color:#f1f5f9;">Impressão Direta</h3>
                                 <p id="print-modal-subtitle" style="margin:0;font-size:0.78rem;color:var(--text-dim);">Configurar opções do driver de impressão</p>
+                                <a href="impressao-experimental.html" style="color:#93c5fd;font-size:0.78rem;">Abrir teste experimental separado</a>
                             </div>
                         </div>
                         <button onclick="closePrintModal()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-dim);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;transition:all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.2)';this.style.color='#ef4444'" onmouseout="this.style.background='rgba(255,255,255,0.08)';this.style.color='var(--text-dim)'">&#x2715;</button>
@@ -4523,6 +4523,7 @@
     <script src="qr-evento-envio.js?v=948"></script>
     <script src="ideal-control.js?v=948"></script>
     <script src="criador-arte.js?v=964"></script>
+    <script src="/impressao-teste-modelo.js?v=1"></script>
     <script src="/pedido.js?v=1037-historico1"></script>
     <script src="/producao-por-cor.js?v=1028"></script>
     <script src="montagem.js?v=958"></script>

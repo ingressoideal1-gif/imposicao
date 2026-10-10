@@ -6173,6 +6173,10 @@ async function executarPedImposition(mode, isRefazer) {
     const folha1 = folha1DoPedido();
     if (folha1?.erro) return toast(folha1.erro, 'warning');
     if (folha1 && isRefazer) return toast('Desmarque Folha 1 antes de usar Refazer Folhas ou Refazer Célula.', 'warning');
+    const testeModelo = mode === 'print' && window.NewProdTesteModelo
+        ? await window.NewProdTesteModelo.capturar(getPedPrintOptions(), {
+            apenasUmaFace: (folha1 ? folha1.face : faceDeImpressaoDoPedido()) !== 'both'
+        }) : null;
     const selecaoInicial = JSON.stringify(state.selectedOSItems || []);
     const ativoInicial = JSON.stringify(state.activeOSItem || null);
     // A confirmação pertence aos modelos capturados antes dos carregamentos.
@@ -6465,7 +6469,7 @@ async function executarPedImposition(mode, isRefazer) {
     // tiragem inteira — e o motor deriva daqui também os nomes `_setN_02_miolo`.
     const baseFilename = modeloNum ? modeloNum : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}`;
     const faceDoTrabalho = folha1 ? folha1.face : faceDeImpressaoDoPedido();
-    const opcoesDeFace = { apenasUmaFace: faceDoTrabalho !== 'both',
+    const opcoesDeFace = { testeModelo, apenasUmaFace: faceDoTrabalho !== 'both',
         historicoContexto: mode === 'print' ? contextoHistoricoImpressao(isRefazer || folha1 ? [state.activeOSItem].filter(Boolean) : alvosDoTrabalho, isRefazer) : null };
     const sufixoFace = faceDoTrabalho === 'both' ? '' : faceDoTrabalho === 'front' ? '_frente' : '_verso';
     const defaultFilename = `${baseFilename}${refazer.sufixo || ''}${sufixoFace}.pdf`;
@@ -7184,7 +7188,7 @@ async function executarPedImposition(mode, isRefazer) {
                                     await fallbackDownload();
                                 }
                             } catch (e) {
-                                if (entrega) entrega.finalizar({ interrompido: true });
+                                if (entrega) await Promise.resolve(entrega.finalizar({ interrompido: true })).catch(() => {});
                                 throw e;
                             }
                         } else if (currentEvent === "done" && dataStr) {
@@ -7204,7 +7208,7 @@ async function executarPedImposition(mode, isRefazer) {
                 await reader.cancel().catch(() => {});
             } else conferencia.verificar();
             } catch (erro) {
-                if (entrega) entrega.finalizar({ interrompido: true });
+                if (entrega) await Promise.resolve(entrega.finalizar({ interrompido: true })).catch(() => {});
                 await reader.cancel().catch(() => {});
                 throw erro;
             }
@@ -7223,8 +7227,8 @@ async function executarPedImposition(mode, isRefazer) {
                 // Refazer é reimpressão de uma parte: o modelo já estava impresso
                 // (ou continua não estando). Ver a nota do bloco abaixo.
                 const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
-                const ok = entrega.finalizar({ interrompido: cancelouNoMeio });
-                if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
+                const ok = await entrega.finalizar({ interrompido: cancelouNoMeio });
+                if (ok && !testeModelo && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 return;
             }
 
@@ -7240,7 +7244,7 @@ async function executarPedImposition(mode, isRefazer) {
                 if (typeof sendPrintJobDirect === 'function') {
                     const ok = await sendPrintJobDirect(printBlobQueue, opcoesDeFace);
                     // Não marca sozinho: pergunta ao operador antes de mudar o status
-                    if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
+                    if (ok && !testeModelo && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 } else {
                     if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
                     await openPrintModalQueue(printBlobQueue);
@@ -7275,7 +7279,7 @@ async function executarPedImposition(mode, isRefazer) {
                     if (typeof sendPrintJobDirect === 'function') {
                         const ok = await sendPrintJobDirect(multiBlobs, opcoesDeFace);
                         // Não marca sozinho: pergunta ao operador antes de mudar o status
-                        if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
+                        if (ok && !testeModelo && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                     } else {
                         if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
                         await openPrintModalQueue(multiBlobs);
@@ -7322,7 +7326,7 @@ async function executarPedImposition(mode, isRefazer) {
                 const queue = [{ name: defaultFilename, blob }];
                 const ok = await sendPrintJobDirect(queue, opcoesDeFace);
                 // Não marca sozinho: pergunta ao operador antes de mudar o status
-                if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
+                if (ok && !testeModelo && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
             } else {
                 if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
                 await openPrintModal(blob);

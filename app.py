@@ -1985,6 +1985,10 @@ async def save_icc_map(request: Request):
 def get_printer_capabilities_endpoint(printer_name: str):
     return print_service.get_printer_capabilities(printer_name)
 
+# O ensaio tem rotas proprias; nao muda o contrato nem o despacho do envio atual.
+from print_experimental_api import router as print_experimental_router
+app.include_router(print_experimental_router)
+
 @app.post("/api/print/submit")
 async def submit_print_job(
     file: UploadFile = File(...),

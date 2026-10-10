@@ -44939,6 +44939,8 @@ async function initPedPrintPanel() {
     const panel = document.getElementById('ped-print-driver-panel');
     if (!panel) return;
 
+    window.NewProdTesteModelo?.montar(panel);
+
     // As pastas do hot folder sao da estacao, como as impressoras, e a tela
     // precisa delas ANTES de o produto ser aplicado: o _applyPrintConfig marca
     // o ladrilho da pasta gravada, e sem a grade desenhada nao ha o que marcar.
@@ -45802,7 +45804,7 @@ window.esquecerHotFolder = esquecerHotFolder;
 // Reversa e Folha a Folha sao aplicadas ao PDF pelo navegador antes do envio, e
 // por isso continuam valendo.
 function _aplicarEstadoHotFolder() {
-    const ativo = _hotFolderAtivo();
+    const ativo = _hotFolderAtivo() && !window.NewProdTesteModelo?.ativo();
 
     // O ESTADO nao se esconde com os controles: fechado o grupo, o selo continua
     // dizendo para onde o material vai. Mesma regra do Gerenciamento de Cores.
@@ -46048,12 +46050,13 @@ async function processPrintQueueOptions(queue, options) {
 // `sendPrintJobDirect` continua com a mesma assinatura, agora escrito em cima
 // disto — os caminhos que já têm a fila inteira na mão (o fallback sem
 // streaming, o modal) não mudaram de comportamento.
-function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historicoContexto = null } = {}) {
-    const { printerName, options } = getPedPrintOptions();
+function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historicoContexto = null, testeModelo = null } = {}) {
+    if (testeModelo?.options?.trabalho_unico) return window.NewProdTesteModelo.criarEntregaUnica({testeModelo, apenasUmaFace, historicoContexto});
+    const { printerName, options } = testeModelo ? structuredClone(testeModelo) : getPedPrintOptions();
     if (apenasUmaFace) options.duplex = 1;
     const hotFolder = options.hot_folder_path || '';
 
-    if (_hotFolderAtivo() && !hotFolder) {
+    if (!testeModelo && _hotFolderAtivo() && !hotFolder) {
         toast('HOT FOLDER está marcado, mas nenhuma pasta foi escolhida.', 'error');
         return null;
     }
@@ -46124,11 +46127,12 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historic
                 const dropData = await res.json();
                 if (dropData.path) caminhosSoltos.push(dropData.path);
             } else if (isLocalMode) {
+                if (testeModelo) itemOptions = window.NewProdTesteModelo.opcoesEnvio(itemOptions);
                 const formData = new FormData();
                 formData.append('file', item.blob, nomeParaSpool(ordem, item.name));
                 formData.append('printer_name', printerName);
                 formData.append('options', JSON.stringify(itemOptions));
-                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/submit`, { method: 'POST', body: formData, signal: AbortSignal.timeout(600000) });
+                const res = await fetch(`${AGENTE_LOCAL_URL}/api/print/${testeModelo ? 'experimental/submit' : 'submit'}`, { method: 'POST', body: formData, signal: AbortSignal.timeout(600000) });
                 if (!res.ok) {
                     const errText = await res.text();
                     throw new Error(errText || 'Falha ao enviar para impressora local.');
@@ -46218,6 +46222,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historic
             if (ok) {
                 const destino = hotFolder ? `a pasta "${hotFolder}"` : `"${printerName}"`;
                 toast(`✓ ${successCount} arquivo(s) enviado(s) para ${destino}!`, 'success');
+                if (testeModelo) toast('Teste entregue ao Windows. Confira o spool e as folhas; o pedido não foi marcado como impresso.', 'info');
                 _conferirConsumoHotFolder(caminhosSoltos);
             } else if (successCount > 0) {
                 // Papel entregue nao volta: quem parou no meio ainda precisa da
@@ -46232,14 +46237,14 @@ window.criarEntregaDeImpressao = criarEntregaDeImpressao;
 
 // Envia os blobs gerados diretamente para a impressora configurada no painel lateral
 // sem abrir o modal (modo "print sem modal")
-async function sendPrintJobDirect(queue, { apenasUmaFace = false, historicoContexto = null } = {}) {
-    const entrega = criarEntregaDeImpressao({ total: (queue || []).length, apenasUmaFace, historicoContexto });
+async function sendPrintJobDirect(queue, { apenasUmaFace = false, historicoContexto = null, testeModelo = null } = {}) {
+    const entrega = criarEntregaDeImpressao({ total: (queue || []).length, apenasUmaFace, historicoContexto, testeModelo });
     if (!entrega) return false;
     try {
         await entrega.entregar(queue);
-        return entrega.finalizar();
+        return await entrega.finalizar();
     } catch (e) {
-        entrega.finalizar({ interrompido: true });
+        await Promise.resolve(entrega.finalizar({ interrompido: true })).catch(() => {});
         throw e;
     }
 }
