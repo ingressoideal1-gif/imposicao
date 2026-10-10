@@ -1,5 +1,7 @@
 # GUSTAVO-PROD — entrada no NewProd Teste
 
+**Plano substituído antes da publicação:** o usuário alterou o destino para LASER-01. Gustavo permanece no canal normal. Ver laser01-teste-381-20261010.md; o restante deste arquivo registra a preparação anterior.
+
 Solicitação de 10/10/2026: incluir a estação Gustavo na versão de teste. Operador disponível para instalação por MSI. Base de produção preservada em origin/main 7d257be9 (Piloto 1.2.379).
 
 Pacote separado: NewProdPiloto_Teste_v1.2.381.msi. ProductVersion Windows 1.2.381; agente informa 1.2.381-teste.1. Mesmo UpgradeCode, destino NewProd Agent, porta 9001 e preservador de configuração do Piloto. Não é instalação paralela. Fonte experimental vem da Junior Teste, com layout e carregamento da .379 e inicialização --background preservados. Não publicar estes arquivos de impressão no site ou no manifesto geral.
