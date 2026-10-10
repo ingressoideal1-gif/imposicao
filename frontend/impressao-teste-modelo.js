@@ -60,7 +60,7 @@
         snapshot.options.perfil_driver = perfil.assinatura;
         if (mode !== 'pdf_raw') {
             if (caps.lote_gdi !== 1) throw new Error('Atualize o NewProd Teste para enviar a sequência em um único trabalho.');
-            snapshot.options.trabalho_unico = true;
+            snapshot.options.trabalho_unico = !snapshot.options.entregar_por_bloco && !snapshot.options.folha_a_folha;
         }
         const resumo = document.getElementById('ped-teste-destino');
         if (resumo) resumo.textContent = `${perfil.estacao} · ${perfil.impressora} · ${mode === 'pdf_raw' ? 'PDF usa o preset do RIP; troca automática de bandejas não disponível nesta saída.' : 'Configuração do modelo conferida com o driver.'}`;
@@ -79,12 +79,40 @@
             copies: options.copies, integridade_sha256: options.integridade_sha256,
             gestao_envio_id: options.gestao_envio_id, historico_contexto: options.historico_contexto};
     }
+    async function prepararFolhasGdi(itens, options) {
+        if (!options.folha_a_folha) return processPrintQueueOptions(itens, options);
+        const PDFDocument = window.PDFLib?.PDFDocument;
+        if (!PDFDocument) throw new Error('Biblioteca PDF indisponível para envio folha a folha. Recarregue o painel.');
+        const fila = [];
+        const passo = Number(options.duplex) === 2 || Number(options.duplex) === 3 ? 2 : 1;
+        for (const item of itens) {
+            const doc = await PDFDocument.load(await item.blob.arrayBuffer());
+            const folhas = [];
+            for (let i = 0; i < doc.getPageCount(); i += passo) {
+                folhas.push(Array.from({length: Math.min(passo, doc.getPageCount() - i)}, (_, n) => i + n));
+            }
+            if (options.impressao_reversa) folhas.reverse();
+            for (const indices of folhas) {
+                const folha = await PDFDocument.create();
+                (await folha.copyPages(doc, indices)).forEach(p => folha.addPage(p));
+                fila.push({name: `${(item.name || 'documento.pdf').replace(/\.pdf$/i, '')}_folha_${String(Math.floor(indices[0] / passo) + 1).padStart(3, '0')}.pdf`,
+                    blob: new Blob([await folha.save()], {type: 'application/pdf'})});
+            }
+        }
+        return fila;
+    }
     function criarEntregaUnica({testeModelo, apenasUmaFace = false, historicoContexto = null}) {
         const {printerName, options} = structuredClone(testeModelo);
         if (!['gdi_atual','experimental_gdi'].includes(options.modo)) throw new Error('Trabalho único requer uma saída GDI.');
         if (apenasUmaFace) options.duplex = 1;
         const fila = [];
         let encerrada = false, cancelado = false, falhas = 0, enviados = 0, conclusao;
+        function informar(texto) {
+            const destino = document.getElementById('ped-teste-destino');
+            if (destino) destino.textContent = texto;
+            console.info('[Teste GDI]', texto);
+        }
+        informar('GDI: aguardando os arquivos gerados pelo modelo.');
         window.isPrinting = true;
         function botoes(emCurso) {
             for (const [id, visible] of [['ped-btn-cancel-print', emCurso], ['ped-btn-impose', !emCurso], ['ped-btn-impose-print', !emCurso]]) {
@@ -104,6 +132,7 @@
                     ? await processPrintQueueOptions(itens, options) : itens;
                 if (encerrada || cancelado) throw new Error('Trabalho encerrado.');
                 fila.push(...partes);
+                informar(`GDI: ${fila.length} arquivo(s) recebido(s). Aguardando concluir a geração para enviar o lote.`);
                 toast(`${fila.length} arquivo(s) preparado(s). O envio único começa após concluir a geração.`, 'info');
                 return true;
             },
@@ -116,10 +145,12 @@
                         if (interrompido || cancelado || window._printCancelRequested) {
                             cancelado = true;
                             window._printCancelRequested = false;
+                            informar('GDI: lote cancelado antes do envio ao agente.');
                             return false;
                         }
                         if (!fila.length) throw new Error('Nenhum PDF preparado para o trabalho.');
                         const form = new FormData();
+                        informar(`GDI: conferindo ${fila.length} arquivo(s) para envio.`);
                         const partes = [];
                         for (const item of fila) {
                             const capa = /_(?:contra)?capa/i.test(item.name || '');
@@ -136,16 +167,21 @@
                         const session = JSON.parse(sessionStorage.getItem('newprod_acesso_local') || 'null');
                         if (session?.token) headers['X-NewProd-Sessao'] = session.token;
                         iniciouRequisicao = true;
+                        informar(`GDI: enviando ${fila.length} arquivo(s) ao agente; aguardando resposta do driver.`);
                         const res = await fetch(`${location.origin}/api/print/experimental/submit-lote`, {
                             method: 'POST', headers, body: form, signal: AbortSignal.timeout(600000)
                         });
-                        const data = await res.json();
+                        let data;
+                        try { data = await res.json(); }
+                        catch (_) { throw new Error(`Agente respondeu HTTP ${res.status} sem resposta JSON válida.`); }
                         if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Falha no trabalho único.');
                         enviados = fila.length;
+                        informar(`GDI: enviado ao spool ${data.spool_id}. Confira a fila da impressora.`);
                         if (data.avisos?.length) toast(data.avisos.join('\n'), 'warning');
                         toast(`Teste enviado em um trabalho (spool ${data.spool_id}). Confira as folhas; o pedido não foi marcado como impresso.`, 'info');
                         return true;
                     } catch (error) {
+                        informar(`GDI: ${error.message}`);
                         falhas++;
                         cancelado = true;
                         if (iniciouRequisicao) window.registrarImpressaoInterrompida?.(0);
@@ -165,5 +201,5 @@
             }
         };
     }
-    window.NewProdTesteModelo = {montar, capturar, opcoesEnvio, ativo, criarEntregaUnica};
+    window.NewProdTesteModelo = {montar, capturar, opcoesEnvio, ativo, criarEntregaUnica, prepararFolhasGdi};
 })();

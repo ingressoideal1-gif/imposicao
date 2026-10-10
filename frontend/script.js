@@ -46188,7 +46188,9 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historic
                     toast(`Processando páginas (${modoDesc})...`, 'info');
                     avisouTransformacao = true;
                 }
-                fila = await processPrintQueueOptions(fila, options);
+                fila = testeModelo && options.modo !== 'pdf_raw'
+                    ? await window.NewProdTesteModelo.prepararFolhasGdi(fila, options)
+                    : await processPrintQueueOptions(fila, options);
             }
 
             for (const item of fila) {

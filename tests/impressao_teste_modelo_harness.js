@@ -57,6 +57,52 @@ function extract(name) {
     assert.equal(await page.$$eval('#ped-teste-saida', es => es.length), 1);
     assert.equal(await page.$$eval('#ped-teste-saida option[value]:not([value=""])', es => es.length), 3);
     const config = {printerName: 'Sintetica', options: {copies: 3, paper_size: 8, tray: 7, tray_capa: 2, tray_miolo: 4, duplex: 2, color: 1, orientation: 2}};
+    for (const modo of ['gdi_atual', 'experimental_gdi']) {
+      await page.select('#ped-teste-saida', modo);
+      const fluxo = await page.evaluate(async cfg => {
+        calls.length = 0;
+        cfg.options.entregar_por_bloco = true;
+        const testeModelo = await NewProdTesteModelo.capturar(cfg);
+        const entrega = criarEntregaDeImpressao({testeModelo});
+        await entrega.entregar([{name:'modelo_capa.pdf',blob:new Blob(['capa'])}]);
+        const primeiro = calls.length;
+        await entrega.entregar([{name:'modelo_miolo.pdf',blob:new Blob(['miolo'])}]);
+        const segundo = calls.length;
+        await entrega.finalizar();
+        return {primeiro,segundo,calls};
+      }, config);
+      assert.equal(fluxo.primeiro, 1, 'primeiro bloco enviado antes do segundo ser gerado');
+      assert.equal(fluxo.segundo, 2);
+      assert.deepEqual(fluxo.calls.map(c=>c.options.tray), [2,4]);
+      assert(fluxo.calls.every(c=>c.url.endsWith('/experimental/submit')));
+    }
+    await page.addScriptTag({path: path.join(root, 'frontend/pdf-lib.min.js')});
+    for (const modo of ['gdi_atual', 'experimental_gdi']) {
+      await page.select('#ped-teste-saida', modo);
+      for (const duplex of [1,2,3]) {
+        const folhas = await page.evaluate(async ({cfg,duplex}) => {
+          calls.length=0;
+          const doc=await PDFLib.PDFDocument.create();
+          for (let n=0;n<3;n++) doc.addPage([100+n,200]);
+          const itens=[{name:'modelo_capa.pdf',blob:new Blob([await doc.save()])}];
+          cfg.options={...cfg.options,folha_a_folha:true,duplex,impressao_reversa:true};
+          const testeModelo=await NewProdTesteModelo.capturar(cfg);
+          const separados=await NewProdTesteModelo.prepararFolhasGdi(itens,testeModelo.options);
+          const paginas=[];
+          for (const f of separados) paginas.push((await PDFLib.PDFDocument.load(await f.blob.arrayBuffer())).getPages().map(p=>p.getWidth()));
+          const entrega=criarEntregaDeImpressao({testeModelo});
+          await entrega.entregar(itens);
+          const antes=calls.length;
+          await entrega.finalizar();
+          return {paginas,antes,depois:calls.length,bandejas:calls.map(c=>c.options.tray)};
+        }, {cfg:config,duplex});
+        assert.deepEqual(folhas.paginas,duplex===1 ? [[102],[101],[100]] : [[102],[100,101]]);
+        assert.equal(folhas.antes,duplex===1 ? 3 : 2,'folhas enviadas antes de finalizar');
+        assert.equal(folhas.depois,folhas.antes);
+        assert(folhas.bandejas.every(b=>b===2));
+      }
+    }
+    await page.select('#ped-teste-saida', '');
     const empty = await page.evaluate(async cfg => {try {await NewProdTesteModelo.capturar(cfg); return false;} catch {return true;}}, config);
     assert(empty, 'sem modo nao gera nem envia');
     for (const mode of ['gdi_atual','experimental_gdi','pdf_raw']) {
@@ -139,7 +185,7 @@ function extract(name) {
     assert.equal(simplex, 1, 'face única conferida como simplex antes da geração');
     assert.equal((pedido.match(/if \(ok && !testeModelo && alvoImpressao.length\)/g)||[]).length,4,'todos os caminhos de conclusao excluem status comercial no teste');
     assert(pedido.includes('const opcoesDeFace = { testeModelo,'));
-    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=1'));
+    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=3'));
     // A entrega normal continua usando o endpoint e opcoes anteriores quando nao ha teste.
     const normal = await page.evaluate(async cfg => {
       calls.length=0; window.fail=false; window._hotFolderAtivo=()=>false; window.getPedPrintOptions=()=>structuredClone(cfg);
