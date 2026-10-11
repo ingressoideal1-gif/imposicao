@@ -61,7 +61,8 @@ function extrair(nome, atribuida = false, codigo = fonte) {
                 'isElSelected', 'renderElementsList', 'boxEspacoDoTextoHTML', 'resumoEstouroHTML',
                 'conferirEstouroDoElemento', 'textoDeExemploDoElemento', 'bancoDeAmostra',
                 'drawElement', 'linhaDeAmostra', 'elementoVisivelNaFace', 'elementoSoLayout',
-                'criarCanvasNumeracaoRasterizada'].map(nome => extrair(nome)).join('\n')}
+                'criarCanvasNumeracaoRasterizada', 'elementosNaOrdemDeComposicao',
+                'elementoMesclaComArte'].map(nome => extrair(nome)).join('\n')}
             const previaPainel = (() => { ${extrair('drawNumeracaoElementsOverCanvas')}; return drawNumeracaoElementsOverCanvas; })();
             const previaCliente = (() => { ${extrair('drawNumeracaoElementsOverCanvas', false, ler('frontend/cliente.js'))}; return drawNumeracaoElementsOverCanvas; })();
             ${['addDatabaseTextElement', 'addElement', 'updateEl', 'updateElSource',
@@ -149,6 +150,43 @@ function extrair(nome, atribuida = false, codigo = fonte) {
             const antiga = addElement('TEXT'), fixo = addElement('FIXED');
             if (antiga.database_text || antiga.pad !== 6 || !fixo.fixed) throw Error('Elementos antigos alterados');
         });
+        // Teatro e Camarote usam os mesmos controles, inclusive ao reabrir o JSON salvo.
+        for (const type of ['TEATRO_FILA', 'TEATRO_LUGAR', 'TEATRO_COMBO',
+            'CAMAROTE_LOCAL', 'CAMAROTE_PESSOA', 'CAMAROTE_PESSOA_TOTAL']) {
+            await page.evaluate(type => {
+                state.numElements = [{ id: 'espaco', type, x_mm: 20, y_mm: 20,
+                    font_name: 'helv', font_size: 12, prefix: 'Exemplo longo ', pad: 6 }];
+                renderElementsList();
+            }, type);
+            const campo = nome => `#elcard-espaco [onchange*="'${nome}'"]`;
+            assert.equal(await page.$eval(campo('max_width_mm'), el => el.value), '', type);
+            assert.equal(await page.$eval(campo('overflow'), el => el.value), 'shrink', type);
+            assert.equal(await page.$eval(campo('text_align'), el => el.value), 'center', type);
+            for (const modo of ['shrink', 'condense', 'wrap']) {
+                for (const alinhamento of ['left', 'center', 'right']) {
+                    await page.$eval(campo('max_width_mm'), el => {
+                        el.value = '15.5'; el.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                    await page.select(campo('overflow'), modo);
+                    await page.select(campo('text_align'), alinhamento);
+                    const salvo = await page.evaluate(() => {
+                        state.numElements = JSON.parse(JSON.stringify(state.numElements));
+                        renderElementsList(); drawCanvas();
+                        return state.numElements[0];
+                    });
+                    assert.equal(salvo.max_width_mm, 15.5, type);
+                    assert.equal(salvo.overflow, modo, type);
+                    assert.equal(salvo.text_align, alinhamento, type);
+                    assert.equal(salvo.pad, 6, type);
+                    assert.equal(await page.$eval(campo('overflow'), el => el.value), modo, type);
+                    assert.equal(await page.$eval(campo('text_align'), el => el.value), alinhamento, type);
+                }
+            }
+            await page.$eval(campo('max_width_mm'), el => {
+                el.value = ''; el.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            assert.equal(await page.evaluate(() => state.numElements[0].max_width_mm), 0, type);
+        }
         assert.deepEqual(erros, []);
         console.log('OK: criação, painel completo, CSV, mapa do modelo, formatação, aviso de largura e duplicação.');
     } finally { await browser.close(); }

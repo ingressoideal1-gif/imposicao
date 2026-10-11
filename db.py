@@ -515,7 +515,10 @@ def add_formato(data: dict) -> str:
             "cover_font_size": int(data.get("cover_font_size", 12)),
             "cover_font_color": data.get("cover_font_color", "#000000"),
             "cover_font_x": float(data.get("cover_font_x", 10.0)),
-            "cover_font_y": float(data.get("cover_font_y", 10.0))
+            "cover_font_y": float(data.get("cover_font_y", 10.0)),
+            "cover_max_width_mm": max(0.0, float(data.get("cover_max_width_mm") or 0)),
+            "cover_overflow": data.get("cover_overflow") or "shrink",
+            "cover_text_align": data.get("cover_text_align") or "left"
         }
         _supabase_request("POST", "producao_formatos", clean_data)
         return new_id
@@ -551,7 +554,10 @@ def update_formato(fmt_id: str, data: dict) -> bool:
             "cover_font_size": int(data.get("cover_font_size", 12)),
             "cover_font_color": data.get("cover_font_color", "#000000"),
             "cover_font_x": float(data.get("cover_font_x", 10.0)),
-            "cover_font_y": float(data.get("cover_font_y", 10.0))
+            "cover_font_y": float(data.get("cover_font_y", 10.0)),
+            "cover_max_width_mm": max(0.0, float(data.get("cover_max_width_mm") or 0)),
+            "cover_overflow": data.get("cover_overflow") or "shrink",
+            "cover_text_align": data.get("cover_text_align") or "left"
         }
             res = _supabase_request("PATCH", f"producao_formatos?id=eq.{fmt_id}", clean_data)
             return bool(res)

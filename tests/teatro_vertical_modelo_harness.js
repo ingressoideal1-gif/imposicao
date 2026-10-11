@@ -6,6 +6,8 @@ const {scenario, extract} = require('./impressao_combinada_harness.js');
 const script = fs.readFileSync('frontend/script.js', 'utf8');
 const {sandbox: c, elements, items} = scenario('sequencial', 'aproveitar', [82, 515, 12], {context: true});
 vm.runInContext(fs.readFileSync('frontend/teatro-banco.js', 'utf8'), c);
+vm.runInContext(fs.readFileSync('frontend/texto-ajuste.js', 'utf8'), c);
+vm.runInContext(fs.readFileSync('frontend/capa-layout.js', 'utf8'), c);
 c.state.formatos[0].rows = 4;
 c.state.saidas[0].height_mm = 120;
 items.forEach((item, idx) => {

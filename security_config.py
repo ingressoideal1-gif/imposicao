@@ -209,6 +209,8 @@ PAINEL_ARQUIVOS = [
     "fonte-glifos.js",
     "csv-editor.js",
     "texto-ajuste.js",
+    "capa-layout.js",
+    "capa-layout.css",
     "foto-lib.js",
     "gerenciador-fotos.js",
     "editor-foto.js",
