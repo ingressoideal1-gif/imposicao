@@ -9045,11 +9045,12 @@ function resumoEstouroHTML(el) {
     </div>`;
 }
 
-/** A box 📏 inteira — só aparece em elemento de texto vindo do banco. */
+/** Ajuste do texto do banco e dos elementos de Teatro/Camarote. */
 function boxEspacoDoTextoHTML(el) {
     const modo = (el.overflow === 'wrap' || el.overflow === 'condense') ? el.overflow : 'shrink';
+    const visivel = el.source === 'database' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_');
     return `
-                <div class="form-group el-full" style="${el.source === 'database' ? '' : 'display:none;'} background: rgba(0,168,255,0.05); border-radius: 6px; padding: 8px;">
+                <div class="form-group el-full" style="${visivel ? '' : 'display:none;'} background: rgba(0,168,255,0.05); border-radius: 6px; padding: 8px;">
                     <label>📏 Espaço do texto (dado variável)</label>
                     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
                         <div>

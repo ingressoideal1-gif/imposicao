@@ -159,6 +159,17 @@ function extrair(nome, atribuida = false, codigo = fonte) {
                 renderElementsList();
             }, type);
             const campo = nome => `#elcard-espaco [onchange*="'${nome}'"]`;
+            for (const source of [undefined, 'sequential', 'database']) {
+                await page.evaluate(source => {
+                    state.numElements[0].source = source;
+                    state.selectedElIds = ['espaco'];
+                    renderElementsList();
+                }, source);
+                for (const nome of ['max_width_mm', 'overflow', 'text_align']) {
+                    assert.equal(await page.$eval(campo(nome), el => el.checkVisibility()), true,
+                        `${type}/${source}: ${nome} precisa estar visível`);
+                }
+            }
             assert.equal(await page.$eval(campo('max_width_mm'), el => el.value), '', type);
             assert.equal(await page.$eval(campo('overflow'), el => el.value), 'shrink', type);
             assert.equal(await page.$eval(campo('text_align'), el => el.value), 'center', type);
