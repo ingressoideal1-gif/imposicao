@@ -28,6 +28,41 @@ except Exception as _svg_imp_ex:   # pragma: no cover - depende do ambiente
 
 MM2PT = 2.8346   # 1mm em pontos PDF
 
+
+def _desenhar_texto_capa(page, cfg, titulo, detalhe, cell_x, cell_y):
+    """Texto da capa com X à esquerda da caixa e Y na primeira linha de base.
+
+    Sem largura, preserva as duas fontes e as coordenadas do formato legado.
+    A régua em negrito reserva espaço para o título mesmo após quebrar linhas,
+    como em frontend/capa-layout.js.
+    """
+    x = cell_x + cfg.cover_font_x * 2.83465
+    y = cell_y + cfg.cover_font_y * 2.83465
+    largura = max(0, getattr(cfg, 'cover_max_width_mm', 0)) * 2.83465
+    texto = titulo + detalhe
+    medir = lambda s, fs: fitz.get_text_length(s, fontname='hebo', fontsize=fs)
+    corpo, linhas, escala = _ajustar_texto_na_largura(
+        medir, texto, cfg.cover_font_size, largura, getattr(cfg, 'cover_overflow', 'shrink'))
+    cor = str(cfg.cover_font_color).lstrip('#')
+    if len(cor) != 6:
+        cor = '000000'
+    color = tuple(int(cor[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    cursor = 0
+    for i, linha in enumerate(linhas):
+        inicio = texto.find(linha, cursor)
+        cursor = max(cursor, inicio) + len(linha)
+        corte = max(0, min(len(linha), len(titulo) - max(0, inicio)))
+        forte, normal = linha[:corte], linha[corte:]
+        w_forte = medir(forte, corpo)
+        w = (w_forte + fitz.get_text_length(normal, fontname='helv', fontsize=corpo)) * escala
+        align = getattr(cfg, 'cover_text_align', 'left')
+        offset = (largura - w if align == 'right' else (largura - w) / 2 if align == 'center' else 0) if largura else 0
+        pivot = fitz.Point(x + offset, y + i * corpo * 1.2)
+        morph = (pivot, fitz.Matrix(escala, 1)) if escala != 1 else None
+        page.insert_text(pivot, forte, fontname='hebo', fontsize=corpo, color=color, morph=morph)
+        page.insert_text(fitz.Point(pivot.x + w_forte, pivot.y), normal,
+                         fontname='helv', fontsize=corpo, color=color, morph=morph)
+
 # Cache para evitar log repetido de resolução de fontes do sistema
 _font_log_cache: set = set()
 
@@ -1198,6 +1233,9 @@ class ImpositionConfig:
         self.cover_font_color = formato.get("cover_font_color", "#000000")
         self.cover_font_x = float(formato.get("cover_font_x", 10.0))
         self.cover_font_y = float(formato.get("cover_font_y", 10.0))
+        self.cover_max_width_mm = max(0.0, float(formato.get("cover_max_width_mm") or 0))
+        self.cover_overflow = formato.get("cover_overflow") or "shrink"
+        self.cover_text_align = formato.get("cover_text_align") or "left"
         # Formato (tamanho do item + grade + gaps)
         self.item_w = formato["width_mm"] * MM2PT
         self.item_h = formato["height_mm"] * MM2PT
@@ -4270,19 +4308,7 @@ class ImpositionEngine:
                 else:
                     bloco_str = f"Bloco {bloco_num:02d}"
                     sufixo_str = f" - de {v_start_str} a {v_end_str}"
-                font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
-                
-                def hex_to_rgb(h):
-                    h = str(h).lstrip('#')
-                    if len(h) < 6: h = "000000"
-                    return tuple(int(h[i:i+2], 16)/255.0 for i in (0, 2, 4))
-                
-                color_rgb = hex_to_rgb(cfg.cover_font_color)
-                w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
-                font_x = cell_x0 + (cfg.cover_font_x * 2.83465)
-                
-                p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
-                p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
+                _desenhar_texto_capa(p, cfg, bloco_str, sufixo_str, cell_x0, cell_y0)
 
                 _recortar_celula(p, inicio_celula,
                                  fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
@@ -4682,19 +4708,7 @@ class ImpositionEngine:
         else:
             bloco_str = f"Bloco {bloco_num:02d}"
             sufixo_str = f" - de {v_start_str} a {v_end_str}"
-        font_y = cell_y0 + (cfg.cover_font_y * 2.83465)
-
-        def hex_to_rgb(h):
-            h = str(h).lstrip('#')
-            if len(h) < 6: h = "000000"
-            return tuple(int(h[i:i+2], 16)/255.0 for i in (0, 2, 4))
-
-        color_rgb = hex_to_rgb(cfg.cover_font_color)
-        w_bloco = fitz.get_text_length(bloco_str, fontname="hebo", fontsize=cfg.cover_font_size)
-        font_x = cell_x0 + (cfg.cover_font_x * 2.83465)
-
-        p.insert_text(fitz.Point(font_x, font_y), bloco_str, fontname="hebo", fontsize=cfg.cover_font_size, color=color_rgb)
-        p.insert_text(fitz.Point(font_x + w_bloco, font_y), sufixo_str, fontname="helv", fontsize=cfg.cover_font_size, color=color_rgb)
+        _desenhar_texto_capa(p, cfg, bloco_str, sufixo_str, cell_x0, cell_y0)
 
         _recortar_celula(p, inicio_celula,
                          fitz.Rect(cell_x0, cell_y0, cell_x0 + cfg.item_w, cell_y0 + cfg.item_h))

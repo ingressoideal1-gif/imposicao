@@ -2349,9 +2349,11 @@ async function saveFmt() {
 
         cover_font_color: document.getElementById('fmt-cover-font-color').value || '#000000',
 
-        cover_font_x: parseFloat(document.getElementById('fmt-cover-font-x').value) || 10.0,
+        cover_font_x: Number(document.getElementById('fmt-cover-font-x').value),
 
-        cover_font_y: parseFloat(document.getElementById('fmt-cover-font-y').value) || 10.0,
+        cover_font_y: Number(document.getElementById('fmt-cover-font-y').value),
+
+        ...lerEstiloDaCapa(),
 
     };
 
@@ -2453,6 +2455,7 @@ function editFmt(id, contexto = {}) {
     document.getElementById('fmt-cover-font-color').value = f.cover_font_color || '#000000';
     document.getElementById('fmt-cover-font-x').value = f.cover_font_x !== undefined ? f.cover_font_x : 10;
     document.getElementById('fmt-cover-font-y').value = f.cover_font_y !== undefined ? f.cover_font_y : 10;
+    carregarEstiloDaCapa(f);
 
     const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
     if (cutStackOpts) cutStackOpts.style.display = (f.default_schema === 'cut_stack') ? 'block' : 'none';
@@ -2517,6 +2520,7 @@ function cancelFmtEdit() {
     document.getElementById('fmt-cover-font-color').value = '#000000';
     document.getElementById('fmt-cover-font-x').value = '10';
     document.getElementById('fmt-cover-font-y').value = '10';
+    carregarEstiloDaCapa();
     const coverOpts = document.getElementById('fmt-cover-options');
     if (coverOpts) coverOpts.style.display = 'none';
 
@@ -2584,6 +2588,9 @@ async function duplicateFmt(id) {
             cover_font_color: f.cover_font_color ?? '#000000',
             cover_font_x: f.cover_font_x ?? 10,
             cover_font_y: f.cover_font_y ?? 10,
+            cover_max_width_mm: f.cover_max_width_mm ?? 0,
+            cover_overflow: f.cover_overflow ?? 'shrink',
+            cover_text_align: f.cover_text_align ?? 'left',
         };
 
         await api('POST', '/formatos', clone);
@@ -8778,7 +8785,7 @@ function renderElementsList() {
                 </div>
                 ` : ''}
 
-                ${el.type === 'TEXT' ? boxEspacoDoTextoHTML(el) : ''}
+                ${el.type === 'TEXT' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_') ? boxEspacoDoTextoHTML(el) : ''}
 
                 ` : ''}
 
@@ -11722,16 +11729,9 @@ function drawPreview() {
             
             if (previewPart === 'capa' || previewPart === 'contracapa') {
                 if (previewPart === 'capa' && !isBack) {
-                    const color = fmt.cover_font_color || '#000000';
-                    const fsPdf = parseInt(fmt.cover_font_size) || 12;
-                    const xPdf = parseFloat(fmt.cover_font_x) || 10;
-                    const yPdf = parseFloat(fmt.cover_font_y) || 10;
-                    
-                    ctx.fillStyle = color;
-                    ctx.font = `bold ${fsPdf * scale}px Helvetica, sans-serif`;
-                    ctx.textBaseline = 'top';
-                    ctx.textAlign = 'left';
-                    
+                    const xPdf = Number(fmt.cover_font_x ?? 10);
+                    const yPdf = Number(fmt.cover_font_y ?? 10);
+
                     const sheetsInput = document.getElementById('imp-sheets-per-block');
                     const sheetsPerBlock = (sheetsInput && sheetsInput.value) 
                         ? parseInt(sheetsInput.value) 
@@ -11747,10 +11747,7 @@ function drawPreview() {
                     // CAMAROTE: usar "Camarote XX - de 1 a L_CAM" com C_INI como início
                     const capaTeatro = window.TeatroBanco?.capa(linhasTeatro || [], item_index, total_sheets, bancoTeatro?.teatro_capa || num?.teatro_capa);
                     if (capaTeatro) {
-                        const largura = ctx.measureText(capaTeatro.titulo).width;
-                        ctx.fillText(capaTeatro.titulo, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                        ctx.fillText(capaTeatro.detalhe, textX + largura, textY);
+                        desenharTextoDaCapa(ctx, fmt, capaTeatro.titulo, capaTeatro.detalhe, textX, textY, scale);
                     } else if (isNumCamarote) {
                         // Pegar c_ini e l_cam do item ativo (pedidos_modelos)
                         let cIni = 1, lCam = 1;
@@ -11767,17 +11764,12 @@ function drawPreview() {
                         if (lCam <= 1) lCam = parseInt(document.getElementById('ped-l-cam')?.value) || parseInt(document.getElementById('imp-l-cam')?.value) || 1;
                         
                         const camaroteNum = String(cIni + (bloco_num - 1)).padStart(2, '0');
-                        const wCamarote = ctx.measureText(`Camarote ${camaroteNum}`).width;
-                        
-                        ctx.fillText(`Camarote ${camaroteNum}`, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                        ctx.fillText(` - de 1 a ${lCam}`, textX + wCamarote, textY);
+
+                        desenharTextoDaCapa(ctx, fmt, `Camarote ${camaroteNum}`, ` - de 1 a ${lCam}`, textX, textY, scale);
                     } else {
                         const blocoNum = String(bloco_num).padStart(2, '0');
-                        const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
-                        
-                        ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+
+
                         
                         const seqStartInput = document.getElementById('imp-start');
                         const seqStart = (seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1;
@@ -11790,7 +11782,7 @@ function drawPreview() {
                         const vStartStr = String(v_start).padStart(4, '0');
                         const vEndStr = String(v_end).padStart(4, '0');
                         
-                        ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
+                        desenharTextoDaCapa(ctx, fmt, `Bloco ${blocoNum}`, ` - de ${vStartStr} a ${vEndStr}`, textX, textY, scale);
                     }
                 }
                 ctx.restore();
