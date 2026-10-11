@@ -433,10 +433,7 @@
         try { localStorage.setItem('impressao-interrompida', JSON.stringify(interrupcao)); } catch (_) {}
     };
     raiz.confirmarRetomadaImpressao = () => {
-        try { interrupcao = JSON.parse(localStorage.getItem('impressao-interrompida')) || interrupcao; } catch (_) {}
-        if (!interrupcao) return true;
-        if (!confirm('O envio anterior foi interrompido. Há ' + interrupcao.enviados
-            + ' arquivo(s) com envio aceito e pode haver um envio sem resposta. Confira a fila e o papel; ajuste Refazer para não repetir o que saiu. Confirma retomar com a seleção atual?')) return false;
+        // A nova impressão é iniciada pelo operador; não retoma envios anteriores.
         interrupcao = null;
         try { localStorage.removeItem('impressao-interrompida'); } catch (_) {}
         return true;

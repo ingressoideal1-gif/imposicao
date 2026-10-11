@@ -249,6 +249,30 @@ async function casos() {
             async abortSignal(){return {data:null};}};}};
         await recusa(() => registrarEAguardarEnvioRemoto(vazio, {}), 'registro do envio');
     }
+    {
+        const storageAnterior = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+        const confirmAnterior = globalThis.confirm;
+        const registros = new Map();
+        Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+            setItem: (k, v) => registros.set(k, v),
+            removeItem: k => registros.delete(k)
+        }});
+        globalThis.confirm = () => { throw new Error('Não deve abrir confirmação de retomada'); };
+        try {
+            registrarImpressaoInterrompida(50);
+            ok(registros.has('impressao-interrompida'), 'interrupção registrada');
+            ok(confirmarRetomadaImpressao() === true, 'nova impressão sem modal');
+            ok(!registros.has('impressao-interrompida'), 'aviso anterior descartado');
+            ok(confirmarRetomadaImpressao() === true, 'próxima impressão continua liberada');
+            localStorage.removeItem = () => { throw new Error('storage indisponível'); };
+            registrarImpressaoInterrompida(1);
+            ok(confirmarRetomadaImpressao() === true, 'storage indisponível não bloqueia');
+        } finally {
+            if (storageAnterior) Object.defineProperty(globalThis, 'localStorage', storageAnterior);
+            else delete globalThis.localStorage;
+            globalThis.confirm = confirmAnterior;
+        }
+    }
     return total;
 }
 
