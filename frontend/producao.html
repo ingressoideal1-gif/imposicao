@@ -8,11 +8,12 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1043">
+    <link rel="stylesheet" href="/style.css?v=1048">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=897"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="/vendor/offline/fabric.min.js"></script>
+    <script src="/vendor/offline/qrcode.min.js"></script>
+    <link rel="stylesheet" href="/capa-layout.css?v=1048">
 </head>
 
 <body>
@@ -294,6 +295,8 @@
                     </div>
 
                     <div id="fmt-cover-options" style="display:none; margin-top: 12px; padding: 12px; background: rgba(162, 155, 254, 0.05); border: 1px solid rgba(162, 155, 254, 0.2); border-radius: var(--radius);">
+                        <button type="button" class="btn btn-secondary" style="margin-bottom:12px" onclick="abrirLayoutDaCapa()">Visualizar e posicionar capa</button>
+                        <div id="fmt-cover-fields">
                         <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 12px;">
                             <div class="form-group">
                                 <label style="color: var(--accent);">Redução da Arte (%)</label>
@@ -325,6 +328,13 @@
                                 <label style="color: var(--accent);">Posição Texto Y (mm)</label>
                                 <input type="number" class="form-control" id="fmt-cover-font-y" value="10" step="0.1">
                             </div>
+                        </div>
+                        <div class="form-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px">
+                            <div class="form-group"><label for="fmt-cover-max-width">Largura máxima (mm)</label><input class="form-control" id="fmt-cover-max-width" type="number" min="0" max="1000" step="0.5" placeholder="livre"></div>
+                            <div class="form-group"><label for="fmt-cover-overflow">Se não couber</label><select class="form-control" id="fmt-cover-overflow"><option value="shrink">Reduzir a fonte até caber</option><option value="condense">Espremer as letras (mantém a altura)</option><option value="wrap">Quebrar em linhas</option></select></div>
+                            <div class="form-group"><label for="fmt-cover-text-align">Alinhamento</label><select class="form-control" id="fmt-cover-text-align"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></div>
+                        </div>
+                        <small>Deixe a largura vazia para texto livre. O alinhamento é aplicado dentro da largura máxima.</small>
                         </div>
                     </div>
                 </div>
@@ -2134,8 +2144,8 @@
         </main>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/vendor/offline/pdf.min.js"></script>
+    <script src="/supabase-js.min.js"></script>
     <!-- ANTES do supabase-config.js: quem chega antes e embrulhado por quem chega
          depois, e o carimbo de sessao de la precisa ficar por cima da conta de
          tempo daqui. A barra que avisa "o banco nao esta respondendo". -->
@@ -2151,8 +2161,8 @@
     <script src="/logo-do-frete.js?v=897"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="/pagamento-do-pedido.js?v=1034"></script>
-    <script src="/arte-de-impressao.js?v=1046"></script>
+    <script src="/pagamento-do-pedido.js?v=1047"></script>
+    <script src="/arte-de-impressao.js?v=1048"></script>
     <script src="/pacotes-locais.js?v=piloto4"></script>
     <script src="/antecipacao-pedidos.js?v=piloto2"></script>
     <script src="/pacote-entrada.js?v=piloto1"></script>
@@ -2161,7 +2171,7 @@
          outra coisa; o desenho no canvas usa `qrcode(0, 'L')`, que so existe
          aqui. Sem esta linha o QR do Painel sairia como o quadrado vermelho de
          erro -- conferido no navegador em 14/08/2026. -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="/qrcode-generator.min.js"></script>
     <script src="/qr-canvas.js?v=1023"></script>
     <script src="/barcode-canvas.js?v=897"></script>
     <script src="/fonte-canvas.js?v=897"></script>
@@ -2176,6 +2186,7 @@
          inteiro do canvas, não só o próprio elemento. A index.html já os carrega
          desde sempre; esta cópia da tela ficou para trás duas vezes. -->
     <script src="/texto-ajuste.js?v=897"></script>
+    <script src="/capa-layout.js?v=1048"></script>
     <script src="/foto-lib.js?v=965"></script>
     <script src="/gerenciador-fotos.js?v=965"></script>
     <script src="/editor-foto.js?v=897"></script>
@@ -2184,14 +2195,14 @@
     <script src="/banco-do-modelo.js?v=948"></script>
     <script src="/teatro-banco.js?v=1034"></script>
     <script src="/teatro-snapshot.js?v=1042"></script>
-    <script src="/mapa-teatro-do-pedido.js?v=1034"></script>
+    <script src="/mapa-teatro-do-pedido.js?v=1047"></script>
     <script src="/csv-editor.js?v=954"></script>
     <script src="/pedido-colunas.js?v=982"></script>
-    <script src="/script.js?v=1045"></script>
+    <script src="/script.js?v=1048"></script>
     <script src="/acesso-estacao.js?v=1010"></script>
     <script src="/dashboard-arte.js?v=978"></script>
     <script src="/criador-arte.js?v=964"></script>
-    <script src="/pedido.js?v=1037-historico1"></script>
+    <script src="/pedido.js?v=1048"></script>
 
 <!-- Modal de Editor Visual -->
                 <div id="modal-mapa-teatro" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:var(--bg); z-index:999999; overflow:hidden; flex-direction:column;">

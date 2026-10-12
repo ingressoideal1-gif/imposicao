@@ -39,6 +39,16 @@ def test_corrupcao_nao_busca_copia_na_rede(pacote, tmp_path):
     with pytest.raises(ValueError): resolver_do_pedido(s,refs)
 
 
+def test_dependencia_fora_do_manifesto_usa_cache_offline_e_nunca_rede(pacote,tmp_path):
+    s,refs=preparar(pacote,tmp_path)
+    url='https://teste.invalid/storage/v1/object/public/teste/adicional.ttf'
+    s.offline=SimpleNamespace(ler_dependencia=lambda u:b'fonte preparada' if u==url else None)
+    resolver=resolver_do_pedido(s,refs)
+    assert resolver(url)==b'fonte preparada'
+    with pytest.raises(ValueError,match='ainda nao preparada'):
+        resolver(url+'-ausente')
+
+
 @pytest.mark.parametrize('refs', [[],[{'modelo':'1','revisao':'r1'}],[{'modelo':'../1','revisao':'d'*64}],
                                  [{'modelo':'1','revisao':'e'*64}]])
 def test_referencia_invalida_e_pacote_ausente_bloqueiam(pacote,tmp_path,refs):

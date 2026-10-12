@@ -7,6 +7,35 @@ from test_pacotes_api import item, BYTES
 from canais_newprod import PORTA
 
 
+def test_rotas_offline_confirmacao_exige_origem_e_permissao(tmp_path):
+    import uuid
+    from test_offline_estacao import ambiente
+    from fastapi import Request
+    s,_,_,_,_=ambiente(tmp_path)
+    app=FastAPI(); app.include_router(criar_router_estatisticas(s))
+    s.offline.ciclo()
+    permitido={'valor':False}
+    @app.middleware('http')
+    async def operador(request:Request,next_):
+        request.state.operador={'uid':'sintetico','permissoes':{'perm_imprimir':permitido['valor']}}
+        return await next_(request)
+    origem=f'http://127.0.0.1:{PORTA}'
+    h={'sec-fetch-site':'same-origin','origin':origem,'x-piloto-painel':'1'}
+    path='/api/pacotes-locais/confirmar-impressao-painel'
+    corpo={'id':str(uuid.uuid4()),'pedido':'99','revisao':'a'*64,'modelos':['10']}
+    with TestClient(app,base_url=origem,client=('127.0.0.1',55)) as c:
+        assert c.post(path,json=corpo,headers=h).status_code==403
+        permitido['valor']=True
+        assert c.post(path,json=corpo,headers=dict(h,origin='https://fora.invalid')).status_code==403
+        assert not s.offline.confirmacoes()
+        r=c.post(path,json=corpo,headers=h)
+        assert r.status_code==200 and r.json()['registrado_localmente']
+        b=c.get('/api/pacotes-locais/offline-painel',headers=h)
+        assert b.status_code==200 and b.headers['cache-control']=='no-store'
+        assert b.json()['confirmacoes'][0]['estado']=='pendente'
+        assert c.post('/api/pacotes-locais/conferencia-trabalho-painel',json=[{'pedido':'99','revisao':'b'*64}],headers=h).status_code==409
+
+
 def test_cache_conta_hash_unico_sem_confundir_modelos(tmp_path):
     s=ServicoPacotes(tmp_path,host='test.invalid',empresa='teste')
     entrada=tmp_path/'arte.pdf'; entrada.write_bytes(BYTES)

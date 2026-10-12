@@ -40,6 +40,31 @@ async function casos() {
             executar() { return confirmarIntegridadeDoTrabalho(fd, 'http://localhost', estado, cliente); } };
     }
     {
+        const c = montar();
+        c.estado.osItens.os[0]._modeloOnline = structuredClone(c.modelo);
+        let consultas = 0;
+        globalThis.PilotoOffline = { conferencia:async () => {
+            consultas++;
+            return {tabelas:{pedidos_modelos:[structuredClone(c.modelo)],producao_numeracoes:[structuredClone(c.num)]},
+                bancos:() => ({bancos:[],vinculos:[]})};
+        }};
+        globalThis.PilotoSelecao = {lerUrl:async () => ({ok:true,blob:async()=>arte})};
+        c.cliente.from = () => { throw Error('Internet proibida no trabalho local'); };
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = async url => {
+            if (!url.startsWith('http://localhost/')) throw Error('Rede externa proibida');
+            return originalFetch(url);
+        };
+        globalThis.chamarBancosPedido = () => { throw Error('Banco remoto proibido'); };
+        try {
+            await c.executar();
+            ok(consultas === 2, 'confere revisao local antes e depois dos arquivos sem rede');
+            ok(c.fd.has('file') && c.fd.has('file_verso'), 'frente e verso locais chegam ao payload');
+            c.modelo.quantidade = 99;
+            await recusa(() => c.executar(), 'dados do modelo mudaram');
+        } finally { delete globalThis.PilotoOffline; delete globalThis.PilotoSelecao; }
+    }
+    {
         const c = montar({ verso:null, modo:'front' });
         c.num.elements = [{type:'METADATA',print_mode:'front'},{type:'TEXT',text:'Teste'}];
         c.estado.numeracoes = [normalizarNumeracaoLida(structuredClone(c.num))];

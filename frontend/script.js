@@ -1841,6 +1841,9 @@ function valorDoFormatoConfere(atual, esperado) {
 }
 
 async function apiSemConfirmacao(method, path, body = null) {
+    if (method === 'GET' && window.PilotoOffline && /^\/(formatos|numeracoes|saidas|cores|modelos_imposicao)(\/|$)/.test(path)) {
+        return window.PilotoOffline.catalogo(path);
+    }
 
     if (typeof supabaseClient !== 'undefined' && supabaseClient && (path.startsWith('/formatos') || path.startsWith('/numeracoes') || path.startsWith('/saidas') || path.startsWith('/cores') || path.startsWith('/modelos_imposicao'))) {
 
@@ -2089,7 +2092,7 @@ async function loadAll() {
             api('GET', '/saidas'),
             api('GET', '/cores').catch(() => []),
             api('GET', '/modelos_imposicao').catch(() => []),
-            (typeof vibeClient !== 'undefined' && vibeClient ? vibeClient.from('produtos').select('*') : Promise.resolve({data:[]}))
+            (window.PilotoOffline ? window.PilotoOffline.bootstrap().then(b => ({data:b.pedidos.flatMap(p => p.snapshot.produtos)})) : typeof vibeClient !== 'undefined' && vibeClient ? vibeClient.from('produtos').select('*') : Promise.resolve({data:[]}))
                 .then(r => {
                     if (r && r.error) {
                         console.error('[loadAll] Erro ao buscar produtos:', r.error);
@@ -2101,7 +2104,7 @@ async function loadAll() {
                     console.error('[loadAll] Exception ao buscar produtos:', err);
                     return [];
                 }),
-            (typeof vibeClient !== 'undefined' && vibeClient
+            (!window.PilotoOffline && typeof vibeClient !== 'undefined' && vibeClient
                 ? vibeClient.from('vw_produto_fotos')
                     .select('id_produto,foto_id,url,nome_produto,posicao')
                     .order('id_produto', { ascending: true })
@@ -2157,7 +2160,7 @@ async function loadAll() {
         // pedidos_modelos diretamente e nao compartilha este state.
         const _modelosPrateleiraReparados = Object.values(state.modelosGlobais || {})
             .reduce((todos, modelosDoPedido) => todos.concat(modelosDoPedido || []), []);
-        if (_modelosPrateleiraReparados.length) {
+        if (!window.PilotoOffline && _modelosPrateleiraReparados.length) {
             await sincronizarAprovacaoProdutosPrateleira(_modelosPrateleiraReparados);
         }
         if (_reparados) {
@@ -2349,9 +2352,11 @@ async function saveFmt() {
 
         cover_font_color: document.getElementById('fmt-cover-font-color').value || '#000000',
 
-        cover_font_x: parseFloat(document.getElementById('fmt-cover-font-x').value) || 10.0,
+        cover_font_x: Number(document.getElementById('fmt-cover-font-x').value),
 
-        cover_font_y: parseFloat(document.getElementById('fmt-cover-font-y').value) || 10.0,
+        cover_font_y: Number(document.getElementById('fmt-cover-font-y').value),
+
+        ...lerEstiloDaCapa(),
 
     };
 
@@ -2453,6 +2458,7 @@ function editFmt(id, contexto = {}) {
     document.getElementById('fmt-cover-font-color').value = f.cover_font_color || '#000000';
     document.getElementById('fmt-cover-font-x').value = f.cover_font_x !== undefined ? f.cover_font_x : 10;
     document.getElementById('fmt-cover-font-y').value = f.cover_font_y !== undefined ? f.cover_font_y : 10;
+    carregarEstiloDaCapa(f);
 
     const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
     if (cutStackOpts) cutStackOpts.style.display = (f.default_schema === 'cut_stack') ? 'block' : 'none';
@@ -2517,6 +2523,7 @@ function cancelFmtEdit() {
     document.getElementById('fmt-cover-font-color').value = '#000000';
     document.getElementById('fmt-cover-font-x').value = '10';
     document.getElementById('fmt-cover-font-y').value = '10';
+    carregarEstiloDaCapa();
     const coverOpts = document.getElementById('fmt-cover-options');
     if (coverOpts) coverOpts.style.display = 'none';
 
@@ -2584,6 +2591,9 @@ async function duplicateFmt(id) {
             cover_font_color: f.cover_font_color ?? '#000000',
             cover_font_x: f.cover_font_x ?? 10,
             cover_font_y: f.cover_font_y ?? 10,
+            cover_max_width_mm: f.cover_max_width_mm ?? 0,
+            cover_overflow: f.cover_overflow ?? 'shrink',
+            cover_text_align: f.cover_text_align ?? 'left',
         };
 
         await api('POST', '/formatos', clone);
@@ -7279,7 +7289,7 @@ window.rasterizePdfToImage = async function (arrayBuffer) {
     }
 
     pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        '/vendor/offline/pdf.worker.min.js';
 
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
@@ -8778,7 +8788,7 @@ function renderElementsList() {
                 </div>
                 ` : ''}
 
-                ${el.type === 'TEXT' ? boxEspacoDoTextoHTML(el) : ''}
+                ${el.type === 'TEXT' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_') ? boxEspacoDoTextoHTML(el) : ''}
 
                 ` : ''}
 
@@ -9038,11 +9048,12 @@ function resumoEstouroHTML(el) {
     </div>`;
 }
 
-/** A box 📏 inteira — só aparece em elemento de texto vindo do banco. */
+/** Ajuste do texto do banco e dos elementos de Teatro/Camarote. */
 function boxEspacoDoTextoHTML(el) {
     const modo = (el.overflow === 'wrap' || el.overflow === 'condense') ? el.overflow : 'shrink';
+    const visivel = el.source === 'database' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_');
     return `
-                <div class="form-group el-full" style="${el.source === 'database' ? '' : 'display:none;'} background: rgba(0,168,255,0.05); border-radius: 6px; padding: 8px;">
+                <div class="form-group el-full" style="${visivel ? '' : 'display:none;'} background: rgba(0,168,255,0.05); border-radius: 6px; padding: 8px;">
                     <label>📏 Espaço do texto (dado variável)</label>
                     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
                         <div>
@@ -10796,7 +10807,7 @@ async function loadImpArtFile(file, aindaAtual = () => true) {
 
             pdfjsLib.GlobalWorkerOptions.workerSrc =
 
-                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                '/vendor/offline/pdf.worker.min.js';
 
             const arrayBuffer = await file.arrayBuffer();
             if (!aindaAtual()) return;
@@ -11722,16 +11733,9 @@ function drawPreview() {
             
             if (previewPart === 'capa' || previewPart === 'contracapa') {
                 if (previewPart === 'capa' && !isBack) {
-                    const color = fmt.cover_font_color || '#000000';
-                    const fsPdf = parseInt(fmt.cover_font_size) || 12;
-                    const xPdf = parseFloat(fmt.cover_font_x) || 10;
-                    const yPdf = parseFloat(fmt.cover_font_y) || 10;
-                    
-                    ctx.fillStyle = color;
-                    ctx.font = `bold ${fsPdf * scale}px Helvetica, sans-serif`;
-                    ctx.textBaseline = 'top';
-                    ctx.textAlign = 'left';
-                    
+                    const xPdf = Number(fmt.cover_font_x ?? 10);
+                    const yPdf = Number(fmt.cover_font_y ?? 10);
+
                     const sheetsInput = document.getElementById('imp-sheets-per-block');
                     const sheetsPerBlock = (sheetsInput && sheetsInput.value) 
                         ? parseInt(sheetsInput.value) 
@@ -11747,10 +11751,7 @@ function drawPreview() {
                     // CAMAROTE: usar "Camarote XX - de 1 a L_CAM" com C_INI como início
                     const capaTeatro = window.TeatroBanco?.capa(linhasTeatro || [], item_index, total_sheets, bancoTeatro?.teatro_capa || num?.teatro_capa);
                     if (capaTeatro) {
-                        const largura = ctx.measureText(capaTeatro.titulo).width;
-                        ctx.fillText(capaTeatro.titulo, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                        ctx.fillText(capaTeatro.detalhe, textX + largura, textY);
+                        desenharTextoDaCapa(ctx, fmt, capaTeatro.titulo, capaTeatro.detalhe, textX, textY, scale);
                     } else if (isNumCamarote) {
                         // Pegar c_ini e l_cam do item ativo (pedidos_modelos)
                         let cIni = 1, lCam = 1;
@@ -11767,17 +11768,12 @@ function drawPreview() {
                         if (lCam <= 1) lCam = parseInt(document.getElementById('ped-l-cam')?.value) || parseInt(document.getElementById('imp-l-cam')?.value) || 1;
                         
                         const camaroteNum = String(cIni + (bloco_num - 1)).padStart(2, '0');
-                        const wCamarote = ctx.measureText(`Camarote ${camaroteNum}`).width;
-                        
-                        ctx.fillText(`Camarote ${camaroteNum}`, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                        ctx.fillText(` - de 1 a ${lCam}`, textX + wCamarote, textY);
+
+                        desenharTextoDaCapa(ctx, fmt, `Camarote ${camaroteNum}`, ` - de 1 a ${lCam}`, textX, textY, scale);
                     } else {
                         const blocoNum = String(bloco_num).padStart(2, '0');
-                        const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
-                        
-                        ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+
+
                         
                         const seqStartInput = document.getElementById('imp-start');
                         const seqStart = (seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1;
@@ -11790,7 +11786,7 @@ function drawPreview() {
                         const vStartStr = String(v_start).padStart(4, '0');
                         const vEndStr = String(v_end).padStart(4, '0');
                         
-                        ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
+                        desenharTextoDaCapa(ctx, fmt, `Bloco ${blocoNum}`, ` - de ${vStartStr} a ${vEndStr}`, textX, textY, scale);
                     }
                 }
                 ctx.restore();
@@ -12410,7 +12406,7 @@ window.uploadMultiArtePdf = async function(index, fileInput) {
 
             try {
 
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/offline/pdf.worker.min.js';
 
                 const arrayBuffer = await file.arrayBuffer();
 
@@ -24982,7 +24978,7 @@ async function loadAmostraArteFile(file) {
 
             pdfjsLib.GlobalWorkerOptions.workerSrc =
 
-                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                '/vendor/offline/pdf.worker.min.js';
 
             const arrayBuffer = await file.arrayBuffer();
 
@@ -26802,6 +26798,7 @@ async function carregarDadosDoRecorteGrafica(recorte) {
 }
 
 async function carregarPedidoPesquisado(numero) {
+    if (window.PilotoOffline) return window.PilotoOffline.carregarOrdens();
     // Consulta pontual; a lista ativa e os modelos abertos permanecem em memoria.
     const usuario = window._currentUser?.id || window._acessoLocal || null;
     try {
@@ -26911,6 +26908,7 @@ function loadOrdens(opcoes = {}) {
 }
 
 async function carregarOrdensDados(opcoes = {}) {
+    if (window.PilotoOffline && opcoes.recorteGrafica) return window.PilotoOffline.carregarOrdens();
     const anteriores = { ordens: state.ordens, osItens: state.osItens,
         modelosGlobais: state.modelosGlobais, produtosPropostaGlobais: state.produtosPropostaGlobais,
         todasArtes: state.todasArtes, linksCliente: state.linksCliente, linksClienteData: state.linksClienteData,
@@ -27589,7 +27587,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 propostas = propostas.filter(p => !concluidos.has(String(p.id_int)));
                 produtos = produtos.filter(p => !concluidos.has(String(p.id_int)));
             }
-            await aplicarNomesPreferenciaisDasPropostas(vibeClient, propostas);
+            if (!opcoes.localPreparado) await aplicarNomesPreferenciaisDasPropostas(vibeClient, propostas);
         } catch (pe) {
             throw pe;
         }
@@ -27630,7 +27628,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 ...produtos.map(p => p.id_int),
                 ...propostas.map(pr => pr.id_int),
             ].filter(Boolean))];
-            const linhasDosPrazos = await lerLotesDaLista(idsParaPrazo, async ids => {
+            const linhasDosPrazos = opcoes.prazosPreloaded || await lerLotesDaLista(idsParaPrazo, async ids => {
                 const { data: osData, error: osError } = await lerDadosLista(vibeClient
                     .from('propostas_os')
                     .select('id_int, data_termino, codigo_rastreamento')
@@ -27652,7 +27650,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         try {
             // Na estacao, cada hora exige uma ida autenticada ao ERP. Completar
             // depois do primeiro desenho; uma hora lenta nao invalida a lista.
-            const horasPorPedido = typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false && !opcoes.numeroPedido
+            const horasPorPedido = opcoes.localPreparado || typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false && !opcoes.numeroPedido
                 ? {} : await lerDadosLista(sinal => carregarHorasDosPrazos(vibeClient, Object.keys(prazosPorPedido), sinal), 'horários dos prazos');
             for (const id of Object.keys(prazosPorPedido)) {
                 prazosPorPedido[id] = comporPrazoDoERP(prazosPorPedido[id], horasPorPedido[id]);
@@ -27798,7 +27796,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         });
 
         console.log(`[Vibecode] ${state.ordens.length} OS carregadas, ${produtos.length} itens totais`);
-        if (typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
+        if (!opcoes.localPreparado && typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
             completarHorasDaLista(state.ordens, prazosPorPedido);
         }
         return true;
@@ -32978,6 +32976,11 @@ async function confirmarImpressaoModelos(alvos) {
         return false;
     }
 
+    if (window.PilotoOffline) {
+        try { return await window.PilotoOffline.confirmar(lista); }
+        catch (e) { toast('Não foi possível guardar a confirmação: ' + e.message, 'error'); return false; }
+    }
+
     for (const a of lista) {
         if (await updateItemImpressao(a.itemId, a.osId, 'IMPRESSO') === false) return false;
     }
@@ -33779,6 +33782,7 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     if (snapshotLocal) mesclarNumeracoesNoCatalogo(state.numeracoes, structuredClone(snapshotLocal.numeracoes).map(normalizarNumeracaoLida));
     const carregado = await loadOSItens(osId, { atualizar: true, exigirModelos, snapshotLocal });
     if (!aindaAtual() || carregado === false) return;
+    if (window.PilotoOffline) await window.PilotoOffline.aplicarConfirmacoes(osId);
     // Enxuto: quem abre o pedido cai no primeiro modelo pelo `enviarParaPedido`
     // logo abaixo, e e ele quem desce o banco do modelo aberto. Ver a linha
     // gemea no `enviarParaImposicao`.
@@ -39572,7 +39576,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             }
 
             if (isPdf && typeof pdfjsLib !== 'undefined') {
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/offline/pdf.worker.min.js';
                 
                 const escalaCache = escalaDaArteDoModelo(item);
                 const identidadeArte = item._cacheArteAmostra || (item._cacheArteAmostra = Symbol());

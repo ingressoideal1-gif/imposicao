@@ -4,7 +4,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from antecipacao_local import AntecipadorRecursos
-from conferencia_piloto import ConferenciaIndisponivel
+from conferencia_piloto import ConferenciaIndisponivel, ConexaoPilotoIndisponivel, PedidoLocalIndisponivel
 from revisao_pedido_piloto import CacheRevisaoPedido, validar_recibo, versoes_confiaveis
 
 
@@ -136,12 +136,22 @@ class SelecaoPiloto:
         try:
             anterior = self._cache.obter(pedido)
             persistida = solicitados is None
-            if persistida and (not anterior or anterior.get('protocolo') != 2):
+            if persistida and (not anterior or anterior.get('protocolo') != 2 or anterior.get('offline_schema') != 1):
                 anterior = None
             conferir = cliente.abrir_pedido if persistida else cliente.conferir_pedido
             rev_anterior = anterior['revisao'] if anterior and anterior['empresa'] == self.servico.empresa else ''
-            recibo = validar_recibo(conferir(pedido, rev_anterior),
-                                    self.servico.empresa, pedido, rev_anterior)
+            try:
+                recibo = validar_recibo(conferir(pedido, rev_anterior),
+                                        self.servico.empresa, pedido, rev_anterior)
+            except ConexaoPilotoIndisponivel:
+                if persistida:
+                    return self._abrir_copia_offline(pedido, anterior)
+                raise
+            except ConferenciaIndisponivel:
+                self._cache.bloquear_offline(pedido)
+                raise
+            if not recibo['sem_mudanca']:
+                self._cache.bloquear_offline(pedido)
             itens = anterior['itens'] if recibo['sem_mudanca'] else recibo['itens']
             snapshot = None
             if persistida:
@@ -163,6 +173,8 @@ class SelecaoPiloto:
                 if modelo in encontrados and encontrados[modelo]['observacao']['digest'] != digest:
                     raise ConferenciaIndisponivel('Pedido alterado. Reabra para conferir.')
             sem_arte = [m for m in solicitados if m not in encontrados or not encontrados[m]['fontes'].get('frente')]
+            if persistida:
+                sem_arte.extend(str(m['id']) for m in snapshot['modelos'] if str(m['id']) not in solicitados)
             antigos_itens = {i['modelo']:i for i in anterior['itens']} if anterior else {}
             antigos_pacotes = {p['modelo']:p for p in anterior['pacotes']} if anterior else {}
             reutilizados, preparar = {}, []
@@ -206,12 +218,56 @@ class SelecaoPiloto:
                 if not final['sem_mudanca']:
                     raise ConferenciaIndisponivel('Pedido mudou durante a copia. Reabra para conferir.')
             pacotes = [reutilizados[m] for m in solicitados if m in reutilizados]
+            if persistida and getattr(self.servico, 'offline', None):
+                self.servico.offline.preparar_dependencias(pedido, snapshot)
             self._cache.salvar(pedido,recibo['revisao'],itens,pacotes,snapshot=snapshot)
             return {'pedido':pedido,'revisao_pedido':recibo['revisao'],'pacotes':pacotes,'sem_arte':sem_arte,
+                    'execucao_offline':False,
                     'reutilizados':len(pacotes)-len(preparar),
                     **({'protocolo':2,'snapshot':snapshot} if persistida else {})}
         finally:
             self._lock.release()
+
+    def _abrir_copia_offline(self, pedido, registro):
+        try:
+            if (not registro or registro.get('empresa') != self.servico.empresa
+                    or registro.get('pedido') != pedido or registro.get('protocolo') != 2
+                    or registro.get('offline_bloqueado')
+                    or not re.fullmatch('[a-f0-9]{64}', registro.get('revisao', ''))):
+                raise ValueError()
+            snapshot = registro['snapshot']
+            if any(not isinstance(snapshot.get(k), list) for k in
+                   ('modelos','numeracoes','origens','produtos','bancos','vinculos','artes','mapas')):
+                raise ValueError()
+            itens = {i['modelo']:i for i in registro['itens']}
+            pacotes = {p['modelo']:p for p in registro['pacotes']}
+            if len(itens) != len(registro['itens']) or len(pacotes) != len(registro['pacotes']):
+                raise ValueError()
+            if (not set(itens) <= {str(m['id']) for m in snapshot['modelos']}
+                    or any(str(m['id_int']) != pedido for m in snapshot['modelos'])):
+                raise ValueError()
+            sem_arte = [m for m,i in itens.items() if not i['fontes'].get('frente')]
+            sem_arte.extend(str(m['id']) for m in snapshot['modelos'] if str(m['id']) not in itens)
+            if set(pacotes) != set(itens) - set(sem_arte):
+                raise ValueError()
+            for modelo,item in itens.items():
+                if item['empresa'] != self.servico.empresa or item['pedido'] != pedido:
+                    raise ValueError()
+                if modelo in sem_arte:
+                    continue
+                pacote = pacotes[modelo]
+                if (pacote['digest'] != item['observacao']['digest'] or pacote['fontes'] != item['fontes']
+                        or self.servico.local.consultar(self.servico.empresa, modelo,
+                            pacote['revisao'], verificar_bytes=True)['estado'] != 'local_validado'):
+                    raise ValueError()
+            return {'pedido':pedido, 'protocolo':2, 'snapshot':snapshot,
+                    'revisao_pedido':registro['revisao'], 'sem_arte':sem_arte,
+                    'pacotes':[dict(p, execucao_offline=True, atualizado=False) for p in pacotes.values()],
+                    'reutilizados':len(pacotes), 'execucao_offline':True,
+                    'conferido_em':registro.get('conferido_em')}
+        except (ValueError, KeyError, TypeError, AttributeError, OSError):
+            raise PedidoLocalIndisponivel('Sem internet e sem copia completa validada deste pedido. '
+                'Conecte a estacao e abra o pedido para preparar seus dados e arquivos.') from None
 
     def ler(self, modelo, revisao, nome):
         if (not re.fullmatch(r'[1-9][0-9]{0,14}', modelo)

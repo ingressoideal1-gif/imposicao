@@ -42,7 +42,7 @@ function montar() {
         local.chamadas.push(url);
         assert.equal(url,'/api/pacotes-locais/abrir-pedido-painel');
         assert.deepEqual(JSON.parse(opts.body),{pedido:'99'});
-        return {ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),sem_arte:[],
+        return {ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),sem_arte:[],execucao_offline:true,
           snapshot:{modelos:[row],numeracoes:[],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]},
           pacotes:[{modelo:'10',digest:digestLocal,revisao:'b'.repeat(64),origem:'local'}]})};
     };
@@ -50,6 +50,7 @@ function montar() {
     await local.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,abertura);
     await local.PilotoSelecao.conferirPedido('vibe_99',()=>true,abertura);
     assert.equal(local.chamadas.length,1);
+    assert(local.mensagens.some(m=>m.includes('última revisão local')), 'informa uso da copia offline');
     local.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
     assert.equal(local.PilotoSelecao.snapshotPedido('outro'),null);
 

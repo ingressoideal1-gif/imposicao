@@ -10,6 +10,14 @@ class ConferenciaIndisponivel(ValueError):
     pass
 
 
+class ConexaoPilotoIndisponivel(ConferenciaIndisponivel):
+    """Falha de transporte; nao representa recusa de acesso ou revisao."""
+
+
+class PedidoLocalIndisponivel(ConferenciaIndisponivel):
+    """Sem copia completa e valida para abertura desconectada."""
+
+
 class ConferidorPiloto:
     def __init__(self, host, *, abrir=None):
         self.url = 'https://' + host + '/functions/v1/piloto-local/conferir-sessao'

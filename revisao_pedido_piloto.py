@@ -1,4 +1,4 @@
-"""Cache privado de revisoes; a nuvem e consultada em toda abertura do pedido."""
+"""Cache privado de revisoes completas, com revalidacao quando ha conexao."""
 from datetime import datetime, timezone
 import json
 import re
@@ -45,12 +45,28 @@ class CacheRevisaoPedido:
 
     def salvar(self, pedido, revisao, itens, pacotes, snapshot=None):
         registro = {'empresa':self.servico.empresa,'pedido':pedido,'revisao':revisao,'itens':itens,'pacotes':pacotes}
+        registro['conferido_em'] = datetime.now(timezone.utc).isoformat()
         if snapshot is not None:
-            registro.update(protocolo=2, snapshot=snapshot)
+            registro.update(protocolo=2, snapshot=snapshot, offline_schema=1)
         con = self.servico._db()
         try:
             con.execute('INSERT OR REPLACE INTO revisoes_pedidos_piloto VALUES (?,?)',
                         (pedido,json.dumps(registro,ensure_ascii=False)))
+            con.commit()
+        finally:
+            con.close()
+
+    def bloquear_offline(self, pedido):
+        # Preserva a copia anterior, mas uma revisao ja invalidada pela nuvem
+        # nao pode voltar a ser usada porque a conexao caiu durante a atualizacao.
+        registro = self.obter(pedido)
+        if registro is None:
+            return
+        registro['offline_bloqueado'] = True
+        con = self.servico._db()
+        try:
+            con.execute('UPDATE revisoes_pedidos_piloto SET conteudo=? WHERE pedido=?',
+                        (json.dumps(registro, ensure_ascii=False), pedido))
             con.commit()
         finally:
             con.close()

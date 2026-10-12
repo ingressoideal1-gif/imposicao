@@ -107,6 +107,21 @@ PAINEL_SYNC_BASE_URL = "https://imposicao.pages.dev"
 # estação e o `csv-editor.js` ficou três releases atrás sem ninguém notar.
 # `tests/test_painel_estacao.py` compara esta lista com o que o HTML pede.
 PAINEL_ARQUIVOS = [
+    'offline-estacao.js',
+    'vendor/offline/fabric.min.js',
+    'vendor/offline/inter-1b08e7fc267a5c7e.ttf',
+    'vendor/offline/inter-8c883f63b2c4157d.ttf',
+    'vendor/offline/inter-b37284b5701b6b16.ttf',
+    'vendor/offline/inter-d0f4bc7faca46837.ttf',
+    'vendor/offline/inter-e7a1aaf7eda9f2fa.ttf',
+    'vendor/offline/inter-eec66af7f2337bd3.ttf',
+    'vendor/offline/inter-ef8f755d933b9310.ttf',
+    'vendor/offline/inter.css',
+    'vendor/offline/jszip.min.js',
+    'vendor/offline/pdf.min.js',
+    'vendor/offline/pdf.worker.min.js',
+    'vendor/offline/qrcode.min.js',
+
     'gestao-estacoes.js',
     'pacotes-locais.js', 'antecipacao-pedidos.js', 'pacote-entrada.js',
     'briefing-editor.js', 'cliente-faturamento-form.js', 'cor-margens.js',
@@ -209,6 +224,8 @@ PAINEL_ARQUIVOS = [
     "fonte-glifos.js",
     "csv-editor.js",
     "texto-ajuste.js",
+    "capa-layout.js",
+    "capa-layout.css",
     "foto-lib.js",
     "gerenciador-fotos.js",
     "editor-foto.js",

@@ -79,15 +79,45 @@ def exigir_painel(request, *, escrita=False):
 def criar_router_estatisticas(servico):
     router = APIRouter()
     from selecao_piloto import SelecaoPiloto
-    from conferencia_piloto import ConferenciaIndisponivel
+    from conferencia_piloto import ConferenciaIndisponivel, PedidoLocalIndisponivel
     from starlette.concurrency import run_in_threadpool
     selecao = SelecaoPiloto(servico)
+    from offline_estacao import OfflineEstacao
+    offline = servico.offline = OfflineEstacao(servico, selecao)
+
+    @router.get('/api/pacotes-locais/offline-painel')
+    def offline_painel(request: Request):
+        exigir_painel(request)
+        return Response(json.dumps(offline.bootstrap()), media_type='application/json', headers={'Cache-Control':'no-store'})
+
+    @router.post('/api/pacotes-locais/conferencia-trabalho-painel')
+    @router.post('/api/pacotes-locais/confirmar-impressao-painel')
+    async def trabalho_offline(request: Request):
+        exigir_painel(request, escrita=True)
+        corpo = bytearray()
+        async for parte in request.stream():
+            corpo.extend(parte)
+            if len(corpo) > 65536:
+                raise HTTPException(413, 'Solicitacao excede limite.')
+        try:
+            dados = json.loads(corpo)
+            if request.url.path.endswith('/confirmar-impressao-painel'):
+                operador = getattr(request.state, 'operador', {})
+                if not operador.get('permissoes', {}).get('perm_imprimir'):
+                    raise HTTPException(403, 'Sem permissao de impressao.')
+                resultado = await run_in_threadpool(offline.confirmar, dados, operador.get('uid', 'local'))
+            else:
+                resultado = await run_in_threadpool(offline.conferir, dados)
+            return resultado
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(409, 'Revisao local indisponivel ou divergente. Reabra o pedido.') from None
 
     @router.get('/api/pacotes-locais/painel.js')
     def script():
         raiz = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
         codigo = (raiz / 'frontend/estatisticas-piloto.js').read_text(encoding='utf-8')
         codigo += '\n' + (raiz / 'frontend/selecao-piloto.js').read_text(encoding='utf-8')
+        codigo += '\n' + (raiz / 'frontend/offline-estacao.js').read_text(encoding='utf-8')
         return Response(codigo,
                         media_type='application/javascript; charset=utf-8', headers={'Cache-Control':'no-store'})
 
@@ -157,6 +187,9 @@ def criar_router_estatisticas(servico):
             operacao = selecao.abrir_pedido if request.url.path.endswith('/abrir-pedido-painel') else selecao.preparar_pedido
             resultado = await run_in_threadpool(operacao, json.loads(corpo))
             return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
+        except PedidoLocalIndisponivel:
+            raise HTTPException(409, {'codigo':'pedido_local_indisponivel',
+                'mensagem':'Sem internet e sem cópia completa validada deste pedido. Conecte a estação e abra o pedido para preparar seus dados e arquivos.'}) from None
         except ConferenciaIndisponivel:
             raise HTTPException(409, 'Pedido não conferido. Reabra e tente novamente.') from None
         except LimiteRecursoExcedido as erro:

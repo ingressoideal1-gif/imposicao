@@ -459,7 +459,7 @@ async function loadPedArtFile(file, aindaAtual = () => true) {
 
             pdfjsLib.GlobalWorkerOptions.workerSrc =
 
-                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                '/vendor/offline/pdf.worker.min.js';
 
             const arrayBuffer = await file.arrayBuffer();
             if (!aindaAtual()) return;
@@ -1533,7 +1533,7 @@ function drawPedPreview() {
                             corObj._pdfLoading = true;
                             if (typeof pdfjsLib !== 'undefined') {
                                 if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                                    pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/offline/pdf.worker.min.js';
                                 }
                                 const fetchPromise = corPdfUrl.startsWith('data:')
                                     ? pdfjsLib.getDocument({ data: atob(corPdfUrl.split('base64,')[1] || corPdfUrl) }).promise
@@ -1941,16 +1941,9 @@ function drawPedPreview() {
                 // texto de bloco abaixo é anotação da folha, desenhado por cima dele.
                 fecharGrupo();
                 if (previewPart === 'capa' && !isBack) {
-                    const color = fmt.cover_font_color || '#000000';
-                    const fsPdf = parseInt(fmt.cover_font_size) || 12;
-                    const xPdf = parseFloat(fmt.cover_font_x) || 10;
-                    const yPdf = parseFloat(fmt.cover_font_y) || 10;
-                    
-                    ctx.fillStyle = color;
-                    ctx.font = `bold ${fsPdf * scale}px Helvetica, sans-serif`;
-                    ctx.textBaseline = 'top';
-                    ctx.textAlign = 'left';
-                    
+                    const xPdf = Number(fmt.cover_font_x ?? 10);
+                    const yPdf = Number(fmt.cover_font_y ?? 10);
+
                     // Obter bloco e ticket_qtd do modelo ativo nesta pose
                     const item_bloco = (multiArteItem && multiArteItem.bloco) ? parseInt(multiArteItem.bloco) : null;
                     
@@ -2017,10 +2010,7 @@ function drawPedPreview() {
                     const capaTeatro = window.TeatroBanco?.capa(numCapa?.csv_data || [], item_local_index ?? item_index,
                         window.currentAssemblySets?.[currentSet - 1]?.num_sheets || total_sheets, numCapa?.teatro_capa);
                     if (capaTeatro) {
-                        const largura = ctx.measureText(capaTeatro.titulo).width;
-                        ctx.fillText(capaTeatro.titulo, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                        ctx.fillText(capaTeatro.detalhe, textX + largura, textY);
+                        desenharTextoDaCapa(ctx, fmt, capaTeatro.titulo, capaTeatro.detalhe, textX, textY, scale);
                     } else if (isNumCamarote) {
                         let cIni = 1, lCam = 1;
                         const targetObj = multiArteItem || activeOSItemObj;
@@ -2032,17 +2022,12 @@ function drawPedPreview() {
                         if (lCam <= 1) lCam = parseInt(document.getElementById('ped-l-cam')?.value) || 1;
 
                         const camaroteNum = String(cIni + (bloco_num - 1)).padStart(2, '0');
-                        const wCamarote = ctx.measureText(`Camarote ${camaroteNum}`).width;
 
-                        ctx.fillText(`Camarote ${camaroteNum}`, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
-                        ctx.fillText(` - de 1 a ${lCam}`, textX + wCamarote, textY);
+                        desenharTextoDaCapa(ctx, fmt, `Camarote ${camaroteNum}`, ` - de 1 a ${lCam}`, textX, textY, scale);
                     } else {
                         const blocoNum = String(bloco_num).padStart(2, '0');
-                        const wBloco = ctx.measureText(`Bloco ${blocoNum}`).width;
-                        
-                        ctx.fillText(`Bloco ${blocoNum}`, textX, textY);
-                        ctx.font = `normal ${fsPdf * scale}px Helvetica, sans-serif`;
+
+
                         
                         const seqStartInput = document.getElementById('ped-start');
                         const seqStart = multiArteItem ? multiArteItem.start : ((seqStartInput && seqStartInput.value) ? parseInt(seqStartInput.value) : 1);
@@ -2055,7 +2040,7 @@ function drawPedPreview() {
                         const vStartStr = String(v_start).padStart(4, '0');
                         const vEndStr = String(v_end).padStart(4, '0');
                         
-                        ctx.fillText(` - de ${vStartStr} a ${vEndStr}`, textX + wBloco, textY);
+                        desenharTextoDaCapa(ctx, fmt, `Bloco ${blocoNum}`, ` - de ${vStartStr} a ${vEndStr}`, textX, textY, scale);
                     }
                 }
                 ctx.restore();
@@ -5924,7 +5909,7 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
     } else if (comPrevia && itemArteUrl && !state.multiArtesPdfLoading[itemArteUrl]) {
         state.multiArtesPdfLoading[itemArteUrl] = true;
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/offline/pdf.worker.min.js';
         }
         (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(itemArteUrl) : fetch(itemArteUrl)).then(r => r.arrayBuffer()).then(buf => {
             return pdfjsLib.getDocument({ data: buf }).promise;
@@ -5944,7 +5929,7 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
     } else if (comPrevia && itemArteVersoUrl && !state.multiArtesPdfLoading[itemArteVersoUrl]) {
         state.multiArtesPdfLoading[itemArteVersoUrl] = true;
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/offline/pdf.worker.min.js';
         }
         (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(itemArteVersoUrl) : fetch(itemArteVersoUrl)).then(r => r.arrayBuffer()).then(buf => {
             return pdfjsLib.getDocument({ data: buf }).promise;

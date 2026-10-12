@@ -44,6 +44,12 @@ def resolver_do_pedido(servico, referencias):
                 raise ValueError('Dependência local excede limite.')
             return dados
         validar_url(origem, servico.host)
+        offline = getattr(servico, 'offline', None)
+        if offline is not None:
+            dados = offline.ler_dependencia(origem)
+            if dados is not None:
+                return dados
+            raise ValueError('Dependencia ainda nao preparada nesta estacao. Conecte para concluir o download.')
         with abrir(urllib.request.Request(origem, headers={'User-Agent':'NewProd-Piloto/1'}), timeout=15) as r:
             if getattr(r, 'status', 200) != 200:
                 raise ValueError('Dependência remota incompleta.')

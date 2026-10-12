@@ -75,6 +75,11 @@
     function snapshotPedido(osId) {
         return pedidoAtual?.osId === String(osId) ? snapshots.get(String(osId)) : null;
     }
+    function revisaoPedido(osId) {
+        const revisao = revisoesPedidos.get(String(osId));
+        const pedido = findOSInState(osId);
+        return revisao && pedido ? {pedido:String(pedido.numero), revisao} : null;
+    }
     async function carregarPedidoLocal(osId, atual, contexto) {
         const pedido = findOSInState(osId);
         if (!pedido || contexto !== pedidoAtual) throw Error('Pedido nao identificado.');
@@ -84,6 +89,11 @@
             body:JSON.stringify({pedido:String(pedido.numero)}), signal:AbortSignal.timeout(600000)
         });
         if (!r.ok) {
+            let detalhe;
+            try { detalhe = (await r.json()).detail; } catch (_) {}
+            if (detalhe?.codigo === 'pedido_local_indisponivel') {
+                throw Error('Sem internet e sem cópia completa validada deste pedido. Conecte a estação e abra o pedido para preparar seus dados e arquivos.');
+            }
             throw Error('Nao foi possivel abrir a revisao local (HTTP ' + r.status + '). Confira a atualizacao do agente e do sinal no banco.');
         }
         const resposta = await r.json();
@@ -183,7 +193,13 @@
             liberados.set(chave(item.id, osId), {pacote, modelo:fotografias.get(pacote.modelo)});
         }
         contexto.pronto = true;
-        toast('Pedido conferido. Modelos preparados para leitura local.', 'success');
+        const offline = resposta.execucao_offline === true;
+        const selo = typeof document !== 'undefined' && document.getElementById('newprod-canal-piloto');
+        if (selo) selo.textContent = offline
+            ? 'NewProd Piloto · Sem conexão — última revisão local do pedido ' + pedido.numero
+            : 'NewProd Piloto · porta 9001';
+        toast(offline ? 'Sem conexão: pedido aberto pela última revisão local. Alterações da nuvem serão conferidas ao reabrir com internet.'
+            : 'Pedido conferido. Modelos preparados para leitura local.', offline ? 'warning' : 'success');
         return resposta;
     }
     async function conferir(itemId, osId, atual) {
@@ -234,7 +250,7 @@
         if (new Set(locais.map(l => l.hash)).size > 1) throw Error('Revisões locais divergentes. Reabra o pedido.');
         return locais[0]?.chave || url;
     }
-    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, iniciarPedido, conferirPedido, conferir, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
+    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, revisaoPedido, iniciarPedido, conferirPedido, conferir, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
     // A injeção exclusiva do Piloto ocorre depois do script principal. Manter
     // o fluxo original e acompanhar também seus retornos antecipados e erros.
     const abrirPedido = window.abrirImposicaoDoPedido;

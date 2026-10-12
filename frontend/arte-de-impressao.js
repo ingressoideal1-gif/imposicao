@@ -212,11 +212,18 @@
                 fd.delete('multi_artes_files');
             }
             const alvos = artes.length ? artes : [dados];
+            const selecaoLocal = estado.selectedOSItems?.length > 1 ? estado.selectedOSItems : [estado.activeOSItem].filter(Boolean);
+            let conferenciaLocal = raiz.PilotoOffline ? await raiz.PilotoOffline.conferencia(selecaoLocal) : null;
+            async function consultarBancos(id) {
+                return conferenciaLocal ? conferenciaLocal.bancos(id) : raiz.chamarBancosPedido('consultar', {id_int:id}, controle.signal);
+            }
             const ids = [...new Set(alvos.map(a => a.modelo).filter(v => v != null && /^\d+$/.test(String(v))).map(String))];
             async function consultar(tabela, idsConsulta) {
                 if (!idsConsulta.length) return [];
-                if (!cliente) throw new Error('Não foi possível confirmar os dados obrigatórios.');
-                const { data, error } = await cliente.from(tabela).select('*').in('id', idsConsulta).abortSignal(controle.signal);
+                if (!cliente && !conferenciaLocal) throw new Error('Não foi possível confirmar os dados obrigatórios.');
+                const { data, error } = conferenciaLocal
+                    ? {data:(conferenciaLocal.tabelas[tabela] || []).filter(r => idsConsulta.includes(String(r.id)))}
+                    : await cliente.from(tabela).select('*').in('id', idsConsulta).abortSignal(controle.signal);
                 if (error || !Array.isArray(data) || data.length !== idsConsulta.length
                     || idsConsulta.some(id => !data.some(r => String(r.id) === id))) {
                     throw new Error('Consulta incompleta de ' + tabela + '. Reabra o pedido.');
@@ -255,7 +262,7 @@
             const bancosLidos = [];
             for (const id of pedidos) {
                 if (typeof raiz.chamarBancosPedido !== 'function') throw new Error('Validação de bancos indisponível. Atualize o painel.');
-                const resposta = await raiz.chamarBancosPedido('consultar', { id_int: id }, controle.signal);
+                const resposta = await consultarBancos(id);
                 const vinculos = (resposta.vinculos || []).filter(v => ids.includes(String(v.modelo_id)));
                 const anteriores = ids.map(id => estado.vinculosDeBanco?.[id]).filter(Boolean);
                 for (const m of modelos.filter(m => m.id_int === id)) {
@@ -393,12 +400,13 @@
                 }
             }
             // Uma alteração durante os downloads invalida o trabalho preparado.
+            if (conferenciaLocal) conferenciaLocal = await raiz.PilotoOffline.conferencia(selecaoLocal);
             if (!iguais(modelos, await consultar('pedidos_modelos', ids))
                 || !iguais(nums, await consultar('producao_numeracoes', numIds))) {
                 throw new Error('Os dados mudaram durante a preparação. Reabra e gere novamente.');
             }
             for (const [id, resposta] of bancosLidos) {
-                if (!iguais(resposta, await raiz.chamarBancosPedido('consultar', { id_int: id }, controle.signal))) {
+                if (!iguais(resposta, await consultarBancos(id))) {
                     throw new Error('O banco mudou durante a preparação. Reabra o pedido.');
                 }
             }

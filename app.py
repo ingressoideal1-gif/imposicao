@@ -1195,6 +1195,11 @@ def _publicar_faixa_qr_ideal(config, data):
             por_pedido[str(data["pedido"])] = set(numeracoes)
         pool = getattr(config, "pool_qr", None)
         for pedido, modelos in por_pedido.items():
+            if data.get('piloto_recursos') is not None and getattr(piloto_pacotes, 'offline', None):
+                piloto_pacotes.offline.guardar_faixa(data['integridade']['job_id'], pedido,
+                    {m:n for m,n in numeracoes.items() if m in modelos},
+                    [c for c in getattr(pool, 'contratos', {}).values() if str(c['pedido']) == str(pedido)])
+                continue
             acesso_publicacao.publicar_em_fundo(
                 int(pedido), (lambda pool=pool: pool) if pool else _pool_qr_ou_none,
                 {m: n for m, n in numeracoes.items() if m in modelos}

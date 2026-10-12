@@ -31,6 +31,7 @@ const format = {
     default_sheets_per_block: 25, default_block_depth: 3, default_rotate_page: true,
     has_cover: true, cover_scale: 70, cover_offset_x: -3, cover_offset_y: 0,
     cover_font_size: 18, cover_font_color: '#123456', cover_font_x: 0, cover_font_y: 0,
+    cover_max_width_mm: 35, cover_overflow: 'wrap', cover_text_align: 'right',
 };
 let count = 0;
 async function test(name, run) { await run(); count++; console.log('OK:', name); }

@@ -4,8 +4,10 @@ import json
 import time
 import threading
 import urllib.request
+import urllib.error
+import ssl
 
-from conferencia_piloto import ConferidorPiloto, ConferenciaIndisponivel
+from conferencia_piloto import ConferidorPiloto, ConferenciaIndisponivel, ConexaoPilotoIndisponivel
 from pacotes_download import SemRedirecionamento
 
 
@@ -22,7 +24,7 @@ class ClienteAutonomo:
         self.abrir = abrir or urllib.request.build_opener(SemRedirecionamento()).open
 
     def chamar(self, acao, corpo):
-        if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido'):
+        if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'confirmar-offline'):
             raise ValueError('Operação fora do piloto.')
         try:
             segredo = self.segredo()
@@ -30,12 +32,20 @@ class ClienteAutonomo:
             req = urllib.request.Request(self.base + acao,
                 data=json.dumps({**corpo, 'estacao': self.estacao}).encode(), method='POST',
                 headers={'Content-Type':'application/json', 'X-Agente-Segredo':segredo})
-            with self.abrir(req, timeout=20) as resposta:
+            with self.abrir(req, timeout=5 if acao == 'abrir-pedido' else 20) as resposta:
                 if getattr(resposta, 'status', 200) != 200: raise ValueError()
-                limite = (8 if acao in ('conferir-pedido', 'abrir-pedido') else 1) * 1024 * 1024
+                limite = (8 if acao in ('conferir-pedido', 'abrir-pedido', 'catalogos-offline') else 1) * 1024 * 1024
                 raw = resposta.read(limite + 1)
                 if len(raw) > limite: raise ValueError()
                 return json.loads(raw)
+        except urllib.error.HTTPError:
+            raise ConferenciaIndisponivel('Canal autônomo recusou a consulta.') from None
+        except urllib.error.URLError as erro:
+            if isinstance(erro.reason, ssl.SSLError):
+                raise ConferenciaIndisponivel('Conexao segura nao confirmada.') from None
+            raise ConexaoPilotoIndisponivel('Conexao com a nuvem indisponivel.') from None
+        except (TimeoutError, ConnectionError):
+            raise ConexaoPilotoIndisponivel('Conexao com a nuvem indisponivel.') from None
         except Exception:
             raise ConferenciaIndisponivel('Canal autônomo não confirmado; confira habilitação e acesso da estação.') from None
 
@@ -188,6 +198,15 @@ class ColetaAutonoma:
 
     def rodar(self):
         self.verificar_ociosidade()
+        # Independente da janela do navegador; usa a mesma ociosidade da coleta.
+        offline = getattr(self.servico, 'offline', None)
+        if offline and not self.servico.preparador.resumo()['ocupado'] and not self.servico.preparador.resumo()['pausado']:
+            self.limite_ciclo = self.relogio() + 120
+            try:
+                offline.ciclo(self._checkpoint)
+            except Exception:
+                # Uma falta de rede conserva os snapshots e confirmacoes no disco.
+                pass
         manual = self._manual.is_set()
         if self.relogio() < self.proxima and not self._solicitado.is_set() and not manual: return
         self.limite_ciclo = self.relogio() + 120

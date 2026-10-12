@@ -4,6 +4,7 @@ import { conferirPiloto } from './piloto_local.ts';
 import { listarPiloto } from './piloto_catalogo.ts';
 import { banco } from './banco.ts';
 import { conferirPedidoPiloto } from './piloto_pedido.ts';
+import { catalogosOffline, confirmarOffline } from './piloto_offline.ts';
 
 export async function conferirVinculoPiloto(operador: Record<string, unknown>, estacao: string,
   empresa: string | undefined, consultar = banco): Promise<Record<string, unknown>> {
@@ -57,6 +58,8 @@ export async function operarPilotoEstacao(acao: string, req: Request,
   const operador = await conferirVinculoPiloto(operadorEstacao, estacao,
     Deno.env.get('PILOTO_LOCAL_EMPRESA'));
   if (acao === 'listar') return await listarPiloto(corpo, operador);
+  if (acao === 'catalogos-offline') return await catalogosOffline(corpo, operador);
+  if (acao === 'confirmar-offline') return await confirmarOffline(corpo, operador);
   if (acao === 'abrir-pedido') return await conferirPedidoPiloto(corpo, operador, banco, undefined, undefined, undefined, true);
   if (acao === 'conferir-pedido') return await conferirPedidoPiloto(corpo, operador);
   if (acao === 'conferir') return await conferirPiloto(corpo, operador, banco, Deno.env.get('PILOTO_LOCAL_EMPRESA'), Deno.env.get('PILOTO_LOCAL_EMPRESA_ID'), true);

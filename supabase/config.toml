@@ -541,5 +541,5 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.piloto-local]
-# Funcao separada, somente leitura: segredo do agente ou Auth valida a sessao.
+# Funcao separada: leitura local e sincronizacao de confirmacoes com autorizacao do agente.
 verify_jwt = false

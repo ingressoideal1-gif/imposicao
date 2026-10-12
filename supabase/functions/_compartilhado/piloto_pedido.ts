@@ -57,7 +57,7 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
     const produtos = d.produtos.filter((p:any)=>String(p.id_produto)===String(produtoId));
     const produto = produtos.length === 1 ? produtos[0] : null;
     if (produto?.is_estoque === true) continue;
-    const fontes = fontesPiloto(m,nums);
+    const fontes = fontesPiloto(m,persistida ? [...nums,...d.bancos,...d.mapas] : nums);
     if (!fontes.frente) continue;
     const versoes_fontes:Record<string,any> = {};
     for (const [nome,url] of Object.entries(fontes)) {
