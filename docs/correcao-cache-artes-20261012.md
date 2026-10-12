@@ -85,3 +85,28 @@ Na variante de teste, 543 testes passaram e quatro falhas de perfil/publicador/
 lista de sincronismo do painel foram reproduzidas também na base 1.2.388,
 sem a correção. São limitações preexistentes daquele canal; não foram ocultadas
 nem alteradas nesta tarefa. O cache e seus consumidores passaram nos 53 testes.
+
+## Publicação concluída
+
+Ambos os downloads públicos completos conferidos antes da ativação:
+
+| Canal | MSI | Bytes | SHA-256 |
+|---|---|---:|---|
+| Oficial | NewProdPiloto_Oficial_v1.2.389.msi | 194953216 | e3bfb64b311c8da940fbf782015281d45956f29ae941d23f5e4ce6e93c3f75c5 |
+| Teste | NewProdPiloto_Teste_v1.2.389.msi | 196632576 | 24d52158ea7c51d2956a8a88df7a6584ea516a33c7bd07c77bc681d1baaf3008 |
+
+`latest.json`, `newprod-piloto-oficial.json` e `newprod-piloto-teste.json`
+reconsultados publicamente com cache-buster: todos em 1.2.389. Listas de estações
+preservadas: oito no oficial, LASER-01 e PC-JR-HOME no teste. Manifestos anteriores
+preservados em `dist` de cada worktree para referência; reversão operacional
+requer versão superior, pois o agente não faz downgrade automático.
+
+Executáveis auditados: módulos `art_cache` e `antecipacao_local` dentro do PYZ
+iguais ao código fonte final. Pacotes verificados sem arquivos privados.
+A primeira tentativa de upload oficial foi interrompida antes da publicação
+para concluir a revisão de concorrência; o objeto ainda não existia e os
+manifestos continuavam em 1.2.381. Apenas os bytes finais acima foram ativados.
+
+Fonte oficial: PR https://github.com/ingressoideal1-gif/imposicao/pull/129.
+Fonte de teste: branch `fix/agent-art-cache-teste-20261012`, commit `4b85b8db`.
+A publicação dos MSIs está concluída; a instalação nas estações não foi executada.
