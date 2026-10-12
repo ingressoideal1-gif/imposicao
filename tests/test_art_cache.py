@@ -180,6 +180,36 @@ class CacheTests(unittest.TestCase):
                 self.baixar(self.cache(abrir))
         self.assertEqual(len(chamadas), 1)
 
+    def test_conjuntos_com_urls_invertidas_nao_prendem_duas_travas(self):
+        from antecipacao_local import AntecipadorRecursos
+        from types import SimpleNamespace
+        barreira = threading.Barrier(2)
+        resultados, erros = [], []
+        def abrir(req, **kwargs):
+            barreira.wait(timeout=5)
+            f = io.BytesIO(b'%PDF-compartilhado')
+            f.headers = {'ETag': '"v1"', 'Cache-Control': 'max-age=3600'}
+            return f
+        local = SimpleNamespace(raiz=self.raiz, reserva_bytes=0,
+                                preparar=lambda *a, **k: {'estado': 'local_validado'})
+        def executar(n, nomes):
+            try:
+                p = AntecipadorRecursos(None, local, 'test.invalid', lambda m: None, lambda *a: None, abrir)
+                m = {'empresa': 'teste', 'modelo': str(n), 'revisao': 'a' * 64,
+                     'configuracao': {'tipo': 'antecipacao_online', 'fontes': {
+                         face: 'https://test.invalid/storage/v1/object/public/artes/' + nome
+                         for face, nome in zip(('frente', 'verso'), nomes)}}}
+                resultados.append(p.preparar(m, {}))
+            except Exception as e:
+                erros.append(e)
+        threads = [threading.Thread(target=executar, args=(10, ('a.pdf', 'b.pdf')), daemon=True),
+                   threading.Thread(target=executar, args=(11, ('b.pdf', 'a.pdf')), daemon=True)]
+        for t in threads: t.start()
+        for t in threads: t.join(timeout=8)
+        self.assertFalse(any(t.is_alive() for t in threads), 'Espera circular entre URLs')
+        self.assertEqual(erros, [])
+        self.assertEqual(len(resultados), 2)
+
 
 if __name__ == '__main__':
     unittest.main()

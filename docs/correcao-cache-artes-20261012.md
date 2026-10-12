@@ -44,7 +44,7 @@ Evidência desta execução em `dist/prova-cache-grande.json`.
 
 ## Validação e canais
 
-- 52 testes focados de cache, antecipação, seleção e revisão passaram.
+- 53 testes focados de cache, antecipação, seleção e revisão passaram.
 - Oficial: 543 testes passaram, 2 skips; todos os harnesses de navegador do
   procedimento oficial passaram. As duas omissões pertencem à suíte existente.
 - Executável oficial compilado; auditoria de arquivos privados passou.
@@ -58,3 +58,30 @@ Os limites de pacote existentes continuam iguais. Dois PDFs cuja soma exceda
 já baixados. A evidência não comprova impressão física nem tráfego de estação
 atualizada. Publicação não é prova de instalação; não há aviso automático de
 ligamento agendado nesta entrega.
+
+## Estações — última versão observada, não instalação desta entrega
+
+Consulta somente leitura em 12/10/2026. Sinal antigo não comprova que a máquina
+está ligada. Mantidos os canais e as permissões de atualização existentes.
+
+| Estação | Última versão observada | Pacote preparado |
+|---|---|---|
+| TEX-01 | 1.2.381 | Oficial 1.2.389 |
+| GUSTAVO-PROD | 1.2.381 | Oficial 1.2.389 |
+| LAPTOP-9BSK81S0 | 1.2.374 | Oficial 1.2.389 |
+| LASER-02 | 1.2.374 | Oficial 1.2.389 |
+| LASER-04 | 1.2.374 | Oficial 1.2.389 |
+| FLEXO | 1.2.371 | Oficial 1.2.389 |
+| DESKTOP-PM6TG1B | 1.2.233 | Oficial 1.2.389 |
+| ACABAMENTO | 1.2.363 | Oficial 1.2.389 |
+| LASER-01 | 1.2.384-teste.1 | Teste 1.2.389-teste.1 |
+| PC-JR-HOME | 1.2.387-teste.1 | Teste 1.2.389-teste.1 |
+
+Há cadastros históricos/duplicados de Piloto, CESAR-CPD, PRD-ACABAMENTO e
+Agente Ideal; eles não foram tratados como instalações atuais confirmadas.
+Nenhuma dessas versões observadas é prova de instalação da correção.
+
+Na variante de teste, 543 testes passaram e quatro falhas de perfil/publicador/
+lista de sincronismo do painel foram reproduzidas também na base 1.2.388,
+sem a correção. São limitações preexistentes daquele canal; não foram ocultadas
+nem alteradas nesta tarefa. O cache e seus consumidores passaram nos 53 testes.

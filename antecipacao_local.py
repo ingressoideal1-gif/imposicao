@@ -155,6 +155,9 @@ class AntecipadorRecursos:
                             raise ValueError('Recurso vazio.')
                 arquivos[nome] = {'sha256': digest.hexdigest(), 'bytes': tamanho}
                 caminhos[nome] = caminho
+                # Não manter duas travas de URLs: modelos podem compartilhar
+                # frente/verso em ordem inversa quando preparados em paralelo.
+                transferencias.close()
             derivado = deepcopy(manifesto)
             derivado['arquivos'] = arquivos
             derivado['configuracao']['tipo'] = 'recursos_antecipados'
