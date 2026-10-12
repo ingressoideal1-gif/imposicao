@@ -1349,6 +1349,8 @@
         [['Contratado', numero(p.contratado), 'o que o ERP vendeu, só o que tem código'],
          ['Publicado', numero(p.publicado), 'ingressos que a portaria já reconhece'],
          ['Passagens', numero(p.entraram), 'entradas registradas; inclui reentradas'],
+         ['Saídas', numero(p.sairam), 'saídas confirmadas na portaria'],
+         ['No local (registro)', p.presentes == null ? '—' : numero(p.presentes), 'último movimento registrado; saídas não registradas não são presumidas'],
          ['Ingressos utilizados', p.ingressos_utilizados == null ? '—' : numero(p.ingressos_utilizados), 'cada ingresso contado uma vez; não mede pessoas presentes'],
          ['Utilização dos publicados', p.publicados_utilizados == null ? '—' : porcento(p.comparecimento_pct), 'ingressos publicados utilizados ÷ publicados'],
          ['Recusadas', numero(p.recusadas), 'leituras negadas — veja o motivo abaixo'],
@@ -1596,6 +1598,7 @@
             sel.appendChild(op);
         });
         uso.appendChild(sel);
+        texto(uso, 'small', 'Permitir sair e voltar exige internet em cada leitura para confirmar entrada ou saída.', 'ic-ajuda');
         grade.appendChild(uso);
 
         campo(grade, 'Abre em', 'datetime-local', 'ic-setor-abre-' + s.id,

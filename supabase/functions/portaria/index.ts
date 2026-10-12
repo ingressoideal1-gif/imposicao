@@ -366,6 +366,21 @@ async function entrada(cabecalho: string | null, corpo: any): Promise<Response> 
   return ok((await registrarLeituras(aparelho, [corpo], true))[0]);
 }
 
+async function movimento(cabecalho: string | null, corpo: any): Promise<Response> {
+  const aparelho = await aparelhoDoToken(cabecalho);
+  if (!leituraValida(corpo) || !corpo.credencial_id || !corpo.setor_id ||
+      !["auto", "entrada", "saida"].includes(corpo.acao) ||
+      (corpo.versao != null && (typeof corpo.versao !== "string" || !FORMATO_UUID.test(corpo.versao))) ||
+      (corpo.acao !== "auto" && !corpo.versao)) return erro(422, "movimento inválido");
+  const r = await banco("POST", "rpc/producao_acesso_movimento", { p_dispositivo: aparelho.id, p_item: corpo });
+  if (!r || r.id_local !== corpo.id_local || !["permitido", "negado", "confirmar"].includes(r.resultado) ||
+      (r.resultado === "confirmar" && !FORMATO_UUID.test(r.versao || "")) ||
+      (r.resultado === "permitido" && !["entrada", "saida"].includes(r.tipo))) {
+    throw new Error("O banco não confirmou o movimento.");
+  }
+  return ok(r);
+}
+
 /**
  * `sincronizar`: so o que MUDOU -- evento, setores, bloqueios, `entradas`,
  * `totais` e a marca de quando o dono zerou a contagem. Sem a lista de
@@ -434,7 +449,7 @@ async function sincronizar(
   for (const s of setores) {
     totais[s.id] = await contar(
       `producao_acesso_leituras?evento_id=eq.${eventoId}&setor_id=eq.${s.id}` +
-        `&resultado=eq.permitido`,
+        `&resultado=eq.permitido&tipo=eq.entrada`,
     );
   }
 
@@ -518,6 +533,9 @@ Deno.serve(async (req: Request) => {
     }
     if (req.method === "POST" && rota === "leituras") {
       return comCors(await leituras(auth, await req.json()), origem);
+    }
+    if (req.method === "POST" && rota === "movimento") {
+      return comCors(await movimento(auth, await req.json()), origem);
     }
     if (req.method === "POST" && rota === "entrada") {
       return comCors(await entrada(auth, await req.json()), origem);

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <script src="reiniciar.js?v=1023"></script>
+    <script src="reiniciar.js?v=1049"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Portaria — Ideal Control</title>
     <meta name="theme-color" content="#0a0f1e">
@@ -515,7 +515,12 @@
         }
         .resposta .grande { font-size: 2rem; }
         /* Layout A: numero em primeiro plano e setor separado abaixo. */
+        .movimento-dialogo { padding: 24px 18px; border: 1px solid var(--border-forte); border-radius: 18px; background: #131d2e; text-align: center; }
+        .movimento-ingresso { font-size: 1.8rem; font-weight: 800; overflow-wrap: anywhere; }
+        #movimento-aviso { color: #d4deec; }
+        #movimento-saida { background: #60a5fa; color: #071a31; }
         .resposta.ok { background: linear-gradient(155deg, #15803d, #166534); }
+        .resposta.ok.saida { background: linear-gradient(155deg, #1d4ed8, #1e3a8a); }
         .resposta.ok .marca { display: none; }
         .resposta.ok .titulo { order: 0; font-size: 1.6rem; margin: 0; letter-spacing: .03em; }
         .resposta.ok .titulo::before { content: '✓'; margin-right: 10px; }
@@ -668,6 +673,18 @@
         <button id="btn-proximo">Ler o próximo</button>
     </div>
 
+    <div id="tela-movimento" class="sumindo">
+        <div role="dialog" aria-modal="true" aria-labelledby="movimento-titulo" class="movimento-dialogo">
+            <h1 id="movimento-titulo">Entrada ou saída?</h1>
+            <p id="movimento-ingresso" class="movimento-ingresso"></p>
+            <p id="movimento-aviso" role="status"></p>
+            <button id="movimento-entrada" type="button">Entrada</button>
+            <button id="movimento-saida" type="button">Saída</button>
+            <button id="movimento-repetir" type="button" class="sumindo">Consultar confirmação</button>
+            <button id="movimento-cancelar" type="button" class="discreto">Cancelar</button>
+        </div>
+    </div>
+
     <div id="tela-ambiguo" class="sumindo">
         <h1>Qual setor?</h1>
         <p style="color:var(--dim);font-size:0.9rem;">
@@ -687,15 +704,15 @@
     <div id="erro-configurar" class="aviso sumindo" role="alert"></div>
 </div>
 
-<script src="jsqr.min.js?v=1023"></script>
-<script src="qr-ideal-hash.js?v=1023"></script>
-<script src="portaria-validacao.js?v=1046"></script>
-<script src="portaria-deposito.js?v=1023"></script>
-<script src="portaria-camera.js?v=1023"></script>
-<script src="aviso-sonoro.js?v=1047"></script>
-<script src="portaria-sincronismo.js?v=1046"></script>
-<script src="chaveiro.js?v=1023"></script>
-<script src="portaria.js?v=1048"></script>
-<script src="sw-registro.js?v=1048"></script>
+<script src="jsqr.min.js?v=1049"></script>
+<script src="qr-ideal-hash.js?v=1049"></script>
+<script src="portaria-validacao.js?v=1049"></script>
+<script src="portaria-deposito.js?v=1049"></script>
+<script src="portaria-camera.js?v=1049"></script>
+<script src="aviso-sonoro.js?v=1049"></script>
+<script src="portaria-sincronismo.js?v=1049"></script>
+<script src="chaveiro.js?v=1049"></script>
+<script src="portaria.js?v=1049"></script>
+<script src="sw-registro.js?v=1049"></script>
 </body>
 </html>

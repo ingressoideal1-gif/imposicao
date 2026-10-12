@@ -159,8 +159,8 @@ export async function dashboard(
       cortesias,
       entraram: entradas,
       sairam: saidas,
-      // Passagens não comprovam presença física; reentrada pode repetir ingresso.
-      presentes: null,
+      // Saldo de presenca pelos registros; nao e uma contagem fisica de pessoas.
+      presentes: metricas.presentes == null ? null : Number(metricas.presentes),
       ingressos_utilizados: usados,
       publicados_utilizados: usadosPublicados,
       recusadas,
