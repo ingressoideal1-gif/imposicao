@@ -24,9 +24,12 @@ Deno.test("paginação por UUID, confirmação individual e métricas sem trunca
       if (table === "rpc/producao_acesso_registrar_leituras") {
         calls.push(body);
         rows = malformedAck ? [] : body.p_itens.map((i: any) => ({ id_local: i.id_local, primeira: false, resultado: "negado", motivo: "setor_bloqueado" }));
+      } else if (table === "rpc/producao_acesso_movimento") {
+        calls.push(body);
+        rows = { id_local: body.p_item.id_local, resultado: 'confirmar', versao: id(50) };
       } else if (table === "rpc/producao_acesso_qr_leitor_evento") rows = 1;
       else if (table === "rpc/producao_acesso_metricas") rows = {
-        entraram: 20001, sairam: 0, recusadas: 5, ingressos_utilizados: 1, publicados_utilizados: 1,
+        entraram: 20001, sairam: 0, presentes: 1, recusadas: 5, ingressos_utilizados: 1, publicados_utilizados: 1,
         por_setor: [{ setor_id: id(21), passagens: 20001, utilizados: 1 }], recusas: [{ motivo: "ja_entrou", quantas: 5 }],
       };
       else if (table === "producao_acesso_dispositivos") rows = [{ id: id(11), evento_id: id(1), nome: "Sintético" }];
@@ -65,6 +68,12 @@ Deno.test("paginação por UUID, confirmação individual e métricas sem trunca
     assert(r.resultado === "negado" && r.motivo === "setor_bloqueado" && calls.at(-1).p_online === true);
     const batch = await (await request("leituras", { leituras: [reading] })).json();
     assert(batch.confirmadas[0] === reading.id_local && calls.at(-1).p_online === false);
+    const movement = await (await request('movimento', { ...reading, acao: 'auto' })).json();
+    assert(movement.resultado === 'confirmar' && movement.versao === id(50));
+    assert(calls.at(-1).p_dispositivo === id(11));
+    assert((await request('movimento', { ...reading, acao: 'saida' })).status === 422);
+    assert((await request('movimento', { ...reading, acao: 'entrada', versao: 'invalida' })).status === 422);
+    assert((await request('movimento', { ...reading, acao: 'outro' })).status === 422);
     const count = calls.length;
     assert((await request("entrada", { ...reading, credencial_id: "filtro-invalido" })).status === 422);
     assert((await request("leituras", { leituras: {} })).status === 422); assert(calls.length === count);
@@ -72,7 +81,7 @@ Deno.test("paginação por UUID, confirmação individual e métricas sem trunca
     assert((await request("leituras", { leituras: [reading] })).status === 500);
     const d = await dashboard(id(1), [{ id: id(21), nome: "Sintético", quantidade: 10 }], 10);
     assert(d.grafico_truncado && d.leituras_lidas === 20000);
-    assert(d.publico.entraram === 20001 && d.publico.ingressos_utilizados === 1 && d.publico.presentes === null);
+    assert(d.publico.entraram === 20001 && d.publico.ingressos_utilizados === 1 && d.publico.presentes === 1);
     assert(d.publico.comparecimento_pct === 10);
     assert(d.por_setor[0].entraram === 20001 && d.por_setor[0].ingressos_utilizados === 1);
     assert(d.recusas[0].quantas === 5);

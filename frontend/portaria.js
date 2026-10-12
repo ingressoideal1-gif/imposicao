@@ -61,7 +61,7 @@
         // 'pareando' saiu daqui em 16/08/2026, junto com o codigo de seis
         // caracteres: nao ha mais o que digitar nesta tela. No lugar dela ficou
         // 'aviso', que so diz por que este aparelho parou de ler.
-        ['aviso', 'carregando', 'lendo', 'resposta', 'ambiguo'].forEach(function (t) {
+        ['aviso', 'carregando', 'lendo', 'resposta', 'ambiguo', 'movimento'].forEach(function (t) {
             $('tela-' + t).classList.toggle('sumindo', t !== qual);
         });
         // O retorno para a lista aparece so nas duas telas em que o aparelho
@@ -74,7 +74,7 @@
         $('erro-configurar').classList.add('sumindo');
         // A trava vale nas telas de trabalho -- ler o codigo e mostrar a
         // resposta. Nas de aviso e carga o aparelho pode dormir.
-        if (qual === 'lendo' || qual === 'resposta' || qual === 'ambiguo') acenderTela();
+        if (qual === 'lendo' || qual === 'resposta' || qual === 'ambiguo' || qual === 'movimento') acenderTela();
         else apagarPermitido();
     }
 
@@ -328,7 +328,7 @@
     function atualizarProntidao() {
         var pronto = prontoParaLer(), aviso = $('evento-salvo-offline');
         if (aviso) aviso.textContent = estado.carga?.publicacao?.leitor_minimo > 2
-            ? 'Atualize o Ideal Control para ler os ingressos deste evento.' : pronto ? 'Pronto para uso offline.'
+            ? 'Atualize o Ideal Control para ler os ingressos deste evento.' : pronto ? ((estado.carga.setores || []).some(function (s) { return s.tipo_uso === 'reentrada'; }) ? 'Sair e voltar exige conexão para confirmar cada movimento.' : 'Pronto para uso offline.')
             : estado.carga && estado.carga.publicacao && estado.carga.publicacao.concluida
                 ? 'Ingressos publicados. Conecte à internet para concluir o download neste celular.'
                 : 'Aguardando publicação dos ingressos. O evento já pode ser configurado. Conecte à internet para sincronizar.';
@@ -467,7 +467,10 @@
         mostrar('lendo');
         atualizarProntidao();
         ligarSincronismo();
-        comecarALer();
+        D.movimentoPendente().then(function (p) {
+            if (p) { movimentoAtual = p; mostrarMovimento('pendente'); }
+            else comecarALer();
+        }).catch(function () { avisar('Não foi possível conferir movimentos pendentes neste aparelho. Reabra o aplicativo.'); });
     }
 
     function setorPorId(carga, id) {
@@ -613,6 +616,72 @@
     var vistos = {};
     var validando = false;
     var aguardandoProximo = false;
+    var movimentoAtual = null;
+
+    function mostrarMovimento(fase) {
+        aguardandoProximo = true;
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        var v = movimentoAtual.veredito;
+        $('movimento-ingresso').textContent = 'Ingresso ' + v.numero + ' · ' + (v.setor.nome || 'Setor');
+        var confirmar = fase === 'confirmar';
+        $('movimento-titulo').textContent = confirmar ? 'Entrada ou saída?' : fase === 'enviando' ? 'Confirmando movimento…' : 'Confirmação pendente';
+        $('movimento-aviso').textContent = confirmar ? 'Este ingresso já se encontra no Local. Qual movimento deseja registrar?' :
+            'Aguarde a confirmação do servidor antes de liberar. Se a conexão falhar, consulte novamente a mesma tentativa.';
+        ['entrada','saida','cancelar'].forEach(function (id) { $('movimento-' + id).classList.toggle('sumindo', !confirmar); });
+        $('movimento-repetir').classList.toggle('sumindo', fase !== 'pendente');
+        mostrar('movimento');
+        if (confirmar) $('movimento-entrada').focus();
+    }
+
+    function enviarMovimento() {
+        var p = movimentoAtual;
+        mostrarMovimento('enviando');
+        var c = estado.carga || {};
+        if (!navigator.onLine || !estado.token || p.evento !== (c.evento || {}).id || p.aparelho !== (c.aparelho || {}).id) {
+            mostrarMovimento('pendente');
+            $('movimento-aviso').textContent = !navigator.onLine ? 'Conecte à internet para confirmar esta tentativa. Nenhuma liberação offline.' : 'Retorne ao evento e aparelho desta tentativa para consultar a confirmação.';
+            return Promise.resolve();
+        }
+        var controle = new AbortController();
+        var prazo = setTimeout(function () { controle.abort(); }, 10000);
+        return D.movimentoPendente(p).then(function () {
+            return api('/movimento', { method: 'POST', body: JSON.stringify(p.leitura), signal: controle.signal });
+        })
+            .then(function (r) {
+                if (!r || r.id_local !== p.leitura.id_local || ['confirmar','permitido','negado'].indexOf(r.resultado) < 0 ||
+                    (r.resultado === 'confirmar' && !r.versao) ||
+                    (r.resultado === 'permitido' && ['entrada','saida'].indexOf(r.tipo) < 0)) throw new Error('Confirmação inválida');
+                if (r.resultado === 'confirmar') {
+                    p.versao = r.versao;
+                    return D.movimentoPendente(p).then(function () { mostrarMovimento('confirmar'); });
+                }
+                return D.movimentoPendente(null).then(function () {
+                    movimentoAtual = null;
+                    var v = Object.assign({}, p.veredito, { estado: r.resultado, motivo: r.motivo, tipo: r.tipo });
+                    anunciar(v);
+                    // O servidor ja persistiu; nao reenfileirar nem somar saidas como entradas.
+                    puxarNovidades();
+                });
+            }).catch(function () { movimentoAtual = p; mostrarMovimento('pendente'); })
+            .then(function () { clearTimeout(prazo); });
+    }
+
+    function iniciarMovimento(v) {
+        return D.movimentoPendente().then(function (p) {
+            movimentoAtual = p || { veredito: v, evento: estado.carga.evento.id, aparelho: estado.carga.aparelho.id,
+                leitura: Object.assign(leituraDe(v), { acao: 'auto' }) };
+            return D.movimentoPendente(movimentoAtual);
+        }).then(enviarMovimento);
+    }
+
+    function escolherMovimento(acao) {
+        if (validando || !movimentoAtual || !movimentoAtual.versao) return;
+        validando = true;
+        movimentoAtual.leitura = Object.assign(leituraDe(movimentoAtual.veredito), { acao: acao, versao: movimentoAtual.versao });
+        movimentoAtual.versao = null;
+        return D.movimentoPendente(movimentoAtual).then(enviarMovimento).catch(function () { mostrarMovimento('pendente'); })
+            .then(function () { validando = false; });
+    }
 
     /**
      * Protecao adicional contra callbacks repetidos da camera. O toque em
@@ -677,7 +746,7 @@
                     return V.decidir({
                         hashes: hashes, carga: carga,
                         agora: new Date().toISOString(),
-                        entradas: entradas, setorEscolhido: setorEscolhido || null,
+                        entradas: entradas, setorEscolhido: setorEscolhido || null, presencaOnline: true,
                     });
                 });
             })
@@ -686,6 +755,7 @@
                     estado.pendente = { texto: texto };
                     return perguntarSetor(v.candidatos);
                 }
+                if (v.setor && v.setor.tipo_uso === 'reentrada' && v.estado === 'permitido') return iniciarMovimento(v);
                 var leitura = leituraDe(v);
                 return conferirNaRede(v, leitura).then(function (decidido) {
                     return registrar(leitura).then(function () {
@@ -829,6 +899,10 @@
         fora_da_janela: 'FORA DO HORÁRIO',
         bloqueado: 'FAIXA BLOQUEADA',
         ja_entrou: 'JÁ ENTROU',
+        ja_no_local: 'Ingresso já se encontra no Local',
+        ja_fora_local: 'INGRESSO JÁ ESTÁ FORA',
+        estado_alterado: 'ESTADO ALTERADO — LEIA NOVAMENTE',
+        atualizacao_necessaria: 'ATUALIZE O IDEAL CONTROL',
         erro_de_leitura: 'ERRO AO LER',
     };
 
@@ -864,7 +938,7 @@
         // A hora entra por decisao do usuario -- numa fila rapida, sem ela o
         // porteiro nao distingue "acabou de passar" de "isto e de trinta
         // segundos atras".
-        faixa.textContent = (setor.nome || 'Ingresso') + ' · ' + v.numero
+        faixa.textContent = (v.tipo === 'saida' ? 'Saída · ' : '') + (setor.nome || 'Ingresso') + ' · ' + v.numero
             + ' · ' + hora(new Date().toISOString());
         if (window.portariaCamera) window.portariaCamera.desligar();
         pintar(v);
@@ -902,14 +976,17 @@
         var permitido = v.estado === 'permitido';
         caixa.className = 'resposta ' + (
             permitido ? 'ok' : v.motivo === 'setor_nao_autorizado' ? 'porta' : 'recusa');
+        if (permitido && v.tipo === 'saida') caixa.classList.add('saida');
         $('resposta-marca').textContent = permitido ? '✓' : '✕';
-        $('resposta-titulo').textContent = permitido ? 'LIBERADO' : TITULOS[v.motivo] || 'RECUSADO';
+        $('resposta-titulo').textContent = permitido ? (v.tipo === 'saida' ? 'SAÍDA REGISTRADA' : 'LIBERADO') : TITULOS[v.motivo] || 'RECUSADO';
         $('resposta-grande').textContent = '';
         $('resposta-motivo').textContent = '';
 
         if (permitido) {
             $('resposta-grande').textContent = String(v.numero);
             $('resposta-detalhe').textContent = setor.nome || 'Ingresso';
+        } else if (['ja_no_local','ja_fora_local','estado_alterado','atualizacao_necessaria'].indexOf(v.motivo) !== -1) {
+            $('resposta-detalhe').textContent = (setor.nome || 'Ingresso') + ' · nº ' + v.numero;
         } else if (v.motivo === 'evento_inativo') {
             // Nao ha setor nem numero a mostrar: a recusa e do evento inteiro,
             // e vem antes de o aparelho saber de que ingresso se trata.
@@ -1001,6 +1078,22 @@
         somDestravado = true;
         mostrar('lendo');
         comecarALer();
+    };
+
+    $('movimento-entrada').onclick = function () { return escolherMovimento('entrada'); };
+    $('movimento-saida').onclick = function () { return escolherMovimento('saida'); };
+    $('movimento-repetir').onclick = function () {
+        if (validando || !movimentoAtual) return;
+        validando = true;
+        return enviarMovimento().then(function () { validando = false; });
+    };
+    $('movimento-cancelar').onclick = function () {
+        if (validando || !movimentoAtual || !movimentoAtual.versao) return;
+        validando = true;
+        return D.movimentoPendente(null).then(function () {
+            movimentoAtual = null; validando = false; aguardandoProximo = false; vistos = {};
+            mostrar('lendo'); comecarALer();
+        }).catch(function () { validando = false; mostrarMovimento('pendente'); });
     };
 
     $('btn-lanterna').onclick = function () {

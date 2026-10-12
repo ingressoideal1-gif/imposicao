@@ -93,7 +93,7 @@
         //    `=== false` e nao `!carga.evento.ativo`: uma carga baixada ANTES
         //    desta versao nao tem o campo, e tratar a ausencia como desligado
         //    pararia um evento que ninguem desligou.
-        if (carga.evento && carga.evento.ativo === false) {
+        if (carga.evento && carga.evento.ativo === false && !entrada.presencaOnline) {
             return negado('evento_inativo', null, null, {});
         }
 
@@ -148,6 +148,14 @@
 
         var cand = meus[0];
         var setor = setorPorId(carga, cand.s);
+        // Identifica o ingresso; o servidor decide entrada/saida e restricoes.
+        // Isso permite registrar saida mesmo depois de fechar/bloquear o setor.
+        if (entrada.presencaOnline && setor && setor.tipo_uso === 'reentrada') {
+            return { estado: 'permitido', credencial_id: cand.id, numero: cand.n, setor: setor };
+        }
+        if (carga.evento && carga.evento.ativo === false) {
+            return negado('evento_inativo', cand, setor, {});
+        }
         if (!setor || (setor.status && setor.status !== 'ativo')) {
             return negado('erro_de_leitura', cand, null, {});
         }
