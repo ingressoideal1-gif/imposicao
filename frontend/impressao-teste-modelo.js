@@ -80,27 +80,9 @@
             gestao_envio_id: options.gestao_envio_id, historico_contexto: options.historico_contexto};
     }
     async function prepararFolhasGdi(itens, options) {
-        if (!options.folha_a_folha) return processPrintQueueOptions(itens, options);
-        const PDFDocument = window.PDFLib?.PDFDocument;
-        if (!PDFDocument) throw new Error('Biblioteca PDF indisponível para envio folha a folha. Recarregue o painel.');
-        const fila = [];
-        const passo = Number(options.duplex) === 2 || Number(options.duplex) === 3 ? 2 : 1;
-        for (const item of itens) {
-            const doc = await PDFDocument.load(await item.blob.arrayBuffer());
-            const folhas = [];
-            for (let i = 0; i < doc.getPageCount(); i += passo) {
-                folhas.push(Array.from({length: Math.min(passo, doc.getPageCount() - i)}, (_, n) => i + n));
-            }
-            if (options.impressao_reversa) folhas.reverse();
-            for (const indices of folhas) {
-                const folha = await PDFDocument.create();
-                (await folha.copyPages(doc, indices)).forEach(p => folha.addPage(p));
-                fila.push({name: `${(item.name || 'documento.pdf').replace(/\.pdf$/i, '')}_folha_${String(Math.floor(indices[0] / passo) + 1).padStart(3, '0')}.pdf`,
-                    blob: new Blob([await folha.save()], {type: 'application/pdf'})});
-            }
-        }
-        return fila;
+        return processPrintQueueOptions(itens, options);
     }
+
     function criarEntregaUnica({testeModelo, apenasUmaFace = false, historicoContexto = null}) {
         const {printerName, options} = structuredClone(testeModelo);
         if (!['gdi_atual','experimental_gdi'].includes(options.modo)) throw new Error('Trabalho único requer uma saída GDI.');

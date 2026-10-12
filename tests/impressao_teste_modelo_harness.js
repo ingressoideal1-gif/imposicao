@@ -56,12 +56,14 @@ function extract(name) {
     assert.equal(await page.$eval('#ped-print-printer', e=>e.disabled), true);
     assert.equal(await page.$$eval('#ped-teste-saida', es => es.length), 1);
     assert.equal(await page.$$eval('#ped-teste-saida option[value]:not([value=""])', es => es.length), 3);
+    await page.addScriptTag({content: extract('getPedPrintOptions')});
     const config = {printerName: 'Sintetica', options: {copies: 3, paper_size: 8, tray: 7, tray_capa: 2, tray_miolo: 4, duplex: 2, color: 1, orientation: 2}};
     for (const modo of ['gdi_atual', 'experimental_gdi']) {
       await page.select('#ped-teste-saida', modo);
       const fluxo = await page.evaluate(async cfg => {
         calls.length = 0;
-        cfg.options.entregar_por_bloco = true;
+        document.getElementById('ped-entregar-por-bloco').checked = true;
+        cfg.options.entregar_por_bloco = getPedPrintOptions().options.entregar_por_bloco;
         const testeModelo = await NewProdTesteModelo.capturar(cfg);
         const entrega = criarEntregaDeImpressao({testeModelo});
         await entrega.entregar([{name:'modelo_capa.pdf',blob:new Blob(['capa'])}]);
@@ -77,7 +79,8 @@ function extract(name) {
       assert(fluxo.calls.every(c=>c.url.endsWith('/experimental/submit')));
     }
     await page.addScriptTag({path: path.join(root, 'frontend/pdf-lib.min.js')});
-    for (const modo of ['gdi_atual', 'experimental_gdi']) {
+    await page.addScriptTag({content: extract('processPrintQueueOptions')});
+    for (const modo of ['gdi_atual', 'experimental_gdi', 'pdf_raw']) {
       await page.select('#ped-teste-saida', modo);
       for (const duplex of [1,2,3]) {
         const folhas = await page.evaluate(async ({cfg,duplex}) => {
@@ -99,7 +102,7 @@ function extract(name) {
         assert.deepEqual(folhas.paginas,duplex===1 ? [[102],[101],[100]] : [[102],[100,101]]);
         assert.equal(folhas.antes,duplex===1 ? 3 : 2,'folhas enviadas antes de finalizar');
         assert.equal(folhas.depois,folhas.antes);
-        assert(folhas.bandejas.every(b=>b===2));
+        assert(folhas.bandejas.every(b=>modo==='pdf_raw' ? b==null : b===2));
       }
     }
     await page.select('#ped-teste-saida', '');

@@ -45954,7 +45954,9 @@ function getPedPrintOptions() {
         orientation: parseInt(document.getElementById('ped-print-orientation')?.value) || 1,
         print_mode: document.getElementById('ped-print-engine-mode')?.value || 'gdi',
         impressao_reversa: document.getElementById('ped-print-reverse')?.checked === true,
-        folha_a_folha: document.getElementById('ped-print-sheet-by-sheet')?.checked === true
+        folha_a_folha: document.getElementById('ped-print-sheet-by-sheet')?.checked === true,
+        entregar_por_bloco: document.getElementById('ped-entregar-por-bloco')?.checked === true
+            && document.getElementById('ped-print-reverse')?.checked !== true
     };
     if (isDualTray) {
         options.tray_capa = parseInt(document.getElementById('ped-print-tray-capa')?.value) || options.tray;
@@ -45969,63 +45971,43 @@ function getPedPrintOptions() {
 
 // Processa a fila de PDFs aplicando Impressão Reversa e/ou Folha a Folha se ativados
 async function processPrintQueueOptions(queue, options) {
-    if (!options || (!options.impressao_reversa && !options.folha_a_folha)) {
-        return queue;
-    }
-
-    const { PDFDocument } = window.PDFLib || {};
-    if (!PDFDocument) {
-        console.warn('[processPrintQueueOptions] window.PDFLib.PDFDocument não disponível.');
-        return queue;
-    }
-
+    if (!options || (!options.impressao_reversa && !options.folha_a_folha)) return queue;
+    const { PDFDocument, PDFName, PDFObjectCopier } = window.PDFLib || {};
+    if (!PDFDocument) throw new Error('Biblioteca PDF indisponível. Nenhum arquivo foi enviado sem aplicar as opções.');
     const newQueue = [];
-
-    for (let i = 0; i < queue.length; i++) {
-        const item = queue[i];
-        try {
-            const arrayBuffer = await item.blob.arrayBuffer();
-            const pdfDoc = await PDFDocument.load(arrayBuffer);
-            const totalPages = pdfDoc.getPageCount();
-
-            // Determinar a ordem das páginas (reversa: N -> 1, normal: 1 -> N)
-            const pageIndices = [];
-            if (options.impressao_reversa) {
-                for (let p = totalPages - 1; p >= 0; p--) pageIndices.push(p);
-            } else {
-                for (let p = 0; p < totalPages; p++) pageIndices.push(p);
+    const passo = [2, 3].includes(Number(options.duplex)) ? 2 : 1;
+    for (const item of queue) {
+        const pdfDoc = await PDFDocument.load(await item.blob.arrayBuffer());
+        const folhas = [];
+        for (let i = 0; i < pdfDoc.getPageCount(); i += passo) {
+            folhas.push(Array.from({length: Math.min(passo, pdfDoc.getPageCount() - i)}, (_, n) => i + n));
+        }
+        if (options.impressao_reversa) folhas.reverse();
+        if (options.folha_a_folha) {
+            for (const indices of folhas) {
+                const folha = await PDFDocument.create();
+                (await folha.copyPages(pdfDoc, indices)).forEach(p => folha.addPage(p));
+                // O perfil de cor pertence ao catálogo, não às páginas copiadas.
+                const intent = pdfDoc.catalog.get(PDFName.of('OutputIntents'));
+                if (intent) folha.catalog.set(PDFName.of('OutputIntents'), PDFObjectCopier.for(pdfDoc.context, folha.context).copy(intent));
+                const numero = String(Math.floor(indices[0] / passo) + 1).padStart(3, '0');
+                newQueue.push({...item, name: `${(item.name || 'documento.pdf').replace(/\.pdf$/i, '')}_folha_${numero}.pdf`,
+                    blob: new Blob([await folha.save()], {type:'application/pdf'})});
             }
-
-            if (options.folha_a_folha) {
-                // Gerar 1 arquivo PDF para cada página individualmente na ordem calculada
-                const baseName = (item.name || 'documento.pdf').replace(/\.pdf$/i, '');
-                for (let k = 0; k < pageIndices.length; k++) {
-                    const pageIdx = pageIndices[k];
-                    const singleDoc = await PDFDocument.create();
-                    const [copiedPage] = await singleDoc.copyPages(pdfDoc, [pageIdx]);
-                    singleDoc.addPage(copiedPage);
-                    const singleBytes = await singleDoc.save();
-                    const singleBlob = new Blob([singleBytes], { type: 'application/pdf' });
-                    const pageNumStr = String(pageIdx + 1).padStart(3, '0');
-                    newQueue.push({
-                        name: `${baseName}_pag_${pageNumStr}.pdf`,
-                        blob: singleBlob
-                    });
+        } else {
+            // Reordenar no documento original conserva catálogo/ICC.
+            const paginas = pdfDoc.getPages();
+            for (let i = paginas.length - 1; i >= 0; i--) pdfDoc.removePage(i);
+            for (let i = 0; i < folhas.length; i++) {
+                const indices = folhas[i];
+                indices.forEach(n => pdfDoc.addPage(paginas[n]));
+                // Última frente sem verso: ao inverter, não deixar a próxima
+                // frente ocupar o verso dela no mesmo trabalho duplex.
+                if (passo === 2 && indices.length === 1 && i < folhas.length - 1) {
+                    pdfDoc.addPage([paginas[indices[0]].getWidth(), paginas[indices[0]].getHeight()]);
                 }
-            } else if (options.impressao_reversa) {
-                // Arquivo único contendo todas as páginas em ordem invertida
-                const reverseDoc = await PDFDocument.create();
-                const copiedPages = await reverseDoc.copyPages(pdfDoc, pageIndices);
-                copiedPages.forEach(p => reverseDoc.addPage(p));
-                const reverseBytes = await reverseDoc.save();
-                const reverseBlob = new Blob([reverseBytes], { type: 'application/pdf' });
-                newQueue.push({ name: item.name, blob: reverseBlob });
-            } else {
-                newQueue.push(item);
             }
-        } catch (err) {
-            console.error(`[processPrintQueueOptions] Erro ao reordenar PDF "${item.name}":`, err);
-            newQueue.push(item);
+            newQueue.push({...item, blob:new Blob([await pdfDoc.save()], {type:'application/pdf'})});
         }
     }
     return newQueue;

@@ -208,7 +208,7 @@ async function main() {
             _hotFolderAtivo: () => !!hot, toast: ()=>{}, window: {}, console};
         vm.createContext(c);
         // Executa o início real da fábrica até a decisão do destino.
-        vm.runInContext(entregaSource.slice(0, entregaSource.indexOf('    if (_hotFolderAtivo()')) + '\nreturn options;\n}', c);
+        vm.runInContext(entregaSource.slice(0, entregaSource.indexOf('    if (!testeModelo && _hotFolderAtivo()')) + '\nreturn options;\n}', c);
         assert.equal(c.criarEntregaDeImpressao({apenasUmaFace:true}).duplex, 1);
         assert.equal(options.hot_folder_path, hot);
     }

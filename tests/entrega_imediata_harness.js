@@ -134,14 +134,14 @@ function montarCenario(opcoes) {
     const criar = new Function(
         'window', 'document', 'toast', 'fetch', 'FormData', 'setTimeout',
         'processPrintQueueOptions', 'nomeObjetoStorage',
-        '_conferirConsumoHotFolder', 'AGENTE_LOCAL_URL', 'console', 'hashArquivoImpressao',
+        '_conferirConsumoHotFolder', 'AGENTE_LOCAL_URL', 'console', 'hashArquivoImpressao', 'contextoHistoricoArquivo',
         FONTE_ENTREGA + '\nreturn { criarEntregaDeImpressao, sendPrintJobDirect };'
     )(
         janela, doc, (msg, tipo) => toasts.push({ msg, tipo }), fetchFalso, FormDataFalsa,
         (fn, ms) => { temporizadores.push(fn); return 1; },
         async (fila) => fila, (n) => n,
         function (caminhos) { if (caminhos && caminhos.length) enviados.push('__CONFERIU__'); },
-        'http://127.0.0.1:9000', console, async () => 'a'.repeat(64)
+        'http://127.0.0.1:9000', console, async () => 'a'.repeat(64), (contexto, arquivo) => ({...contexto, arquivo})
     );
 
     return { criar, janela, doc, toasts, enviados, opcoesEnviadas, botoes, campos };
