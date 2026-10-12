@@ -15,7 +15,7 @@
     'use strict';
 
     // A versão vem da tag que carregou ESTE arquivo, e não de uma constante:
-    // o `publicar.ps1` renumera `.js?v=` sozinho, e uma constante aqui teria de
+    // o `entrega-segura.ps1` versiona este asset junto com o leitor; uma constante teria de
     // ser lembrada a cada release — a que ninguém lembra é a que envelhece.
     function versaoDeste() {
         var eu = document.currentScript;

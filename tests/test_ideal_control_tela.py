@@ -172,13 +172,14 @@ CLIENTE_FALSO = {
 
 DASHBOARD_FALSO = {
         "publico": {"contratado": 1000, "publicado": 1000, "cortesias": 42,
-                    "entraram": 150, "sairam": 10, "presentes": 140,
+                    "entraram": 150, "sairam": 10, "presentes": None,
+                    "ingressos_utilizados": 150, "publicados_utilizados": 150,
                     "recusadas": 7, "bloqueados": 51, "comparecimento_pct": 15.0},
         "por_setor": [
             {"setor_id": "s1", "nome": "PISTA", "contratado": 600,
-             "publicado": 600, "entraram": 120, "ocupacao_pct": 20.0},
+             "publicado": 600, "entraram": 120, "ingressos_utilizados": 120, "ocupacao_pct": 20.0},
             {"setor_id": "s2", "nome": "CAMAROTE", "contratado": 400,
-             "publicado": 400, "entraram": 30, "ocupacao_pct": 7.5},
+             "publicado": 400, "entraram": 30, "ingressos_utilizados": 30, "ocupacao_pct": 7.5},
         ],
         "recusas": [{"motivo": "ja_entrou", "rotulo": "Ingresso já usado", "quantas": 5},
                     {"motivo": "desconhecido",
@@ -295,7 +296,8 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
   console.log(JSON.stringify({{ saida, erros }}));
 }})();
 """
-    r = subprocess.run(["node", "-e", driver], capture_output=True,
+    # O código do navegador pode exceder o limite de argumentos do Windows.
+    r = subprocess.run(["node", "-"], input=driver, capture_output=True,
                        encoding="utf-8", cwd=RAIZ)
     if r.returncode != 0:
         raise AssertionError(r.stderr[:1200])
@@ -374,9 +376,9 @@ def test_a_tela_abre_um_pedido_e_desenha_tudo():
     assert a["kpis"] == 0
     assert not [c for c in a["caminhos"] if "/dashboard" in c]
     # E depois do toque, sim.
-    assert "Entraram=150" in saida["depois"]
-    assert "Presentes=140" in saida["depois"]
-    assert "Comparecimento=15,0%" in saida["depois"]
+    assert "Passagens=150" in saida["depois"]
+    assert "Ingressos utilizados=150" in saida["depois"]
+    assert "Utilização dos publicados=15,0%" in saida["depois"]
 
 
 def test_o_modelo_sem_codigo_aparece_marcado_e_nao_escondido():

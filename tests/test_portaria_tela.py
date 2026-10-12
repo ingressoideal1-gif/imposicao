@@ -449,7 +449,7 @@ def _sincronizar(mock):
 
 def test_sincronizar_remove_da_fila_so_depois_da_confirmacao_do_servidor():
     r = _sincronizar({"method": "POST", "pathname": "/functions/v1/portaria/leituras",
-                      "status": 200, "body": {"gravadas": 2}})
+                      "status": 200, "body": {"gravadas": 2, "confirmadas": ["leitura-de-teste", "entrada-de-teste"]}})
     assert r["filaAntes"] == 2
     assert r["filaDepois"] == 0
 
@@ -619,7 +619,7 @@ def test_trocar_a_identidade_manda_a_fila_antes_de_sair():
     virar uma porta que nunca abre."""
     r = _configurar(fila=FILA_DE_TESTE, online=True,
                     mock={"method": "POST", "pathname": "/functions/v1/portaria/leituras",
-                          "status": 200, "body": {"gravadas": 2}})
+                          "status": 200, "body": {"gravadas": 2, "confirmadas": ["negada-1", "entrada-1"]}})
     assert r["saiu"] is True
     assert r["filaDepois"] == 0
 

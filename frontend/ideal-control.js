@@ -1348,9 +1348,9 @@
         var p = d.publico;
         [['Contratado', numero(p.contratado), 'o que o ERP vendeu, só o que tem código'],
          ['Publicado', numero(p.publicado), 'ingressos que a portaria já reconhece'],
-         ['Entraram', numero(p.entraram), 'leituras aceitas na entrada'],
-         ['Presentes', numero(p.presentes), 'entraram menos os que saíram'],
-         ['Comparecimento', porcento(p.comparecimento_pct), 'entraram ÷ publicado'],
+         ['Passagens', numero(p.entraram), 'entradas registradas; inclui reentradas'],
+         ['Ingressos utilizados', p.ingressos_utilizados == null ? '—' : numero(p.ingressos_utilizados), 'cada ingresso contado uma vez; não mede pessoas presentes'],
+         ['Utilização dos publicados', p.publicados_utilizados == null ? '—' : porcento(p.comparecimento_pct), 'ingressos publicados utilizados ÷ publicados'],
          ['Recusadas', numero(p.recusadas), 'leituras negadas — veja o motivo abaixo'],
          ['Cortesias', numero(p.cortesias), 'códigos de staff carregados'],
          ['Bloqueados', numero(p.bloqueados), 'ingressos dentro de faixa bloqueada']
@@ -1375,11 +1375,11 @@
             trilho.className = 'ic-barra-trilho';
             var barra = document.createElement('div');
             barra.className = 'ic-barra';
-            barra.style.width = Math.min(100, s.ocupacao_pct || 0) + '%';
+            barra.style.width = Math.min(100, s.ingressos_utilizados == null ? 0 : (s.ocupacao_pct || 0)) + '%';
             trilho.appendChild(barra);
             linha.appendChild(trilho);
-            texto(linha, 'span', numero(s.entraram) + ' / ' + numero(s.contratado)
-                  + ' · ' + porcento(s.ocupacao_pct), 'ic-dim');
+            texto(linha, 'span', (s.ingressos_utilizados == null ? '—' : numero(s.ingressos_utilizados)) + ' utilizados / ' + numero(s.contratado)
+                  + ' · ' + numero(s.entraram) + ' passagens', 'ic-dim');
             porSetor.appendChild(linha);
         });
 

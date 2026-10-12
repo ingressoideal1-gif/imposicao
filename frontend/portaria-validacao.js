@@ -147,7 +147,10 @@
         }
 
         var cand = meus[0];
-        var setor = setorPorId(carga, cand.s) || {};
+        var setor = setorPorId(carga, cand.s);
+        if (!setor || (setor.status && setor.status !== 'ativo')) {
+            return negado('erro_de_leitura', cand, null, {});
+        }
 
         // 3. O dono desligou ESTA porta. Antes da janela de proposito: as duas
         //    podem valer ao mesmo tempo, e "o dono interditou o camarote" e o
