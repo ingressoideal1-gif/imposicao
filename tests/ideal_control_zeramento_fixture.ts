@@ -22,6 +22,7 @@ function matches(row: any, params: URLSearchParams) {
   for (const [key, value] of params) {
     if (value.startsWith("eq.") && String(row[key]) !== value.slice(3)) return false;
     if (value.startsWith("gte.") && String(row[key]) < value.slice(4)) return false;
+    if (value.startsWith("gt.") && String(row[key]) <= value.slice(3)) return false;
   }
   return true;
 }
@@ -31,6 +32,31 @@ globalThis.fetch = (async (input: any, options: any = {}) => {
   const u = new URL(String(input));
   if (u.origin !== "https://banco-sintetico.invalid") throw new Error("Unexpected network destination: " + u.origin);
   const table = u.pathname.replace("/rest/v1/", "");
+  if (table === "rpc/producao_acesso_qr_leitor_evento") return json(1);
+  if (table === "rpc/producao_acesso_registrar_leituras") {
+    // Somente o contrato usado por este ensaio de zeramento. A atomicidade e
+    // as regras da RPC são exercitadas no PostgreSQL por test_control_integridade_sql.py.
+    const body = JSON.parse(options.body);
+    if (body.p_dispositivo !== A) throw new Error("Unexpected device");
+    const replies = body.p_itens.map((row: any) => {
+      const cutoff = tables.producao_acesso_eventos[0].entradas_zeradas_em;
+      if (cutoff && Date.parse(row.momento) <= Date.parse(cutoff)) {
+        return { id_local: row.id_local, zerada: true, primeira: false, resultado: "negado", motivo: "erro_de_leitura" };
+      }
+      const previous = tables.producao_acesso_leituras.find(r => r.dispositivo_id === A && r.id_local === row.id_local);
+      if (previous) return { ...previous, primeira: previous.resultado === "permitido", reenvio: true };
+      let resultado = row.resultado, motivo = row.motivo;
+      if (resultado === "permitido") {
+        if (![C, C2].includes(row.credencial_id) || row.setor_id !== S) throw new Error("Unexpected credential");
+        const used = tables.producao_acesso_entradas_unicas.find(r => r.credencial_id === row.credencial_id);
+        if (used) { resultado = "negado"; motivo = "ja_entrou"; }
+        else tables.producao_acesso_entradas_unicas.push({ ...row, evento_id: E, dispositivo_id: A });
+      }
+      tables.producao_acesso_leituras.push({ ...row, evento_id: E, dispositivo_id: A, tipo: "entrada", resultado, motivo });
+      return { id_local: row.id_local, resultado, motivo, primeira: resultado === "permitido" };
+    });
+    return json(replies);
+  }
   if (table === "rpc/producao_acesso_zerar_entradas") {
     const body = JSON.parse(options.body);
     if (body.p_evento_id !== E) throw new Error("Unexpected reset target");
@@ -52,6 +78,7 @@ globalThis.fetch = (async (input: any, options: any = {}) => {
     let selected = rows.filter(row => matches(row, u.searchParams));
     const total = selected.length;
     if (u.searchParams.get("order") === "momento.asc") selected.sort((a, b) => a.momento.localeCompare(b.momento));
+    if (u.searchParams.get("order") === "credencial_id.asc") selected.sort((a, b) => a.credencial_id.localeCompare(b.credencial_id));
     if (u.searchParams.has("limit")) selected = selected.slice(0, Number(u.searchParams.get("limit")));
     return json(selected, { "Content-Range": total ? `0-${selected.length - 1}/${total}` : "*/0" });
   }

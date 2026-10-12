@@ -105,34 +105,23 @@ export async function dashboard(
   const cortesias = await contar(
     `producao_acesso_credenciais?evento_id=eq.${eventoId}&origem=eq.cliente`,
   );
-  const entradas = await contar(
-    `producao_acesso_leituras?evento_id=eq.${eventoId}&resultado=eq.permitido&tipo=eq.entrada`,
-  );
-  const saidas = await contar(
-    `producao_acesso_leituras?evento_id=eq.${eventoId}&resultado=eq.permitido&tipo=eq.saida`,
-  );
-  const recusadas = await contar(
-    `producao_acesso_leituras?evento_id=eq.${eventoId}&resultado=eq.negado`,
-  );
+  const metricas = await banco("POST", "rpc/producao_acesso_metricas", { p_evento: eventoId });
+  if (!metricas || !Array.isArray(metricas.por_setor) || !Array.isArray(metricas.recusas)) {
+    throw new Error("O banco não confirmou as métricas do evento.");
+  }
+  const entradas = Number(metricas.entraram), saidas = Number(metricas.sairam);
+  const recusadas = Number(metricas.recusadas);
+  const usados = Number(metricas.ingressos_utilizados);
+  const usadosPublicados = Number(metricas.publicados_utilizados);
+  const porSetor = new Map<string, any>(metricas.por_setor.map((s: any) => [String(s.setor_id), s]));
 
   const [leituras, truncado] = await todasAsLinhas(
     `producao_acesso_leituras?evento_id=eq.${eventoId}` +
-      "&select=momento,resultado,motivo,tipo,setor_id,dispositivo_id&order=momento.asc",
+      "&select=momento,resultado,motivo,tipo,setor_id,dispositivo_id&order=momento.asc,id.asc",
   );
 
   const porHora: Record<string, { entradas: number; saidas: number; recusas: number }> = {};
-  const entradasPorSetor: Record<string, number> = {};
-  const motivos: Record<string, number> = {};
   for (const l of leituras) {
-    if (l.resultado === "permitido" && l.tipo !== "saida" && l.setor_id) {
-      const k = String(l.setor_id);
-      entradasPorSetor[k] = (entradasPorSetor[k] ?? 0) + 1;
-    }
-    if (l.resultado === "negado") {
-      const m = l.motivo ?? null;
-      motivos[String(m)] = (motivos[String(m)] ?? 0) + 1;
-    }
-
     const hora = horaCheia(l.momento);
     if (!hora) continue;
     porHora[hora] ??= { entradas: 0, saidas: 0, recusas: 0 };
@@ -170,37 +159,27 @@ export async function dashboard(
       cortesias,
       entraram: entradas,
       sairam: saidas,
-      // Quem esta DENTRO agora. So faz sentido onde ha reentrada; nos setores de
-      // entrada unica, saidas sao sempre zero e o numero coincide com
-      // "entraram" -- que e o comportamento certo.
-      presentes: Math.max(0, entradas - saidas),
+      // Passagens não comprovam presença física; reentrada pode repetir ingresso.
+      presentes: null,
+      ingressos_utilizados: usados,
+      publicados_utilizados: usadosPublicados,
       recusadas,
       bloqueados,
-      // A pergunta que o dono faz primeiro: quantos dos que compraram
-      // apareceram? Sem `publicado` ainda nao ha denominador, e devolver 0%
-      // mentiria -- devolve nulo e a tela diz "—".
-      comparecimento_pct: publicado
-        ? Math.round(entradas * 1000.0 / publicado) / 10
-        : null,
+      comparecimento_pct: publicado ? Math.round(usadosPublicados * 1000.0 / publicado) / 10 : null,
     },
-    // Sai da MESMA varredura de leituras que o histograma usa -- nenhuma
-    // consulta a mais. Contar por setor no banco custaria uma ida por setor.
-    por_setor: setores.map((s) => ({
-      setor_id: s.id,
-      nome: s.nome,
-      contratado: s.quantidade ?? 0,
-      entraram: entradasPorSetor[String(s.id)] ?? 0,
-      ocupacao_pct: s.quantidade
-        ? Math.round((entradasPorSetor[String(s.id)] ?? 0) * 1000.0 / s.quantidade) / 10
-        : null,
-    })),
-    recusas: Object.entries(motivos)
-      .sort((a, b) => b[1] - a[1])
-      .map(([m, quantas]) => ({
-        motivo: m === "null" ? "sem motivo" : m,
-        rotulo: MOTIVOS[m] ?? (m === "null" ? "sem motivo" : m),
-        quantas,
-      })),
+    por_setor: setores.map((s) => {
+      const m = porSetor.get(String(s.id));
+      const utilizados = Number(m?.utilizados ?? 0);
+      return {
+        setor_id: s.id, nome: s.nome, contratado: s.quantidade ?? 0,
+        entraram: Number(m?.passagens ?? 0), ingressos_utilizados: utilizados,
+        ocupacao_pct: s.quantidade ? Math.round(utilizados * 1000.0 / s.quantidade) / 10 : null,
+      };
+    }),
+    recusas: metricas.recusas
+      .map((r: any) => ({ motivo: r.motivo ?? "sem motivo",
+        rotulo: MOTIVOS[r.motivo] ?? (r.motivo ?? "sem motivo"), quantas: Number(r.quantas) }))
+      .sort((a: any, b: any) => b.quantas - a.quantas),
     por_hora: horasOrdenadas.map((h) => ({ hora: h, ...porHora[h] })),
     pico,
     // Nenhum corte silencioso: quando o histograma nao cabe no teto, a resposta

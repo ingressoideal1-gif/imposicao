@@ -185,7 +185,8 @@ async function main() {
     body: JSON.stringify(offline.fila[0]) });
   assert.equal(oldOnline.status, 200);
   assert.equal(JSON.parse(oldOnline.body).zerada, true);
-  assert.equal(JSON.parse(oldOnline.body).primeira, true);
+  assert.equal(JSON.parse(oldOnline.body).primeira, false);
+  assert.notEqual(JSON.parse(oldOnline.body).motivo, 'ja_entrou');
   // Readings after reset are accepted, and retries remain idempotent.
   const newReading = { ...offline.fila[0], id_local: 'leitura-nova-pos-zeramento', momento: new Date(Date.now() + 1000).toISOString() };
   const uploadNew = () => rpc({ op: 'request', url: 'http://localhost/functions/v1/portaria/leituras',
