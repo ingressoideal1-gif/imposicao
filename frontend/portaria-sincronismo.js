@@ -5,7 +5,7 @@
  * a parte pesada -- e depois, de cinco em cinco minutos, busca so o que muda:
  * o evento continua ativo, que setores o dono bloqueou, que faixas de numeros
  * suspendeu, quem entrou por qualquer outro portao, e os totais do contador.
- * Em 4G de portao, e a diferenca entre alguns kB e varias paginas.
+ * As entradas são varridas em páginas, sem baixar novamente as credenciais.
  *
  * Por isso `aplicar` MESCLA e nunca substitui. E a regra inteira deste arquivo:
  *
@@ -182,12 +182,13 @@
         return pedido.then(function (novidade) {
             if (!novidade) return;
             return Promise.resolve(aoAplicar ? aoAplicar(novidade) : null)
-                .then(function () {
+                .then(function (aplicou) {
+                    if (aplicou === false) return;
                     // O ponto de continuacao so anda DEPOIS de a novidade ter
-                    // sido guardada, e vem do relogio do SERVIDOR. Anda-lo antes
+                    // sido guardada. O cursor é opaco; null reinicia o ciclo. Anda-lo antes
                     // perderia de vez as entradas daquele intervalo, e a mesma
                     // pessoa entraria duas vezes, calada, por dois portoes.
-                    if (novidade.momento) desde = novidade.momento;
+                    if (Object.prototype.hasOwnProperty.call(novidade, 'momento')) desde = novidade.momento;
                 });
         }).catch(function () {
             // Uma sincronizacao que falha nao interrompe nada e nao muda a
@@ -207,6 +208,7 @@
      */
     function ligar(pedir, aoAplicar) {
         desligar();
+        desde = null;
         temporizador = setInterval(function () {
             // Devolve a promessa do tique de proposito: e o que permite ao
             // teste esperar a ida ao servidor terminar.

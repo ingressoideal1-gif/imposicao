@@ -561,18 +561,14 @@
                 + (daqui ? '?desde=' + encodeURIComponent(daqui) : '');
             return api(caminho).then(function (p) {
                 entradas = entradas.concat(p.entradas || []);
+                if (p.proxima_desde && p.proxima_desde === daqui) throw new Error('O sincronismo das entradas não avançou.');
                 if (p.proxima_desde && quantas < MAXIMO_DE_PAGINAS) {
                     return pagina(p.proxima_desde, quantas + 1);
                 }
                 p.entradas = entradas;
-                // Onde o PROXIMO tique comeca. Vem do relogio do SERVIDOR, e nao
-                // deste celular: um aparelho adiantado pularia as entradas
-                // registradas no intervalo, e a mesma pessoa entraria duas
-                // vezes, calada, por dois portoes. Sem entrada nenhuma, fica
-                // nulo e o proximo pedido baixa tudo de novo -- sao poucos kB, e
-                // baixar demais e sempre melhor que baixar de menos aqui.
-                p.momento = entradas.length
-                    ? entradas[entradas.length - 1].momento : null;
+                // Continuar a varredura limitada; ao concluí-la, reiniciar no
+                // próximo ciclo para incluir leituras offline recebidas tarde.
+                p.momento = p.proxima_desde || null;
                 return p;
             });
         }
@@ -582,12 +578,12 @@
     /** Guarda o que a rota leve trouxe, sem perder nada do que ja havia. */
     function aplicarNovidades(novidade) {
         var S = window.portariaSincronismo;
-        if (!S || !novidade || baixandoCarga) return Promise.resolve();
+        if (!S || !novidade || baixandoCarga) return Promise.resolve(false);
         var eventoId = estado.carga && estado.carga.evento && estado.carga.evento.id;
         var entradasAntes = estado.entradasDesdeOSincronismo;
         return D.gravarNovidades(novidade, eventoId).then(function (nova) {
             // O estado em memória só avança depois do commit do IndexedDB.
-            if (!estado.carga || estado.carga.evento.id !== eventoId) return;
+            if (!estado.carga || estado.carga.evento.id !== eventoId) return false;
             estado.carga = nova;
             atualizarDadosDoTopo();
             atualizarProntidao();
@@ -778,20 +774,21 @@
         }
         return comTeto(api('/entrada', {
             method: 'POST', body: JSON.stringify(leitura),
+        }).catch(function (e) {
+            // Uma recusa explícita não é perda de conexão.
+            if ([401, 403, 409, 422, 426].indexOf(e.status) !== -1) {
+                return { resultado: 'negado', motivo: 'erro_de_leitura', primeira: false };
+            }
+            throw e;
         })).then(function (r) {
-            if (!r || r.primeira !== false) return v;
+            if (!r || (r.resultado !== 'negado' && r.primeira !== false)) return v;
             var a = r.anterior || {};
-            // A fila leva o veredito do SERVIDOR, e nao o local: e ele que vale.
             leitura.resultado = 'negado';
-            leitura.motivo = 'ja_entrou';
-            // campo `portao` da resposta do servidor: o nome do aparelho que
-            // registrou a primeira entrada.
-            var nome_portao_anterior = a.portao;
+            leitura.motivo = r.motivo || 'erro_de_leitura';
             return {
-                estado: 'negado', motivo: 'ja_entrou',
-                setor: v.setor, numero: v.numero,
-                credencial_id: v.credencial_id,
-                detalhe: { momentoAnterior: a.momento, aparelhoAnterior: nome_portao_anterior },
+                estado: 'negado', motivo: leitura.motivo,
+                setor: v.setor, numero: v.numero, credencial_id: v.credencial_id,
+                detalhe: { momentoAnterior: a.momento, aparelhoAnterior: a.portao },
             };
         });
     }
@@ -962,7 +959,12 @@
             if (!lote.length) return;
             return api('/leituras', {
                 method: 'POST', body: JSON.stringify({ leituras: lote }),
-            }).then(function () {
+            }).then(function (resposta) {
+                var ids = lote.map(function (l) { return l.id_local; });
+                if (!resposta || !Array.isArray(resposta.confirmadas) ||
+                    ids.some(function (id) { return resposta.confirmadas.indexOf(id) === -1; })) {
+                    throw new Error('O servidor não confirmou todas as leituras.');
+                }
                 // So AGORA sai da fila. Remover antes seria perder leitura
                 // quando a resposta se perde no caminho.
                 return D.removerDaFila(lote.map(function (l) { return l.id_local; }));

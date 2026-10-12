@@ -50,14 +50,15 @@ def evento(**mudancas):
         },
         "publico": {
             "contratado": 150, "publicado": 150, "cortesias": 0,
-            "entraram": 90, "sairam": 0, "presentes": 90,
+            "entraram": 90, "sairam": 0, "presentes": None,
+            "ingressos_utilizados": 90, "publicados_utilizados": 90,
             "recusadas": 0, "bloqueados": 0, "comparecimento_pct": 60.0,
         },
         "por_setor": [
             {"setor_id": "vip", "nome": "VIP", "contratado": 100,
-             "entraram": 60, "ocupacao_pct": 60.0},
+             "entraram": 60, "ingressos_utilizados": 60, "ocupacao_pct": 60.0},
             {"setor_id": "cam", "nome": "Camarote", "contratado": 50,
-             "entraram": 30, "ocupacao_pct": 60.0},
+             "entraram": 30, "ingressos_utilizados": 30, "ocupacao_pct": 60.0},
         ],
         "recusas": [],
         "por_hora": [
@@ -104,20 +105,15 @@ def test_o_resumo_abre_com_quantos_entraram():
     """É a pergunta que o dono faz primeiro, e por isso é a primeira placa."""
     r = desenhar(evento())
     assert r["resumo"][0].startswith("90")
-    assert "entraram" in r["resumo"][0]
+    assert "passagens na entrada" in r["resumo"][0]
 
 
-def test_dentro_agora_so_aparece_onde_alguem_saiu():
-    """Em setor de entrada única ninguém sai, e o número seria uma cópia de
-    "entraram" ocupando espaço e sugerindo que alguém saiu."""
-    sem_saida = desenhar(evento())
-    assert not any("dentro agora" in p for p in sem_saida["resumo"])
-
+def test_reentradas_e_saidas_nao_sao_apresentadas_como_presenca_fisica():
     d = evento()
-    d["publico"] = dict(d["publico"], sairam=12, presentes=78)
-    com_saida = desenhar(d)
-    assert any("dentro agora" in p for p in com_saida["resumo"])
-    assert any(p.startswith("78") for p in com_saida["resumo"])
+    d["publico"] = dict(d["publico"], sairam=12, presentes=78, ingressos_utilizados=45)
+    resumo = desenhar(d)["resumo"]
+    assert not any("dentro agora" in p for p in resumo)
+    assert any(p.startswith("45") and "ingressos utilizados" in p for p in resumo)
 
 
 def test_sem_denominador_o_comparecimento_e_travessao_e_nao_zero():
@@ -127,15 +123,15 @@ def test_sem_denominador_o_comparecimento_e_travessao_e_nao_zero():
     d = evento()
     d["publico"] = dict(d["publico"], publicado=0, comparecimento_pct=None)
     r = desenhar(d)
-    assert any(p.startswith("—") and "compareceram" in p for p in r["resumo"])
+    assert any(p.startswith("—") and "dos publicados utilizados" in p for p in r["resumo"])
 
 
 def test_cada_setor_mostra_entraram_de_contratados():
     r = desenhar(evento())
     assert "VIP" in r["setores"][0]
-    assert "60 de 100" in r["setores"][0]
+    assert "60 utilizados de 100" in r["setores"][0]
     assert "Camarote" in r["setores"][1]
-    assert "30 de 50" in r["setores"][1]
+    assert "30 utilizados de 50" in r["setores"][1]
 
 
 def test_a_barra_do_setor_e_proporcional_e_o_numero_esta_escrito():
