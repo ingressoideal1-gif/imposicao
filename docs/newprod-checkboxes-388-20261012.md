@@ -19,4 +19,6 @@ Correção solicitada após análise dos checkboxes na .387.
 
 ## Entrega
 
-Build .388 em preparação; HTML 1050. Manifesto de teste permanece .387 até eventual liberação posterior. Instalação e conferência de versão serão registradas separadamente.
+MSI .388 concluído e publicado; HTML 1050. `NewProdPiloto_Teste_v1.2.388.msi`: 196431872 bytes, SHA-256 `e86371d4675c59f748a3af25127ec80ca0e394f4fc969b297b47107b7f156cc6`. Download público integral confere com o artefato local; painel dentro do executável confere com a fonte. Manifesto de teste permanece .387.
+
+Instalação no Junior pendente: solicitado encerramento pelo ícone da bandeja, mas o agente ainda respondia na última verificação. Spool vazio. Nenhum encerramento forçado nem instalação realizados nesta etapa. LASER-01 ainda não recebeu a .388.
