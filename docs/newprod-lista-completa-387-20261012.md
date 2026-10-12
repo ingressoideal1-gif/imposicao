@@ -26,3 +26,9 @@ O painel .386 formava a lista exclusivamente com snapshots completamente prepara
 - Executável instalado coincide com o build. Agente responde `NewProd 1.2.387-teste.1`; JS servido coincide com a fonte. HTML 1049 validado considerando a injeção dinâmica local (não é byte a byte igual ao arquivo fonte).
 - Coleta autônoma após reinício gravou 65 pedidos em `offline_lista`, todos com nome e número do cliente, sem abrir o navegador. Spool permaneceu vazio.
 - Manifesto de teste permanece .384; outras estações não foram instaladas. Pacote .387 está disponível para instalação manual. Nenhuma impressão física executada.
+
+## Liberação para LASER-01 após aceite do Junior
+
+Em 12/10/2026, após o usuário confirmar funcionamento e solicitar a liberação, `newprod-piloto-teste.json` foi promovido para .387. Conservados os alvos LASER-01 e PC-JR-HOME (Junior já instalado); outros canais e estações não foram habilitados. Prova do download público e hash local conferidos, manifesto anterior salvo em `dist/teste387-ativacao-antes.json`, releitura imediatamente antes da escrita e manifesto público posterior idêntico ao candidato.
+
+Na consulta posterior, LASER-01 ainda reportava `1.2.384-teste.1`, painel 1043, heartbeat de 12/10/2026 12:29:39 BRT. Portanto, a atualização está liberada, mas sua instalação remota ainda não está comprovada. Verificação automática mantém o intervalo de seis horas; o operador pode antecipar pelo botão Verificar atualização.
