@@ -95,7 +95,8 @@ def test_ingresso_bom_para_camera_e_mostra_liberado():
     assert r["telaResposta"] is True
     assert r["titulo"] == "LIBERADO"
     assert r["classe"] == "resposta ok"
-    assert "PISTA" in r["detalhe"] and "1" in r["detalhe"]
+    assert r["detalhe"] == "PISTA"
+    assert r["numeroDestaque"] == "1"
 
 
 def test_a_faixa_verde_mostra_setor_numero_e_hora():

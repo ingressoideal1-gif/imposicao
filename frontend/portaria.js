@@ -908,7 +908,8 @@
         $('resposta-motivo').textContent = '';
 
         if (permitido) {
-            $('resposta-detalhe').textContent = (setor.nome || 'Ingresso') + ' · nº ' + v.numero;
+            $('resposta-grande').textContent = String(v.numero);
+            $('resposta-detalhe').textContent = setor.nome || 'Ingresso';
         } else if (v.motivo === 'evento_inativo') {
             // Nao ha setor nem numero a mostrar: a recusa e do evento inteiro,
             // e vem antes de o aparelho saber de que ingresso se trata.

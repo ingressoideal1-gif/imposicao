@@ -547,6 +547,7 @@ async function rodar(caso) {
             classe: caixa.className,
             titulo: document.getElementById('resposta-titulo').textContent,
             detalhe: document.getElementById('resposta-detalhe').textContent,
+            numeroDestaque: document.getElementById('resposta-grande').textContent,
             motivo: document.getElementById('resposta-motivo').textContent,
             faixa: document.getElementById('faixa-ultima').textContent,
             faixaVazia: document.getElementById('faixa-ultima')
