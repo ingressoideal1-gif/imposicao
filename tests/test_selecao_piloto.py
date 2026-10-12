@@ -1,4 +1,5 @@
 import io
+import hashlib
 from types import SimpleNamespace
 
 import pytest
@@ -18,7 +19,9 @@ def ambiente(tmp_path):
     def abrir(*a, **k):
         estado['downloads'] += 1
         if estado.get('falha'): raise OSError('falha simulada')
-        return io.BytesIO(estado['bytes'])
+        resposta = io.BytesIO(estado['bytes'])
+        resposta.headers = {'ETag': '"' + hashlib.sha256(estado['bytes']).hexdigest() + '"'}
+        return resposta
     s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste', abrir=abrir)
     item = candidato(); item['pedido'] = '99'
     def listar(cursor, pedido):
@@ -34,7 +37,11 @@ def ambiente(tmp_path):
     return s, estado, {'pedido':'99', 'modelo':'10', 'digest':'a'*64}
 
 
-def test_selecao_confere_baixa_le_do_disco_e_revalida_mesma_url(tmp_path):
+def test_selecao_confere_baixa_le_do_disco_e_revalida_mesma_url(tmp_path, monkeypatch):
+    from functools import partial
+    from art_cache import CacheArtes, RetryAdiado
+    agora = [10000]
+    monkeypatch.setattr('antecipacao_local.CacheArtes', partial(CacheArtes, relogio=lambda: agora[0]))
     s, estado, dados = ambiente(tmp_path); p = SelecaoPiloto(s)
     r = p.preparar(dados)
     assert r['origem'] == 'local' and r['atualizado'] and not r['execucao_offline']
@@ -43,6 +50,8 @@ def test_selecao_confere_baixa_le_do_disco_e_revalida_mesma_url(tmp_path):
     with pytest.raises(OSError): p.preparar(dados)
     estado['falha'] = False
     estado['bytes'] = BYTES + b'\n% nova revisao'
+    with pytest.raises(RetryAdiado): p.preparar(dados)
+    agora[0] += 3601
     novo = p.preparar(dados)
     assert novo['revisao'] != r['revisao'] and novo['atualizado']
     assert p.ler('10', novo['revisao'], 'frente') == estado['bytes']
@@ -181,7 +190,9 @@ def test_modelos_independentes_preparam_em_paralelo_com_limite(tmp_path):
     s = ServicoPacotes(tmp_path,host='test.invalid',empresa='teste',abrir=abrir)
     itens = []
     for n in range(10, 16):
-        item = copy.deepcopy(candidato()); item.update(modelo=str(n), pedido='99'); itens.append(item)
+        item = copy.deepcopy(candidato()); item.update(modelo=str(n), pedido='99')
+        item['fontes']['frente'] = item['fontes']['frente'].replace('10.pdf', str(n) + '.pdf')
+        itens.append(item)
     s.coleta_autonoma = SimpleNamespace(cliente=SimpleNamespace(
         listar=lambda cursor,pedido:{'itens':itens,'fim':True}, conferir=lambda item:'2026-09-27T12:00:00+00:00'))
     r = SelecaoPiloto(s).preparar_pedido({'pedido':'99','modelos':[

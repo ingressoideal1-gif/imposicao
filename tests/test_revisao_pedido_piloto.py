@@ -93,10 +93,13 @@ def test_arquivo_ausente_reparado_antes_de_liberar(tmp_path):
 
 
 def test_sem_versionamento_revalida_url_em_cada_abertura(tmp_path):
+    import hashlib
     s,e,itens,dados=ambiente(tmp_path);itens[0]['versoes_fontes']['frente']=None
     def abrir(req,**kwargs):
         e['downloads']+=1
-        return io.BytesIO(e['bytes']['10'])
+        resposta = io.BytesIO(e['bytes']['10'])
+        resposta.headers = {'ETag': '"' + hashlib.sha256(e['bytes']['10']).hexdigest() + '"'}
+        return resposta
     s.preparador.armazenamento.abrir=abrir
     p=SelecaoPiloto(s);antes=p.preparar_pedido(dados)
     e['bytes']['10']=BYTES+b'\n% mudou sem revisao de Storage'
