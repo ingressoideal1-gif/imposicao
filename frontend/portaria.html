@@ -514,8 +514,32 @@
             font-size: 1.2rem; font-weight: 800; line-height: 1.25;
         }
         .resposta .grande { font-size: 2rem; }
+        /* Layout A: numero em primeiro plano e setor separado abaixo. */
+        .resposta.ok { background: linear-gradient(155deg, #15803d, #166534); }
+        .resposta.ok .marca { display: none; }
+        .resposta.ok .titulo { order: 0; font-size: 1.6rem; margin: 0; letter-spacing: .03em; }
+        .resposta.ok .titulo::before { content: '✓'; margin-right: 10px; }
+        .resposta.ok .grande {
+            order: 1; width: 100%; margin: 28px 0 20px;
+            font-size: clamp(3rem, 20vw, 5.375rem); font-weight: 800;
+            line-height: 1.12; letter-spacing: -.045em;
+            font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+        }
+        .resposta.ok .detalhe {
+            order: 2; width: 100%; margin: 0; padding-top: 19px;
+            border-top: 1px solid rgba(255,255,255,.35);
+            font-size: 1.95rem; font-weight: 800; line-height: 1.18;
+            opacity: 1; overflow-wrap: anywhere;
+        }
+        .resposta.ok .grande::before, .resposta.ok .detalhe::before {
+            display: block; margin-bottom: 8px; font-size: .75rem;
+            font-weight: 800; letter-spacing: .16em; color: #d1f7de;
+        }
+        .resposta.ok .grande::before { content: 'INGRESSO'; }
+        .resposta.ok .detalhe::before { content: 'SETOR'; }
         /* O botão fecha a tela por baixo, do tamanho da mão. Ele existe porque
            a recusa PRECISA de um toque: é a única prova de que o porteiro viu. */
+        #resposta-caixa.ok + #btn-proximo { background: #2dd4bf; color: #062821; box-shadow: none; }
         #btn-proximo {
             margin: 0; min-height: 74px; border-radius: 0;
             font-size: 1.12rem; font-weight: 800;
@@ -671,7 +695,7 @@
 <script src="aviso-sonoro.js?v=1047"></script>
 <script src="portaria-sincronismo.js?v=1046"></script>
 <script src="chaveiro.js?v=1023"></script>
-<script src="portaria.js?v=1047"></script>
-<script src="sw-registro.js?v=1047"></script>
+<script src="portaria.js?v=1048"></script>
+<script src="sw-registro.js?v=1048"></script>
 </body>
 </html>
