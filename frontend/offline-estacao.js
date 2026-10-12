@@ -23,7 +23,11 @@
                     const conflitos = filas.filter(c => c.estado === 'conflito').length;
                     const aguardando = filas.filter(c => c.estado === 'pendente').length;
                     const preparo = b.preparacao;
-                    const estado = preparo ? `Offline: ${preparo.prontos} de ${preparo.catalogados} pedido(s) preparado(s). ` : '';
+                    const lista = b.lista?.lista?.pedidos;
+                    const prontos = new Set((b.pedidos || []).map(p => String(p.pedido)));
+                    const estado = Array.isArray(lista)
+                        ? `Lista: ${lista.length} pedido(s). Offline: ${lista.filter(p => prontos.has(String(p.id_int))).length} preparado(s). `
+                        : preparo ? `Lista completa aguardando sincronização. Offline: ${preparo.prontos} pedido(s) preparado(s). ` : '';
                     if (aviso) aviso.textContent = estado + (conflitos ? `${conflitos} confirmação(ões) com divergência no banco; solicitar revisão.`
                         : aguardando ? `${aguardando} confirmação(ões) guardada(s), aguardando sincronização.` : '');
                 }
@@ -51,18 +55,30 @@
     async function carregarOrdens() {
         const b = await bootstrap();
         const registros = b.pedidos || [];
-        state.todasArtes = unir(registros,'artes');
-        state.produtosGlobais = unir(registros,'produtos','id_produto');
-        const propostas = unir(registros,'pedidos','id_int');
-        const ok = await loadOrdensFromVibecode(propostas, unir(registros,'origens'), {
-            propostasPreloaded:propostas, prazosPreloaded:unir(registros,'prazos','id_int'),
+        const lista = b.lista?.lista;
+        // A lista comercial nao depende do download completo das artes e bancos.
+        const dados = chave => lista ? lista[chave] : unir(registros,chave,
+            ['pedidos','prazos'].includes(chave) ? 'id_int' : chave === 'produtos' ? 'id_produto' : 'id');
+        state.todasArtes = dados('artes');
+        state.produtosGlobais = dados('produtos');
+        const propostas = dados('pedidos');
+        const ok = await loadOrdensFromVibecode(propostas, dados('origens'), {
+            propostasPreloaded:propostas, prazosPreloaded:dados('prazos'),
             localPreparado:true, recorteGrafica:'producao', propagarErro:true, artes:state.todasArtes
         });
-        state.modelosGlobais ||= {};
-        for (const r of registros) {
-            state.modelosGlobais[r.pedido] = structuredClone(r.snapshot.modelos);
+        state.modelosGlobais = {};
+        for (const modelo of structuredClone(dados('modelos'))) {
+            modelo.impressao = typeof normalizarStatusImpressao === 'function'
+                ? normalizarStatusImpressao(modelo.status_impressao || modelo.status_producao) : modelo.status_impressao;
+            modelo.quantidade = parseInt(modelo.quantidade || 0);
+            modelo.amostra_status = modelo.status_arte || modelo.amostra_status || '';
+            modelo.modelo = modelo.nome_modelo || '';
+            if (typeof aplicarRegraProdutoPrateleira === 'function') aplicarRegraProdutoPrateleira(modelo);
+            (state.modelosGlobais[modelo.id_int] ||= []).push(modelo);
         }
-        if (!registros.length) toast('Nenhum pedido completo preparado nesta estação. Conecte para baixar os pedidos.', 'warning');
+        const prontos = new Set(registros.map(r => String(r.pedido)));
+        for (const os of state.ordens || []) os._disponivelOffline = prontos.has(String(os.numero));
+        if (!lista && !registros.length) toast('A lista ainda não foi sincronizada nesta estação. Conecte para baixá-la.', 'warning');
         renderOrdens();
         return ok;
     }

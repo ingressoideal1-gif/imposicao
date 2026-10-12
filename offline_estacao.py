@@ -13,6 +13,7 @@ class OfflineEstacao:
     def __init__(self, servico, selecao):
         self.servico, self.selecao = servico, selecao
         with self.banco() as con:
+            con.execute('CREATE TABLE IF NOT EXISTS offline_lista (id INTEGER PRIMARY KEY CHECK(id=1), dados TEXT NOT NULL)')
             con.execute('CREATE TABLE IF NOT EXISTS offline_catalogos (id INTEGER PRIMARY KEY CHECK(id=1), dados TEXT NOT NULL)')
             con.execute('CREATE TABLE IF NOT EXISTS offline_confirmacoes ('
                         'id TEXT PRIMARY KEY, dados TEXT NOT NULL, estado TEXT NOT NULL, criado REAL NOT NULL)')
@@ -20,6 +21,7 @@ class OfflineEstacao:
                         'id TEXT PRIMARY KEY, dados TEXT NOT NULL, enviado INTEGER NOT NULL DEFAULT 0)')
             con.execute('CREATE TABLE IF NOT EXISTS offline_dependencias (url TEXT PRIMARY KEY, sha256 TEXT NOT NULL, dados BLOB NOT NULL)')
         self.proxima = 0
+        self.proxima_lista = 0
         self.tentativas = {}
         self.falhas = {}
 
@@ -37,12 +39,40 @@ class OfflineEstacao:
             row = con.execute('SELECT dados FROM offline_catalogos WHERE id=1').fetchone()
         return json.loads(row[0]) if row else None
 
+    def lista(self):
+        with self.banco() as con:
+            row = con.execute('SELECT dados FROM offline_lista WHERE id=1').fetchone()
+        return json.loads(row[0]) if row else None
+
+    def sincronizar_lista(self, cliente):
+        if time.monotonic() < self.proxima_lista:
+            return
+        self.proxima_lista = time.monotonic() + 60
+        anterior = self.lista()
+        dados = cliente.chamar('lista-offline', {'empresa':self.servico.empresa,
+                              'revisao':anterior['revisao'] if anterior else ''})
+        import re
+        if dados.get('empresa') != self.servico.empresa or not re.fullmatch('[a-f0-9]{64}', str(dados.get('revisao', ''))):
+            raise ValueError('Lista da estacao incompleta.')
+        if dados.get('sem_mudanca') is True:
+            if not anterior or dados['revisao'] != anterior['revisao']:
+                raise ValueError('Revisao da lista divergente.')
+            return
+        lista = dados.get('lista')
+        if dados.get('sem_mudanca') is not False or not isinstance(lista, dict) or any(
+                not isinstance(lista.get(k), list) for k in ('pedidos','origens','modelos','prazos','produtos','artes')):
+            raise ValueError('Lista da estacao incompleta.')
+        dados['coletado_em'] = datetime.now(timezone.utc).isoformat()
+        with self.banco() as con:
+            con.execute('INSERT OR REPLACE INTO offline_lista VALUES (1,?)', (json.dumps(dados),))
+
     def ciclo(self, checkpoint=lambda: None):
         cliente = self.servico.coleta_autonoma.cliente
         if time.monotonic() < self.proxima:
             return
         self.proxima = time.monotonic() + 30
-        for nome, tarefa in (('confirmacoes', lambda: self.sincronizar_confirmacoes(cliente, checkpoint)),
+        for nome, tarefa in (('lista', lambda: self.sincronizar_lista(cliente)),
+                             ('confirmacoes', lambda: self.sincronizar_confirmacoes(cliente, checkpoint)),
                              ('faixas', lambda: self.sincronizar_faixas(checkpoint))):
             checkpoint()
             try:
@@ -174,7 +204,7 @@ class OfflineEstacao:
             snapshot['numeracoes'] = [{k:v for k,v in n.items() if k != 'csv_data'}
                                      for n in registro['snapshot']['numeracoes']]
             pedidos.append({'pedido':registro['pedido'], 'revisao':registro['revisao'], 'snapshot':snapshot})
-        return {'catalogos':self.catalogos(), 'pedidos':pedidos, 'preparacao':{
+        return {'catalogos':self.catalogos(), 'lista':self.lista(), 'pedidos':pedidos, 'preparacao':{
                     'prontos':len(pedidos), 'catalogados':len(self.servico.pedidos_locais()), 'pendencias':dict(self.falhas)},
                 'confirmacoes':self.confirmacoes()}
 

@@ -44,7 +44,7 @@ function extrair(nome) {
      window.state={osItens:{},modelosGlobais:{},selectedOSItems:[]};
      window.toast=()=>{};window.renderOrdens=()=>{};window.normalizarNumeracaoLida=()=>{};
      window.arteFoiLancada=()=>true;window.lerStatusOverride=()=>null;
-     window.nomePreferencialDaProposta=p=>p.cliente_nome;window.comporPrazoDoERP=d=>d;
+     window.nomePreferencialDaProposta=p=>p.cliente_exibicao || p.cliente_nome;window.comporPrazoDoERP=d=>d;
      window.pedidosJaNaGrafica=()=>new Set(['99']);window.pedidoEntraNoPainel=()=>true;
      window.vibeClient={from(){throw Error('Tentou consultar nuvem');}};
      window.PilotoSelecao={revisaoPedido:()=>({pedido:'99',revisao:'a'.repeat(64)})};
@@ -63,6 +63,24 @@ function extrair(nome) {
    assert(result.ok);assert.equal(result.ordens[0].numero,99);assert.equal(result.ordens[0].prazo_entrega,'2026-10-15');
    assert.equal(result.formatos[0].id,1);assert.equal(result.modelos[0].id,10);assert(result.item._confirmacaoLocalPendente);
    assert.equal(dados.confirmacoes.length,1);
+   dados.lista={revisao:'b'.repeat(64),lista:{...snapshot,
+     pedidos:Array.from({length:65},(_,i)=>({id_int:99+i,status_interno:'EM PRODUCAO',
+       cliente_exibicao:'Cliente '+i,id_cliente:100+i,id_faturado:900+i})),
+     modelos:Array.from({length:65},(_,i)=>({id:10+i,id_int:99+i,status_arte:'APROVADO',status_impressao:'AGUARDANDO'}))}};
+   // Nova instancia simula reabrir o painel sem internet; apenas um PDF pronto.
+   await page.addScriptTag({url:origem+'/offline-estacao.js?lista=1'});
+   const completa=await page.evaluate(async()=>{
+     await PilotoOffline.carregarOrdens();
+     return {ordens:state.ordens,modelos:Object.keys(state.modelosGlobais).length};
+   });
+   assert.equal(completa.ordens.length,65);assert.equal(completa.modelos,65);
+   const primeiro=completa.ordens.find(o=>Number(o.numero)===99);
+   assert.equal(primeiro.cliente,'Cliente 0');assert.equal(primeiro.numero_cliente,100);
+   assert.equal(primeiro.id_cliente,900);assert(primeiro._disponivelOffline);
+   assert.equal(completa.ordens.filter(o=>o._disponivelOffline).length,1);
+   dados.pedidos=[];
+   await page.addScriptTag({url:origem+'/offline-estacao.js?lista=2'});
+   assert.equal(await page.evaluate(async()=>{await PilotoOffline.carregarOrdens();return state.ordens.length;}),65);
    for(const lib of ['vendor/offline/jszip.min.js','vendor/offline/fabric.min.js','vendor/offline/pdf.min.js','pdf-lib.min.js'])
      await page.addScriptTag({url:origem+'/'+lib});
    const paginas=await page.evaluate(async()=>{

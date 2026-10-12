@@ -15,6 +15,7 @@ def ambiente(tmp_path):
     chamadas=[]
     def chamar(acao,corpo):
         chamadas.append(acao)
+        if acao=='lista-offline': return {'empresa':'teste','revisao':'c'*64,'sem_mudanca':False,'lista':{k:[] for k in ('pedidos','origens','modelos','prazos','produtos','artes')}}
         if acao=='catalogos-offline': return {'empresa':'teste',**{k:[] for k in ('formatos','saidas','cores','modelos_imposicao')}}
         return {'id':corpo['id'],'estado':'sincronizado'}
     s.coleta_autonoma.cliente.chamar=chamar
@@ -28,8 +29,26 @@ def test_prepara_sem_navegador_e_conferencia_sobrevive_reinicio(tmp_path):
     local=OfflineEstacao(s,SelecaoPiloto(s))
     assert len(local.bootstrap()['pedidos'])==1
     assert local.conferir([{'pedido':'99','revisao':'a'*64}])['pedidos'][0]['execucao_offline']
-    assert chamadas==['catalogos-offline']
+    assert chamadas==['lista-offline','catalogos-offline']
     with pytest.raises(ValueError): local.conferir([{'pedido':'99','revisao':'b'*64}])
+
+
+def test_lista_completa_sem_arquivos_preservada_apos_falha_e_reinicio(tmp_path):
+    s,_,_,o,_=ambiente(tmp_path)
+    lista={k:[] for k in ('pedidos','origens','modelos','prazos','produtos','artes')}
+    lista['pedidos']=[{'id_int':n,'cliente_exibicao':'Cliente','id_cliente':10} for n in range(65)]
+    cliente=SimpleNamespace(chamar=lambda *_:{'empresa':'teste','revisao':'c'*64,'sem_mudanca':False,'lista':lista})
+    o.sincronizar_lista(cliente)
+    novo=OfflineEstacao(s,SelecaoPiloto(s))
+    assert len(novo.bootstrap()['lista']['lista']['pedidos'])==65
+    assert novo.bootstrap()['pedidos']==[]
+    cliente.chamar=lambda *_:{'empresa':'teste','revisao':'d'*64,'sem_mudanca':False,'lista':{}}
+    with pytest.raises(ValueError):novo.sincronizar_lista(cliente)
+    assert novo.lista()['lista']==lista
+    novo.proxima_lista=0
+    cliente.chamar=lambda *_:{'empresa':'teste','revisao':'c'*64,'sem_mudanca':True}
+    novo.sincronizar_lista(cliente)
+    assert novo.lista()['lista']==lista
 
 
 def test_confirmacao_duravel_idempotente_sem_spool_e_reconexao(tmp_path):

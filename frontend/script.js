@@ -32257,6 +32257,7 @@ function renderOrdens() {
 
                         <td>
                             <strong>${escapeHtml(rotuloDoCliente(os)) || '--'}</strong>
+                            ${typeof os._disponivelOffline === 'boolean' ? `<small style="display:block;color:var(--text-muted)">${os._disponivelOffline ? 'Preparado para uso offline' : 'Arquivos offline em preparação'}</small>` : ''}
                             ${nomeEventoHtml}
                             <!-- O selo "DADOS NAO CONFERIDOS PELO CLIENTE" saiu
                                  daqui em 03/09/2026, a pedido do usuario, no mesmo

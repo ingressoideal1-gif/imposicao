@@ -24,7 +24,7 @@ class ClienteAutonomo:
         self.abrir = abrir or urllib.request.build_opener(SemRedirecionamento()).open
 
     def chamar(self, acao, corpo):
-        if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'confirmar-offline'):
+        if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'lista-offline', 'confirmar-offline'):
             raise ValueError('Operação fora do piloto.')
         try:
             segredo = self.segredo()
@@ -34,7 +34,7 @@ class ClienteAutonomo:
                 headers={'Content-Type':'application/json', 'X-Agente-Segredo':segredo})
             with self.abrir(req, timeout=5 if acao == 'abrir-pedido' else 20) as resposta:
                 if getattr(resposta, 'status', 200) != 200: raise ValueError()
-                limite = (8 if acao in ('conferir-pedido', 'abrir-pedido', 'catalogos-offline') else 1) * 1024 * 1024
+                limite = (8 if acao in ('conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'lista-offline') else 1) * 1024 * 1024
                 raw = resposta.read(limite + 1)
                 if len(raw) > limite: raise ValueError()
                 return json.loads(raw)
