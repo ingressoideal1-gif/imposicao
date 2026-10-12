@@ -71,6 +71,13 @@ def test_liberado_e_barrado_soam_diferente():
     assert a["osciladores"][0]["duracao"] < b["osciladores"][0]["duracao"]
 
 
+def test_ambos_avisos_usam_ganho_maximo_e_vibracao():
+    for tipo in ("liberado", "barrado"):
+        r = chamar(tipo)
+        assert r["volumes"] == [1, 1]
+        assert sum(r["vibracao"]) >= 120
+
+
 def test_liberado_e_agudo_e_barrado_e_grave():
     """Grave e a convencao de erro, e ela sobrevive melhor ao barulho da fila."""
     assert chamar("liberado")["osciladores"][0]["frequencia"] > 800
@@ -114,7 +121,7 @@ def test_navegador_sem_audio_NAO_lanca():
 def test_navegador_sem_audio_AINDA_VIBRA():
     """Vibracao nao depende de `AudioContext`, e no bolso ela e o aviso que
     chega."""
-    assert chamar("liberado", sem_audio=True)["vibracao"] == [40]
+    assert chamar("liberado", sem_audio=True)["vibracao"] == [120]
 
 
 def test_barrado_tambem_nao_lanca_sem_nada():

@@ -23,7 +23,18 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
 
 let bruto = '';
 process.stdin.on('data', d => (bruto += d));
-process.stdin.on('end', () => rodar(JSON.parse(bruto)));
+process.stdin.on('end', () => {
+    if (bruto.trim()) return rodar(JSON.parse(bruto));
+    // A entrega segura chama o harness sem stdin: executar a suite que fornece
+    // os cenarios e verifica as respostas, em vez de interpretar JSON vazio.
+    const resultado = require('child_process').spawnSync(
+        process.env.IDEAL_TEST_PYTHON || 'python',
+        ['-m', 'pytest', '-n', '0', '-q', 'tests/test_portaria_tela.py'],
+        { cwd: REPO, stdio: 'inherit' }
+    );
+    if (resultado.error) console.error(resultado.error.message);
+    process.exit(resultado.status === null ? 1 : resultado.status);
+});
 
 const ARQUIVOS = ['jsqr.min.js', 'qr-ideal-hash.js', 'portaria-validacao.js',
                   'portaria-deposito.js', 'portaria-camera.js', 'aviso-sonoro.js',
@@ -31,8 +42,7 @@ const ARQUIVOS = ['jsqr.min.js', 'qr-ideal-hash.js', 'portaria-validacao.js',
 
 // Espia o que a tela FAZ, e nao so o que ela mostra: se a camera parou, e que
 // aviso sonoro tocou. Os dois sao invisiveis num `textContent` e sao o coracao
-// da tela nova -- o ingresso bom nao pode parar a camera, e a recusa tem de
-// apitar diferente.
+// da tela: todo resultado para a camera, e a recusa tem de apitar diferente.
 const ESPIAO = `
     window.__espiao = { desligar: 0, avisos: [], destravou: 0 };
     (function () {
@@ -520,8 +530,14 @@ async function rodar(caso) {
             if (i > 0 && c.pausa) {
                 await new Promise((r) => setTimeout(r, c.pausa));
             }
+            if (i > 0 && c.confirmarProximo) document.getElementById('btn-proximo').click();
             const comecou = Date.now();
-            await window.portaria.validarTexto(textos[i], c.setorEscolhido || null);
+            if (c.concorrente) {
+                await Promise.all([window.portaria.validarTexto(textos[i], c.setorEscolhido || null),
+                    window.portaria.validarTexto('999999')]);
+            } else {
+                await window.portaria.validarTexto(textos[i], c.setorEscolhido || null);
+            }
             gasto += Date.now() - comecou;
         }
 

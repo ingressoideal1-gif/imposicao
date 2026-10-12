@@ -2,18 +2,15 @@
 """O que a tela FAZ a cada leitura, que e a parte desta camada que falha em
 silencio.
 
-As regras ja sao testadas em tests/test_portaria_validacao.py. O que nada mais
-cobre e a traducao do veredito em cor, frase, som e -- desde 16/08/2026 -- em
-NAO INTERROMPER NINGUEM. A spec diz que confundir `setor_nao_autorizado`
+As regras ja sao testadas em tests/test_portaria_validacao.py. Esta suite
+cobre cor, frase, som e a confirmacao manual de cada resultado.
+A spec diz que confundir `setor_nao_autorizado`
 (ingresso bom, porta errada) com `desconhecido` (ingresso estranho ao evento)
 faz o porteiro devolver ingresso legitimo achando que e falso. Sao cores
 diferentes de proposito, e e isto que garante que continuem.
 
-A tela mudou de forma em 16/08/2026: o ingresso BOM deixou de ocupar o aparelho
--- a camera segue ligada, a faixa verde troca e a fila anda sem ninguem tocar em
-nada. A recusa continua travando. Os testes abaixo estao organizados nessa
-ordem: primeiro o caminho feliz que nao interrompe, depois o silencio por codigo
-que substituiu o desligar-a-camera, depois a recusa, o contador e as saidas.
+Liberacoes e recusas param a camera e aguardam "Ler o proximo". Os testes
+protegem tambem o registro unico, a fila, os contadores e a retomada da leitura.
 """
 
 import json
@@ -87,22 +84,18 @@ def pintar(texto, c=None, escolhido=None):
     return ler(c, texto=texto, setorEscolhido=escolhido)
 
 
-# ── O ingresso bom nao interrompe ninguem ────────────────────────────────────
+# ── O ingresso bom aguarda confirmacao ──────────────────────────────────────
 
 
-def test_ingresso_bom_NAO_desliga_a_camera():
-    """O caso comum e o ingresso bom, e ele nao deveria pedir nada de ninguem.
-    Dois mil ingressos eram dois mil toques em "Ler o proximo" -- com uma mao,
-    no escuro, com a fila esperando.
-
-    Ate 16/08/2026 `achou()` desligava a camera antes de cada validacao e a
-    resposta ocupava a tela. Agora a camera segue ligada e a tela continua sendo
-    a de leitura: quem prova isso e este teste.
-    """
+def test_ingresso_bom_para_camera_e_mostra_liberado():
+    """A entrada exige o mesmo toque para continuar que a recusa."""
     r = pintar("000001")
-    assert r["desligouACamera"] is False, "a camera parou num ingresso BOM"
-    assert r["telaLendo"] is True
-    assert r["telaResposta"] is False, "o ingresso bom voltou a ocupar a tela"
+    assert r["desligouACamera"] is True
+    assert r["telaLendo"] is False
+    assert r["telaResposta"] is True
+    assert r["titulo"] == "LIBERADO"
+    assert r["classe"] == "resposta ok"
+    assert "PISTA" in r["detalhe"] and "1" in r["detalhe"]
 
 
 def test_a_faixa_verde_mostra_setor_numero_e_hora():
@@ -139,22 +132,46 @@ def test_o_mesmo_codigo_e_ignorado_por_2_segundos():
     porteiro devolve quem tinha direito de entrar."""
     r = ler(textos=["000001", "000001"])
     assert r["fila"] == 1, "a mesma leitura entrou duas vezes na fila"
-    assert r["telaResposta"] is False, "o ingresso bom piscou vermelho"
+    assert r["titulo"] == "LIBERADO", "outro callback substituiu a liberacao"
 
 
-def test_outro_codigo_passa_na_hora():
-    """O silencio e por CODIGO, nao por tempo de tela: a proxima pessoa da fila
-    nao pode esperar dois segundos porque a anterior acabou de passar."""
+def test_outro_codigo_aguarda_confirmacao():
     r = ler(textos=["000001", "999999"])
+    assert r["fila"] == 1
+    assert r["titulo"] == "LIBERADO"
+    assert r["avisos"] == ["liberado"]
+
+
+def test_ler_proximo_libera_outro_codigo():
+    r = ler(textos=["000001", "999999"], confirmarProximo=True)
     assert r["fila"] == 2
-    assert r["telaResposta"] is True, "o segundo codigo nao foi decidido"
+    assert r["filaResultados"] == ["permitido", "negado"]
+    assert r["avisos"] == ["liberado", "barrado"]
 
 
-def test_o_mesmo_codigo_volta_a_valer_depois_de_2_segundos():
-    """O silencio e uma pausa, e nao um esquecimento. Passados os dois segundos,
-    o mesmo ingresso apresentado de novo vira `ja_entrou` -- que e o certo: ele
-    ja entrou mesmo."""
-    r = ler(textos=["000001", "000001"], pausa=2400)
+def test_recusa_tambem_aguarda_toque_antes_da_liberacao():
+    bloqueado = ler(textos=["999999", "000001"])
+    assert bloqueado["filaResultados"] == ["negado"]
+    confirmado = ler(textos=["999999", "000001"], confirmarProximo=True)
+    assert confirmado["filaResultados"] == ["negado", "permitido"]
+    assert confirmado["titulo"] == "LIBERADO"
+
+
+def test_callbacks_concorrentes_nao_registram_segundo_ingresso():
+    r = ler(texto="000001", concorrente=True)
+    assert r["fila"] == 1
+    assert r["titulo"] == "LIBERADO"
+
+
+def test_resultado_nao_avanca_com_o_tempo():
+    r = ler(textos=["000001", "999999"], pausa=2400)
+    assert r["fila"] == 1
+    assert r["titulo"] == "LIBERADO"
+
+
+def test_o_mesmo_codigo_e_reavaliado_apos_o_toque():
+    """A nova leitura deliberada identifica que o ingresso ja entrou."""
+    r = ler(textos=["000001", "000001"], confirmarProximo=True)
     assert r["fila"] == 2
     assert r["titulo"] == "JÁ ENTROU"
 
@@ -275,7 +292,8 @@ def test_servidor_lento_NAO_trava_a_leitura():
             mock={"method": "POST", "pathname": ENTRADA, "status": 200,
                   "demora": 3000, "body": {"primeira": False}})
     assert r["ms"] < 2500, f"a leitura esperou {r['ms']} ms pela rede"
-    assert r["telaResposta"] is False, "a demora do servidor barrou ingresso bom"
+    assert r["telaResposta"] is True
+    assert r["titulo"] == "LIBERADO", "a demora do servidor barrou ingresso bom"
     assert r["fila"] == 1
 
 
