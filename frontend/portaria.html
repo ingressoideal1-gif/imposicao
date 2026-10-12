@@ -37,10 +37,8 @@
         fila andando. Por isso: alvos de toque grandes, cor ocupando a tela
         inteira na RECUSA, e nenhuma decisao escondida atras de menu.
 
-        Desde 16/08/2026 o ingresso BOM nao ocupa mais a tela: a camera fica
-        ligada, a faixa verde troca de conteudo e a proxima pessoa passa sem
-        ninguem tocar em nada. Numa noite de dois mil ingressos, a tela antiga
-        pedia dois mil toques em "Ler o proximo" -- com uma mao, no escuro.
+        Cada leitura ocupa a tela com seu resultado. A camera so volta
+        depois do toque em "Ler o proximo", tanto na liberacao quanto na recusa.
 
         Auto-contida como as outras telas do aplicativo, e por um motivo a
         mais: esta pagina precisa ABRIR SEM REDE. Todo arquivo que ela usa e
@@ -633,9 +631,7 @@
     </div>
 
     <!--
-        A recusa continua ocupando a tela e continua exigindo um toque: é a
-        única forma de garantir que o porteiro viu. O ingresso BOM não passa
-        mais por aqui.
+        A liberacao e a recusa ficam visiveis ate o toque em "Ler o proximo".
     -->
     <div id="tela-resposta" class="sumindo">
         <div class="resposta" id="resposta-caixa">
@@ -672,10 +668,10 @@
 <script src="portaria-validacao.js?v=1046"></script>
 <script src="portaria-deposito.js?v=1023"></script>
 <script src="portaria-camera.js?v=1023"></script>
-<script src="aviso-sonoro.js?v=1023"></script>
+<script src="aviso-sonoro.js?v=1047"></script>
 <script src="portaria-sincronismo.js?v=1046"></script>
 <script src="chaveiro.js?v=1023"></script>
-<script src="portaria.js?v=1046"></script>
-<script src="sw-registro.js?v=1046"></script>
+<script src="portaria.js?v=1047"></script>
+<script src="sw-registro.js?v=1047"></script>
 </body>
 </html>

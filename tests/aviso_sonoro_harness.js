@@ -22,7 +22,18 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
 
 let bruto = '';
 process.stdin.on('data', d => (bruto += d));
-process.stdin.on('end', () => rodar(JSON.parse(bruto)));
+process.stdin.on('end', () => {
+    if (bruto.trim()) return rodar(JSON.parse(bruto));
+    // A entrega segura chama o harness sem stdin: executar a suite que fornece
+    // os cenarios e verifica as respostas, em vez de interpretar JSON vazio.
+    const resultado = require('child_process').spawnSync(
+        process.env.IDEAL_TEST_PYTHON || 'python',
+        ['-m', 'pytest', '-n', '0', '-q', 'tests/test_aviso_sonoro.py'],
+        { cwd: REPO, stdio: 'inherit' }
+    );
+    if (resultado.error) console.error(resultado.error.message);
+    process.exit(resultado.status === null ? 1 : resultado.status);
+});
 
 async function rodar(caso) {
     const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
@@ -43,7 +54,7 @@ async function rodar(caso) {
     // Os dubles entram ANTES do arquivo. Depois seria tarde para o caso do
     // navegador sem audio: quem pega a fabrica de contexto e o proprio arquivo.
     await page.evaluate((c) => {
-        var reg = { osciladores: [], vibracao: [], buffers: 0, contextos: 0 };
+        var reg = { osciladores: [], vibracao: [], volumes: [], buffers: 0, contextos: 0 };
         window.__registro = reg;
 
         function Parametro(valor) { this.value = valor; }
@@ -84,6 +95,7 @@ async function rodar(caso) {
         Contexto.prototype.createGain = function () {
             var no = new No();
             no.gain = new Parametro(1);
+            no.gain.setValueAtTime = function (v) { reg.volumes.push(v); this.value = v; return this; };
             return no;
         };
         Contexto.prototype.createBuffer = function () { return {}; };
@@ -153,6 +165,7 @@ async function rodar(caso) {
         return {
             resultado: resultado === undefined ? null : resultado,
             pronto: pronto,
+            volumes: window.__registro.volumes,
             osciladores: reg.osciladores,
             vibracao: reg.vibracao,
             buffers: reg.buffers,
