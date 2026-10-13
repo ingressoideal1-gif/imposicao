@@ -1,0 +1,17 @@
+{
+  "manifesto": {
+    "schema": 1,
+    "produto": "NewProdPilotoTeste",
+    "version": "1.2.397",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.397.msi",
+    "bytes": 196665344,
+    "sha256": "193f5241b8844a355d6fe30fae71c72dd656c9649e19e510ae38cc6411ae5d4a",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME"
+    ],
+    "notes": "Corrige capas por camarote em blocos com montagem, com lotacao e inicio de cada modelo e contracapas correspondentes. Preserva miolo e ampliacao da arte."
+  },
+  "download_completo_conferido": true,
+  "instalacao_verificada": false
+}

@@ -32,3 +32,10 @@ MSI de teste: `dist/NewProdPiloto_Teste_v1.2.397.msi`. A instalação no Junior
 continua adiada por escolha do usuário. Conferência física permanece pendente.
 O modelo 1002451 com C_INI=0 permanece dependente da definição da faixa correta;
 nenhum dado do pedido foi modificado no banco.
+
+Publicação concluída apenas no manifesto de teste, mantendo LASER-01 e
+PC-JR-HOME. Download público completo conferido: 196665344 bytes;
+SHA-256 `193f5241b8844a355d6fe30fae71c72dd656c9649e19e510ae38cc6411ae5d4a`.
+Produto MSI 1.2.397, bytecode do motor e 375 arquivos do painel conferidos.
+Evidência: `evidencias/publicacao-capas-camarote-397.json`. Disponibilidade
+do pacote não comprova instalação em nenhuma estação.
