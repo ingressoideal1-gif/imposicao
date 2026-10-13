@@ -1,0 +1,65 @@
+{
+  "version": "1.2.393",
+  "manifestos": {
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.2.393",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.2.393.msi",
+      "sha256": "ec052340ff2e80afe184cfa05e53a7e476f0cb13743ecd2f9dcaa98c77ec0469",
+      "bytes": 194981888,
+      "size": 194981888,
+      "notes": "Diagnostico do motivo HTTP original, identificacao enviada, Windows e proxy sem dados privados; preserva comportamento do canal.",
+      "estacoes": [
+        "LASER-04",
+        "TEX-01",
+        "FLEXO",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02",
+        "ACABAMENTO",
+        "DESKTOP-PM6TG1B"
+      ]
+    },
+    "newprod-piloto-teste.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.2.393",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.393.msi",
+      "bytes": 196665344,
+      "sha256": "15aa48113acc50179c7688c2f3fd36144b86890149ec49a8fccbfd971e857526",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME"
+      ],
+      "notes": "Diagnostico do motivo HTTP original, identificacao enviada, Windows e proxy sem dados privados; preserva comportamento do canal."
+    },
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.2.393",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.2.393.msi",
+      "sha256": "ec052340ff2e80afe184cfa05e53a7e476f0cb13743ecd2f9dcaa98c77ec0469",
+      "bytes": 194981888,
+      "size": 194981888,
+      "notes": "Diagnostico do motivo HTTP original, identificacao enviada, Windows e proxy sem dados privados; preserva comportamento do canal.",
+      "estacoes": [
+        "LASER-04",
+        "TEX-01",
+        "FLEXO",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02",
+        "ACABAMENTO",
+        "DESKTOP-PM6TG1B"
+      ]
+    }
+  },
+  "download_completo_sha256_conferido": true,
+  "estacoes_instaladas_verificadas": false,
+  "compilacao_auditada": true,
+  "testes": {
+    "piloto": 98,
+    "teste": 81
+  }
+}
