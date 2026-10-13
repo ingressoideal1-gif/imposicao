@@ -4439,12 +4439,17 @@ async function gerarPdfDaMontagem() {
 
 /** A estação desta máquina, ou null. Sem plano B na nuvem, de propósito. */
 async function _mtgEstacao() {
-    for (const base of ['http://localhost:8080', 'http://127.0.0.1:9000']) {
+    const local = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+        && ['9001', '9000', '8080'].includes(window.location.port);
+    // O painel local pertence a esta instancia; nao encaminhar a outra versao.
+    const bases = local ? [window.location.origin]
+        : ['http://127.0.0.1:9001', 'http://localhost:8080', 'http://127.0.0.1:9000'];
+    for (const base of bases) {
         try {
             const r = await fetch(base + '/api/status', { signal: AbortSignal.timeout(2500) });
             if (!r.ok) continue;
             const d = await r.json();
-            if (d && d.onde !== 'nuvem') return base;
+            if (d && d.version && d.onde !== 'nuvem') return base;
         } catch (_) {}
     }
     return null;
