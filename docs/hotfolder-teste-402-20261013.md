@@ -24,6 +24,12 @@ regras de numeracao e versao normal nao foram alterados.
 - Harness do teste: pasta nos quatro estados do seletor, captura imutavel,
   erro sem desvio para impressora, tres modos de driver e bloqueio comercial.
 - Ladrilhos de Hot Folder: 48 verificacoes; logica de arquivos: 47 testes.
+- Bateria `conferir_duas_versoes.py`: perfis producao, piloto e oficial,
+  cada um com 939 testes Python, 2 subtestes e 19 harnesses JavaScript.
+  Dois testes por perfil exigem pool QR real ausente e ficaram ignorados;
+  houve um aviso preexistente de depreciacao Starlette/httpx por perfil.
+  As 60 etapas terminaram com sucesso. Logs e tempos estao em
+  `dist/compatibilidade/hotfolder-402-*validacao.log` e `*tempos.json`.
 - Auditoria do EXE/MSI/preservador: sem arquivos privados; identidade de teste
   e ProductVersion conferidos; 375 arquivos do painel identicos a fonte.
 - Evidencia do pacote: `evidencias/hotfolder-402-teste-auditoria.json`.
@@ -35,3 +41,19 @@ downgrade. Nao restaurar configuracoes ou filas para reverter apenas codigo.
 
 Esta entrega nao executa instalacao, reinicio nem impressao fisica. A versao
 em uso e a recepcao pelo RIP devem ser verificadas separadamente na estacao.
+
+## Publicacao concluida
+
+Fontes enviadas na branch `fix/compatibilidade-newprod-teste-20261013`,
+commit `fe4b2db5`. O pacote foi publicado sob nome novo, baixado integralmente
+e conferido antes da ativacao de `newprod-piloto-teste.json` em 1.2.402.
+Tamanho: 196669440 bytes. SHA-256:
+`fde52ff4e4abcaf1007558aae2e3ca76bca79067621b4e19ba142cff6a74162d`.
+
+Manifesto relido com cache-buster; mantidas exatamente LASER-01 e PC-JR-HOME.
+`newprod-piloto-oficial.json` e `latest.json` foram relidos e permanecem
+identicos aos anteriores, em 1.2.401. Nenhuma publicacao web de producao.
+Evidencia: `evidencias/hotfolder-402-teste-publicacao.json`.
+Manifestos anteriores preservados em
+`dist/compatibilidade/manifestos-antes-hotfolder-402.json` e no backup
+criado pelo publicador. MSI anterior mantido, sem sobrescrita.
