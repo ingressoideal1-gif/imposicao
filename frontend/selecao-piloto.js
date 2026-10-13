@@ -2,6 +2,8 @@
 (function () {
     'use strict';
     const liberados = new Map();
+    const consultas = new Map();
+    const aprovados = new Set(['APROVADO','APROVADA','APROVADA_CLIENTE','LIBERADA','ARTE_APROVADA','ARTE APROVADA']);
     const revisoesPedidos = new Map();
     let pedidoAtual = null;
     let popupConferencia = null;
@@ -59,6 +61,7 @@
     }
     function iniciarPedido(osId) {
         liberados.clear();
+        consultas.clear();
         pedidoAtual = {osId:String(osId)};
         state.multiArtesPdfCache = {};
         return pedidoAtual;
@@ -159,9 +162,19 @@
         const resposta = await r.json();
         if (!atual() || contexto !== pedidoAtual) return null;
         const pacotes = resposta.pacotes;
+        // Apenas um snapshot confirmado pode conceder consulta sem impressao.
+        // Uma resposta incompleta para modelo aprovado continua sendo erro.
+        const somenteConsulta = contexto.preparado ? itens.filter(item => {
+            const raw = contexto.preparado.snapshot.modelos.find(m => String(m.id) === String(item.id));
+            return raw && JSON.stringify(canonico(raw)) === fotografias.get(String(item.id))
+                && !aprovados.has(String(raw.status_arte || '').trim().toUpperCase())
+                && !pacotes?.some(p => p.modelo === String(item.id))
+                && !resposta.sem_arte?.includes(String(item.id));
+        }) : [];
+        const idsConsulta = somenteConsulta.map(i => String(i.id));
         if (resposta.pedido !== String(pedido.numero) || !Array.isArray(pacotes) || !Array.isArray(resposta.sem_arte)
-            || new Set([...pacotes.map(p => p.modelo), ...resposta.sem_arte]).size !== modelos.length
-            || pacotes.length + resposta.sem_arte.length !== modelos.length) throw Error('Resposta local incompleta.');
+            || new Set([...pacotes.map(p => p.modelo), ...resposta.sem_arte, ...idsConsulta]).size !== modelos.length
+            || pacotes.length + resposta.sem_arte.length + idsConsulta.length !== modelos.length) throw Error('Resposta local incompleta.');
         for (const pacote of pacotes) {
             const esperado = modelos.find(m => m.modelo === pacote.modelo);
             const itemAtual = (getOSItens(osId) || []).find(i => String(i.id) === pacote.modelo);
@@ -192,6 +205,11 @@
             const item = itens.find(i => String(i.id) === pacote.modelo);
             liberados.set(chave(item.id, osId), {pacote, modelo:fotografias.get(pacote.modelo)});
         }
+        for (const item of somenteConsulta) {
+            consultas.set(chave(item.id, osId), {modelo:fotografias.get(String(item.id)),
+                motivo:'Modelo disponivel somente para consulta: arte ' + String(item._modeloOnline.status_arte || 'sem aprovacao')
+                    + '. Geracao e impressao indisponiveis enquanto a arte nao estiver aprovada.'});
+        }
         contexto.pronto = true;
         const offline = resposta.execucao_offline === true;
         const selo = typeof document !== 'undefined' && document.getElementById('newprod-canal-piloto');
@@ -199,11 +217,17 @@
             ? 'NewProd Piloto · Sem conexão — última revisão local do pedido ' + pedido.numero
             : 'NewProd Piloto · porta 9001';
         toast(offline ? 'Sem conexão: pedido aberto pela última revisão local. Alterações da nuvem serão conferidas ao reabrir com internet.'
-            : 'Pedido conferido. Modelos preparados para leitura local.', offline ? 'warning' : 'success');
+            : idsConsulta.length ? 'Pedido conferido. Ha modelos sem aprovacao disponiveis somente para consulta.' : 'Pedido conferido. Modelos preparados para leitura local.', offline ? 'warning' : 'success');
         return resposta;
     }
-    async function conferir(itemId, osId, atual) {
+    function motivoConsulta(itemId, osId) {
+        const registro = consultas.get(chave(itemId, osId));
+        const item = (getOSItens(osId) || []).find(i => String(i.id) === String(itemId));
+        return registro && registro.modelo === JSON.stringify(canonico(item?._modeloOnline)) ? registro.motivo : null;
+    }
+    async function conferir(itemId, osId, atual, somenteVisualizar = false) {
         if (!atual()) return null;
+        if (somenteVisualizar && motivoConsulta(itemId, osId)) return null;
         validarTrabalho([{itemId, osId}]);
         return liberados.get(chave(itemId, osId)).pacote;
     }
@@ -218,6 +242,8 @@
     function validarTrabalho(alvos) {
         if (!alvos?.length) throw Error('Selecione e confira um modelo antes de imprimir.');
         for (const alvo of alvos) {
+            const motivo = motivoConsulta(alvo.itemId, alvo.osId);
+            if (motivo) throw Error(motivo);
             const liberado = liberados.get(chave(alvo.itemId, alvo.osId));
             const item = (getOSItens(alvo.osId) || []).find(i => String(i.id) === String(alvo.itemId));
             if (!liberado || !item?._modeloOnline || liberado.modelo !== JSON.stringify(canonico(item._modeloOnline))) {
@@ -250,7 +276,7 @@
         if (new Set(locais.map(l => l.hash)).size > 1) throw Error('Revisões locais divergentes. Reabra o pedido.');
         return locais[0]?.chave || url;
     }
-    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, revisaoPedido, iniciarPedido, conferirPedido, conferir, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
+    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, revisaoPedido, iniciarPedido, conferirPedido, conferir, motivoConsulta, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
     // A injeção exclusiva do Piloto ocorre depois do script principal. Manter
     // o fluxo original e acompanhar também seus retornos antecipados e erros.
     const abrirPedido = window.abrirImposicaoDoPedido;

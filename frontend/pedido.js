@@ -4314,9 +4314,15 @@ async function enviarParaPedido(itemId, osId, contexto = {}) {
     if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
     try {
         const pacoteLocal = window.PilotoSelecao
-            ? await window.PilotoSelecao.conferir(itemId, osId, atual) : null;
+            ? await window.PilotoSelecao.conferir(itemId, osId, atual, true) : null;
         if (!atual()) return;
-        await carregarModeloParaPedido(itemId, osId, { ...contexto, pacoteLocal, aindaAtual: atual });
+        const avisoConsulta = window.PilotoSelecao?.motivoConsulta(itemId, osId);
+        await carregarModeloParaPedido(itemId, osId, { ...contexto, pacoteLocal, aindaAtual: atual,
+            restaurandoNavegacao: contexto.restaurandoNavegacao || !!avisoConsulta });
+        if (atual() && avisoConsulta) {
+            state.pedidoSelecaoErro = avisoConsulta;
+            toast(avisoConsulta, 'warning');
+        }
     } catch (erro) {
         if (atual()) {
             state.pedidoSelecaoErro = 'Não foi possível carregar o modelo. Reabra antes de gerar: ' + erro.message;
