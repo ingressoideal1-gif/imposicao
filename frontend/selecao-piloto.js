@@ -168,13 +168,13 @@
             const raw = contexto.preparado.snapshot.modelos.find(m => String(m.id) === String(item.id));
             return raw && JSON.stringify(canonico(raw)) === fotografias.get(String(item.id))
                 && !aprovados.has(String(raw.status_arte || '').trim().toUpperCase())
-                && !pacotes?.some(p => p.modelo === String(item.id))
-                && !resposta.sem_arte?.includes(String(item.id));
+                && !pacotes?.some(p => p.modelo === String(item.id));
         }) : [];
         const idsConsulta = somenteConsulta.map(i => String(i.id));
+        const idsConsultaAdicionais = idsConsulta.filter(id => !resposta.sem_arte?.includes(id));
         if (resposta.pedido !== String(pedido.numero) || !Array.isArray(pacotes) || !Array.isArray(resposta.sem_arte)
             || new Set([...pacotes.map(p => p.modelo), ...resposta.sem_arte, ...idsConsulta]).size !== modelos.length
-            || pacotes.length + resposta.sem_arte.length + idsConsulta.length !== modelos.length) throw Error('Resposta local incompleta.');
+            || pacotes.length + resposta.sem_arte.length + idsConsultaAdicionais.length !== modelos.length) throw Error('Resposta local incompleta.');
         for (const pacote of pacotes) {
             const esperado = modelos.find(m => m.modelo === pacote.modelo);
             const itemAtual = (getOSItens(osId) || []).find(i => String(i.id) === pacote.modelo);
@@ -251,6 +251,15 @@
             }
         }
     }
+    async function lerUrlParaConsulta(url, itemId, osId) {
+        if (!motivoConsulta(itemId, osId)) return lerUrl(url);
+        const item = (getOSItens(osId) || []).find(i => String(i.id) === String(itemId));
+        const raw = item._modeloOnline;
+        if (!url || ![raw.arte_url, raw.verso_arte_url].includes(url)) {
+            throw Error('Arte nao pertence ao modelo conferido para consulta.');
+        }
+        return fetch(url, {signal:AbortSignal.timeout(30000)});
+    }
     async function lerUrl(url) {
         const alvos = state.selectedOSItems?.length > 1 ? state.selectedOSItems : [state.activeOSItem].filter(Boolean);
         validarTrabalho(alvos);
@@ -276,7 +285,7 @@
         if (new Set(locais.map(l => l.hash)).size > 1) throw Error('Revisões locais divergentes. Reabra o pedido.');
         return locais[0]?.chave || url;
     }
-    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, revisaoPedido, iniciarPedido, conferirPedido, conferir, motivoConsulta, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
+    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, revisaoPedido, iniciarPedido, conferirPedido, conferir, motivoConsulta, lerArte, lerUrl, lerUrlParaConsulta, validarTrabalho, referencias, chaveRecurso};
     // A injeção exclusiva do Piloto ocorre depois do script principal. Manter
     // o fluxo original e acompanhar também seus retornos antecipados e erros.
     const abrirPedido = window.abrirImposicaoDoPedido;
