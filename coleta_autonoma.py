@@ -31,7 +31,8 @@ class ClienteAutonomo:
         codigo = 'canal_autonomo'
         def diagnosticada(erro, falha):
             falha.diagnostico_id = registrar_diagnostico(erro, codigo, acao, pedido=corpo.get('pedido'),
-                modelo=corpo.get('modelo'), duracao_ms=int((time.monotonic()-inicio)*1000))
+                modelo=corpo.get('modelo'), duracao_ms=int((time.monotonic()-inicio)*1000),
+                contexto_http=(self.estacao, self.empresa, self.base))
             return falha
         try:
             segredo = self.segredo()

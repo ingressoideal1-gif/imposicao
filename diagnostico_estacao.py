@@ -1,4 +1,4 @@
-"""Diagnóstico limitado e assíncrono; nunca recebe corpos HTTP ou credenciais."""
+"""Diagnóstico limitado e assíncrono; nunca persiste corpos HTTP ou credenciais."""
 from collections import deque
 from datetime import datetime, timezone
 import json
@@ -10,6 +10,7 @@ import socket
 import ssl
 import threading
 import uuid
+from urllib.error import HTTPError
 
 
 CODIGOS = {'canal_autonomo', 'credencial_ausente', 'resposta_invalida',
@@ -54,6 +55,22 @@ def _limpar(dados):
     for campo, minimo, maximo in [('http_origem', 100, 599), ('duracao_ms', 0, 3600000)]:
         v = dados.get(campo)
         r[campo] = v if type(v) is int and minimo <= v <= maximo else None
+    from diagnostico_http import RESULTADOS
+    for campo, permitidos in {
+        'motivo_http': RESULTADOS,
+        'formato_resposta': {'json', 'html', 'outro'},
+        'servidor_http': {'cloudflare', 'envoy', 'nginx', 'squid', 'outro'},
+        'windows_edicao': {'Professional', 'Core', 'Enterprise', 'Education', 'ProfessionalWorkstation'},
+    }.items():
+        v = dados.get(campo)
+        r[campo] = v if isinstance(v, str) and v in permitidos else None
+    for campo in ('empresa_padrao', 'destino_padrao', 'via_presente', 'cf_ray_presente',
+                  'desafio_cloudflare', 'proxy_https_configurado'):
+        r[campo] = dados.get(campo) if type(dados.get(campo)) is bool else None
+    build = dados.get('windows_build')
+    r['windows_build'] = build if type(build) is int and 0 < build < 1000000 else None
+    estacao = dados.get('estacao_enviada')
+    r['estacao_enviada'] = estacao if isinstance(estacao, str) and re.fullmatch('[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', estacao) else None
     return r
 
 
@@ -74,7 +91,7 @@ class Diagnosticos:
                 self.thread = threading.Thread(target=self._rodar, name='DiagnosticosNewProd', daemon=True)
                 self.thread.start()
 
-    def registrar(self, dados):
+    def registrar(self, dados, resposta=None):
         registro = _limpar(dados)
         if registro is None:
             return
@@ -82,10 +99,15 @@ class Diagnosticos:
         with self.lock:
             self.recentes.append(registro)
         try:
-            self.fila.put_nowait(registro)
+            self.fila.put_nowait((registro, resposta))
         except queue.Full:
             with self.lock:
                 self.descartados += 1
+            if resposta is not None:
+                try:
+                    resposta.close()
+                except Exception:
+                    pass
 
     def resumo(self):
         self.iniciar()
@@ -125,11 +147,18 @@ class Diagnosticos:
             with self.lock:
                 self.carregado = True
         while True:
-            registro = self.fila.get()
-            if registro is None:
+            item = self.fila.get()
+            if item is None:
                 self.fila.task_done()
                 return
+            registro, resposta = item
             try:
+                if resposta is not None:
+                    from diagnostico_http import classificar_corpo
+                    registro = {**registro, 'motivo_http': classificar_corpo(resposta)}
+                    with self.lock:
+                        self.recentes = deque((registro if r['id'] == registro['id'] else r
+                                               for r in self.recentes), maxlen=20)
                 con = self._banco()
                 try:
                     with con:
@@ -153,7 +182,7 @@ def _raiz():
 _registros = Diagnosticos(_raiz)
 
 
-def registrar(erro, codigo, etapa, *, pedido=None, modelo=None, duracao_ms=None):
+def registrar(erro, codigo, etapa, *, pedido=None, modelo=None, duracao_ms=None, contexto_http=None):
     """Não lança, não grava no disco nem espera rede na thread da operação."""
     try:
         anterior = getattr(erro, 'diagnostico_id', None)
@@ -174,10 +203,20 @@ def registrar(erro, codigo, etapa, *, pedido=None, modelo=None, duracao_ms=None)
                       'tls' if isinstance(causa, ssl.SSLError) else
                       'timeout' if isinstance(causa, TimeoutError) else
                       'conexao' if isinstance(causa, ConnectionError) else None)
-        _registros.registrar(dict(id=ident, quando=datetime.now(timezone.utc).isoformat(),
+        extras = {}
+        resposta = None
+        if contexto_http is not None:
+            from diagnostico_http import contexto
+            extras = contexto(erro, *contexto_http)
+            if isinstance(erro, HTTPError):
+                # Manter o proprietário do stream vivo até a leitura em segundo plano.
+                resposta = erro if getattr(erro, 'fp', None) is not None else None
+                erro.__traceback__ = None
+                extras['motivo_http'] = 'aguardando_leitura' if resposta is not None else 'corpo_indisponivel'
+        _registros.registrar(dict(**extras, id=ident, quando=datetime.now(timezone.utc).isoformat(),
             codigo=codigo, etapa=etapa, pedido=pedido, modelo=modelo, versao=AGENT_VERSION,
             origem=origem, transporte=transporte,
-            tipo=type(erro).__name__, http_origem=getattr(erro, 'code', None), duracao_ms=duracao_ms))
+            tipo=type(erro).__name__, http_origem=getattr(erro, 'code', None), duracao_ms=duracao_ms), resposta)
         erro.diagnostico_id = ident
         return ident
     except Exception:
