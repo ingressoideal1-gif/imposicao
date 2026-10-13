@@ -1,0 +1,17 @@
+{
+  "manifesto": {
+    "schema": 1,
+    "produto": "NewProdPilotoTeste",
+    "version": "1.2.396",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.396.msi",
+    "bytes": 196657152,
+    "sha256": "1973eb6761e35ac05a0352051dfd1b5487a7c3a0f741eaa312824b229f52ee2f",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME"
+    ],
+    "notes": "Preserva ampliacao da arte na geracao de PDF de modelo unico em blocos, incluindo 104 por cento; mantem numeracao e recorte."
+  },
+  "download_completo_conferido": true,
+  "instalacao_verificada": false
+}
