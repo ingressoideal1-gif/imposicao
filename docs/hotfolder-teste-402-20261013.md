@@ -39,8 +39,8 @@ foram arquivados em `dist/compatibilidade/base-401-binarios` antes do rebuild.
 Recuperacao de codigo exige novo numero superior, pois o atualizador nao faz
 downgrade. Nao restaurar configuracoes ou filas para reverter apenas codigo.
 
-Esta entrega nao executa instalacao, reinicio nem impressao fisica. A versao
-em uso e a recepcao pelo RIP devem ser verificadas separadamente na estacao.
+O agente de desenvolvimento nao executou instalacao, reinicio nem impressao
+fisica nesta entrega. O aceite posterior do usuario esta registrado abaixo.
 
 ## Publicacao concluida
 
@@ -57,3 +57,15 @@ Evidencia: `evidencias/hotfolder-402-teste-publicacao.json`.
 Manifestos anteriores preservados em
 `dist/compatibilidade/manifestos-antes-hotfolder-402.json` e no backup
 criado pelo publicador. MSI anterior mantido, sem sobrescrita.
+
+## Aceite do usuario — 13/10/2026
+
+Apos a publicacao, o usuario confirmou: "hotfolder na teste ok".
+Registrado o funcionamento do Hot Folder na versao de teste por validacao
+do usuario. O problema relatado de selecionar uma pasta e enviar para a
+impressora fica encerrado com esse aceite.
+
+A confirmacao nao especificou estacao, pedido, pasta ou RIP, nem informou
+saida fisica em papel. Portanto, nao comprova instalacao em todas as estacoes
+liberadas ou impressao fisica. Nao houve nova alteracao de codigo, pacote,
+manifesto ou configuracao para registrar este aceite.
