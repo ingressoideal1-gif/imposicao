@@ -148,14 +148,30 @@
         ctx.textBaseline = 'middle';
         const lineHeight = aj.corpo * 1.2;   // igual ao engine.py
         const x = xTexto / esc;
+        const fioMm = el && el.type === 'TEXT' && el.database_text
+            ? Math.min(10, Math.max(0, Number(el.text_stroke_mm) || 0)) : 0;
+        const pintarLinha = function (linha, y) {
+            // PDF render_mode=2: preenchimento seguido do contorno.
+            ctx.fillText(linha, x, y);
+            if (fioMm > 0 && linha) {
+                ctx.save();
+                ctx.strokeStyle = /^#[0-9a-f]{6}$/i.test(el.text_stroke_color || '')
+                    ? el.text_stroke_color : '#000000';
+                ctx.lineWidth = fioMm * pxPorMm;
+                ctx.lineJoin = 'miter';
+                ctx.miterLimit = 1;
+                ctx.strokeText(linha, x, y);
+                ctx.restore();
+            }
+        };
         if (aj.linhas.length > 1) {
             const totalH = aj.linhas.length * lineHeight;
             const blockTop = -totalH / 2;
             aj.linhas.forEach(function (linha, i) {
-                ctx.fillText(linha, x, blockTop + i * lineHeight + lineHeight / 2);
+                pintarLinha(linha, blockTop + i * lineHeight + lineHeight / 2);
             });
         } else {
-            ctx.fillText(aj.linhas[0], x, 0);
+            pintarLinha(aj.linhas[0], 0);
         }
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
