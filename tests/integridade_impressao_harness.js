@@ -37,18 +37,36 @@ async function casos() {
             ? { ok: true, json: async () => ({ capabilities: ['integridade_impressao_v1'] }) }
             : { ok: true, blob: async () => arte };
         return { estado, modelo, num, fd, cliente, mudar(fn) { mudarConsulta = fn; },
-            executar() { return confirmarIntegridadeDoTrabalho(fd, 'http://localhost', estado, cliente); } };
+            executar(selecao, bancos) { return confirmarIntegridadeDoTrabalho(fd, 'http://localhost', estado, cliente, undefined, selecao, bancos); } };
+    }
+    {
+        const c = montar();
+        const banco = {id:'b1', csv_data:[{N:'A'}]};
+        globalThis.chamarBancosPedido = async () => ({bancos:[structuredClone(banco)],vinculos:[]});
+        // O painel global esta em outro pedido; a Montagem conserva sua copia.
+        c.estado.bancosDoPedido = [{id:'outro'}];
+        const preparados = {'123':{bancos:[structuredClone(banco)],vinculos:{}}};
+        await c.executar(undefined, preparados);
+        ok(c.fd.has('file'), 'Montagem confere banco do seu pedido sem usar banco da outra tela');
+        banco.csv_data[0].N='ALTERADO';
+        await recusa(()=>c.executar(undefined, preparados), 'banco do pedido mudou');
+        await recusa(()=>c.executar(undefined, {}), 'Banco não preparado');
     }
     {
         const c = montar();
         c.estado.osItens.os[0]._modeloOnline = structuredClone(c.modelo);
         let consultas = 0;
-        globalThis.PilotoOffline = { conferencia:async () => {
+        const selecaoMontagem = [{osId:'montagem',itemId:1}];
+        globalThis.PilotoOffline = { conferencia:async alvos => {
+            ok(JSON.stringify(alvos)===JSON.stringify(selecaoMontagem), 'confere alvos explicitos da Montagem');
             consultas++;
             return {tabelas:{pedidos_modelos:[structuredClone(c.modelo)],producao_numeracoes:[structuredClone(c.num)]},
                 bancos:() => ({bancos:[],vinculos:[]})};
         }};
-        globalThis.PilotoSelecao = {lerUrl:async () => ({ok:true,blob:async()=>arte})};
+        globalThis.PilotoSelecao = {lerUrl:async (url, opts, alvos) => {
+            ok(JSON.stringify(alvos)===JSON.stringify(selecaoMontagem), 'download usa alvos explicitos');
+            return {ok:true,blob:async()=>arte};
+        }};
         c.cliente.from = () => { throw Error('Internet proibida no trabalho local'); };
         const originalFetch = globalThis.fetch;
         globalThis.fetch = async url => {
@@ -57,11 +75,11 @@ async function casos() {
         };
         globalThis.chamarBancosPedido = () => { throw Error('Banco remoto proibido'); };
         try {
-            await c.executar();
+            await c.executar(selecaoMontagem);
             ok(consultas === 2, 'confere revisao local antes e depois dos arquivos sem rede');
             ok(c.fd.has('file') && c.fd.has('file_verso'), 'frente e verso locais chegam ao payload');
             c.modelo.quantidade = 99;
-            await recusa(() => c.executar(), 'dados do modelo mudaram');
+            await recusa(() => c.executar(selecaoMontagem), 'dados do modelo mudaram');
         } finally { delete globalThis.PilotoOffline; delete globalThis.PilotoSelecao; }
     }
     {

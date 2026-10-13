@@ -59,9 +59,15 @@
             popupConferencia = null;
         };
     }
-    function iniciarPedido(osId) {
-        liberados.clear();
-        consultas.clear();
+    function iniciarPedido(osId, preservarOutrosPedidos = false) {
+        if (preservarOutrosPedidos) {
+            for (const mapa of [liberados, consultas]) {
+                for (const id of mapa.keys()) if (id.startsWith(String(osId) + ':')) mapa.delete(id);
+            }
+        } else {
+            liberados.clear();
+            consultas.clear();
+        }
         pedidoAtual = {osId:String(osId)};
         state.multiArtesPdfCache = {};
         return pedidoAtual;
@@ -276,8 +282,8 @@
         }
         return fetch(url, {signal:AbortSignal.timeout(30000)});
     }
-    async function lerUrl(url) {
-        const alvos = state.selectedOSItems?.length > 1 ? state.selectedOSItems : [state.activeOSItem].filter(Boolean);
+    async function lerUrl(url, opcoes, selecaoExplicita) {
+        const alvos = selecaoExplicita || (state.selectedOSItems?.length > 1 ? state.selectedOSItems : [state.activeOSItem].filter(Boolean));
         validarTrabalho(alvos);
         const candidatos = [];
         for (const alvo of alvos) {
