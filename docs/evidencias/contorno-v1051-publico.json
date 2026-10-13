@@ -1,0 +1,72 @@
+[
+  {
+    "domain": "imposition.ai-ideal.com.br",
+    "file": "index.html",
+    "local": "4c843546eeee18bcca9de32e38d3f17cf649b09ef9783e8540db60a7576788c4",
+    "public": "4c843546eeee18bcca9de32e38d3f17cf649b09ef9783e8540db60a7576788c4",
+    "matches": true
+  },
+  {
+    "domain": "imposition.ai-ideal.com.br",
+    "file": "producao.html",
+    "local": "80c4baaed3a31aa869a0b4f9222e5a270b31da808acac9315d2be78e75631896",
+    "public": "80c4baaed3a31aa869a0b4f9222e5a270b31da808acac9315d2be78e75631896",
+    "matches": true
+  },
+  {
+    "domain": "imposition.ai-ideal.com.br",
+    "file": "cliente.html",
+    "local": "a9671c61d59e4bc2b44ab62e4cc489fd89497a1175076884fe4a33c56331b158",
+    "public": "a9671c61d59e4bc2b44ab62e4cc489fd89497a1175076884fe4a33c56331b158",
+    "matches": true
+  },
+  {
+    "domain": "imposition.ai-ideal.com.br",
+    "file": "script.js",
+    "local": "92db586e6669644b2efbae8f9ffa425f4cb056d8ac5dea3571cf8fbe5f3aa3ba",
+    "public": "92db586e6669644b2efbae8f9ffa425f4cb056d8ac5dea3571cf8fbe5f3aa3ba",
+    "matches": true
+  },
+  {
+    "domain": "imposition.ai-ideal.com.br",
+    "file": "texto-ajuste.js",
+    "local": "3b2e2961d2482dcc1d56b0036e6f9011fa7f466329e755b45a0ffe9456be5182",
+    "public": "3b2e2961d2482dcc1d56b0036e6f9011fa7f466329e755b45a0ffe9456be5182",
+    "matches": true
+  },
+  {
+    "domain": "imposicao.pages.dev",
+    "file": "index.html",
+    "local": "4c843546eeee18bcca9de32e38d3f17cf649b09ef9783e8540db60a7576788c4",
+    "public": "4c843546eeee18bcca9de32e38d3f17cf649b09ef9783e8540db60a7576788c4",
+    "matches": true
+  },
+  {
+    "domain": "imposicao.pages.dev",
+    "file": "producao.html",
+    "local": "80c4baaed3a31aa869a0b4f9222e5a270b31da808acac9315d2be78e75631896",
+    "public": "80c4baaed3a31aa869a0b4f9222e5a270b31da808acac9315d2be78e75631896",
+    "matches": true
+  },
+  {
+    "domain": "imposicao.pages.dev",
+    "file": "cliente.html",
+    "local": "a9671c61d59e4bc2b44ab62e4cc489fd89497a1175076884fe4a33c56331b158",
+    "public": "a9671c61d59e4bc2b44ab62e4cc489fd89497a1175076884fe4a33c56331b158",
+    "matches": true
+  },
+  {
+    "domain": "imposicao.pages.dev",
+    "file": "script.js",
+    "local": "92db586e6669644b2efbae8f9ffa425f4cb056d8ac5dea3571cf8fbe5f3aa3ba",
+    "public": "92db586e6669644b2efbae8f9ffa425f4cb056d8ac5dea3571cf8fbe5f3aa3ba",
+    "matches": true
+  },
+  {
+    "domain": "imposicao.pages.dev",
+    "file": "texto-ajuste.js",
+    "local": "3b2e2961d2482dcc1d56b0036e6f9011fa7f466329e755b45a0ffe9456be5182",
+    "public": "3b2e2961d2482dcc1d56b0036e6f9011fa7f466329e755b45a0ffe9456be5182",
+    "matches": true
+  }
+]

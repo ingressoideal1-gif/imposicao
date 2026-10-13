@@ -82,6 +82,15 @@
                 if(cursorCentral) botao(body,'Voltar aos recentes',async()=>{cursorCentral=null;await atualizar();});
             } else if(aba==='frota') {
                 lista=d;
+                el('h3','Diagnósticos recentes das estações',body);
+                el('p','Até 20 erros recentes por estação, enviados com o sinal de presença. Sem internet, ficam locais até a reconexão. Esta consulta não representa um histórico central completo. Confira o horário do último sinal.',body);
+                d.forEach(r=>{const dg=r.printers_json?.gestao?.diagnosticos;
+                    if(!dg) el('p',(r.apelido||r.name)+': versão sem diagnóstico estruturado.',body);
+                    else if(dg.indisponivel || dg.descartados || dg.falhas_gravacao) el('p',(r.apelido||r.name)+': coleta incompleta; descartados '+(dg.descartados||0)+', falhas de gravação '+(dg.falhas_gravacao||0)+'.',body);
+                    else if(!dg.carregado) el('p',(r.apelido||r.name)+': carregando diagnóstico local.',body);
+                });
+                tabela([['Estação','estacao'],['Último sinal',r=>quando(r.sinal)],['Erro em',r=>quando(r.quando)],['Código','id'],['Categoria','codigo'],['Etapa','etapa'],['Pedido','pedido'],['Modelo','modelo'],['HTTP de origem','http_origem'],['Motivo HTTP','motivo_http'],['Identificação enviada','estacao_enviada'],['Resposta','formato_resposta'],['Servidor','servidor_http'],['Windows build','windows_build'],['Edição','windows_edicao'],['Proxy HTTPS',r=>r.proxy_https_configurado===true?'Configurado':r.proxy_https_configurado===false?'Não configurado':'Não informado'],['Rede','transporte'],['Tipo','tipo'],['Origem','origem'],['Duração (ms)','duracao_ms'],['Versão do erro','versao']],
+                    d.flatMap(r=>(r.printers_json?.gestao?.diagnosticos?.recentes||[]).map(e=>({...e,estacao:r.apelido||r.name,sinal:r.last_seen}))),body);
                 el('p','Presença central: atualização a cada 30 segundos. Versões antigas podem não informar gestão. O Piloto não recebe a fila remota.',body);
                 tabela([['Estação',r=>r.apelido||r.name],['Canal',r=>r.printers_json?.canal||'não informado'],['Presença',r=>!r.last_seen?'sem sinal':Date.now()-Date.parse(r.last_seen)<120000?'online':'sem sinal recente'],['Painel HTTP',r=>r.printers_json?.gestao?.painel?.estado||'não monitorado'],['Histórico central',r=>r.printers_json?.gestao?.historico_central?.estado||'não disponível nesta versão'],['Produto oficial',r=>r.printers_json?.produto_oficial===true?'sim':'ainda não migrado'],['Último sinal',r=>quando(r.last_seen)],['Versão',r=>r.printers_json?.version||'não informada'],['Disco livre',r=>tamanho(r.printers_json?.armazenamento?.disco_temp_livre_bytes)],['Fila',r=>JSON.stringify(r.printers_json?.gestao?.fila||'não monitorada')]],d,body);
                 d.forEach(r=>{const a=r.printers_json?.armazenamento; if(a?.disco_temp_total_bytes && (a.disco_temp_livre_bytes/a.disco_temp_total_bytes<0.1 || a.disco_temp_livre_bytes<5368709120))el('p','Atenção: pouco espaço em '+(r.apelido||r.name),body);});

@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "data": "2026-10-13",
+  "estado": "fontes_locais_validadas",
+  "publicado": false,
+  "instalado": false,
+  "impressao_fisica": false,
+  "fontes_comuns": [
+    {
+      "arquivo": "engine.py",
+      "sha256": "121b2afddf6a600fed952a9106b115d8583b0d78d872ac77d1af106c50f5ae4e"
+    },
+    {
+      "arquivo": "print_service.py",
+      "sha256": "e92184604ec020d72102c6fbd11bcc16881497e0f1b12386d38843817f89f472"
+    },
+    {
+      "arquivo": "hotfolder.py",
+      "sha256": "4c111e171613dac2f87d171bf41725c19cb349675d6886abcc5884f43bafb81e"
+    },
+    {
+      "arquivo": "frontend/texto-ajuste.js",
+      "sha256": "c23ae7c5fb8dc22ab19a65e52b2d88fe9d9878851c2fcb6befd22c1e0c91892f"
+    },
+    {
+      "arquivo": "frontend/capa-layout.js",
+      "sha256": "afde775da957cf728d2106346a10202db8cb911157e2742f8a053cf42fa9e110"
+    },
+    {
+      "arquivo": "frontend/montagem.js",
+      "sha256": "3e417253df6ac5890f9c2b98f82266cd3b46430f3ae57c78a73f59adf000c362"
+    },
+    {
+      "arquivo": "integridade_impressao.py",
+      "sha256": "8aa95438b61fae638564f8229384ec8d30d45f99b84284ce96048c81d88e7fcb"
+    },
+    {
+      "arquivo": "agent_worker.py",
+      "sha256": "b4b1cb755ed41c8020284be49b9bfc5fe1f78e9effa22d75fce40809f6850826"
+    },
+    {
+      "arquivo": "art_cache.py",
+      "sha256": "19810059693c12fa6cbbdaae533e91d242dfcb591cff872acae1d7db326c7175"
+    },
+    {
+      "arquivo": "antecipacao_local.py",
+      "sha256": "fc33d3979b8f2b1bba2a71b0999522730ecef7777b89dbf8e4c3692db2151b8a"
+    },
+    {
+      "arquivo": "ferramentas/publicar_pacote_oficial.py",
+      "sha256": "eb6c02c4775b611c03944ae05ae449721baadd030203485085c35ea9a99ce275"
+    }
+  ],
+  "validacao": {
+    "oficial": {
+      "base_git": "3259cfb204120a88b419f2c2d4dc32f4b4ac72fb",
+      "perfis": {
+        "producao": {
+          "pytest_aprovados": 823,
+          "ignorados": 2,
+          "avisos": 1,
+          "subtestes": 2,
+          "harnesses_js": 19,
+          "segundos": 112.37,
+          "log": "dist/compatibilidade/concluido-producao.log",
+          "log_sha256": "59cf6e1b08dd22803611d85941546b2ef5c098d9c42ac8990f3297a3d9caefab"
+        },
+        "piloto": {
+          "pytest_aprovados": 823,
+          "ignorados": 2,
+          "avisos": 1,
+          "subtestes": 2,
+          "harnesses_js": 19,
+          "segundos": 110.328,
+          "log": "dist/compatibilidade/concluido-piloto.log",
+          "log_sha256": "6803f8d9d4d585d4bd004126c39aa9c7715ab9e5aa8f576b18b14545e00adba6"
+        },
+        "oficial": {
+          "pytest_aprovados": 823,
+          "ignorados": 2,
+          "avisos": 1,
+          "subtestes": 2,
+          "harnesses_js": 19,
+          "segundos": 103.829,
+          "log": "dist/compatibilidade/concluido-oficial.log",
+          "log_sha256": "c4681273a452e892781ed6dbca3bc5b8cee7b129080801af974ff875390eea5a"
+        }
+      },
+      "portaria_browser": 61,
+      "cache_diagnosticos": 26,
+      "hotfolder": 47,
+      "edge_functions": 343,
+      "motivo_ignorados": "Dois casos dependem do qr_ideal_pool.bin real ausente; contratos QR sinteticos aprovados.",
+      "aviso": "Depreciacao Starlette/httpx preexistente."
+    },
+    "teste": {
+      "base_git": "529bfd4e3ee051b99e9be926cdc993ea058896ad",
+      "perfis": {
+        "producao": {
+          "pytest_aprovados": 939,
+          "ignorados": 2,
+          "avisos": 1,
+          "subtestes": 2,
+          "harnesses_js": 19,
+          "segundos": 119.298,
+          "log": "dist/compatibilidade/concluido-producao.log",
+          "log_sha256": "465976223ee6fdd54e90b5668bd091acf9e4b1eb966e6d55d75e426c42c32ac5"
+        },
+        "piloto": {
+          "pytest_aprovados": 939,
+          "ignorados": 2,
+          "avisos": 1,
+          "subtestes": 2,
+          "harnesses_js": 19,
+          "segundos": 115.99,
+          "log": "dist/compatibilidade/concluido-piloto.log",
+          "log_sha256": "a1b53fd3b260f2fc122edb58ca5e26c921a5c3db68db19f6538c0c6d3207edb0"
+        },
+        "oficial": {
+          "pytest_aprovados": 939,
+          "ignorados": 2,
+          "avisos": 1,
+          "subtestes": 2,
+          "harnesses_js": 19,
+          "segundos": 111.302,
+          "log": "dist/compatibilidade/concluido-oficial.log",
+          "log_sha256": "ec37bdd9e67a0cebb01e68ebec5bb3614cd7ccaded2e51ef586ed1ebdeef8648"
+        }
+      },
+      "portaria_browser": 61,
+      "cache_diagnosticos": 26,
+      "hotfolder": 47,
+      "edge_functions": 349,
+      "motivo_ignorados": "Dois casos dependem do qr_ideal_pool.bin real ausente; contratos QR sinteticos aprovados.",
+      "aviso": "Depreciacao Starlette/httpx preexistente."
+    }
+  }
+}

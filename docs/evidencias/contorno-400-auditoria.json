@@ -1,0 +1,11 @@
+{
+  "version": "1.2.400",
+  "bytes": 194985984,
+  "sha256": "793c9928ec23a044308c3f3f1712f273fcc46136b13a0c4d76cf90e7acfa2798",
+  "engine_contorno": true,
+  "painel": {
+    "frontend/script.js": "0a88cea940a425fa344faf46a456dfda8bec69f2998974cb97e381476c938b90",
+    "frontend/texto-ajuste.js": "c23ae7c5fb8dc22ab19a65e52b2d88fe9d9878851c2fcb6befd22c1e0c91892f"
+  },
+  "dlls": true
+}

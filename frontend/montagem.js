@@ -4130,6 +4130,26 @@ function abrirPdfDaMontagemNaTela(blob, nome) {
  * nenhuma, que é o defeito mais silencioso deste sistema: sai número
  * sequencial no lugar do nome, sem erro em tela.
  */
+async function _mtgPrepararPedidoLocal(osId) {
+    if (!window.PilotoSelecao?.carregarPedidoLocal) return false;
+    if (!findOSInState(osId) && window.PilotoOffline) await window.PilotoOffline.carregarOrdens();
+    if (!findOSInState(osId)) throw Error('Pedido indisponível na lista local. Atualize a lista e reabra a Montagem.');
+    const contexto = window.PilotoSelecao.iniciarPedido(osId, true);
+    const atual = () => state.montagem.gerando;
+    const snapshotLocal = await window.PilotoSelecao.carregarPedidoLocal(osId, atual, contexto);
+    if (!snapshotLocal || !atual()) throw Error('Preparação da Montagem interrompida. Gere novamente.');
+    mesclarNumeracoesNoCatalogo(state.numeracoes, structuredClone(snapshotLocal.numeracoes).map(normalizarNumeracaoLida));
+    const ok = await loadOSItens(osId, {atualizar:true, exigirModelos:true, snapshotLocal});
+    if (ok === false || !atual()) throw Error('Não foi possível carregar os modelos locais da Montagem.');
+    if (window.PilotoOffline) await window.PilotoOffline.aplicarConfirmacoes(osId);
+    await window.PilotoSelecao.conferirPedido(osId, atual, contexto);
+    if (!atual()) throw Error('Preparação da Montagem interrompida.');
+    // Nao reutilizar a marca de bancos de outra abertura/revisao.
+    state._bancosPedidoDe = null;
+    if (state._bancosConsultados) delete state._bancosConsultados[String(osId)];
+    return true;
+}
+
 async function prepararArtesDaMontagem(modelos) {
     if (typeof arteDoModeloParaFolha !== 'function' || typeof arteParaOMotor !== 'function') {
         throw new Error('O painel desta estação está desatualizado: falta o construtor de arte '
@@ -4138,6 +4158,7 @@ async function prepararArtesDaMontagem(modelos) {
 
     const numero = numeroDaMontagemSaneado(state.montagem.numero);
     const artes = new Array((modelos || []).length).fill(null);
+    artes.bancosPorPedido = {};
     const ordemDosPedidos = [];
     const indicesPorPedido = {};
     (modelos || []).forEach((m, j) => {
@@ -4147,6 +4168,7 @@ async function prepararArtesDaMontagem(modelos) {
     });
 
     for (const osId of ordemDosPedidos) {
+        const preparadoLocal = await _mtgPrepararPedidoLocal(osId);
         if (!(state.osItens[osId] || []).length && typeof loadOSItens === 'function') {
             try { await loadOSItens(osId); } catch (e) { console.warn('[montagem]', e); }
         }
@@ -4159,7 +4181,7 @@ async function prepararArtesDaMontagem(modelos) {
             return (typeof numeracaoIdDoItem === 'function')
                 ? numeracaoIdDoItem(it) : (it.amostra_num_id || it.numeracao_id);
         }).filter(Boolean);
-        if (typeof garantirCsvDoTrabalho === 'function') {
+        if (!preparadoLocal && typeof garantirCsvDoTrabalho === 'function') {
             await garantirCsvDoTrabalho(ids);
         }
 
@@ -4174,6 +4196,12 @@ async function prepararArtesDaMontagem(modelos) {
             throw new Error('Não consegui confirmar os bancos de dados do pedido ' + _mtgNumeroDoPedido(osId) + '. Confira a conexão e tente novamente.');
         }
         itens = state.osItens[osId] || [];
+        const numeroPedido = idIntDoPedido(osId);
+        if (!numeroPedido) throw Error('Número do pedido indisponível para conferir os bancos.');
+        artes.bancosPorPedido[String(numeroPedido)] = {
+            bancos: structuredClone(state.bancosDoPedido || []),
+            vinculos: structuredClone(state.vinculosDeBanco || {})
+        };
 
         for (const j of indicesPorPedido[osId]) {
             const m = modelos[j];
@@ -4388,11 +4416,14 @@ async function gerarPdfDaMontagem() {
         }
 
         const payload = payloadDaMontagem(celulas, modelos, artes);
+        const selecaoMontagem = modelos.map(m => ({osId:m.osId, itemId:m.itemId}));
+        if (window.PilotoSelecao) payload.piloto_recursos = window.PilotoSelecao.referencias(selecaoMontagem);
         payload.suggested_filename = nome;
         const fd = new FormData();
         fd.append('payload', JSON.stringify(payload));
 
-        await confirmarIntegridadeDoTrabalho(fd, base, state, supabaseClient);
+        await confirmarIntegridadeDoTrabalho(fd, base, state, supabaseClient, undefined,
+            selecaoMontagem, artes.bancosPorPedido);
         const resp = await fetch(base + '/api/impose', { method: 'POST', body: fd });
         if (!resp.ok) {
             const detalhe = (typeof descreverErroHttp === 'function')
@@ -4439,12 +4470,17 @@ async function gerarPdfDaMontagem() {
 
 /** A estação desta máquina, ou null. Sem plano B na nuvem, de propósito. */
 async function _mtgEstacao() {
-    for (const base of ['http://localhost:8080', 'http://127.0.0.1:9000']) {
+    const local = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
+        && ['9001', '9000', '8080'].includes(window.location.port);
+    // O painel local pertence a esta instancia; nao encaminhar a outra versao.
+    const bases = local ? [window.location.origin]
+        : ['http://127.0.0.1:9001', 'http://localhost:8080', 'http://127.0.0.1:9000'];
+    for (const base of bases) {
         try {
             const r = await fetch(base + '/api/status', { signal: AbortSignal.timeout(2500) });
             if (!r.ok) continue;
             const d = await r.json();
-            if (d && d.onde !== 'nuvem') return base;
+            if (d && d.version && d.onde !== 'nuvem') return base;
         } catch (_) {}
     }
     return null;

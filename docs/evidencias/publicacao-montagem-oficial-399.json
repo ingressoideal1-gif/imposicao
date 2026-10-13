@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "produto": "NewProdPilotoOficial",
+  "version": "1.2.399",
+  "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.2.399.msi",
+  "sha256": "80ecc00732e2c90a0c510c43acad53ec45362bc9dc5846ee1b4711736aa5d84f",
+  "bytes": 194985984,
+  "size": 194985984,
+  "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+  "estacoes": [
+    "LASER-04",
+    "TEX-01",
+    "FLEXO",
+    "LAPTOP-9BSK81S0",
+    "GUSTAVO-PROD",
+    "LASER-02",
+    "ACABAMENTO",
+    "DESKTOP-PM6TG1B"
+  ],
+  "download_conferido": true,
+  "ativado": true,
+  "bootstrap_legado": true
+}

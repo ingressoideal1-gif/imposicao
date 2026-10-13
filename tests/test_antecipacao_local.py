@@ -146,7 +146,8 @@ def test_etag_fraco_nao_substitui_hash_dos_bytes(tmp_path):
     p.preparar(m, {}); agora[0] = 301
     p._atualizar_ao_abrir.add(('teste','10',m['revisao']))
     p.preparar(m, {})
-    assert chamadas == [None, None]
+    # Validador fraco pode revalidar HTTP, mas nunca substitui o SHA local.
+    assert chamadas == [None, 'W/"fraco"']
 
 
 @pytest.mark.parametrize('tamanho, limite_total, falha', [(16, 32, False), (17, 64, True), (16, 31, True)])
