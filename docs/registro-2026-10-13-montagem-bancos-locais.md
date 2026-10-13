@@ -26,3 +26,16 @@ passou com 74 casos no teste e 61 no padrao. Nenhuma impressao fisica realizada.
 
 Artefatos 1.2.399 preservam capas e deteccao de porta 9001. Nao encerrar agente
 com trabalho em curso. Publicacao nao comprova instalacao ou PDF real.
+
+Validacao completa: padrao passou nos perfis producao, piloto e oficial, com
+543 testes e 2 ignorados por perfil, alem dos harnesses JavaScript. No canal
+teste, ambos os perfis tiveram 544 aprovados, 2 ignorados e 4 falhas ja
+existentes: identidade/promocao do perfil oficial (3) e lista de sincronismo
+de impressao-teste-modelo.js (1). Nao foram suprimidas nem corrigidas nesta
+tarefa. Os testes especificos da Montagem passaram nos dois canais. Auditoria
+do MSI conferiu versao, motor, DLLs e os quatro arquivos alterados do painel.
+
+Publicacao concluida: MSI baixado integralmente e SHA-256/tamanho conferidos;
+manifestos ativados e relidos na versao 1.2.399, mantendo as estacoes de cada
+canal. Nenhuma instalacao .399 nem geracao real na TEX foi comprovada nesta
+entrega. Reabrir o painel apos atualizar e validar a montagem reportada.
