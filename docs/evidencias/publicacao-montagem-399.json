@@ -1,0 +1,17 @@
+{
+  "manifesto": {
+    "schema": 1,
+    "produto": "NewProdPilotoTeste",
+    "version": "1.2.399",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.399.msi",
+    "bytes": 196669440,
+    "sha256": "6ee0bdaaa69f0686a2554dad25b710a05a9c0d2d91db9f36399696f3a57e8a99",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME"
+    ],
+    "notes": "Montagem prepara pedidos locais e confere bancos por pedido, sem usar selecao ou banco de outra tela; preserva validacoes."
+  },
+  "download_completo_conferido": true,
+  "instalacao_verificada": false
+}
