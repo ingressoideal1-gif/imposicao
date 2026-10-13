@@ -13,5 +13,16 @@
     "notes": "Confere pedidos mistos com produtos de estoque sem exigir arquivos de impressao para os itens de prateleira; preserva integridade dos modelos."
   },
   "download_completo_conferido": true,
-  "instalacao_verificada": false
+  "instalacao_verificada": {
+    "estacao": "PC-JR-HOME",
+    "version": "NewProd 1.2.395-teste.1",
+    "msi_exit": 0,
+    "executavel_sha256_confere": true,
+    "script_servido_conferido": true,
+    "configuracoes_preservadas": true,
+    "spool_antes": 0,
+    "spool_depois": 0,
+    "backup": "%LOCALAPPDATA%/NewProd Agent/backups/pedido-misto-395-20261013",
+    "previa_13020_verificada": false
+  }
 }
