@@ -1,0 +1,34 @@
+{
+  "canal": "Teste",
+  "versao": "1.2.401-teste.1",
+  "commit": "e738516c80871d2e085b5507e837c8986e0211e5",
+  "msi": "NewProdPiloto_Teste_v1.2.401.msi",
+  "bytes": 196669440,
+  "sha256": "7804721b2534996eafccc980be29cfcb63fde9f3f7ea6d99ac11a8f51d2b73e6",
+  "exe_sha256": "abb1168dbdf755524ee321787f7fc05438ddd81bdbc0327505ce3c3536483ecb",
+  "propriedades_msi": {
+    "ProductVersion": "1.2.401",
+    "ProductName": "NewProd Piloto Teste",
+    "ProductCode": "{051AC0D0-FCD6-47F3-9897-5CC923DA0989}",
+    "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}"
+  },
+  "modulos_conferidos": [
+    "engine",
+    "print_service",
+    "app",
+    "agent_version",
+    "manifesto_oficial",
+    "security_config",
+    "agent_worker",
+    "art_cache",
+    "antecipacao_local"
+  ],
+  "painel_arquivos_conferidos": 375,
+  "dlls_conferidas": [
+    "pythonwin/win32ui.pyd",
+    "pythonwin/mfc140u.dll",
+    "pythonwin/VCRUNTIME140.dll",
+    "pythonwin/VCRUNTIME140_1.dll"
+  ],
+  "instalacao_executada": false
+}

@@ -1,0 +1,131 @@
+{
+  "verificado_em": "2026-10-13T22:17:12Z",
+  "resultados": [
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/arte-de-impressao.js",
+      "sha256_local": "361e65e97bb90fa4773a41c7164a46f3a7cc729f335e0889be2997c85fc16f1a",
+      "sha256_publico": "361e65e97bb90fa4773a41c7164a46f3a7cc729f335e0889be2997c85fc16f1a",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/cliente.html",
+      "sha256_local": "7281933478a619678d1d4847bb3567c5ce98d8ff8820095a5c14b9e97b3284f7",
+      "sha256_publico": "7281933478a619678d1d4847bb3567c5ce98d8ff8820095a5c14b9e97b3284f7",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/gestao-estacoes.js",
+      "sha256_local": "14b62006dfa828ab2991e0a22c01a3aa14c923a54d7399a52fa5b1efbf19b569",
+      "sha256_publico": "14b62006dfa828ab2991e0a22c01a3aa14c923a54d7399a52fa5b1efbf19b569",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/index.html",
+      "sha256_local": "a846cda40d4951b0bca49e6e4e7ae0dcd09bb6e48b808a74ab8c4c2dcc168813",
+      "sha256_publico": "a846cda40d4951b0bca49e6e4e7ae0dcd09bb6e48b808a74ab8c4c2dcc168813",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/montagem.js",
+      "sha256_local": "95316656ca73e228d8081337a38258171fc16d7dab2f4bd19e2a35330abfee41",
+      "sha256_publico": "95316656ca73e228d8081337a38258171fc16d7dab2f4bd19e2a35330abfee41",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/pedido.js",
+      "sha256_local": "55c7973be6105acfb1f815a6849f4c93b24406a876368ade8701b6033bc41806",
+      "sha256_publico": "55c7973be6105acfb1f815a6849f4c93b24406a876368ade8701b6033bc41806",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/producao.html",
+      "sha256_local": "fb3d76e16cc2cd611156e3c28ee051dc6da919cd298f76cbd4046c0379c65f12",
+      "sha256_publico": "fb3d76e16cc2cd611156e3c28ee051dc6da919cd298f76cbd4046c0379c65f12",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/script.js",
+      "sha256_local": "83c74c5c33c4f6df1c6e3d0fd8a9a3e78eda89237588c1f4537c11598c674a5f",
+      "sha256_publico": "83c74c5c33c4f6df1c6e3d0fd8a9a3e78eda89237588c1f4537c11598c674a5f",
+      "confere": true
+    },
+    {
+      "domain": "https://imposition.ai-ideal.com.br",
+      "arquivo": "frontend/selecao-piloto.js",
+      "sha256_local": "aa76458f91c0d8a1644567e45037cb4aee8837a26b642fdaed4cf73c93fcaaa7",
+      "sha256_publico": "aa76458f91c0d8a1644567e45037cb4aee8837a26b642fdaed4cf73c93fcaaa7",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/arte-de-impressao.js",
+      "sha256_local": "361e65e97bb90fa4773a41c7164a46f3a7cc729f335e0889be2997c85fc16f1a",
+      "sha256_publico": "361e65e97bb90fa4773a41c7164a46f3a7cc729f335e0889be2997c85fc16f1a",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/cliente.html",
+      "sha256_local": "7281933478a619678d1d4847bb3567c5ce98d8ff8820095a5c14b9e97b3284f7",
+      "sha256_publico": "7281933478a619678d1d4847bb3567c5ce98d8ff8820095a5c14b9e97b3284f7",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/gestao-estacoes.js",
+      "sha256_local": "14b62006dfa828ab2991e0a22c01a3aa14c923a54d7399a52fa5b1efbf19b569",
+      "sha256_publico": "14b62006dfa828ab2991e0a22c01a3aa14c923a54d7399a52fa5b1efbf19b569",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/index.html",
+      "sha256_local": "a846cda40d4951b0bca49e6e4e7ae0dcd09bb6e48b808a74ab8c4c2dcc168813",
+      "sha256_publico": "a846cda40d4951b0bca49e6e4e7ae0dcd09bb6e48b808a74ab8c4c2dcc168813",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/montagem.js",
+      "sha256_local": "95316656ca73e228d8081337a38258171fc16d7dab2f4bd19e2a35330abfee41",
+      "sha256_publico": "95316656ca73e228d8081337a38258171fc16d7dab2f4bd19e2a35330abfee41",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/pedido.js",
+      "sha256_local": "55c7973be6105acfb1f815a6849f4c93b24406a876368ade8701b6033bc41806",
+      "sha256_publico": "55c7973be6105acfb1f815a6849f4c93b24406a876368ade8701b6033bc41806",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/producao.html",
+      "sha256_local": "fb3d76e16cc2cd611156e3c28ee051dc6da919cd298f76cbd4046c0379c65f12",
+      "sha256_publico": "fb3d76e16cc2cd611156e3c28ee051dc6da919cd298f76cbd4046c0379c65f12",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/script.js",
+      "sha256_local": "83c74c5c33c4f6df1c6e3d0fd8a9a3e78eda89237588c1f4537c11598c674a5f",
+      "sha256_publico": "83c74c5c33c4f6df1c6e3d0fd8a9a3e78eda89237588c1f4537c11598c674a5f",
+      "confere": true
+    },
+    {
+      "domain": "https://imposicao.pages.dev",
+      "arquivo": "frontend/selecao-piloto.js",
+      "sha256_local": "aa76458f91c0d8a1644567e45037cb4aee8837a26b642fdaed4cf73c93fcaaa7",
+      "sha256_publico": "aa76458f91c0d8a1644567e45037cb4aee8837a26b642fdaed4cf73c93fcaaa7",
+      "confere": true
+    }
+  ]
+}
