@@ -1,0 +1,36 @@
+{
+  "funcao": "piloto-local",
+  "versao": 9,
+  "fontes_conferidas": 12,
+  "arquivo_alterado": "_compartilhado/piloto_estacao.ts",
+  "testes_piloto": 31,
+  "testes_conjunto_publicado": 10,
+  "consultas": [
+    {
+      "estacao": "Gustavo-Prod",
+      "pedido": "23381",
+      "http": 200,
+      "modelos": 21
+    },
+    {
+      "estacao": "GUSTAVO-PROD",
+      "pedido": "23381",
+      "http": 200,
+      "modelos": 21
+    },
+    {
+      "estacao": "gustavo-prod",
+      "pedido": "23435",
+      "http": 200,
+      "modelos": 2
+    },
+    {
+      "estacao": "ESTACAO-NAO-AUTORIZADA-VALIDACAO",
+      "pedido": "23381",
+      "http": 403,
+      "modelos": null
+    }
+  ],
+  "origem_validacao": "Junior; abertura presencial na Gustavo ainda pendente",
+  "sem_alteracao_de_cadastros": true
+}
