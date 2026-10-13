@@ -1,0 +1,26 @@
+{
+  "version": {
+    "version": "NewProd 1.2.397-teste.1",
+    "canal": "piloto",
+    "commit": "local_agent_NewProd 1.2.397-teste.1",
+    "desc": "strict_assembly_v2",
+    "engine": "fastpath+garbage4",
+    "capabilities": [
+      "multi_artes_pdf_duplex_unico",
+      "integridade_impressao_v1",
+      "mapa_teatro_blocos_v1",
+      "teatro_vertical_modelo_v1",
+      "teatro_capas_fila_v1",
+      "teatro_capa_descricao_atual_v1",
+      "teatro_snapshot_v1",
+      "qr_ideal_contrato_v2"
+    ]
+  },
+  "msi_exit": 0,
+  "exe_hash_confere": true,
+  "configuracoes_preservadas": true,
+  "spool_antes": 0,
+  "spool_depois": 0,
+  "backup": "C:\\Users\\Junior\\AppData\\Local\\NewProd Agent\\backups\\capas-397-20261013-154316",
+  "impressao_fisica_verificada": false
+}

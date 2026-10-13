@@ -39,3 +39,10 @@ SHA-256 `193f5241b8844a355d6fe30fae71c72dd656c9649e19e510ae38cc6411ae5d4a`.
 Produto MSI 1.2.397, bytecode do motor e 375 arquivos do painel conferidos.
 Evidência: `evidencias/publicacao-capas-camarote-397.json`. Disponibilidade
 do pacote não comprova instalação em nenhuma estação.
+
+Posteriormente o usuário autorizou atualizar o Junior. Instalado o MSI de teste
+1.2.397 com retorno 0, agente previamente fechado e spool vazio antes/depois.
+Backup protegido e restaurável criado antes da instalação. Executável instalado
+idêntico ao build e hashes das configurações preservados. Agente reiniciado e
+API local confirmou NewProd 1.2.397-teste.1. Evidência em
+evidencias/instalacao-junior-397.json. Impressão física ainda não verificada.
