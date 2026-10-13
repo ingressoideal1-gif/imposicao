@@ -14,7 +14,7 @@
  *
  * Rodar: npx deno test --allow-env _compartilhado/relatorio_test.ts
  */
-import { assertEquals } from "jsr:@std/assert@1";
+import { deepStrictEqual as assertEquals } from "node:assert";
 import {
   dashboard,
   leiturasDoEvento,
@@ -41,6 +41,7 @@ async function comBanco<T>(
   tabelas: Record<string, any[]>,
   contagens: Record<string, number>,
   tarefa: () => Promise<T>,
+  metricas: Record<string, unknown> = {},
 ): Promise<{ resultado: T; idas: Ida[] }> {
   const idas: Ida[] = [];
   Deno.env.set("SUPABASE_URL", "https://banco.de.mesa");
@@ -50,6 +51,10 @@ async function comBanco<T>(
     const contagem = (init?.headers as Record<string, string>)?.Prefer === "count=exact";
     idas.push({ caminho, contagem });
 
+    if (caminho === "rpc/producao_acesso_metricas") {
+      return Promise.resolve(new Response(JSON.stringify({ entraram: 0, sairam: 0, recusadas: 0,
+        ingressos_utilizados: 0, publicados_utilizados: 0, por_setor: [], recusas: [], ...metricas })));
+    }
     if (contagem) {
       const chave = Object.keys(contagens).find((k) => caminho.includes(k));
       const total = chave === undefined ? 0 : contagens[chave];
@@ -175,15 +180,17 @@ Deno.test("dashboard: o contratado chega pronto, e nao e recalculado aqui", asyn
   assertEquals(resultado.publico.contratado, 777);
 });
 
-Deno.test("dashboard: presentes = entraram - sairam, nunca negativo", async () => {
+Deno.test("dashboard: passagens não são presença física", async () => {
   const { resultado } = await comBanco(
     {},
-    { "resultado=eq.permitido&tipo=eq.entrada": 10, "resultado=eq.permitido&tipo=eq.saida": 4 },
+    {},
     () => dashboard("e1", SETORES, 150),
+    { entraram: 10, sairam: 4, ingressos_utilizados: 3 },
   );
   assertEquals(resultado.publico.entraram, 10);
   assertEquals(resultado.publico.sairam, 4);
-  assertEquals(resultado.publico.presentes, 6);
+  assertEquals(resultado.publico.presentes, null);
+  assertEquals(resultado.publico.ingressos_utilizados, 3);
 });
 
 Deno.test("dashboard: sem ninguem publicado, o comparecimento e nulo e nao zero", async () => {
@@ -193,7 +200,7 @@ Deno.test("dashboard: sem ninguem publicado, o comparecimento e nulo e nao zero"
   assertEquals(resultado.publico.comparecimento_pct, null);
 });
 
-Deno.test("dashboard: por setor e por hora saem da MESMA varredura de leituras", async () => {
+Deno.test("dashboard: setores e recusas vêm da agregação; horas da amostra paginada", async () => {
   const { resultado, idas } = await comBanco(
     {
       "producao_acesso_leituras": [
@@ -205,6 +212,8 @@ Deno.test("dashboard: por setor e por hora saem da MESMA varredura de leituras",
     },
     {},
     () => dashboard("e1", SETORES, 150),
+    { por_setor: [{setor_id:"vip",passagens:2,utilizados:2},{setor_id:"cam",passagens:1,utilizados:1}],
+      recusas:[{motivo:"ja_entrou",quantas:1}] },
   );
   assertEquals(
     resultado.por_setor.map((s: any) => [s.nome, s.entraram]),

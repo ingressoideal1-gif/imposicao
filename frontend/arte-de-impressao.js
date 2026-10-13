@@ -175,6 +175,30 @@
         const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
         return Array.from(new Uint8Array(hash), x => x.toString(16).padStart(2, '0')).join('');
     }
+    // Capacidade do motor, e nao a versao da tela, determina o PDF gerado.
+    function conferirRecursosDoMotor(dados, info) {
+        const capacidades = Array.isArray(info?.capabilities) ? info.capabilities : [];
+        const versao = String(info?.version || '').replace(/^NewProd\s+/i, '');
+        const artes = dados.multi_artes || [];
+        const alvos = artes.length ? artes : [dados];
+        const contorno = alvos.some(a => [a.numeracao, a.numeracao_2].some(n =>
+            (n?.elements || []).some(e => e?.type === 'TEXT' && e.database_text
+                && Number(e.text_stroke_mm) > 0)));
+        // A .400 oficial publicada ja implementa contorno, mas nao anuncia a
+        // capacidade. Nao extrapolar essa excecao para outros canais/versoes.
+        if (contorno && !capacidades.includes('texto_banco_contorno_v1') && versao !== '1.2.400') {
+            throw new Error('Atualize o NewProd desta estação para gerar o contorno do Texto — Banco de Dados.');
+        }
+        const modeloSintetico = !artes.length && (dados.schema === 'multi_artes'
+            || (dados.schema === 'cut_stack' && dados.cut_stack_mode === 'strict_assembly'));
+        const escalaAlterada = ['arte_escala_h', 'arte_escala_v'].some(k =>
+            dados[k] != null && Number(dados[k]) !== 100);
+        if (modeloSintetico && escalaAlterada && !capacidades.includes('escala_modelo_blocos_v1')
+                && versao !== '1.2.399-teste.1') {
+            throw new Error('Atualize o NewProd desta estação para preservar a escala da arte na geração em blocos.');
+        }
+    }
+
     async function confirmarIntegridadeDoTrabalho(fd, base, estado, cliente, signal, selecaoExplicita, bancosPorPedido) {
         if (!globalThis.crypto?.subtle || !globalThis.crypto?.randomUUID) {
             throw new Error('Abra o painel pelo endereço local do NewProd ou por HTTPS para conferir a integridade dos arquivos.');
@@ -197,6 +221,7 @@
                 throw new Error('Atualize o NewProd desta estação: validação integral da impressão indisponível.');
             }
             const dados = JSON.parse(fd.get('payload'));
+            conferirRecursosDoMotor(dados, info);
             const artes = dados.multi_artes || [];
             const usaQrIdeal = (artes.length ? artes : [dados]).some(a =>
                 [a.numeracao, a.numeracao_2].some(n => (n?.elements || []).some(e => e?.type === 'QR_IDEAL')));
@@ -489,6 +514,7 @@
         };
     }
     raiz.criarConferenciaStream = criarConferenciaStream;
+    raiz.conferirRecursosDoMotor = conferirRecursosDoMotor;
     raiz.confirmarIntegridadeDoTrabalho = confirmarIntegridadeDoTrabalho;
     raiz.hashArquivoImpressao = hashArquivo;
 

@@ -767,11 +767,18 @@ def _send_print_job_windows(printer_name, pdf_path, options, job_title="impressa
     frente e verso. São dois campos homônimos com significados diferentes.
 
     O usuário pode selecionar o modo via options["print_mode"]:
-      - "pdf_raw" (padrão) → envia PDF direto ao spooler (requer impressora com interpretador PDF)
+      - "pdf_raw" → envia PDF direto ao spooler (requer impressora com interpretador PDF)
       - "ghostscript" → converte PDF→PS vetorial via Ghostscript (qualquer impressora PS)
-      - "gdi" → rasteriza para imagem via GDI (fallback, perde qualidade vetorial)
+      - "gdi" (padrão) → rasteriza para imagem via GDI
       - "auto" → tenta pdf_raw → ghostscript → gdi em cascata
     """
+    # Faces do PDF (front/duplex) nao sao estrategias do driver. Um valor
+    # desconhecido nunca pode selecionar RAW por cair no ramo automatico.
+    print_mode = options.get("print_mode", "gdi")
+    if not isinstance(print_mode, str) or print_mode.strip().lower() not in {"gdi", "pdf_raw", "ghostscript", "auto"}:
+        return False, "Modo de impressão inválido. Selecione GDI, PDF RAW, Ghostscript ou automático."
+    print_mode = print_mode.strip().lower()
+
     # Config de cor da impressora de destino (perfil .icm, intento). Resolvida
     # UMA vez por trabalho; None quando o recurso esta desligado — e ai tudo
     # se comporta exatamente como antes do gerenciamento de cores existir.
@@ -785,7 +792,6 @@ def _send_print_job_windows(printer_name, pdf_path, options, job_title="impressa
     # Obter DEVMODE com as opcoes do usuario (duplex, bandeja, papel, etc.)
     devmode = _apply_devmode_options(printer_name, options)
 
-    print_mode = options.get("print_mode", "gdi").lower().strip()
     print(f"[print] Modo de impressao: '{print_mode}' para '{printer_name}'")
 
     # Modo forçado

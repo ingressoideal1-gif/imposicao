@@ -10,19 +10,9 @@
  * que e puro e testado com dados de mesa. Este arquivo orquestra: pega o texto
  * lido, calcula os hashes, pergunta ao validador, pinta a tela e enfileira.
  *
- * ## A tela nova, de 16/08/2026
- *
- * O caso comum e o ingresso BOM, e ele deixou de pedir alguma coisa de alguem.
- * A camera fica ligada, a faixa verde troca de conteudo, o aparelho apita e
- * vibra curto, e a proxima pessoa passa. Antes, cada leitura desligava a camera
- * e ocupava a tela: numa noite de dois mil ingressos, dois mil toques em "Ler o
- * proximo", com uma mao, no escuro.
- *
- * Desligar a camera a cada leitura era tambem, sem querer, a protecao contra
- * ler o mesmo QR duas vezes -- ela le o mesmo codigo cerca de vinte vezes por
- * segundo enquanto o papel estiver na frente da lente. No lugar dela ficou o
- * SILENCIO POR CODIGO: ver `silenciado`, que e a peca mais importante deste
- * arquivo.
+ * Cada leitura para a camera e apresenta o resultado ate o toque em
+ * "Ler o proximo". A trava de processamento ignora callbacks concorrentes;
+ * a confirmacao impede outra leitura por tras do resultado, verde ou vermelho.
  *
  * REGRA QUE GOVERNA ESTA TELA: recusa e recusa. Nao existe "deixar entrar assim
  * mesmo" -- decisao do usuario em 15/08/2026. Quem for recusado procura o dono
@@ -71,7 +61,7 @@
         // 'pareando' saiu daqui em 16/08/2026, junto com o codigo de seis
         // caracteres: nao ha mais o que digitar nesta tela. No lugar dela ficou
         // 'aviso', que so diz por que este aparelho parou de ler.
-        ['aviso', 'carregando', 'lendo', 'resposta', 'ambiguo'].forEach(function (t) {
+        ['aviso', 'carregando', 'lendo', 'resposta', 'ambiguo', 'movimento'].forEach(function (t) {
             $('tela-' + t).classList.toggle('sumindo', t !== qual);
         });
         // O retorno para a lista aparece so nas duas telas em que o aparelho
@@ -84,7 +74,7 @@
         $('erro-configurar').classList.add('sumindo');
         // A trava vale nas telas de trabalho -- ler o codigo e mostrar a
         // resposta. Nas de aviso e carga o aparelho pode dormir.
-        if (qual === 'lendo' || qual === 'resposta' || qual === 'ambiguo') acenderTela();
+        if (qual === 'lendo' || qual === 'resposta' || qual === 'ambiguo' || qual === 'movimento') acenderTela();
         else apagarPermitido();
     }
 
@@ -338,7 +328,7 @@
     function atualizarProntidao() {
         var pronto = prontoParaLer(), aviso = $('evento-salvo-offline');
         if (aviso) aviso.textContent = estado.carga?.publicacao?.leitor_minimo > 2
-            ? 'Atualize o Ideal Control para ler os ingressos deste evento.' : pronto ? 'Pronto para uso offline.'
+            ? 'Atualize o Ideal Control para ler os ingressos deste evento.' : pronto ? ((estado.carga.setores || []).some(function (s) { return s.tipo_uso === 'reentrada'; }) ? 'Sair e voltar exige conexão para confirmar cada movimento.' : 'Pronto para uso offline.')
             : estado.carga && estado.carga.publicacao && estado.carga.publicacao.concluida
                 ? 'Ingressos publicados. Conecte à internet para concluir o download neste celular.'
                 : 'Aguardando publicação dos ingressos. O evento já pode ser configurado. Conecte à internet para sincronizar.';
@@ -413,15 +403,15 @@
     }
 
     function ligarCamera() {
+        if (validando || aguardandoProximo) return;
         if (!estado.carga || baixandoCarga) return;
         if (!window.portariaCamera) return;
         // O rotulo volta ao repouso a cada abertura: a lanterna se apaga junto
         // com a camera, e um botao dizendo "acesa" com a luz apagada e pior do
         // que botao nenhum.
         marcarLanterna(false);
-        // `pararAoAchar: false` e o coracao da tela nova: a camera SEGUE ligada
-        // depois de achar um codigo. Quem para a camera agora e esta tela, e so
-        // quando algo ocupa o aparelho -- recusa, escolha de setor, digitacao.
+        // Esta tela para a camera ao aceitar o callback e controla a retomada
+        // depois do toque em "Ler o proximo".
         //
         // A funcao vai junto: a camera nao conhece mais esta tela pelo nome --
         // ela e usada tambem pela casa do aplicativo, que faz outra coisa com o
@@ -477,7 +467,10 @@
         mostrar('lendo');
         atualizarProntidao();
         ligarSincronismo();
-        comecarALer();
+        D.movimentoPendente().then(function (p) {
+            if (p) { movimentoAtual = p; mostrarMovimento('pendente'); }
+            else comecarALer();
+        }).catch(function () { avisar('Não foi possível conferir movimentos pendentes neste aparelho. Reabra o aplicativo.'); });
     }
 
     function setorPorId(carga, id) {
@@ -561,18 +554,14 @@
                 + (daqui ? '?desde=' + encodeURIComponent(daqui) : '');
             return api(caminho).then(function (p) {
                 entradas = entradas.concat(p.entradas || []);
+                if (p.proxima_desde && p.proxima_desde === daqui) throw new Error('O sincronismo das entradas não avançou.');
                 if (p.proxima_desde && quantas < MAXIMO_DE_PAGINAS) {
                     return pagina(p.proxima_desde, quantas + 1);
                 }
                 p.entradas = entradas;
-                // Onde o PROXIMO tique comeca. Vem do relogio do SERVIDOR, e nao
-                // deste celular: um aparelho adiantado pularia as entradas
-                // registradas no intervalo, e a mesma pessoa entraria duas
-                // vezes, calada, por dois portoes. Sem entrada nenhuma, fica
-                // nulo e o proximo pedido baixa tudo de novo -- sao poucos kB, e
-                // baixar demais e sempre melhor que baixar de menos aqui.
-                p.momento = entradas.length
-                    ? entradas[entradas.length - 1].momento : null;
+                // Continuar a varredura limitada; ao concluí-la, reiniciar no
+                // próximo ciclo para incluir leituras offline recebidas tarde.
+                p.momento = p.proxima_desde || null;
                 return p;
             });
         }
@@ -582,12 +571,12 @@
     /** Guarda o que a rota leve trouxe, sem perder nada do que ja havia. */
     function aplicarNovidades(novidade) {
         var S = window.portariaSincronismo;
-        if (!S || !novidade || baixandoCarga) return Promise.resolve();
+        if (!S || !novidade || baixandoCarga) return Promise.resolve(false);
         var eventoId = estado.carga && estado.carga.evento && estado.carga.evento.id;
         var entradasAntes = estado.entradasDesdeOSincronismo;
         return D.gravarNovidades(novidade, eventoId).then(function (nova) {
             // O estado em memória só avança depois do commit do IndexedDB.
-            if (!estado.carga || estado.carga.evento.id !== eventoId) return;
+            if (!estado.carga || estado.carga.evento.id !== eventoId) return false;
             estado.carga = nova;
             atualizarDadosDoTopo();
             atualizarProntidao();
@@ -625,10 +614,78 @@
 
     // Quando cada codigo apareceu pela ultima vez na frente da lente.
     var vistos = {};
+    var validando = false;
+    var aguardandoProximo = false;
+    var movimentoAtual = null;
+
+    function mostrarMovimento(fase) {
+        aguardandoProximo = true;
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        var v = movimentoAtual.veredito;
+        $('movimento-ingresso').textContent = 'Ingresso ' + v.numero + ' · ' + (v.setor.nome || 'Setor');
+        var confirmar = fase === 'confirmar';
+        $('movimento-titulo').textContent = confirmar ? 'Entrada ou saída?' : fase === 'enviando' ? 'Confirmando movimento…' : 'Confirmação pendente';
+        $('movimento-aviso').textContent = confirmar ? 'Este ingresso já se encontra no Local. Qual movimento deseja registrar?' :
+            'Aguarde a confirmação do servidor antes de liberar. Se a conexão falhar, consulte novamente a mesma tentativa.';
+        ['entrada','saida','cancelar'].forEach(function (id) { $('movimento-' + id).classList.toggle('sumindo', !confirmar); });
+        $('movimento-repetir').classList.toggle('sumindo', fase !== 'pendente');
+        mostrar('movimento');
+        if (confirmar) $('movimento-entrada').focus();
+    }
+
+    function enviarMovimento() {
+        var p = movimentoAtual;
+        mostrarMovimento('enviando');
+        var c = estado.carga || {};
+        if (!navigator.onLine || !estado.token || p.evento !== (c.evento || {}).id || p.aparelho !== (c.aparelho || {}).id) {
+            mostrarMovimento('pendente');
+            $('movimento-aviso').textContent = !navigator.onLine ? 'Conecte à internet para confirmar esta tentativa. Nenhuma liberação offline.' : 'Retorne ao evento e aparelho desta tentativa para consultar a confirmação.';
+            return Promise.resolve();
+        }
+        var controle = new AbortController();
+        var prazo = setTimeout(function () { controle.abort(); }, 10000);
+        return D.movimentoPendente(p).then(function () {
+            return api('/movimento', { method: 'POST', body: JSON.stringify(p.leitura), signal: controle.signal });
+        })
+            .then(function (r) {
+                if (!r || r.id_local !== p.leitura.id_local || ['confirmar','permitido','negado'].indexOf(r.resultado) < 0 ||
+                    (r.resultado === 'confirmar' && !r.versao) ||
+                    (r.resultado === 'permitido' && ['entrada','saida'].indexOf(r.tipo) < 0)) throw new Error('Confirmação inválida');
+                if (r.resultado === 'confirmar') {
+                    p.versao = r.versao;
+                    return D.movimentoPendente(p).then(function () { mostrarMovimento('confirmar'); });
+                }
+                return D.movimentoPendente(null).then(function () {
+                    movimentoAtual = null;
+                    var v = Object.assign({}, p.veredito, { estado: r.resultado, motivo: r.motivo, tipo: r.tipo });
+                    anunciar(v);
+                    // O servidor ja persistiu; nao reenfileirar nem somar saidas como entradas.
+                    puxarNovidades();
+                });
+            }).catch(function () { movimentoAtual = p; mostrarMovimento('pendente'); })
+            .then(function () { clearTimeout(prazo); });
+    }
+
+    function iniciarMovimento(v) {
+        return D.movimentoPendente().then(function (p) {
+            movimentoAtual = p || { veredito: v, evento: estado.carga.evento.id, aparelho: estado.carga.aparelho.id,
+                leitura: Object.assign(leituraDe(v), { acao: 'auto' }) };
+            return D.movimentoPendente(movimentoAtual);
+        }).then(enviarMovimento);
+    }
+
+    function escolherMovimento(acao) {
+        if (validando || !movimentoAtual || !movimentoAtual.versao) return;
+        validando = true;
+        movimentoAtual.leitura = Object.assign(leituraDe(movimentoAtual.veredito), { acao: acao, versao: movimentoAtual.versao });
+        movimentoAtual.versao = null;
+        return D.movimentoPendente(movimentoAtual).then(enviarMovimento).catch(function () { mostrarMovimento('pendente'); })
+            .then(function () { validando = false; });
+    }
 
     /**
-     * O mesmo codigo e ignorado por 2 segundos. E a peca que substituiu o
-     * desligar-a-camera-a-cada-leitura.
+     * Protecao adicional contra callbacks repetidos da camera. O toque em
+     * "Ler o proximo" limpa este mapa e permite uma nova tentativa imediata.
      *
      * A camera le o mesmo QR cerca de vinte vezes por segundo enquanto o papel
      * estiver na frente da lente. Sem este silencio, o segundo disparo cairia na
@@ -636,11 +693,8 @@
      * piscar depois do verde -- e o porteiro devolveria quem tinha direito de
      * entrar. E o pior resultado possivel desta tela.
      *
-     * O silencio e POR CODIGO, e nao por tempo de tela: outro ingresso,
-     * diferente, passa na hora. E a contagem recomeca a cada aparicao, e nao so
-     * na que valeu -- o papel fica na frente da lente por segundos e a camera
-     * insiste; com a contagem parada na primeira leitura, a insistencia venceria
-     * o silencio e o vermelho apareceria assim mesmo.
+     * Enquanto o resultado esta visivel, aguardandoProximo bloqueia todos os
+     * codigos, inclusive um ingresso diferente.
      */
     function silenciado(texto) {
         var agora = Date.now();
@@ -655,6 +709,7 @@
     }
 
     function validarTexto(texto, setorEscolhido) {
+        if (validando || aguardandoProximo) return Promise.resolve();
         var carga = estado.carga;
         if (!prontoParaLer()) {
             if (window.portariaCamera) window.portariaCamera.desligar();
@@ -666,6 +721,8 @@
             $('resposta-grande').textContent = '';
             $('resposta-motivo').textContent = 'Conecte à internet para sincronizar e tente a leitura novamente.';
             mostrar('resposta');
+            aguardandoProximo = true;
+            avisarBarrado();
             return Promise.resolve();
         }
         // A escolha de setor passa por fora do silencio, de proposito: o texto e
@@ -673,6 +730,8 @@
         // no botao. Sem esta saida, a propria escolha dele cairia no silencio e
         // a tela nao responderia nada.
         if (!setorEscolhido && silenciado(texto)) return Promise.resolve();
+        validando = true;
+        if (window.portariaCamera) window.portariaCamera.desligar();
         // TUDO dentro da cadeia de promise, inclusive o primeiro calculo --
         // sem isto um erro SINCRONO (ex.: `saisParaTentar` recebendo carga
         // incompleta) escapava do .catch la embaixo e a tela nao mudava:
@@ -687,7 +746,7 @@
                     return V.decidir({
                         hashes: hashes, carga: carga,
                         agora: new Date().toISOString(),
-                        entradas: entradas, setorEscolhido: setorEscolhido || null,
+                        entradas: entradas, setorEscolhido: setorEscolhido || null, presencaOnline: true,
                     });
                 });
             })
@@ -696,6 +755,7 @@
                     estado.pendente = { texto: texto };
                     return perguntarSetor(v.candidatos);
                 }
+                if (v.setor && v.setor.tipo_uso === 'reentrada' && v.estado === 'permitido') return iniciarMovimento(v);
                 var leitura = leituraDe(v);
                 return conferirNaRede(v, leitura).then(function (decidido) {
                     return registrar(leitura).then(function () {
@@ -710,10 +770,11 @@
                 // visivel e infinitamente melhor que um silencio.
                 console.error('erro ao validar leitura da portaria:', e);
                 anunciar({ estado: 'negado', motivo: 'erro_de_leitura', setor: null, detalhe: {} });
-            });
+            }).then(function () { validando = false; });
     }
 
     function perguntarSetor(candidatos) {
+        aguardandoProximo = true;
         // Escolher ocupa o aparelho: a camera para, como em qualquer recusa.
         // Sem isto ela seguiria lendo por tras da pergunta e responderia outra
         // coisa por cima.
@@ -725,8 +786,8 @@
             // textContent, sempre: o nome do setor e escrito pelo dono do evento.
             b.textContent = c.setor.nome;
             b.onclick = function () {
+                aguardandoProximo = false;
                 mostrar('lendo');
-                comecarALer();
                 validarTexto(estado.pendente.texto, c.setor.id);
             };
             caixa.appendChild(b);
@@ -778,20 +839,21 @@
         }
         return comTeto(api('/entrada', {
             method: 'POST', body: JSON.stringify(leitura),
+        }).catch(function (e) {
+            // Uma recusa explícita não é perda de conexão.
+            if ([401, 403, 409, 422, 426].indexOf(e.status) !== -1) {
+                return { resultado: 'negado', motivo: 'erro_de_leitura', primeira: false };
+            }
+            throw e;
         })).then(function (r) {
-            if (!r || r.primeira !== false) return v;
+            if (!r || (r.resultado !== 'negado' && r.primeira !== false)) return v;
             var a = r.anterior || {};
-            // A fila leva o veredito do SERVIDOR, e nao o local: e ele que vale.
             leitura.resultado = 'negado';
-            leitura.motivo = 'ja_entrou';
-            // campo `portao` da resposta do servidor: o nome do aparelho que
-            // registrou a primeira entrada.
-            var nome_portao_anterior = a.portao;
+            leitura.motivo = r.motivo || 'erro_de_leitura';
             return {
-                estado: 'negado', motivo: 'ja_entrou',
-                setor: v.setor, numero: v.numero,
-                credencial_id: v.credencial_id,
-                detalhe: { momentoAnterior: a.momento, aparelhoAnterior: nome_portao_anterior },
+                estado: 'negado', motivo: leitura.motivo,
+                setor: v.setor, numero: v.numero, credencial_id: v.credencial_id,
+                detalhe: { momentoAnterior: a.momento, aparelhoAnterior: a.portao },
             };
         });
     }
@@ -837,6 +899,10 @@
         fora_da_janela: 'FORA DO HORÁRIO',
         bloqueado: 'FAIXA BLOQUEADA',
         ja_entrou: 'JÁ ENTROU',
+        ja_no_local: 'Ingresso já se encontra no Local',
+        ja_fora_local: 'INGRESSO JÁ ESTÁ FORA',
+        estado_alterado: 'ESTADO ALTERADO — LEIA NOVAMENTE',
+        atualizacao_necessaria: 'ATUALIZE O IDEAL CONTROL',
         erro_de_leitura: 'ERRO AO LER',
     };
 
@@ -856,13 +922,13 @@
     }
 
     function anunciar(v) {
+        aguardandoProximo = true;
         if (v.estado === 'permitido') return anunciarPassagem(v);
         return anunciarRecusa(v);
     }
 
     /**
-     * O caminho feliz: a faixa verde troca, o aparelho apita curto, e a camera
-     * SEGUE ligada. Ninguem toca em nada.
+     * Liberado: resultado verde permanece ate a confirmacao do porteiro.
      */
     function anunciarPassagem(v) {
         var setor = v.setor || {};
@@ -872,8 +938,10 @@
         // A hora entra por decisao do usuario -- numa fila rapida, sem ela o
         // porteiro nao distingue "acabou de passar" de "isto e de trinta
         // segundos atras".
-        faixa.textContent = (setor.nome || 'Ingresso') + ' · ' + v.numero
+        faixa.textContent = (v.tipo === 'saida' ? 'Saída · ' : '') + (setor.nome || 'Ingresso') + ' · ' + v.numero
             + ' · ' + hora(new Date().toISOString());
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        pintar(v);
         avisarPassagem();
     }
 
@@ -905,16 +973,21 @@
         // `evento_inativo` e `setor_bloqueado` sao vermelhos porque, neles, o
         // ingresso nao entra em porta nenhuma.
         //
-        // Nao ha mais ramo verde aqui: o ingresso bom nao ocupa a tela desde
-        // 16/08/2026 -- ele troca a faixa em `anunciarPassagem` e a camera segue.
+        var permitido = v.estado === 'permitido';
         caixa.className = 'resposta ' + (
-            v.motivo === 'setor_nao_autorizado' ? 'porta' : 'recusa');
-        $('resposta-marca').textContent = '✕';
-        $('resposta-titulo').textContent = TITULOS[v.motivo] || 'RECUSADO';
+            permitido ? 'ok' : v.motivo === 'setor_nao_autorizado' ? 'porta' : 'recusa');
+        if (permitido && v.tipo === 'saida') caixa.classList.add('saida');
+        $('resposta-marca').textContent = permitido ? '✓' : '✕';
+        $('resposta-titulo').textContent = permitido ? (v.tipo === 'saida' ? 'SAÍDA REGISTRADA' : 'LIBERADO') : TITULOS[v.motivo] || 'RECUSADO';
         $('resposta-grande').textContent = '';
         $('resposta-motivo').textContent = '';
 
-        if (v.motivo === 'evento_inativo') {
+        if (permitido) {
+            $('resposta-grande').textContent = String(v.numero);
+            $('resposta-detalhe').textContent = setor.nome || 'Ingresso';
+        } else if (['ja_no_local','ja_fora_local','estado_alterado','atualizacao_necessaria'].indexOf(v.motivo) !== -1) {
+            $('resposta-detalhe').textContent = (setor.nome || 'Ingresso') + ' · nº ' + v.numero;
+        } else if (v.motivo === 'evento_inativo') {
             // Nao ha setor nem numero a mostrar: a recusa e do evento inteiro,
             // e vem antes de o aparelho saber de que ingresso se trata.
             $('resposta-detalhe').textContent =
@@ -962,7 +1035,12 @@
             if (!lote.length) return;
             return api('/leituras', {
                 method: 'POST', body: JSON.stringify({ leituras: lote }),
-            }).then(function () {
+            }).then(function (resposta) {
+                var ids = lote.map(function (l) { return l.id_local; });
+                if (!resposta || !Array.isArray(resposta.confirmadas) ||
+                    ids.some(function (id) { return resposta.confirmadas.indexOf(id) === -1; })) {
+                    throw new Error('O servidor não confirmou todas as leituras.');
+                }
                 // So AGORA sai da fila. Remover antes seria perder leitura
                 // quando a resposta se perde no caminho.
                 return D.removerDaFila(lote.map(function (l) { return l.id_local; }));
@@ -993,8 +1071,29 @@
     $('btn-voltar').onclick = voltarParaALista;
 
     $('btn-proximo').onclick = function () {
+        if (validando) return;
+        aguardandoProximo = false;
+        vistos = {};
+        if (window.avisoSonoro) window.avisoSonoro.liberar();
+        somDestravado = true;
         mostrar('lendo');
         comecarALer();
+    };
+
+    $('movimento-entrada').onclick = function () { return escolherMovimento('entrada'); };
+    $('movimento-saida').onclick = function () { return escolherMovimento('saida'); };
+    $('movimento-repetir').onclick = function () {
+        if (validando || !movimentoAtual) return;
+        validando = true;
+        return enviarMovimento().then(function () { validando = false; });
+    };
+    $('movimento-cancelar').onclick = function () {
+        if (validando || !movimentoAtual || !movimentoAtual.versao) return;
+        validando = true;
+        return D.movimentoPendente(null).then(function () {
+            movimentoAtual = null; validando = false; aguardandoProximo = false; vistos = {};
+            mostrar('lendo'); comecarALer();
+        }).catch(function () { validando = false; mostrarMovimento('pendente'); });
     };
 
     $('btn-lanterna').onclick = function () {

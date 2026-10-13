@@ -50,13 +50,6 @@ const MAXIMO_LEITURAS = 500;
 // entrar de novo quem ja entrou.
 const ENTRADAS_POR_VEZ = 500;
 
-// O `?desde=` da rota leve entra DIRETO num filtro do PostgREST, e o `banco()`
-// concatena a URL sem escapar nada. So passa data que termina em `Z`: o `+` de
-// um `+00:00` significa ESPACO numa query string, o filtro chega quebrado e o
-// PostgREST responde 400 -- defeito que ja mordeu o freio de forca bruta em
-// 16/08/2026. Qualquer outra coisa e ignorada (ver a rota leve, mais abaixo).
-const FORMATO_ISO_Z = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
-
 // Forca bruta no pareamento. A contagem mora no BANCO -- Edge Function e
 // stateless, e um contador em memoria comecaria do zero a cada invocacao.
 // Enquanto o Python e esta funcao conviverem, os dois contam na MESMA tabela:
@@ -333,214 +326,59 @@ async function faixa(
   });
 }
 
-/** Recebe a fila que o aparelho acumulou. */
-async function leituras(cabecalho: string | null, corpo: any): Promise<Response> {
-  const aparelho = await aparelhoDoToken(cabecalho);
-  const itens = corpo?.leituras ?? [];
-  if (itens.length > MAXIMO_LEITURAS) {
-    return erro(422, `mande no maximo ${MAXIMO_LEITURAS} leituras por vez`);
-  }
-  if (!itens.length) return ok({ gravadas: 0 });
-
-  const linhas = [];
-  for (const i of itens) {
-    if (!RESULTADOS.includes(String(i.resultado ?? ""))) {
-      return erro(422, "resultado invalido");
-    }
-    if (!i.id_local || !i.momento) {
-      return erro(422, "leitura sem id_local ou momento");
-    }
-    linhas.push({
-      evento_id: aparelho.evento_id,
-      // O aparelho e quem o TOKEN diz que e. Aceitar o id do corpo deixaria um
-      // aparelho gravar leitura no nome de outro.
-      dispositivo_id: aparelho.id,
-      credencial_id: i.credencial_id,
-      setor_id: i.setor_id,
-      id_local: String(i.id_local),
-      momento: i.momento,
-      // `tipo` tem DEFAULT 'entrada' no esquema, entao omiti-lo daria a mesma
-      // linha -- por sorte. Explicito porque o dia em que o default mudar nao
-      // avisa ninguem, e porque o Python manda explicito.
-      tipo: "entrada",
-      resultado: i.resultado,
-      // ESTE campo ficou de fora ate 16/08/2026, e o furo passou por baixo de
-      // todo teste de HTTP: as duas rotas respondem `{"gravadas": 1}` antes de
-      // saber o que o banco fez, entao a resposta era identica e a linha
-      // gravada nao era. So apareceu quando li a tabela com a chave de
-      // servico. `motivo` e o "por que" da recusa no portao -- sem ele, a tela
-      // do dono mostra um ingresso negado e nao sabe dizer a razao.
-      motivo: i.motivo ?? null,
-    });
-  }
-
-  // `on_conflict` e a chave unica que ja existe no esquema desde 13/08/2026,
-  // criada exatamente para isto: o celular que ficou tres horas offline reenvia
-  // a fila inteira, e nada duplica.
-  await banco(
-    "POST",
-    "producao_acesso_leituras?on_conflict=dispositivo_id,id_local",
-    linhas,
-    "resolution=ignore-duplicates,return=minimal",
-  );
-  await banco(
-    "PATCH",
-    `producao_acesso_dispositivos?id=eq.${aparelho.id}`,
-    { ultimo_visto: "now()" },
-    "return=minimal",
-  );
-  return ok({ gravadas: linhas.length });
+/** Validação estrutural antes da RPC; nenhum dado bruto entra em filtros SQL. */
+function leituraValida(i: any): boolean {
+  return i && typeof i.id_local === "string" && i.id_local.length > 0 && i.id_local.length <= 128 &&
+    typeof i.momento === "string" && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(i.momento) &&
+    Number.isFinite(Date.parse(i.momento)) && RESULTADOS.includes(i.resultado) &&
+    (i.credencial_id == null || (typeof i.credencial_id === "string" && FORMATO_UUID.test(i.credencial_id))) &&
+    (i.setor_id == null || (typeof i.setor_id === "string" && FORMATO_UUID.test(i.setor_id))) &&
+    (i.motivo == null || (typeof i.motivo === "string" && i.motivo.length <= 200));
 }
 
-/**
- * A leitura que acabou de acontecer, na hora -- e a corrida entre dois portoes
- * decidida pelo BANCO.
- *
- * ## Por que existe, se o `/leituras` ja sobe a fila
- *
- * O sincronismo do portao e de cinco minutos, e cinco minutos e tempo de sobra
- * para a mesma pessoa entrar por duas portas. Fechar isso perguntando "ja existe
- * entrada para esta credencial?" e so entao gravar NAO funciona: as duas
- * perguntas se cruzam e os dois portoes recebem "nao existe". Quem decide aqui e
- * o banco, com `credencial_id` como chave primaria e `ON CONFLICT DO NOTHING`,
- * numa operacao so.
- *
- * ## O que nao pode sair errado
- *
- * O portao NUNCA espera esta resposta: quem chama tem teto de 800 ms e segue com
- * a decisao local. Por isso a leitura e gravada de qualquer jeito, ganhando ou
- * perdendo a corrida -- e contagem que o cliente pagou para ter. O que muda e o
- * `resultado`/`motivo` que fica registrado.
- */
+async function registrarLeituras(aparelho: any, itens: any[], online: boolean): Promise<any[]> {
+  const respostas = await banco("POST", "rpc/producao_acesso_registrar_leituras", {
+    p_dispositivo: aparelho.id, p_itens: itens, p_online: online,
+  });
+  if (!Array.isArray(respostas) || respostas.length !== itens.length ||
+      respostas.some((r: any, i: number) => r.id_local !== itens[i].id_local ||
+        !RESULTADOS.includes(r.resultado))) {
+    throw new Error("O banco não confirmou todas as leituras.");
+  }
+  return respostas;
+}
+
+/** A fila usa a mesma validação e identidade da conferência online. */
+async function leituras(cabecalho: string | null, corpo: any): Promise<Response> {
+  const aparelho = await aparelhoDoToken(cabecalho);
+  const itens = corpo?.leituras;
+  if (!Array.isArray(itens) || itens.length > MAXIMO_LEITURAS || !itens.every(leituraValida)) {
+    return erro(422, "lote de leituras inválido");
+  }
+  const respostas = itens.length ? await registrarLeituras(aparelho, itens, false) : [];
+  return ok({ gravadas: respostas.length, confirmadas: respostas.map(r => r.id_local) });
+}
+
+/** Reserva e histórico são gravados juntos; um reenvio mantém a decisão original. */
 async function entrada(cabecalho: string | null, corpo: any): Promise<Response> {
   const aparelho = await aparelhoDoToken(cabecalho);
+  if (!leituraValida(corpo)) return erro(422, "leitura inválida");
+  return ok((await registrarLeituras(aparelho, [corpo], true))[0]);
+}
 
-  let resultado = String(corpo?.resultado ?? "");
-  let motivo = corpo?.motivo ?? null;
-  if (!RESULTADOS.includes(resultado)) return erro(422, "resultado invalido");
-  if (!corpo?.id_local || !corpo?.momento) {
-    return erro(422, "leitura sem id_local ou momento");
+async function movimento(cabecalho: string | null, corpo: any): Promise<Response> {
+  const aparelho = await aparelhoDoToken(cabecalho);
+  if (!leituraValida(corpo) || !corpo.credencial_id || !corpo.setor_id ||
+      !["auto", "entrada", "saida"].includes(corpo.acao) ||
+      (corpo.versao != null && (typeof corpo.versao !== "string" || !FORMATO_UUID.test(corpo.versao))) ||
+      (corpo.acao !== "auto" && !corpo.versao)) return erro(422, "movimento inválido");
+  const r = await banco("POST", "rpc/producao_acesso_movimento", { p_dispositivo: aparelho.id, p_item: corpo });
+  if (!r || r.id_local !== corpo.id_local || !["permitido", "negado", "confirmar"].includes(r.resultado) ||
+      (r.resultado === "confirmar" && !FORMATO_UUID.test(r.versao || "")) ||
+      (r.resultado === "permitido" && !["entrada", "saida"].includes(r.tipo))) {
+    throw new Error("O banco não confirmou o movimento.");
   }
-
-  const credencialId = String(corpo?.credencial_id ?? "");
-  const setorId = String(corpo?.setor_id ?? "");
-  // Os dois vao para dentro de um filtro do PostgREST, e o `banco()` concatena a
-  // URL sem escapar nada: id malformado viraria HTTP 400 la e "erro interno" na
-  // tela do porteiro, com fila na frente. Mesmo defeito que o `/entrar` ja teve
-  // em producao.
-  const idsValidos = FORMATO_UUID.test(credencialId) && FORMATO_UUID.test(setorId);
-
-  // Comeca em `true` porque a corrida so existe para leitura PERMITIDA em setor
-  // de entrada unica. Para uma leitura que o aparelho ja negou, este campo nao
-  // quer dizer nada -- a tela dele travou no vermelho antes desta resposta
-  // chegar, e nao ha entrada nenhuma a reivindicar.
-  let primeira = true;
-  let anterior: { momento: string; portao: string } | null = null;
-
-  if (resultado === "permitido" && idsValidos) {
-    // Reentrada NAO entra na corrida: o setor existe justamente para deixar sair
-    // e voltar, e para ele nao existe "primeira entrada". Reivindicar
-    // exclusividade la trancaria na rua quem tem direito de voltar.
-    //
-    // O `evento_id` no filtro nao e enfeite: o setor tem de ser do evento DESTE
-    // aparelho, senao um token de um portao reivindicaria entrada em outro
-    // evento.
-    const setor = ((await banco(
-      "GET",
-      `producao_acesso_setores?id=eq.${setorId}` +
-        `&evento_id=eq.${aparelho.evento_id}&select=id,tipo_uso`,
-    )) ?? [])[0];
-
-    if (setor && setor.tipo_uso !== "reentrada") {
-      await banco(
-        "POST",
-        "producao_acesso_entradas_unicas?on_conflict=credencial_id",
-        {
-          credencial_id: credencialId,
-          evento_id: aparelho.evento_id,
-          setor_id: setorId,
-          // O aparelho e quem o TOKEN diz que e, aqui pelo mesmo motivo do
-          // `/leituras`: aceitar o id do corpo deixaria um aparelho gravar
-          // entrada no nome de outro -- e e este campo que decide quem ganhou.
-          dispositivo_id: aparelho.id,
-          momento: corpo.momento,
-        },
-        "resolution=ignore-duplicates,return=minimal",
-      );
-
-      // Quem ficou na linha. Um `return=representation` no POST acima nao
-      // serviria: com `ignore-duplicates` o PostgREST devolve VAZIO quando o
-      // conflito acontece, e vazio nao diz quem ganhou nem quando.
-      const dono = ((await banco(
-        "GET",
-        `producao_acesso_entradas_unicas?credencial_id=eq.${credencialId}` +
-          `&select=dispositivo_id,momento`,
-      )) ?? [])[0];
-
-      if (!dono) {
-        // Um zeramento concorrente pode descartar uma entrada anterior à
-        // marca. Isso não é "já entrou": nenhuma reserva atual existe.
-        const ev = ((await banco("GET", `producao_acesso_eventos?id=eq.${aparelho.evento_id}` +
-          "&select=entradas_zeradas_em")) ?? [])[0];
-        if (ev?.entradas_zeradas_em &&
-            Date.parse(corpo.momento) <= Date.parse(ev.entradas_zeradas_em)) {
-          return ok({ primeira: true, resultado, motivo, anterior: null, zerada: true });
-        }
-        throw new Error("O banco não confirmou a reserva da entrada.");
-      }
-
-      // Se a linha e deste aparelho, ele ganhou -- inclusive quando ele proprio
-      // ja tinha ganhado antes e esta reenviando. Isso e de proposito: o mesmo
-      // aparelho reenviando a mesma leitura nao pode virar recusa, e a chave
-      // `(dispositivo_id, id_local)` da tabela de leituras impede a duplicata.
-      primeira = !!dono && dono.dispositivo_id === aparelho.id;
-
-      if (!primeira && dono) {
-        // Quem perde precisa ouvir QUANDO e em QUAL portao a pessoa entrou --
-        // senao a recusa vira "nao sei, o sistema nao deixou", que e o que o
-        // porteiro tem de repetir para a pessoa na frente dele.
-        const outro = ((await banco(
-          "GET",
-          `producao_acesso_dispositivos?id=eq.${dono.dispositivo_id}&select=nome`,
-        )) ?? [])[0];
-        anterior = {
-          momento: dono.momento,
-          portao: outro?.nome ?? "outro aparelho",
-        };
-        resultado = "negado";
-        motivo = "ja_entrou";
-      }
-    }
-  }
-
-  // Gravada DEPOIS da corrida, e nao antes, porque e a corrida que decide o
-  // `resultado`/`motivo` desta linha. `on_conflict` e a mesma chave de
-  // idempotencia do `/leituras`: se esta leitura tambem subir pela fila depois,
-  // nada duplica.
-  await banco(
-    "POST",
-    "producao_acesso_leituras?on_conflict=dispositivo_id,id_local",
-    [{
-      evento_id: aparelho.evento_id,
-      dispositivo_id: aparelho.id,
-      credencial_id: corpo.credencial_id ?? null,
-      setor_id: corpo.setor_id ?? null,
-      id_local: String(corpo.id_local),
-      momento: corpo.momento,
-      tipo: "entrada",
-      resultado,
-      motivo,
-    }],
-    "resolution=ignore-duplicates,return=minimal",
-  );
-  await banco(
-    "PATCH",
-    `producao_acesso_dispositivos?id=eq.${aparelho.id}`,
-    { ultimo_visto: "now()" },
-    "return=minimal",
-  );
-
-  return ok({ primeira, resultado, motivo, anterior });
+  return ok(r);
 }
 
 /**
@@ -581,18 +419,21 @@ async function sincronizar(
       `&select=setor_id,de,ate,motivo`,
   )) ?? [];
 
-  // `?desde=` e OPCIONAL: sem ele a rota devolve as entradas todas, que e o
-  // primeiro sincronismo depois de um boot. Data em formato estranho e IGNORADA
-  // em vez de recusada -- baixar tudo e pesado, mas e correto; recusar deixaria
-  // o portao sem sincronizar por causa de um relogio mal formatado.
-  const desde = FORMATO_ISO_Z.test(desdeBruto ?? "") ? desdeBruto : null;
-  const filtro = desde ? `&momento=gte.${desde}` : "";
-  // Pede ENTRADAS_POR_VEZ + 1 pelo mesmo motivo do `/faixa`: e o unico jeito de
-  // distinguir "esta pagina veio cheia e acabou" de "ha mais depois dela".
+  // Cursor por chave imutável, independente do horário informado pelo celular.
+  // Datas de clientes antigos reiniciam uma varredura segura. Ao terminar cada
+  // ciclo o cliente volta ao início, incluindo entradas offline recebidas tarde.
+  let cursor: string | null = null;
+  if (desdeBruto?.startsWith("id:")) {
+    cursor = desdeBruto.slice(3);
+    if (!FORMATO_UUID.test(cursor)) return erro(422, "cursor de entradas inválido");
+  } else if (desdeBruto && !Number.isFinite(Date.parse(desdeBruto))) {
+    return erro(422, "cursor de entradas inválido");
+  }
+  const filtro = cursor ? `&credencial_id=gt.${cursor}` : "";
   const maisUma = (await banco(
     "GET",
     `producao_acesso_entradas_unicas?evento_id=eq.${eventoId}${filtro}` +
-      `&select=credencial_id,momento&order=momento.asc` +
+      `&select=credencial_id,momento&order=credencial_id.asc` +
       `&limit=${ENTRADAS_POR_VEZ + 1}`,
   )) ?? [];
   const temMais = maisUma.length > ENTRADAS_POR_VEZ;
@@ -608,7 +449,7 @@ async function sincronizar(
   for (const s of setores) {
     totais[s.id] = await contar(
       `producao_acesso_leituras?evento_id=eq.${eventoId}&setor_id=eq.${s.id}` +
-        `&resultado=eq.permitido`,
+        `&resultado=eq.permitido&tipo=eq.entrada`,
     );
   }
 
@@ -647,11 +488,8 @@ async function sincronizar(
     // esvaziar ANTES de mesclar o resto desta resposta. Nulo quer dizer que este
     // evento nunca foi zerado, que e o caso da esmagadora maioria.
     entradas_zeradas_em: evento.entradas_zeradas_em ?? null,
-    // Onde continuar quando a pagina veio cheia. Vai como `momento` e o proximo
-    // pedido usa `gte`, e nao `gt`: repetir a ultima entrada nao custa nada
-    // (quem recebe junta por `credencial_id`), e PULAR uma entrada que dividia o
-    // mesmo instante custaria uma pessoa entrando duas vezes.
-    proxima_desde: temMais ? entradas[entradas.length - 1].momento : null,
+    // Exclusivo por UUID: horários iguais e fusos distintos não repetem páginas.
+    proxima_desde: temMais ? "id:" + entradas[entradas.length - 1].credencial_id : null,
   });
 }
 
@@ -695,6 +533,9 @@ Deno.serve(async (req: Request) => {
     }
     if (req.method === "POST" && rota === "leituras") {
       return comCors(await leituras(auth, await req.json()), origem);
+    }
+    if (req.method === "POST" && rota === "movimento") {
+      return comCors(await movimento(auth, await req.json()), origem);
     }
     if (req.method === "POST" && rota === "entrada") {
       return comCors(await entrada(auth, await req.json()), origem);

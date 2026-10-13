@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <script src="reiniciar.js?v=1023"></script>
+    <script src="reiniciar.js?v=1049"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Portaria — Ideal Control</title>
     <meta name="theme-color" content="#0a0f1e">
@@ -37,10 +37,8 @@
         fila andando. Por isso: alvos de toque grandes, cor ocupando a tela
         inteira na RECUSA, e nenhuma decisao escondida atras de menu.
 
-        Desde 16/08/2026 o ingresso BOM nao ocupa mais a tela: a camera fica
-        ligada, a faixa verde troca de conteudo e a proxima pessoa passa sem
-        ninguem tocar em nada. Numa noite de dois mil ingressos, a tela antiga
-        pedia dois mil toques em "Ler o proximo" -- com uma mao, no escuro.
+        Cada leitura ocupa a tela com seu resultado. A camera so volta
+        depois do toque em "Ler o proximo", tanto na liberacao quanto na recusa.
 
         Auto-contida como as outras telas do aplicativo, e por um motivo a
         mais: esta pagina precisa ABRIR SEM REDE. Todo arquivo que ela usa e
@@ -516,8 +514,37 @@
             font-size: 1.2rem; font-weight: 800; line-height: 1.25;
         }
         .resposta .grande { font-size: 2rem; }
+        /* Layout A: numero em primeiro plano e setor separado abaixo. */
+        .movimento-dialogo { padding: 24px 18px; border: 1px solid var(--border-forte); border-radius: 18px; background: #131d2e; text-align: center; }
+        .movimento-ingresso { font-size: 1.8rem; font-weight: 800; overflow-wrap: anywhere; }
+        #movimento-aviso { color: #d4deec; }
+        #movimento-saida { background: #60a5fa; color: #071a31; }
+        .resposta.ok { background: linear-gradient(155deg, #15803d, #166534); }
+        .resposta.ok.saida { background: linear-gradient(155deg, #1d4ed8, #1e3a8a); }
+        .resposta.ok .marca { display: none; }
+        .resposta.ok .titulo { order: 0; font-size: 1.6rem; margin: 0; letter-spacing: .03em; }
+        .resposta.ok .titulo::before { content: '✓'; margin-right: 10px; }
+        .resposta.ok .grande {
+            order: 1; width: 100%; margin: 28px 0 20px;
+            font-size: clamp(3rem, 20vw, 5.375rem); font-weight: 800;
+            line-height: 1.12; letter-spacing: -.045em;
+            font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+        }
+        .resposta.ok .detalhe {
+            order: 2; width: 100%; margin: 0; padding-top: 19px;
+            border-top: 1px solid rgba(255,255,255,.35);
+            font-size: 1.95rem; font-weight: 800; line-height: 1.18;
+            opacity: 1; overflow-wrap: anywhere;
+        }
+        .resposta.ok .grande::before, .resposta.ok .detalhe::before {
+            display: block; margin-bottom: 8px; font-size: .75rem;
+            font-weight: 800; letter-spacing: .16em; color: #d1f7de;
+        }
+        .resposta.ok .grande::before { content: 'INGRESSO'; }
+        .resposta.ok .detalhe::before { content: 'SETOR'; }
         /* O botão fecha a tela por baixo, do tamanho da mão. Ele existe porque
            a recusa PRECISA de um toque: é a única prova de que o porteiro viu. */
+        #resposta-caixa.ok + #btn-proximo { background: #2dd4bf; color: #062821; box-shadow: none; }
         #btn-proximo {
             margin: 0; min-height: 74px; border-radius: 0;
             font-size: 1.12rem; font-weight: 800;
@@ -633,9 +660,7 @@
     </div>
 
     <!--
-        A recusa continua ocupando a tela e continua exigindo um toque: é a
-        única forma de garantir que o porteiro viu. O ingresso BOM não passa
-        mais por aqui.
+        A liberacao e a recusa ficam visiveis ate o toque em "Ler o proximo".
     -->
     <div id="tela-resposta" class="sumindo">
         <div class="resposta" id="resposta-caixa">
@@ -646,6 +671,18 @@
             <div class="motivo" id="resposta-motivo"></div>
         </div>
         <button id="btn-proximo">Ler o próximo</button>
+    </div>
+
+    <div id="tela-movimento" class="sumindo">
+        <div role="dialog" aria-modal="true" aria-labelledby="movimento-titulo" class="movimento-dialogo">
+            <h1 id="movimento-titulo">Entrada ou saída?</h1>
+            <p id="movimento-ingresso" class="movimento-ingresso"></p>
+            <p id="movimento-aviso" role="status"></p>
+            <button id="movimento-entrada" type="button">Entrada</button>
+            <button id="movimento-saida" type="button">Saída</button>
+            <button id="movimento-repetir" type="button" class="sumindo">Consultar confirmação</button>
+            <button id="movimento-cancelar" type="button" class="discreto">Cancelar</button>
+        </div>
     </div>
 
     <div id="tela-ambiguo" class="sumindo">
@@ -667,15 +704,15 @@
     <div id="erro-configurar" class="aviso sumindo" role="alert"></div>
 </div>
 
-<script src="jsqr.min.js?v=1023"></script>
-<script src="qr-ideal-hash.js?v=1023"></script>
-<script src="portaria-validacao.js?v=1023"></script>
-<script src="portaria-deposito.js?v=1023"></script>
-<script src="portaria-camera.js?v=1023"></script>
-<script src="aviso-sonoro.js?v=1023"></script>
-<script src="portaria-sincronismo.js?v=1023"></script>
-<script src="chaveiro.js?v=1023"></script>
-<script src="portaria.js?v=1023"></script>
-<script src="sw-registro.js?v=1023"></script>
+<script src="jsqr.min.js?v=1049"></script>
+<script src="qr-ideal-hash.js?v=1049"></script>
+<script src="portaria-validacao.js?v=1049"></script>
+<script src="portaria-deposito.js?v=1049"></script>
+<script src="portaria-camera.js?v=1049"></script>
+<script src="aviso-sonoro.js?v=1049"></script>
+<script src="portaria-sincronismo.js?v=1049"></script>
+<script src="chaveiro.js?v=1049"></script>
+<script src="portaria.js?v=1049"></script>
+<script src="sw-registro.js?v=1049"></script>
 </body>
 </html>

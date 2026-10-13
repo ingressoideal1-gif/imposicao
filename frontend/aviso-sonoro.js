@@ -43,10 +43,10 @@
      */
     var LIBERADO = {
         frequencia: 1320,      // Hz -- mi agudo, atravessa a conversa da fila
-        duracao: 0.08,         // s
-        volume: 0.28,
+        duracao: 0.20,         // s
+        volume: 1,            // ganho maximo; volume fisico depende do celular
         tipo: 'square',        // quadrada corta melhor o ruido que a senoide
-        vibracao: [40]         // ms -- um toque, e so
+        vibracao: [120]        // ms -- um toque perceptivel
     };
 
     /**
@@ -56,8 +56,8 @@
      */
     var BARRADO = {
         frequencia: 220,       // Hz -- la grave
-        duracao: 0.45,         // s -- mais de cinco vezes o bipe de liberado
-        volume: 0.35,
+        duracao: 0.45,         // s -- mais longo que o bipe de liberado
+        volume: 1,
         tipo: 'square',
         vibracao: [200, 120, 200]   // dois toques longos, com pausa no meio
     };
@@ -99,7 +99,10 @@
         // Voltar de segundo plano deixa o contexto suspenso: sem isto o bipe
         // seria agendado e nunca ouvido.
         try {
-            if (contexto.state === 'suspended' && contexto.resume) { contexto.resume(); }
+            if (contexto.state === 'suspended' && contexto.resume) {
+                var retomada = contexto.resume();
+                if (retomada && retomada.catch) retomada.catch(function () {});
+            }
         } catch (e) { /* enfeite */ }
         return pronto();
     }
@@ -126,6 +129,7 @@
             osc.type = padrao.tipo;
             osc.frequency.setValueAtTime(padrao.frequencia, agora);
             ganho.gain.setValueAtTime(padrao.volume, agora);
+            ganho.gain.setValueAtTime(padrao.volume, Math.max(agora, fim - 0.03));
             // Exponencial nao chega a zero; 0.0001 e silencio na pratica.
             ganho.gain.exponentialRampToValueAtTime(0.0001, fim);
             osc.connect(ganho);

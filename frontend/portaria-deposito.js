@@ -85,7 +85,7 @@
 
     function gravarCarga(carga) {
         return comLoja('carga', 'readwrite', function (loja) {
-            loja.clear();                 // substitui a carga INTEIRA
+            // Substitui o objeto da carga sem apagar tentativa online pendente.
             loja.put(carga, 'unica');
             loja.put(carga.entradas_zeradas_em || null, 'zeramento');
         });
@@ -102,6 +102,8 @@
     // as entradas e os totais juntos. Uma fila pendente impede a troca.
     function gravarEventoPreparado(cargaNova) {
         return comLojas(['carga', 'entradas', 'totais', 'fila'], 'readwrite', function (t) {
+            var pendente = t.objectStore('carga').get('movimento-pendente');
+            pendente.onsuccess = function () { if (pendente.result) t.abort(); };
             var conta = t.objectStore('fila').count();
             conta.onsuccess = function () {
                 if (conta.result) { t.abort(); return; }
@@ -316,12 +318,24 @@
     function limpar() {
         // Despareou: nada do evento anterior pode ficar. Os totais entram aqui
         // porque contador de um cliente na tela do outro e numero errado.
-        return Promise.all(['carga', 'fila', 'entradas', 'totais'].map(function (nome) {
+        return movimentoPendente().then(function (p) {
+            if (p) throw new Error('Confirme o movimento pendente antes de limpar o aparelho.');
+            return Promise.all(['carga', 'fila', 'entradas', 'totais'].map(function (nome) {
             return comLoja(nome, 'readwrite', function (loja) { loja.clear(); });
-        })).then(function () { });
+            }));
+        }).then(function () { });
+    }
+
+    function movimentoPendente(valor) {
+        var gravar = arguments.length > 0;
+        return comLoja('carga', gravar ? 'readwrite' : 'readonly', function (loja, devolver) {
+            if (gravar) { if (valor) loja.put(valor, 'movimento-pendente'); else loja.delete('movimento-pendente'); }
+            else { var r = loja.get('movimento-pendente'); r.onsuccess = function () { devolver(r.result || null); }; }
+        });
     }
 
     window.portariaDeposito = {
+        movimentoPendente: movimentoPendente,
         gravarEventoPreparado: gravarEventoPreparado,
         gravarCarga: gravarCarga, lerCarga: lerCarga,
         gravarNovidades: gravarNovidades,

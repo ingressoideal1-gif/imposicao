@@ -168,16 +168,12 @@
         var p = d.publico || {};
         var caixa = $('ao-vivo-resumo');
         caixa.innerHTML = '';
-        placa(caixa, numero(p.entraram), 'entraram', 'destaque');
-        // "Presentes" só onde ele diz alguma coisa: em setor de entrada única
-        // ninguém sai, e o número seria uma cópia de "entraram" ocupando espaço
-        // e sugerindo que alguém saiu.
-        if (p.sairam > 0) {
-            placa(caixa, numero(p.presentes), 'dentro agora');
-        }
-        placa(caixa, numero(p.publicado), 'ingressos impressos');
-        placa(caixa, p.comparecimento_pct === null || typeof p.comparecimento_pct === 'undefined'
-            ? '—' : (String(p.comparecimento_pct).replace('.', ',') + '%'), 'compareceram');
+        placa(caixa, numero(p.entraram), 'passagens na entrada', 'destaque');
+        placa(caixa, p.ingressos_utilizados == null ? '—' : numero(p.ingressos_utilizados), 'ingressos utilizados');
+        placa(caixa, numero(p.publicado), 'ingressos publicados');
+        placa(caixa, p.publicados_utilizados == null || p.comparecimento_pct == null
+            ? '—' : (String(p.comparecimento_pct).replace('.', ',') + '%'), 'dos publicados utilizados');
+        texto(caixa, 'p', 'Passagens incluem reentradas. Ingressos utilizados não representam pessoas presentes.', 'config-ajuda');
         if (p.recusadas > 0) {
             placa(caixa, numero(p.recusadas), 'recusas', 'atencao');
         }
@@ -204,14 +200,15 @@
             topo.className = 'setor-vivo-topo';
             texto(topo, 'strong', s.nome || 'Setor');
             texto(topo, 'span',
-                  numero(s.entraram) + ' de ' + numero(s.contratado),
+                  (s.ingressos_utilizados == null ? '—' : numero(s.ingressos_utilizados)) + ' utilizados de ' + numero(s.contratado),
                   'setor-vivo-conta');
             c.appendChild(topo);
             // A barra mostra so a porcentagem: "402 de 500" ja esta escrito na
             // linha de cima, e repetir o 402 ao lado da barra gasta a unica
             // coluna que tinha algo novo a dizer.
-            barra(c, '', s.entraram, s.contratado || 0, '',
-                  s.ocupacao_pct === null || typeof s.ocupacao_pct === 'undefined'
+            texto(c, 'p', numero(s.entraram) + ' passagens na entrada', 'config-ajuda');
+            barra(c, '', s.ingressos_utilizados || 0, s.contratado || 0, '',
+                  s.ingressos_utilizados == null || s.ocupacao_pct == null
                       ? '' : (String(s.ocupacao_pct).replace('.', ',') + '%'));
             caixa.appendChild(c);
         });

@@ -10,6 +10,8 @@ from entrega_impacto import impacto_testes, plano
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
+    'test_compatibilidade_motor.py', 'test_texto_banco.py', 'test_modos_impressao.py',
+    'test_escala_da_arte.py', 'test_engine_capas_camarote.py',
     'test_intervalo_atualizacao.py',
     'test_historico_impressao.py',
     'test_perfil_oficial.py','test_transicao_piloto.py','test_atualizador_oficial.py','test_publicar_pacote_oficial.py','test_auditoria_transicao_piloto.py','test_manifesto_oficial.py','test_controle_producao.py',
@@ -24,7 +26,8 @@ TESTES = [
     'test_coleta_autonoma.py','test_coleta_telemetria.py','test_conferencia_piloto.py','test_auditoria_piloto.py',
     'test_diario_local.py','test_pacotes_api.py','test_selecao_piloto.py','test_revisao_pedido_piloto.py',
     'test_abertura_persistida.py','test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
-HARNESSES = ['historico_impressao_harness.js','gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
+TESTES += ['test_pdf_duplex.py', 'test_pdf_duplex_unico.py', 'test_engine_entrega_por_bloco.py', 'test_engine_refazer_strict_assembly.py', 'test_engine_recorte_celula.py', 'test_multi_artes.py', 'test_multi_artes_capa.py', 'test_verso_individual.py', 'test_montagem_faces_pdf.py', 'test_print_service_escala.py', 'test_print_service_cores.py', 'test_gdi_sem_win32ui.py', 'test_o_javascript_do_frontend_compila.py', 'test_abertura_offline.py', 'test_offline_estacao.py', 'test_print_experimental.py', 'test_impressao_destinos.py', 'test_impressao_plano.py']
+HARNESSES = ['montagem_harness.js', 'montagem_local_harness.cjs', 'montagem_estacao_harness.cjs', 'historico_impressao_harness.js','gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
              'foto_piloto_harness.js','foto_lib_harness.js',
              'selecao_piloto_harness.js','integridade_impressao_harness.js',
              'token_estacao_harness.js','ticket_condicoes_harness.js',

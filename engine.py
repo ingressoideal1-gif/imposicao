@@ -2472,6 +2472,24 @@ class ImpositionEngine:
                 val_str = "\n".join(_linhas_aj)
                 _align = el.get("text_align")
 
+            # Contorno exclusivo do Texto — Banco de Dados. A largura fica em
+            # mm mesmo quando shrink reduz o corpo; PyMuPDF multiplica
+            # border_width pelo fontsize ao escrever a espessura no PDF.
+            if t == "TEXT" and el.get("database_text"):
+                try:
+                    fio_mm = min(10.0, max(0.0, float(el.get("text_stroke_mm") or 0)))
+                except (TypeError, ValueError):
+                    fio_mm = 0.0
+                if fio_mm > 0:
+                    cor_fio = str(el.get("text_stroke_color") or "#000000")
+                    if (len(cor_fio) != 7 or not cor_fio.startswith("#")
+                            or any(c not in "0123456789abcdefABCDEF" for c in cor_fio[1:])):
+                        cor_fio = "#000000"
+                    insert_kwargs.update(
+                        render_mode=2, fill=rgb, color=_hex_to_rgb(cor_fio),
+                        border_width=fio_mm * MM2PT / font_size, miter_limit=1,
+                    )
+
             # Medir largura real do texto para centralizar horizontalmente
             text_width = _largura_do_texto(val_str, font_file, font_name, font_size)
 
