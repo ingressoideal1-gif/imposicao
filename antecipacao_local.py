@@ -1,5 +1,6 @@
 """Pré-cópia de recursos observados online; nunca constitui pacote aprovado."""
 from copy import deepcopy
+from contextlib import ExitStack
 import hashlib
 import json
 import shutil
@@ -9,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from art_cache import CacheArtes
 
 from pacotes_download import validar_url, SemRedirecionamento
 from pacotes_locais import (_sem_links, LIMITE_RECURSO_BYTES, LIMITE_TOTAL_BYTES,
@@ -64,6 +66,7 @@ class AntecipadorRecursos:
         arquivos = {'frente': None, 'verso': None}
         caminhos, criados, total = {}, [], 0
         validadores = {}
+        transferencias = ExitStack()
         try:
             for nome, url in manifesto['configuracao']['fontes'].items():
                 checkpoint()
@@ -89,6 +92,8 @@ class AntecipadorRecursos:
                     continue
                 # Revalidacao legada para URLs sem versao verificavel.
                 headers = {'If-None-Match': antigo} if _etag_forte(antigo) and not versao else {}
+                if reutilizavel:
+                    headers['Cache-Control'] = 'no-cache'
                 endereco = url
                 if versao:
                     partes = urllib.parse.urlsplit(url)
@@ -97,7 +102,11 @@ class AntecipadorRecursos:
                     endereco = urllib.parse.urlunsplit(partes._replace(query=urllib.parse.urlencode(query)))
                     headers['Cache-Control'] = 'no-cache'
                 try:
-                    resposta = self.abrir(urllib.request.Request(endereco, headers=headers), timeout=15)
+                    cache = CacheArtes(self.local.raiz / 'cache-artes-http', self.abrir)
+                    resposta = transferencias.enter_context(cache.abrir_recurso(
+                        urllib.request.Request(endereco, headers=headers), timeout=15,
+                        limite=LIMITE_RECURSO_BYTES, checkpoint=checkpoint,
+                        reserva=self.local.reserva_bytes, modelo=manifesto['modelo']))
                 except urllib.error.HTTPError as erro:
                     if erro.code != 304 or not headers:
                         erro.close()
@@ -146,6 +155,9 @@ class AntecipadorRecursos:
                             raise ValueError('Recurso vazio.')
                 arquivos[nome] = {'sha256': digest.hexdigest(), 'bytes': tamanho}
                 caminhos[nome] = caminho
+                # Não manter duas travas de URLs: modelos podem compartilhar
+                # frente/verso em ordem inversa quando preparados em paralelo.
+                transferencias.close()
             derivado = deepcopy(manifesto)
             derivado['arquivos'] = arquivos
             derivado['configuracao']['tipo'] = 'recursos_antecipados'
@@ -163,5 +175,6 @@ class AntecipadorRecursos:
                 del self._revalidar[next(iter(self._revalidar))]
             return dict(resultado, antecipacao=True, revisao_recursos=derivado['revisao'])
         finally:
+            transferencias.close()
             for caminho in criados:
                 caminho.unlink(missing_ok=True)
