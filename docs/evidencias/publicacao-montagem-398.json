@@ -1,0 +1,17 @@
+{
+  "manifesto": {
+    "schema": 1,
+    "produto": "NewProdPilotoTeste",
+    "version": "1.2.398",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.398.msi",
+    "bytes": 196665344,
+    "sha256": "921ebe9ba7622dc4d8c5ad7b973db89ca2d50bbc74e894d87d4fa6262fb10293",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME"
+    ],
+    "notes": "Montagem reconhece agente Piloto na porta 9001 e preserva a instancia do painel local; mantem correcao das capas."
+  },
+  "download_completo_conferido": true,
+  "instalacao_verificada": false
+}

@@ -20,3 +20,10 @@ passou nas 249 verificacoes. Isso nao comprova geracao real na TEX.
 Nenhuma fila foi alterada nem trabalho enviado a impressoras nesta correcao.
 As capas de camarote de 1.2.397 permanecem incluidas. Validacao na TEX apos
 atualizar e reabrir o painel continua pendente.
+
+Canal teste: bateria completa em producao e piloto com 544 aprovados, 2
+pulados e 4 falhas preexistentes por perfil; 16 harnesses por perfil sem
+nova falha. MSI 196665344 bytes, SHA-256
+921ebe9ba7622dc4d8c5ad7b973db89ca2d50bbc74e894d87d4fa6262fb10293.
+Auditoria de ProductVersion, bytecode do motor, DLLs e montagem.js embutido
+aprovada. Instalacao nas estacoes nao realizada nesta tarefa.
