@@ -8785,6 +8785,17 @@ function renderElementsList() {
                 </div>
                 ` : ''}
 
+                ${el.type === 'TEXT' && el.database_text ? `
+                <div class="form-group"><label>Fio de contorno (mm)</label>
+                    <input class="form-control" type="number" min="0" max="10" step="0.1" value="${el.text_stroke_mm || 0}"
+                           onchange="this.value=Math.min(10,Math.max(0,+this.value||0));updateEl('${el.id}','text_stroke_mm',+this.value)">
+                    <div style="font-size:0.72rem;color:var(--text-dim);margin-top:4px;">0 = sem contorno nas letras.</div>
+                </div>
+                <div class="form-group"><label>Cor do contorno</label>
+                    <input class="form-control" type="color" value="${el.text_stroke_color || '#000000'}"
+                           onchange="updateEl('${el.id}','text_stroke_color',this.value)">
+                </div>
+                ` : ''}
                 ${el.type === 'TEXT' || el.type.startsWith('TEATRO_') || el.type.startsWith('CAMAROTE_') ? boxEspacoDoTextoHTML(el) : ''}
 
                 ` : ''}
