@@ -27,3 +27,17 @@ esta alteracao pontual preservando os demais modulos, publicar piloto-local
 e conferir nova abertura real do pedido antes de declarar resolvido.
 
 Suite completa das Edge Functions: 349 aprovados, zero falhas; cache existente, sem instalar dependencias.
+
+## Publicacao concluida
+
+Sessao existente do Supabase CLI autenticou corretamente; o HTTP 401 anterior
+se limitava a credencial usada na chamada direta. Fonte ativa v9 baixada e
+preservada em dist/tex-23138-deploy-base. Aplicada somente a alteracao em
+_compartilhado/piloto_local.ts; demais 11 arquivos preservados. piloto-local
+publicada como v10 ACTIVE, mantendo verify_jwt=false e autenticacao interna.
+Os 12 arquivos foram baixados novamente e comparados byte a byte com o pacote.
+
+ClienteAutonomo real, sem transformacao local da resposta publicada, preparou
+23138 com modelos 1002053 e 1002054, sem_arte vazio e 11 registros do banco.
+Nao houve envio ao spool nem alteracao comercial. Nao exige novo MSI.
+Falta operador reabrir o pedido/Montagem na TEX e confirmar PDF final.
