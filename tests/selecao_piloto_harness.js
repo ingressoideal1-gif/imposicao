@@ -53,6 +53,35 @@ function montar() {
     local.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
     assert.equal(local.PilotoSelecao.snapshotPedido('outro'),null);
 
+    // Snapshot inclui reprovados, mas a preparacao nao pode libera-los para imprimir.
+    for (const statusArte of ['REPROVADA_CLIENTE', 'EM ARTE', 'APROVADO']) {
+        const consulta=montar(); const modelo={id:10,id_int:99,status_arte:statusArte};
+        consulta.getOSItens()[0]._modeloOnline=modelo;
+        consulta.fetch=async()=>({ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),
+            sem_arte:[],pacotes:[],snapshot:{modelos:[modelo],numeracoes:[],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]}})});
+        const contexto=consulta.PilotoSelecao.iniciarPedido('vibe_99');
+        await consulta.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contexto);
+        if(statusArte==='APROVADO') {
+            await assert.rejects(consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto),/incompleta/);
+            continue;
+        }
+        await consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto);
+        consulta.carregarModeloParaPedido=async(id,os,ctx)=>{
+            assert.equal(ctx.pacoteLocal,null); consulta.cargas.push(id);
+        };
+        await consulta.enviarParaPedido(10,'vibe_99');
+        assert.equal(consulta.cargas.length,1);
+        assert.match(consulta.state.pedidoSelecaoErro,/somente para consulta/);
+        const alvo={itemId:10,osId:'vibe_99'};
+        assert.throws(()=>consulta.PilotoSelecao.validarTrabalho([alvo]),/somente para consulta/);
+        assert.throws(()=>consulta.PilotoSelecao.referencias([alvo]),/somente para consulta/);
+        await assert.rejects(consulta.PilotoSelecao.conferir(10,'vibe_99',()=>true),/somente para consulta/);
+        modelo.quantidade=99;
+        await assert.rejects(consulta.PilotoSelecao.conferir(10,'vibe_99',()=>true,true),/Reabra/);
+        consulta.PilotoSelecao.iniciarPedido('outro');
+        assert.equal(consulta.PilotoSelecao.motivoConsulta(10,'vibe_99'),null);
+    }
+
     for (const [status, detail, esperado] of [
         [413, {codigo:'limite_recurso', tamanho_bytes:300*1024*1024, limite_bytes:256*1024*1024, modelo:'10'}, /modelo 10.*300,00 MiB.*256,00 MiB/],
         [507, null, /espaço disponível/],
