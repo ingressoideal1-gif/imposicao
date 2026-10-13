@@ -3357,6 +3357,7 @@ class ImpositionEngine:
                         "nome_pos": art.get("nome_pos"),
                         "nome_rot": art.get("nome_rot"),
                         "model_idx": model_idx,
+                        "cover_c_ini": art.get("c_ini"),
                         "start_base": n1,
                         "l_cam": int(art.get("l_cam", cfg.l_cam if hasattr(cfg, "l_cam") else 1)),
                         "q_cam": int(art.get("q_cam", cfg.q_cam if hasattr(cfg, "q_cam") else 0)),
@@ -4618,8 +4619,12 @@ class ImpositionEngine:
                          fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
 
     def _generate_contracapa_for_chunk(self, set_idx, layer_idx, set_def, cfg):
+        folhas = set_def.get("capa_folhas_por_layer", {}).get(layer_idx)
+        if folhas is None:
+            folhas = math.ceil(len(set_def["cover_items"]) / (cfg.rows * cfg.cols)) if set_def.get("cover_items") else 1
+        if not folhas:
+            return
         doc_c = fitz.open()
-        folhas = math.ceil(len(set_def["cover_items"]) / (cfg.rows * cfg.cols)) if set_def.get("cover_items") else 1
         for _ in range(folhas):
             p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
             if self.rotate_angle > 0:
@@ -4686,10 +4691,12 @@ class ImpositionEngine:
             bloco_str = f"{descricao or row_start.get('Conjunto') or 'Fila'} {row_start['Fila']}"
             setor = row_start.get("Setor") or "Teatro"
             sufixo_str = f" - {setor} - de {row_start['Numero']} a {row_end['Numero']} ({qtd} lugares)"
-        elif getattr(cfg, 'num_tipo', '') == 'CAMAROTE':
-            camarote_num = cfg.c_ini + (bloco_num - 1)
+        elif item_start.get('num_tipo', getattr(cfg, 'num_tipo', '')) == 'CAMAROTE':
+            lugares = max(1, int(item_start.get('l_cam', cfg.l_cam)))
+            inicio = item_start.get('cover_c_ini')
+            camarote_num = (int(inicio) if inicio is not None else cfg.c_ini) + item_start['local_idx'] // lugares
             bloco_str = f"Camarote {camarote_num:02d}"
-            sufixo_str = f" - de 1 a {cfg.l_cam}"
+            sufixo_str = f" - de 1 a {lugares}"
         elif getattr(cfg, 'num_tipo', '') == 'TICKET':
             # TICKET: v_start/v_end são valores de "folha", não de ingresso
             # Cada folha contém ticket_qtd ingressos
@@ -4766,7 +4773,40 @@ class ImpositionEngine:
                 start_y + row * (cfg.item_h + cfg.gap_v),
             )
 
-        if set_def.get("cover_items"):
+        tem_camarote = any(item.get('num_tipo') == 'CAMAROTE' for item in multi_map)
+        if tem_camarote and not set_def.get("cover_items"):
+            # Cada camarote pertence ao chunk que contem seu primeiro lugar.
+            # A divisao fisica do miolo em blocos continua intacta.
+            presentes = [item for cell in set_def['cell_allocations']
+                         for item in cell[layer_idx * stack_size:(layer_idx + 1) * stack_size]
+                         if item is not None]
+            capas = []
+            for item in sorted(presentes, key=lambda it: it['global_idx']):
+                if item.get('num_tipo') == 'CAMAROTE':
+                    lugares = max(1, int(item['l_cam']))
+                    if item['local_idx'] % lugares == 0:
+                        capas.append((item, item))
+            if set_def['type'] == 'assembly':
+                outras = self._blocos_da_montagem(set_def, stack_size)
+            else:
+                outras = []
+                for cell in set_def['cell_allocations']:
+                    validos = [it for it in cell[layer_idx * stack_size:(layer_idx + 1) * stack_size] if it is not None]
+                    if validos:
+                        outras.append((validos[0], validos[-1]))
+            capas.extend((a, b) for a, b in outras if a.get('num_tipo') != 'CAMAROTE')
+            capas.sort(key=lambda par: par[0]['global_idx'])
+            set_def.setdefault('capa_folhas_por_layer', {})[layer_idx] = math.ceil(len(capas) / poses)
+            if not capas:
+                doc_c.close()
+                return
+            for ordem, (item_start, item_end) in enumerate(capas):
+                P = ordem % poses
+                if ordem and P == 0:
+                    p = nova_folha()
+                cell_x0, cell_y0 = canto_da_celula(P)
+                self._desenhar_capa_de_bloco(p, cell_x0, cell_y0, item_start, item_end, cfg, multi_map, stack_size)
+        elif set_def.get("cover_items"):
             # Uma capa por FILA do mapa, independente das pilhas do miolo.
             for ordem, (item_start, item_end) in enumerate(set_def["cover_items"]):
                 P = ordem % poses
