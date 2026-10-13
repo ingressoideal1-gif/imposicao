@@ -7,6 +7,24 @@ from test_pacotes_api import item, BYTES
 from canais_newprod import PORTA
 
 
+def test_abertura_entrega_catalogos_atualizados_ao_painel(tmp_path):
+    from test_offline_estacao import ambiente
+    s, _, _, _, _ = ambiente(tmp_path)
+    app = FastAPI(); app.include_router(criar_router_estatisticas(s))
+    s.offline.ciclo()
+    catalogos = {'empresa':'teste', 'formatos':[{'id':'f', 'height_mm':480}],
+                 'saidas':[{'id':'s', 'name':'Cartaz'}], 'cores':[], 'modelos_imposicao':[]}
+    s.coleta_autonoma.cliente.chamar = lambda *_: catalogos.copy()
+    origem = f'http://127.0.0.1:{PORTA}'
+    h = {'sec-fetch-site':'same-origin', 'origin':origem, 'x-piloto-painel':'1'}
+    with TestClient(app, base_url=origem, client=('127.0.0.1',55)) as c:
+        r = c.post('/api/pacotes-locais/abrir-pedido-painel', json={'pedido':'99'}, headers=h)
+        assert r.status_code == 200, r.text
+        assert r.json()['catalogos']['formatos'] == catalogos['formatos']
+        assert r.json()['catalogos']['saidas'] == catalogos['saidas']
+        assert r.json()['snapshot']['modelos']
+
+
 def test_rotas_offline_confirmacao_exige_origem_e_permissao(tmp_path):
     import uuid
     from test_offline_estacao import ambiente

@@ -1,0 +1,26 @@
+{
+  "manifesto": {
+    "schema": 1,
+    "produto": "NewProdPilotoTeste",
+    "version": "1.2.394",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.394.msi",
+    "bytes": 196661248,
+    "sha256": "970df26fa837f9f62f8d2601a15d15be3df7122facb78cc7fbb97601a08951dc",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME"
+    ],
+    "notes": "Atualiza formatos e saidas ao abrir o pedido e aplica ao painel; preserva catalogo offline e validacao antes de gerar."
+  },
+  "download_completo_conferido": true,
+  "instalacao_verificada": {
+    "estacao": "PC-JR-HOME",
+    "version": "NewProd 1.2.394-teste.1",
+    "msi_exit": 0,
+    "executavel_sha256_confere": true,
+    "scripts_servidos_conferidos": true,
+    "configuracoes_preservadas": true,
+    "backup": "%LOCALAPPDATA%/NewProd Agent/backups/catalogos-394-20261013",
+    "geracao_fisica_verificada": false
+  }
+}

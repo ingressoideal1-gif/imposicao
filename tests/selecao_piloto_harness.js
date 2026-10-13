@@ -40,6 +40,8 @@ function montar() {
     await assert.rejects(erroLocal.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contextoErro),/D-123456789abc/);
 
     const local=montar(); const row={id:10,id_int:99};
+    let catalogosAplicados=null;
+    local.PilotoOffline={aplicarCatalogos:d=>{catalogosAplicados=d;}};
     local.getOSItens()[0]._modeloOnline=row;
     const digestLocal=Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([row,[]])))).toString('hex');
     local.supabaseClient={from(){throw Error('Consulta de numeracao/modelo proibida');}};
@@ -48,11 +50,13 @@ function montar() {
         assert.equal(url,'/api/pacotes-locais/abrir-pedido-painel');
         assert.deepEqual(JSON.parse(opts.body),{pedido:'99'});
         return {ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),sem_arte:[],execucao_offline:true,
+          catalogos:{formatos:[{id:'f',height_mm:480}],saidas:[{id:'s',name:'Cartaz'}],cores:[],modelos_imposicao:[]},
           snapshot:{modelos:[row],numeracoes:[],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]},
           pacotes:[{modelo:'10',digest:digestLocal,revisao:'b'.repeat(64),origem:'local'}]})};
     };
     const abertura=local.PilotoSelecao.iniciarPedido('vibe_99');
     await local.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,abertura);
+    assert.equal(catalogosAplicados.formatos[0].height_mm,480);
     await local.PilotoSelecao.conferirPedido('vibe_99',()=>true,abertura);
     assert.equal(local.chamadas.length,1);
     assert(local.mensagens.some(m=>m.includes('última revisão local')), 'informa uso da copia offline');

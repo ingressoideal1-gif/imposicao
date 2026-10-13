@@ -200,6 +200,8 @@ def criar_router_estatisticas(servico):
         try:
             operacao = selecao.abrir_pedido if request.url.path.endswith('/abrir-pedido-painel') else selecao.preparar_pedido
             resultado = await run_in_threadpool(operacao, json.loads(corpo))
+            if request.url.path.endswith('/abrir-pedido-painel'):
+                resultado['catalogos'] = await run_in_threadpool(offline.catalogos_para_pedido, resultado)
             return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
         except PedidoLocalIndisponivel:
             raise HTTPException(409, {'codigo':'pedido_local_indisponivel',

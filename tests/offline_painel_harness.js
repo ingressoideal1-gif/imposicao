@@ -63,6 +63,13 @@ function extrair(nome) {
    assert(result.ok);assert.equal(result.ordens[0].numero,99);assert.equal(result.ordens[0].prazo_entrega,'2026-10-15');
    assert.equal(result.formatos[0].id,1);assert.equal(result.modelos[0].id,10);assert(result.item._confirmacaoLocalPendente);
    assert.equal(dados.confirmacoes.length,1);
+   const catalogoAtualizado=await page.evaluate(()=>{
+     const novo={formatos:[{id:1,height_mm:480}],saidas:[{id:2,name:'Cartaz'}],cores:[],modelos_imposicao:[]};
+     PilotoOffline.aplicarCatalogos(novo);
+     novo.formatos[0].height_mm=1;
+     return {altura:state.formatos[0].height_mm,nome:state.saidas[0].name};
+   });
+   assert.deepEqual(catalogoAtualizado,{altura:480,nome:'Cartaz'});
    dados.lista={revisao:'b'.repeat(64),lista:{...snapshot,
      pedidos:Array.from({length:65},(_,i)=>({id_int:99+i,status_interno:'EM PRODUCAO',
        cliente_exibicao:'Cliente '+i,id_cliente:100+i,id_faturado:900+i})),

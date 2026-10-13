@@ -33,6 +33,33 @@ def test_prepara_sem_navegador_e_conferencia_sobrevive_reinicio(tmp_path):
     with pytest.raises(ValueError): local.conferir([{'pedido':'99','revisao':'b'*64}])
 
 
+def test_abertura_atualiza_catalogo_recente_sem_mudanca_no_pedido(tmp_path):
+    s, _, _, o, chamadas = ambiente(tmp_path)
+    o.ciclo()
+    novo = {'empresa':'teste', 'formatos':[{'id':'f', 'height_mm':480}],
+            'saidas':[{'id':'s', 'name':'Cartaz'}], 'cores':[], 'modelos_imposicao':[]}
+    s.coleta_autonoma.cliente.chamar = lambda *_: dict(novo)
+    assert o.sincronizar_catalogos(s.coleta_autonoma.cliente)['formatos'] == []
+    assert o.catalogos_para_pedido({'execucao_offline':False})['formatos'] == novo['formatos']
+    assert OfflineEstacao(s, SelecaoPiloto(s)).catalogos()['saidas'] == novo['saidas']
+    def sem_rede(*_): raise AssertionError('Abertura offline nao consulta rede')
+    s.coleta_autonoma.cliente.chamar = sem_rede
+    assert o.catalogos_para_pedido({'execucao_offline':True})['saidas'] == novo['saidas']
+
+
+def test_catalogo_invalido_ou_recusa_preserva_copia_sem_liberar_abertura_online(tmp_path):
+    s, _, _, o, _ = ambiente(tmp_path)
+    o.ciclo(); anterior = o.catalogos()
+    s.coleta_autonoma.cliente.chamar = lambda *_: {'empresa':'outra'}
+    with pytest.raises(ValueError): o.catalogos_para_pedido({'execucao_offline':False})
+    assert o.catalogos() == anterior
+    from conferencia_piloto import ConferenciaIndisponivel
+    def negado(*_): raise ConferenciaIndisponivel('403')
+    s.coleta_autonoma.cliente.chamar = negado
+    with pytest.raises(ConferenciaIndisponivel): o.catalogos_para_pedido({'execucao_offline':False})
+    assert o.catalogos() == anterior
+
+
 def test_lista_completa_sem_arquivos_preservada_apos_falha_e_reinicio(tmp_path):
     s,_,_,o,_=ambiente(tmp_path)
     lista={k:[] for k in ('pedidos','origens','modelos','prazos','produtos','artes')}

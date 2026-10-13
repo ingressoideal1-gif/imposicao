@@ -109,6 +109,9 @@
                     .some(k => !Array.isArray(resposta.snapshot[k]))) throw Error('Snapshot local incompleto.');
         const snapshot = structuredClone(resposta.snapshot);
         if (snapshot.modelos.some(m => String(m.id_int) !== String(pedido.numero))) throw Error('Snapshot de outro pedido.');
+        if (resposta.catalogos && window.PilotoOffline) {
+            window.PilotoOffline.aplicarCatalogos(resposta.catalogos);
+        }
         contexto.preparado = resposta;
         snapshots.set(String(osId), snapshot);
         return snapshot;

@@ -42,6 +42,13 @@
         for (const r of registros) for (const row of r.snapshot?.[chave] || []) mapa.set(String(row[id]), row);
         return [...mapa.values()];
     }
+    function aplicarCatalogos(dados) {
+        const campos = {formatos:'formatos', saidas:'saidas'};
+        if (Object.keys(campos).some(k => !Array.isArray(dados[k]))) throw Error('Catálogo local incompleto.');
+        for (const [origem, destino] of Object.entries(campos)) state[destino] = structuredClone(dados[origem]);
+        // Descarta o bootstrap anterior; a próxima consulta lê o catálogo persistido.
+        pendente = null;
+    }
     async function catalogo(path) {
         const b = await bootstrap();
         if (!b.catalogos) throw Error('Os catálogos ainda não foram preparados nesta estação. Conecte uma vez para concluir o download.');
@@ -135,5 +142,5 @@
             }
         }
     }
-    window.PilotoOffline = {bootstrap,catalogo,carregarOrdens,conferencia,confirmar,aplicarConfirmacoes};
+    window.PilotoOffline = {bootstrap,catalogo,carregarOrdens,conferencia,confirmar,aplicarConfirmacoes,aplicarCatalogos};
 })();

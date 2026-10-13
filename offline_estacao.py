@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 import hashlib
+import threading
 from contextlib import contextmanager
 
 from conferencia_piloto import ConferenciaIndisponivel
@@ -24,6 +25,32 @@ class OfflineEstacao:
         self.proxima_lista = 0
         self.tentativas = {}
         self.falhas = {}
+        self._catalogos_lock = threading.Lock()
+
+    def sincronizar_catalogos(self, cliente, *, forcar=False):
+        # Serializa a abertura pelo operador com a coleta em segundo plano.
+        with self._catalogos_lock:
+            anterior = self.catalogos()
+            if not forcar and anterior and (datetime.now(timezone.utc) -
+                    datetime.fromisoformat(anterior['coletado_em'])).total_seconds() <= 1800:
+                return anterior
+            dados = cliente.chamar('catalogos-offline', {'empresa': self.servico.empresa})
+            tabelas = ('formatos', 'saidas', 'cores', 'modelos_imposicao')
+            if (dados.get('empresa') != self.servico.empresa
+                    or any(not isinstance(dados.get(t), list) for t in tabelas)):
+                raise ValueError('Catalogo da estacao incompleto.')
+            dados['coletado_em'] = datetime.now(timezone.utc).isoformat()
+            with self.banco() as con:
+                con.execute('INSERT OR REPLACE INTO offline_catalogos VALUES (1,?)', (json.dumps(dados),))
+            return dados
+
+    def catalogos_para_pedido(self, resultado):
+        if resultado.get('execucao_offline'):
+            dados = self.catalogos()
+            if dados is None:
+                raise ValueError('Catalogo local indisponivel.')
+            return dados
+        return self.sincronizar_catalogos(self.servico.coleta_autonoma.cliente, forcar=True)
 
     @contextmanager
     def banco(self):
@@ -81,16 +108,7 @@ class OfflineEstacao:
             except (ValueError, OSError):
                 self.falhas[nome] = 'Sincronizacao pendente; os registros continuam guardados.'
         checkpoint()
-        dados = self.catalogos()
-        if not dados or (datetime.now(timezone.utc)-datetime.fromisoformat(dados['coletado_em'])).total_seconds() > 1800:
-            dados = cliente.chamar('catalogos-offline', {'empresa':self.servico.empresa})
-            tabelas = ('formatos','saidas','cores','modelos_imposicao')
-            if (dados.get('empresa') != self.servico.empresa
-                    or any(not isinstance(dados.get(t), list) for t in tabelas)):
-                raise ValueError('Catalogo da estacao incompleto.')
-            dados['coletado_em'] = datetime.now(timezone.utc).isoformat()
-            with self.banco() as con:
-                con.execute('INSERT OR REPLACE INTO offline_catalogos VALUES (1,?)', (json.dumps(dados),))
+        self.sincronizar_catalogos(cliente)
         # Pedidos ainda nao preparados primeiro; no maximo tres por ciclo.
         pedidos = self.servico.pedidos_locais()
         pedidos.sort(key=lambda p: (self.selecao._cache.obter(p) or {}).get('conferido_em', ''))
