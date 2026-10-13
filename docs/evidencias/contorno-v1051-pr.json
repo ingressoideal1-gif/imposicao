@@ -1,0 +1,49 @@
+{
+  "number": 134,
+  "url": "https://github.com/ingressoideal1-gif/imposicao/pull/134",
+  "head": "0aefdb89620b35894b49052525ee3290a3806836",
+  "mergeable_state": "clean",
+  "checks": [
+    {
+      "name": "Windows - seguranca e recuperacao",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38463419082/job/115526121881"
+    },
+    {
+      "name": "NewProd e Piloto - oficial",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38463419082/job/115524119599"
+    },
+    {
+      "name": "NewProd e Piloto - producao",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38463419082/job/115524119417"
+    },
+    {
+      "name": "Piloto - consulta autenticada sem escrita",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38463419082/job/115524119308"
+    },
+    {
+      "name": "NewProd e Piloto - piloto",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38463419082/job/115524119069"
+    },
+    {
+      "name": "Cloudflare Pages",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/78a4ccea-5a07-4e4c-83ae-c0b6cc07e64d"
+    }
+  ],
+  "merge": {
+    "sha": "3259cfb204120a88b419f2c2d4dc32f4b4ac72fb",
+    "merged": true,
+    "message": "Pull Request successfully merged"
+  }
+}
