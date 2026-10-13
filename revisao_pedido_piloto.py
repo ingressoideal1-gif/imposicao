@@ -7,6 +7,7 @@ from conferencia_piloto import ConferenciaIndisponivel
 
 
 def validar_recibo(dados, empresa, pedido, anterior):
+    codigo = 'revisao_invalida'
     try:
         if (not isinstance(dados, dict) or dados.get('empresa') != empresa or dados.get('pedido') != pedido
                 or not re.fullmatch('[a-f0-9]{64}', dados.get('revisao', ''))
@@ -16,11 +17,15 @@ def validar_recibo(dados, empresa, pedido, anterior):
             raise ValueError()
         quando = datetime.fromisoformat(dados['conferido_em'])
         if quando.tzinfo is None or abs((datetime.now(timezone.utc)-quando).total_seconds()) > 120:
+            codigo = 'relogio_divergente'
             raise ValueError()
         if not dados['sem_mudanca'] and (not isinstance(dados.get('itens'), list) or len(dados['itens']) > 128):
             raise ValueError()
-    except (ValueError, TypeError, KeyError):
-        raise ConferenciaIndisponivel('Revisao do pedido nao confirmada na nuvem.') from None
+    except (ValueError, TypeError, KeyError) as erro:
+        from diagnostico_estacao import registrar
+        falha = ConferenciaIndisponivel('Revisao do pedido nao confirmada na nuvem.')
+        falha.diagnostico_id = registrar(erro, codigo, 'recibo', pedido=pedido)
+        raise falha from None
     return dados
 
 

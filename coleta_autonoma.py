@@ -6,6 +6,7 @@ import threading
 import urllib.request
 import urllib.error
 import ssl
+from diagnostico_estacao import registrar as registrar_diagnostico
 
 from conferencia_piloto import ConferidorPiloto, ConferenciaIndisponivel, ConexaoPilotoIndisponivel
 from pacotes_download import SemRedirecionamento
@@ -26,28 +27,38 @@ class ClienteAutonomo:
     def chamar(self, acao, corpo):
         if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'lista-offline', 'confirmar-offline'):
             raise ValueError('Operação fora do piloto.')
+        inicio = time.monotonic()
+        codigo = 'canal_autonomo'
+        def diagnosticada(erro, falha):
+            falha.diagnostico_id = registrar_diagnostico(erro, codigo, acao, pedido=corpo.get('pedido'),
+                modelo=corpo.get('modelo'), duracao_ms=int((time.monotonic()-inicio)*1000))
+            return falha
         try:
             segredo = self.segredo()
-            if not segredo: raise ValueError()
+            if not segredo:
+                codigo = 'credencial_ausente'
+                raise ValueError()
             req = urllib.request.Request(self.base + acao,
                 data=json.dumps({**corpo, 'estacao': self.estacao}).encode(), method='POST',
                 headers={'Content-Type':'application/json', 'X-Agente-Segredo':segredo})
             with self.abrir(req, timeout=5 if acao == 'abrir-pedido' else 20) as resposta:
-                if getattr(resposta, 'status', 200) != 200: raise ValueError()
+                if getattr(resposta, 'status', 200) != 200:
+                    raise urllib.error.HTTPError('', resposta.status, '', {}, None)
+                codigo = 'resposta_invalida'
                 limite = (8 if acao in ('conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'lista-offline') else 1) * 1024 * 1024
                 raw = resposta.read(limite + 1)
                 if len(raw) > limite: raise ValueError()
                 return json.loads(raw)
-        except urllib.error.HTTPError:
-            raise ConferenciaIndisponivel('Canal autônomo recusou a consulta.') from None
+        except urllib.error.HTTPError as erro:
+            raise diagnosticada(erro, ConferenciaIndisponivel('Canal autônomo recusou a consulta.')) from None
         except urllib.error.URLError as erro:
             if isinstance(erro.reason, ssl.SSLError):
-                raise ConferenciaIndisponivel('Conexao segura nao confirmada.') from None
-            raise ConexaoPilotoIndisponivel('Conexao com a nuvem indisponivel.') from None
-        except (TimeoutError, ConnectionError):
-            raise ConexaoPilotoIndisponivel('Conexao com a nuvem indisponivel.') from None
-        except Exception:
-            raise ConferenciaIndisponivel('Canal autônomo não confirmado; confira habilitação e acesso da estação.') from None
+                raise diagnosticada(erro, ConferenciaIndisponivel('Conexao segura nao confirmada.')) from None
+            raise diagnosticada(erro, ConexaoPilotoIndisponivel('Conexao com a nuvem indisponivel.')) from None
+        except (TimeoutError, ConnectionError) as erro:
+            raise diagnosticada(erro, ConexaoPilotoIndisponivel('Conexao com a nuvem indisponivel.')) from None
+        except Exception as erro:
+            raise diagnosticada(erro, ConferenciaIndisponivel('Canal autônomo não confirmado; confira habilitação e acesso da estação.')) from None
 
     def conferir(self, item):
         corpo = {k:item[k] for k in ('empresa','modelo','fontes')}

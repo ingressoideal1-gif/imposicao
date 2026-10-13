@@ -97,7 +97,9 @@
             if (detalhe?.codigo === 'pedido_local_indisponivel') {
                 throw Error('Sem internet e sem cópia completa validada deste pedido. Conecte a estação e abra o pedido para preparar seus dados e arquivos.');
             }
-            throw Error('Nao foi possivel abrir a revisao local (HTTP ' + r.status + '). Confira a atualizacao do agente e do sinal no banco.');
+            const codigo = r.headers.get('X-NewProd-Diagnostico') || '';
+            const referencia = /^D-[a-f0-9]{12}$/.test(codigo) ? ' Informe ao suporte o codigo ' + codigo + '.' : '';
+            throw Error('Nao foi possivel abrir o pedido (HTTP ' + r.status + ').' + referencia);
         }
         const resposta = await r.json();
         if (!atual() || contexto !== pedidoAtual) return null;
