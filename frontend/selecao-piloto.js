@@ -167,6 +167,17 @@
         const resposta = await r.json();
         if (!atual() || contexto !== pedidoAtual) return null;
         const pacotes = resposta.pacotes;
+        // A resposta inclui o pedido inteiro; a tela confere apenas impressos.
+        // Excluir somente estoque comprovado pelo snapshot, nunca IDs desconhecidos.
+        const snapshot = contexto.preparado?.snapshot;
+        const estoque = new Set((snapshot?.modelos || []).filter(m => {
+            const origem = (snapshot.origens || []).find(o => String(o.id) === String(m.id_produto_proposta_origem));
+            const produtoId = m._vibe_id_produto ?? m.id_produto ?? m.produto_id ?? origem?.id_produto;
+            return produtoId != null && (snapshot.produtos || []).some(p =>
+                String(p.id_produto) === String(produtoId) && p.is_estoque === true)
+                && (getOSItens(osId) || []).some(i => String(i.id) === String(m.id) && i._produto_prateleira === true);
+        }).map(m => String(m.id)));
+        const semArte = Array.isArray(resposta.sem_arte) ? resposta.sem_arte.filter(id => !estoque.has(id)) : null;
         // Apenas um snapshot confirmado pode conceder consulta sem impressao.
         // Uma resposta incompleta para modelo aprovado continua sendo erro.
         const somenteConsulta = contexto.preparado ? itens.filter(item => {
@@ -176,10 +187,10 @@
                 && !pacotes?.some(p => p.modelo === String(item.id));
         }) : [];
         const idsConsulta = somenteConsulta.map(i => String(i.id));
-        const idsConsultaAdicionais = idsConsulta.filter(id => !resposta.sem_arte?.includes(id));
-        if (resposta.pedido !== String(pedido.numero) || !Array.isArray(pacotes) || !Array.isArray(resposta.sem_arte)
-            || new Set([...pacotes.map(p => p.modelo), ...resposta.sem_arte, ...idsConsulta]).size !== modelos.length
-            || pacotes.length + resposta.sem_arte.length + idsConsultaAdicionais.length !== modelos.length) throw Error('Resposta local incompleta.');
+        const idsConsultaAdicionais = idsConsulta.filter(id => !semArte?.includes(id));
+        if (resposta.pedido !== String(pedido.numero) || !Array.isArray(pacotes) || !semArte
+            || new Set([...pacotes.map(p => p.modelo), ...semArte, ...idsConsulta]).size !== modelos.length
+            || pacotes.length + semArte.length + idsConsultaAdicionais.length !== modelos.length) throw Error('Resposta local incompleta.');
         for (const pacote of pacotes) {
             const esperado = modelos.find(m => m.modelo === pacote.modelo);
             const itemAtual = (getOSItens(osId) || []).find(i => String(i.id) === pacote.modelo);
@@ -187,7 +198,7 @@
                 || !/^[a-f0-9]{64}$/.test(pacote.revisao)
                 || fotografias.get(pacote.modelo) !== JSON.stringify(canonico(itemAtual?._modeloOnline))) throw Error('Resposta local não corresponde ao pedido.');
         }
-        if (resposta.sem_arte.some(id => !modelos.some(m => m.modelo === id))) throw Error('Modelo local desconhecido.');
+        if (semArte.some(id => !modelos.some(m => m.modelo === id))) throw Error('Modelo local desconhecido.');
         if (/^[a-f0-9]{64}$/.test(resposta.revisao_pedido || '')) {
             // Bancos do pedido/vinculos tambem participam da revisao. A marca
             // anterior nao pode dispensar a carga depois de uma alteracao.

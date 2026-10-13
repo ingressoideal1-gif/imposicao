@@ -63,6 +63,26 @@ function montar() {
     local.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
     assert.equal(local.PilotoSelecao.snapshotPedido('outro'),null);
 
+    // Pedido misto: produto de estoque em sem_arte nao e um impresso ausente.
+    for (const comprovado of [true,false]) {
+        const misto=montar(), impresso={id:10,id_int:99,status_arte:'APROVADO'};
+        const estoque={id:11,id_int:99,id_produto_proposta_origem:7};
+        misto.getOSItens=()=>[{id:10,_modeloOnline:impresso},{id:11,_modeloOnline:estoque,_produto_prateleira:true}];
+        const dig=Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(
+            [Object.fromEntries(Object.entries(impresso).sort(([a],[b])=>a.localeCompare(b))),[]])))).toString('hex');
+        misto.fetch=async()=>({ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),
+            sem_arte:['11'],pacotes:[{modelo:'10',digest:dig,revisao:'b'.repeat(64),origem:'local'}],
+            snapshot:{modelos:[impresso,estoque],numeracoes:[],origens:[{id:7,id_produto:8}],
+                produtos:[{id_produto:8,is_estoque:comprovado}],bancos:[],vinculos:[],artes:[],mapas:[]}})});
+        const contexto=misto.PilotoSelecao.iniciarPedido('vibe_99');
+        await misto.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contexto);
+        if(comprovado) {
+            await misto.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto);
+            misto.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
+            assert.throws(()=>misto.PilotoSelecao.validarTrabalho([{itemId:11,osId:'vibe_99'}]));
+        } else await assert.rejects(misto.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto),/incompleta/);
+    }
+
     // Snapshot inclui reprovados, mas a preparacao nao pode libera-los para imprimir.
     for (const semArte of [[], ['10']]) for (const statusArte of ['REPROVADA_CLIENTE', 'EM ARTE', 'APROVADO']) {
         const consulta=montar(); const modelo={id:10,id_int:99,status_arte:statusArte,arte_url:'https://test.invalid/a.pdf'};
