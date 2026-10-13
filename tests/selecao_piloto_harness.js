@@ -54,15 +54,19 @@ function montar() {
     assert.equal(local.PilotoSelecao.snapshotPedido('outro'),null);
 
     // Snapshot inclui reprovados, mas a preparacao nao pode libera-los para imprimir.
-    for (const statusArte of ['REPROVADA_CLIENTE', 'EM ARTE', 'APROVADO']) {
-        const consulta=montar(); const modelo={id:10,id_int:99,status_arte:statusArte};
+    for (const semArte of [[], ['10']]) for (const statusArte of ['REPROVADA_CLIENTE', 'EM ARTE', 'APROVADO']) {
+        const consulta=montar(); const modelo={id:10,id_int:99,status_arte:statusArte,arte_url:'https://test.invalid/a.pdf'};
         consulta.getOSItens()[0]._modeloOnline=modelo;
         consulta.fetch=async()=>({ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),
-            sem_arte:[],pacotes:[],snapshot:{modelos:[modelo],numeracoes:[],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]}})});
+            sem_arte:semArte,pacotes:[],snapshot:{modelos:[modelo],numeracoes:[],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]}})});
         const contexto=consulta.PilotoSelecao.iniciarPedido('vibe_99');
         await consulta.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contexto);
         if(statusArte==='APROVADO') {
-            await assert.rejects(consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto),/incompleta/);
+            if (!semArte.length) await assert.rejects(consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto),/incompleta/);
+            else {
+                await consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto);
+                await assert.rejects(consulta.PilotoSelecao.conferir(10,'vibe_99',()=>true,true),/Reabra/);
+            }
             continue;
         }
         await consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto);
@@ -71,6 +75,11 @@ function montar() {
         };
         await consulta.enviarParaPedido(10,'vibe_99');
         assert.equal(consulta.cargas.length,1);
+        let leitura=null;
+        consulta.fetch=async(url)=>{leitura=url;return {ok:true};};
+        assert.equal((await consulta.PilotoSelecao.lerUrlParaConsulta(modelo.arte_url,10,'vibe_99')).ok,true);
+        assert.equal(leitura,modelo.arte_url);
+        await assert.rejects(consulta.PilotoSelecao.lerUrlParaConsulta('https://test.invalid/outro.pdf',10,'vibe_99'),/nao pertence/);
         assert.match(consulta.state.pedidoSelecaoErro,/somente para consulta/);
         const alvo={itemId:10,osId:'vibe_99'};
         assert.throws(()=>consulta.PilotoSelecao.validarTrabalho([alvo]),/somente para consulta/);

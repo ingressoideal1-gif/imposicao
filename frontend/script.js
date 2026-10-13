@@ -33382,7 +33382,10 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
     state.imposicaoSelecaoErro = null;
     const anterior = contexto.aindaAtual || (() => true);
     const aindaAtual = () => state.imposicaoSelecaoCarregando === carga && anterior();
-    try { await carregarModeloParaImposicao(itemId, osId, switchTab, { ...contexto, aindaAtual }); }
+    try {
+        await carregarModeloParaImposicao(itemId, osId, switchTab, { ...contexto, aindaAtual });
+        if (aindaAtual()) state.imposicaoSelecaoErro = window.PilotoSelecao?.motivoConsulta(itemId, osId) || null;
+    }
     catch (erro) {
         if (aindaAtual()) {
             state.imposicaoSelecaoErro = erro.message;
@@ -33604,7 +33607,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
             const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
             const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
             
-            await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(arteUrl) : fetch(arteUrl))
+            await (window.PilotoSelecao ? window.PilotoSelecao.lerUrlParaConsulta(arteUrl, itemId, osId) : fetch(arteUrl))
                 .then(res => {
                     if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                     const ct = res.headers.get('content-type') || '';
@@ -33635,7 +33638,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
             state.impArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
-                await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(item.verso_arte_url) : fetch(item.verso_arte_url))
+                await (window.PilotoSelecao ? window.PilotoSelecao.lerUrlParaConsulta(item.verso_arte_url, itemId, osId) : fetch(item.verso_arte_url))
                     .then(res => {
                         if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                         const ct = res.headers.get('content-type') || '';
