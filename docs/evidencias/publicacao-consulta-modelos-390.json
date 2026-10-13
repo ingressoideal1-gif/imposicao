@@ -1,0 +1,40 @@
+{
+  "oficial": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.2.390",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.2.390.msi",
+    "sha256": "8df7584c39bed14bc9ead4d813dc97a7a1ea52ae2f358c8ce10384a9eb518571",
+    "bytes": 194953216,
+    "size": 194953216,
+    "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+    "estacoes": [
+      "LASER-04",
+      "TEX-01",
+      "FLEXO",
+      "LAPTOP-9BSK81S0",
+      "GUSTAVO-PROD",
+      "LASER-02",
+      "ACABAMENTO",
+      "DESKTOP-PM6TG1B"
+    ],
+    "download_conferido": true,
+    "ativado": true,
+    "bootstrap_legado": true
+  },
+  "teste": {
+    "schema": 1,
+    "produto": "NewProdPilotoTeste",
+    "version": "1.2.390",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.390.msi",
+    "bytes": 196628480,
+    "sha256": "cad80495e34cc908ca5c1e2ce9d2dd41e4eae65aa7ef83aa649aa7a36aaa1b29",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME"
+    ],
+    "notes": "Consulta de modelos sem aprovacao com bloqueio explicito de geracao e impressao; preserva recursos do Teste 389.",
+    "download_conferido": true,
+    "ativado": true
+  }
+}

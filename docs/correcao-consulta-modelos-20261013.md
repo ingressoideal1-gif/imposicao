@@ -32,3 +32,11 @@ Correcao destinada ao painel local empacotado. Nao substituir o frontend web
 mais recente pela base antiga do agente. Preservar listas dos manifestos.
 Publicacao e instalacao devem ser registradas separadamente; nenhuma estacao
 foi reiniciada ou instalada nesta tarefa. Abertura real na Gustavo pendente.
+
+## Publicacao confirmada
+
+Em 13/10/2026, MSIs oficial e teste 1.2.390 publicados. Downloads completos
+conferidos por tamanho e SHA-256 antes de ativar. latest.json, manifesto
+oficial e manifesto de teste reconsultados publicamente: 1.2.390, mesmas
+listas de estacoes. Evidencia em docs/evidencias/publicacao-consulta-modelos-390.json.
+Instalacao e abertura do pedido na Gustavo ainda nao confirmadas.
