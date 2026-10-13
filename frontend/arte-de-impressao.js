@@ -175,7 +175,7 @@
         const hash = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
         return Array.from(new Uint8Array(hash), x => x.toString(16).padStart(2, '0')).join('');
     }
-    async function confirmarIntegridadeDoTrabalho(fd, base, estado, cliente, signal) {
+    async function confirmarIntegridadeDoTrabalho(fd, base, estado, cliente, signal, selecaoExplicita, bancosPorPedido) {
         if (!globalThis.crypto?.subtle || !globalThis.crypto?.randomUUID) {
             throw new Error('Abra o painel pelo endereço local do NewProd ou por HTTPS para conferir a integridade dos arquivos.');
         }
@@ -254,17 +254,19 @@
             const pedidos = [...new Set(modelos.map(m => m.id_int).filter(Boolean))];
             const bancosLidos = [];
             for (const id of pedidos) {
+                const preparados = bancosPorPedido ? bancosPorPedido[String(id)] : null;
+                if (bancosPorPedido && !preparados) throw new Error('Banco não preparado para o pedido da Montagem. Reabra o pedido.');
                 if (typeof raiz.chamarBancosPedido !== 'function') throw new Error('Validação de bancos indisponível. Atualize o painel.');
                 const resposta = await raiz.chamarBancosPedido('consultar', { id_int: id }, controle.signal);
                 const vinculos = (resposta.vinculos || []).filter(v => ids.includes(String(v.modelo_id)));
-                const anteriores = ids.map(id => estado.vinculosDeBanco?.[id]).filter(Boolean);
+                const anteriores = ids.map(id => (preparados ? preparados.vinculos : estado.vinculosDeBanco)?.[id]).filter(Boolean);
                 for (const m of modelos.filter(m => m.id_int === id)) {
                     const v = vinculos.find(v => String(v.modelo_id) === String(m.id)) || null;
                     const ant = anteriores.find(v => String(v.modelo_id) === String(m.id)) || null;
                     if (!iguais(v, ant)) throw new Error('O vínculo do banco mudou. Reabra o pedido.');
                 }
                 for (const banco of resposta.bancos || []) {
-                    const antigo = (estado.bancosDoPedido || []).find(b => String(b.id) === String(banco.id));
+                    const antigo = ((preparados ? preparados.bancos : estado.bancosDoPedido) || []).find(b => String(b.id) === String(banco.id));
                     if (!iguais(banco, antigo)) throw new Error('O banco do pedido mudou ou está incompleto. Reabra o pedido.');
                 }
                 bancosLidos.push([id, resposta]);
@@ -290,7 +292,7 @@
             async function baixar(url, chave) {
                 if (!downloads.has(url)) downloads.set(url, (async () => {
                     const res = raiz.PilotoSelecao
-                        ? await raiz.PilotoSelecao.lerUrl(url, { signal: controle.signal })
+                        ? await raiz.PilotoSelecao.lerUrl(url, { signal: controle.signal }, selecaoExplicita)
                         : await fetch(url, { signal: controle.signal, cache: 'no-store' });
                     if (!res.ok) throw new Error('Falha ao carregar a arte obrigatória: ' + chave);
                     return res.blob();

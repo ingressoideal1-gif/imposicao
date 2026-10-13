@@ -75,7 +75,7 @@ const NOMES = [
     'celulasDaFolhaUnica', 'celulasDistribuidas', 'modoSugeridoDaMontagem',
     'celulasDasMontagens', '_mtgAssinaturaDasCelulas',
     'formatoDoItem', 'saidaIdDoItem', 'pecaDaMontagem',
-    'payloadDaMontagem', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem', 'nomeDoArquivoDaMontagem',
+    'payloadDaMontagem', '_mtgPrepararPedidoLocal', 'prepararArtesDaMontagem', 'imprimirNumeroNaMontagem', 'nomeDoArquivoDaMontagem',
     '_mtgNumeroDoPedido', '_mtgEstiloDoNumero', '_mtgModeloDoItem',
     '_mtgChaveDoCandidato', 'melhoresCombinacoesDeModelosDaMontagem',
 ];
@@ -111,6 +111,7 @@ function novoState() {
 // Os nomes que o núcleo consulta com `typeof X === 'function'`. Cada teste
 // passa os seus; o que não vier fica `undefined`, como numa estação sem eles.
 const GLOBAIS = [
+    'window', 'idIntDoPedido',
     'fatiaCsvDoItem', 'state', 'document', 'modoDeVersoDoModelo', 'rotacaoDaFolhaDoFormato',
     'arteDoModeloParaFolha', 'arteParaOMotor', 'garantirBancosDoTrabalho', 'garantirCsvDoTrabalho',
     'pedidosComBancoDesconhecido', 'bancoVazioNoPayload', 'recadoDeBancoVazio',
@@ -121,7 +122,7 @@ const fabrica = new Function(...GLOBAIS,
     + CONSTANTES.map(extrairConst).join('\n') + '\n'
     + NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};');
 function montarApi(stubs) {
-    const s = Object.assign({ state: novoState() }, stubs || {});
+    const s = Object.assign({ state: novoState(), window: {} }, stubs || {});
     return fabrica(...GLOBAIS.map(n => s[n]));
 }
 
@@ -718,6 +719,7 @@ async function testarPreparo() {
         numeracaoIdDoItem: it => it.amostra_num_id,
         numeracaoSemElementosDeLayout: n => n,
         numeroDoPedidoDoItem: osId => ({ a: '21202', b: '21188' })[osId] || null,
+        idIntDoPedido: osId => ({ a: '21202', b: '21188' })[osId] || null,
         garantirBancosDoTrabalho: async ids => { log.push('bancos ' + ids.join()); st._bancosPedidoDe = ids[0]; },
         garantirCsvDoTrabalho: async ids => { log.push('csv ' + ids.join()); },
         pedidosComBancoDesconhecido: () => [],

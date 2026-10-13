@@ -1222,9 +1222,8 @@ function idIntDoBancoOuModelo(bancoId, modeloId) {
 async function carregarBancosDoPedidoNovo(osId, idInt) {
     if (!Array.isArray(state.bancosDoPedido)) state.bancosDoPedido = [];
     if (!state.vinculosDeBanco) state.vinculosDeBanco = {};
-    if (typeof supabaseClient === 'undefined' || !supabaseClient || !idInt) return 0;
-
     const local = window.PilotoSelecao?.snapshotPedido?.(osId);
+    if (!idInt || (!local && (typeof supabaseClient === 'undefined' || !supabaseClient))) return 0;
     const resposta = local ? {bancos:structuredClone(local.bancos),vinculos:structuredClone(local.vinculos)}
         : await chamarBancosPedido('consultar', { id_int: idInt });
     state.bancosDoPedido = resposta.bancos || [];
@@ -1629,7 +1628,8 @@ async function garantirBancosDoTrabalho(osIds) {
         // marca em localStorage). Marcar como consultado aqui recriaria o
         // defeito calado: o `carregarBancosDoPedidoNovo` devolve 0 nesse caso,
         // que e indistinguivel de "este pedido nao tem banco".
-        if (typeof supabaseClient === 'undefined' || !supabaseClient) continue;
+        if (!window.PilotoSelecao?.snapshotPedido?.(osId)
+            && (typeof supabaseClient === 'undefined' || !supabaseClient)) continue;
         try {
             await carregarBancosDoPedidoNovo(osId, idInt);
             state._bancosConsultados[osId] = true;
