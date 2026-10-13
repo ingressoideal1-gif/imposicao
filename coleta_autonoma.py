@@ -46,7 +46,8 @@ class ClienteAutonomo:
                 return json.loads(raw)
         except Exception as erro:
             ident = registrar_diagnostico(erro, codigo, acao, pedido=corpo.get('pedido'),
-                modelo=corpo.get('modelo'), duracao_ms=int((time.monotonic()-inicio)*1000))
+                modelo=corpo.get('modelo'), duracao_ms=int((time.monotonic()-inicio)*1000),
+                contexto_http=(self.estacao, self.empresa, self.base))
             falha = ConferenciaIndisponivel('Canal autônomo não confirmado; confira habilitação e acesso da estação.')
             falha.diagnostico_id = ident
             raise falha from None
