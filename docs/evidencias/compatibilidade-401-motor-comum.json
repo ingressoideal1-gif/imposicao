@@ -1,0 +1,14 @@
+{
+  "versao": "1.2.401",
+  "modulos_compilados_identicos": [
+    "engine",
+    "print_service",
+    "hotfolder",
+    "agent_worker",
+    "art_cache",
+    "antecipacao_local",
+    "integridade_impressao"
+  ],
+  "oficial_commit": "15c42ab98ed2bf064eacc06fb13672cf22e51681",
+  "teste_commit": "e738516c80871d2e085b5507e837c8986e0211e5"
+}

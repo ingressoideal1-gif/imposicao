@@ -2,14 +2,15 @@
 
 ## Escopo e estado
 
-Preparacao local autorizada para compatibilizar versoes, motores e modos de
-impressao. Nao houve commit, push, publicacao, compilacao de instalador,
-instalacao, reinicio, consulta a pedidos reais ou envio ao spool.
+Compatibilizacao concluida e entregue: oficial 1.2.401, teste
+1.2.401-teste.1 (MSI 1.2.401) e web v1052. PR #135 integrado na main em
+777fa4a2. Pacotes publicos conferidos por download integral, tamanho e SHA-256;
+manifestos relidos e listas de estacoes preservadas. Web conferida nos dois
+dominios. Nenhuma instalacao, reinicio ou impressao fisica foi comandada.
 
-As versoes publicadas continuam sendo artefatos diferentes destas fontes de
-trabalho. Nao republicar um MSI 1.2.400 ou 1.2.399 com outros bytes. Uma entrega
-posterior precisa atribuir novas versoes, compilar e auditar os pacotes,
-conferir download e preservar a lista de estacoes de cada manifesto.
+A primeira etapa foi somente local. A continuacao "seguir" autorizou a entrega;
+o uso exclusivo da chave de publicacao foi autorizado separadamente. Os
+artefatos antigos 1.2.400 e 1.2.399 foram preservados, sem sobrescrita.
 
 ## Bases preservadas e integracao
 
@@ -21,9 +22,8 @@ conferir download e preservar a lista de estacoes de cada manifesto.
 
 As duas worktrees ficam em `C:\Users\Junior\Projetos Ingresso ideal`, com os
 nomes `imposicao-compatibilidade-newprod-20261013` e
-`imposicao-compatibilidade-newprod-teste-20261013`. A integracao usa squash
-sem commit; o diff completo deve ser lido contra HEAD, incluindo staged e
-unstaged. Os checkouts operacionais anteriores nao foram modificados.
+`imposicao-compatibilidade-newprod-teste-20261013`. A preparacao usou squash; depois da validacao, as fontes foram registradas
+nos commits indicados na secao de entrega. Os checkouts operacionais anteriores nao foram modificados.
 
 A fonte oficial incorpora cache persistente, diagnosticos, consulta de
 modelos, capas por camarote e Montagem da linha 1.2.389–1.2.400, preservando
@@ -124,6 +124,58 @@ o harness de faces da Montagem precisou fornecer os identificadores de
 pedido e structuredClone exigidos pela preparacao atual. As assercoes de
 PDF, integridade e recusa foram mantidas.
 
-Compilacao e auditoria do MSI, rollout por estacao, PDF com dados reais e
-aceite de impressao fisica permanecem etapas posteriores. Nenhum resultado
+Compilacao e auditoria do MSI foram concluidas na continuacao abaixo.
+Rollout por estacao, PDF com dados reais e aceite de impressao fisica
+continuam sem prova nesta entrega. Nenhum resultado
 de simulacao comprova impressao fisica ou instalacao nas estacoes.
+
+
+## Continuacao autorizada: entrega 1.2.401 e web v1052
+
+Fontes registradas e enviadas em branches isoladas: oficial 15c42ab9,
+teste e738516c. Integracao oficial pelo PR #135; o canal experimental
+permanece em sua branch propria. Checkouts operacionais preservados.
+
+MSI oficial 1.2.401: 194990080 bytes, SHA-256
+`971d4323327c93b37c4d4764857055971dfad3c3f2039d8be7d74e4f52ea8a43`.
+MSI teste 1.2.401, runtime 1.2.401-teste.1: 196669440 bytes, SHA-256
+`7804721b2534996eafccc980be29cfcb63fde9f3f7ea6d99ac11a8f51d2b73e6`.
+Auditorias do executavel, preservador e MSI aprovadas, sem arquivos privados.
+Nove modulos conferidos contra as respectivas fontes e 356/375 arquivos de
+painel conferidos. DLLs GDI incluidas. Sete modulos compilados comuns sao
+identicos entre os dois canais; provas em evidencias/compatibilidade-401-*.
+
+Treze testes de versao, perfil, publicador e compatibilidade passaram em
+cada fonte depois da troca de versao. A auditoria adicional do MSI teste foi
+inicialmente chamada antes do fim do linker; apos conclusao com codigo zero,
+a leitura de propriedades e toda a auditoria passaram. Nao foi uma falha
+do instalador concluido.
+
+Previa Cloudflare 2292743a-8798-4399-8f28-35c33ca0dc20 conferida: 9/9 arquivos
+alterados correspondem a fonte. A producao foi conferida posteriormente, conforme registro abaixo.
+Uso exclusivo de SUPABASE_SERVICE_KEY de .env.local autorizado pelo usuario;
+nenhum valor exibido, salvo no Git ou incluido nos pacotes.
+
+Entrega publica concluida em 13/10/2026. Os dois MSI foram enviados sob nomes
+novos e baixados integralmente antes da ativacao. Manifestos oficiais e teste
+relidos em 1.2.401; mantidas exatamente as oito estacoes oficiais e as duas
+de teste. Os tres manifestos anteriores estao em
+dist/compatibilidade/manifestos-antes-401.json e nos backups do publicador.
+
+Seis checks do PR #135 aprovados, incluindo os tres perfis, consulta,
+seguranca/recuperacao e previa Cloudflare. Merge no SHA conferido.
+Cloudflare de producao 6b1008eb-83d2-4ded-ae97-31234a32e70c concluida;
+18/18 comparacoes normalizadas com cache-buster aprovadas nos dominios
+imposition.ai-ideal.com.br e imposicao.pages.dev. Tag web v1052 aponta para
+777fa4a2. Evidencias de PR, deployment, assets e manifestos em docs/evidencias.
+
+Nenhuma Edge Function ou migracao SQL foi publicada nesta etapa; os testes
+locais de Edge nao comprovam uma nova implantacao remota. Nao houve consulta
+a pedidos reais, instalacao, reinicio ou comando de impressao fisica.
+A atualizacao efetiva e o aceite em campo precisam ser conferidos por estacao.
+
+Recuperacao: conservar MSI, fontes anteriores e manifestos. Como o agente nao
+faz downgrade, uma reversao de codigo exige novo numero superior a 1.2.401,
+rebuild e auditoria. Web usa reversao restrita em novo commit ou rollback do
+deployment comprovado. Nao tocar em configuracoes, spool, QR ou filas para
+executar a recuperacao. Conferir PDF real antes do aceite de impressao.
