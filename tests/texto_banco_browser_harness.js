@@ -85,6 +85,45 @@ function extrair(nome, atribuida = false, codigo = fonte) {
         assert.equal(await page.$$eval('select[onchange*="overflow"] option', els => els.length), 3);
         assert.equal(await page.$$eval('select[onchange*="text_align"] option', els => els.length), 3);
 
+        // Contorno editável, persistido no elemento e desenhado com o preenchimento.
+        await page.evaluate(() => {
+            window.contornos = [];
+            const stroke = CanvasRenderingContext2D.prototype.strokeText;
+            CanvasRenderingContext2D.prototype.strokeText = function (texto, x, y) {
+                contornos.push({ texto, cor: this.strokeStyle, largura: this.lineWidth });
+                return stroke.call(this, texto, x, y);
+            };
+            state.selectedElIds = ['el_1']; renderElementsList();
+        });
+        const fio = '[onchange*="\'text_stroke_mm\'"]';
+        const corFio = '[onchange*="\'text_stroke_color\'"]';
+        for (const seletor of [fio, corFio]) {
+            assert.equal(await page.$eval(seletor, el => el.checkVisibility()), true);
+        }
+        await page.$eval(corFio, el => {
+            el.value = '#ff0000'; el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        await page.$eval(fio, el => {
+            el.value = '0.4'; el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        const contorno = await page.evaluate(() => {
+            state.numElements = JSON.parse(JSON.stringify(state.numElements));
+            renderElementsList(); contornos.length = 0; drawCanvas();
+            return { el: state.numElements[0], desenhos: contornos };
+        });
+        assert.equal(contorno.el.text_stroke_mm, 0.4);
+        assert.equal(contorno.el.text_stroke_color, '#ff0000');
+        assert.ok(contorno.desenhos.length > 0);
+        assert.equal(contorno.desenhos[0].cor, '#ff0000');
+        assert.equal(contorno.desenhos[0].largura, 2);
+        for (const [valor, esperado] of [['-1', 0], ['20', 10], ['', 0]]) {
+            await page.$eval(fio, (el, valor) => {
+                el.value = valor; el.dispatchEvent(new Event('change', { bubbles: true }));
+            }, valor);
+            assert.equal(await page.evaluate(() => state.numElements[0].text_stroke_mm), esperado);
+        }
+        assert.deepEqual(await page.evaluate(() => { contornos.length = 0; drawCanvas(); return contornos; }), []);
+
         // Peça nova sem coluna; o mapa do modelo resolve por el:<id> e mantém as opções.
         const resolvido = await page.evaluate(() => {
             const el = state.numElements[0], banco = { csv_headers: ['NOME'], csv_data: [{ NOME: 'MARIA' }] };
@@ -108,14 +147,19 @@ function extrair(nome, atribuida = false, codigo = fonte) {
         assert.deepEqual(await page.evaluate(() => drawn), ['ID: 0007 VIP']);
         const previas = await page.evaluate(async () => {
             const el = state.numElements[0];
+            el.text_stroke_mm = 0.4;
             const num = { elements: [el], csv_data: [{ NOME: '7' }, { NOME: '8' }] };
             const ctx = document.getElementById('numeracao-canvas').getContext('2d');
             const resultados = [];
             for (const pintar of [previaPainel, previaCliente]) {
+                contornos.length = 0;
                 drawn.length = 0; pintar(ctx, num, {}, 2, 800, 280); resultados.push([...drawn]);
+                if (!contornos.length || contornos[0].cor !== '#ff0000') throw Error('Prévia sem contorno');
             }
             drawn.length = 0;
+            contornos.length = 0;
             await criarCanvasNumeracaoRasterizada(num, state.numFormato, 'front'); resultados.push([...drawn]);
+            if (!contornos.length) throw Error('Raster sem contorno');
             return resultados;
         });
         assert.deepEqual(previas, [['ID: 0008 VIP'], ['ID: 0008 VIP'], ['ID: 0007 VIP']]);
