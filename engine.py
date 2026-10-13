@@ -3067,6 +3067,10 @@ class ImpositionEngine:
             else:
                 sorted_artes = [{
                     "qtd": cfg.total_items,
+                    # O modelo sintetico do bloco herda a escala do trabalho.
+                    # Sem isto o multi_map aplica seu padrao 100 e perde a ampliacao.
+                    "escala_h": cfg.arte_sx * 100,
+                    "escala_v": cfg.arte_sy * 100,
                     "numeracao": {
                         "start": cfg.seq_start,
                         "elements": cfg.elements,
