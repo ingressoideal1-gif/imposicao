@@ -324,7 +324,8 @@ def resumo_coleta():
 
 
 def resumo_publico():
-    """Somente metricas operacionais no heartbeat existente, sem logs/pedidos."""
+    """Métricas e diagnósticos estruturados; sem documentos ou mensagens brutas."""
+    from diagnostico_estacao import resumo as resumo_diagnostico
     s = snapshot()
     spool = s.get('spool', {})
     estados = {}
@@ -343,7 +344,7 @@ def resumo_publico():
     return dict(schema=2, estado=s['estado'], coletado_em=s.get('coletado_em'), painel=s.get('painel'),
                 fila_disponivel=spool.get('disponivel', False), fila=estados,
                 erros_24h=erros, totais_30d=contagens, backup=backup, manutencao=s.get('manutencao'),
-                historico_central=sincronizacao, coleta=resumo_coleta())
+                historico_central=sincronizacao, coleta=resumo_coleta(), diagnosticos=resumo_diagnostico())
 
 
 @contextmanager
@@ -356,6 +357,8 @@ def acompanhar_envio(impressora, origem='local', digest=None, chave=None, contex
     try:
         yield ident
     except BaseException as e:
+        from diagnostico_estacao import registrar
+        registrar(e, 'impressao', 'spool')
         h.transicao(ident, 'incerto' if _contexto.spool_iniciado else 'falha', erro=type(e).__name__)
         raise
     finally:

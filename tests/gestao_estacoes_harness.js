@@ -23,13 +23,15 @@ const assert=require('assert/strict');
     r.respond({contentType:'text/html',body:'<html><head></head><body><aside class="sidebar"></aside></body></html>'});
    });
    await page.goto(`http://127.0.0.1:${porta}/app/`);
-   await page.evaluate(()=>{window._currentPerms={perm_admin_view:true};sessionStorage.setItem('newprod_acesso_local',JSON.stringify({token:'sessao-sintetica'}));window.supabaseClient={from(){const q={select(){return q},order(){return q},range(){return Promise.resolve({data:[{name:'Estacao sintetica',last_seen:new Date().toISOString(),printers_json:{version:'teste',gestao:{fila:{},totais_30d:[]}}}],error:null})}};return q}};});
+   await page.evaluate(()=>{window._currentPerms={perm_admin_view:true};sessionStorage.setItem('newprod_acesso_local',JSON.stringify({token:'sessao-sintetica'}));window.supabaseClient={from(){const q={select(){return q},order(){return q},range(){return Promise.resolve({data:[{name:'Estacao sintetica',last_seen:new Date().toISOString(),printers_json:{version:'teste',gestao:{fila:{},totais_30d:[],diagnosticos:{carregado:true,recentes:[{id:'D-123456789abc',codigo:'canal_autonomo',pedido:'23381',http_origem:403,etapa:'abrir-pedido',tipo:'<img src=x onerror=alert(1)>'}]}}}}],error:null})}};return q}};});
    await page.addScriptTag({content:fs.readFileSync('frontend/gestao-estacoes.js','utf8')});
    await page.evaluate(()=>{window.historicoConsultas=[];window.supabaseClient.functions={async invoke(nome,{body}){
      window.historicoConsultas.push({nome,body});return {data:{eventos:[{id:123,estacao:'LASER-TESTE',codigo:'trabalho_enviado',contexto:{tipo:'capa',alvos:[{pedido:'23143',modelo:'1002240'}]}}],proximo:body.antes?null:123}};
    }};});
    await page.waitForSelector('#gestao-estacoes-abrir',{visible:true});await page.click('#gestao-estacoes-abrir');
    await page.waitForFunction(()=>document.querySelector('dialog')?.textContent.includes('Estacao sintetica'));
+   assert.ok(await page.evaluate(()=>document.querySelector('dialog').textContent.includes('D-123456789abc')));
+   assert.equal(await page.$('dialog img'),null);
    async function clicar(text){await page.evaluate(t=>[...document.querySelectorAll('dialog button')].find(b=>b.textContent===t).click(),text);}
    await clicar('Histórico por pedido');await page.waitForFunction(()=>document.querySelector('dialog')?.textContent.includes('LASER-TESTE'));
    await page.type('[data-filtro="pedido"]','23143');await clicar('Consultar histórico');

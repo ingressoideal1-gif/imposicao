@@ -34,6 +34,11 @@ function montar() {
     return c;
 }
 (async()=>{
+    const erroLocal=montar();
+    erroLocal.fetch=async()=>({ok:false,status:409,headers:{get:()=> 'D-123456789abc'},json:async()=>({detail:'Pedido nao conferido'})});
+    const contextoErro=erroLocal.PilotoSelecao.iniciarPedido('vibe_99');
+    await assert.rejects(erroLocal.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contextoErro),/D-123456789abc/);
+
     const local=montar(); const row={id:10,id_int:99};
     local.getOSItens()[0]._modeloOnline=row;
     const digestLocal=Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([row,[]])))).toString('hex');

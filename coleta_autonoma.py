@@ -4,6 +4,8 @@ import json
 import time
 import threading
 import urllib.request
+import urllib.error
+from diagnostico_estacao import registrar as registrar_diagnostico
 
 from conferencia_piloto import ConferidorPiloto, ConferenciaIndisponivel
 from pacotes_download import SemRedirecionamento
@@ -24,20 +26,30 @@ class ClienteAutonomo:
     def chamar(self, acao, corpo):
         if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido'):
             raise ValueError('Operação fora do piloto.')
+        inicio = time.monotonic()
+        codigo = 'canal_autonomo'
         try:
             segredo = self.segredo()
-            if not segredo: raise ValueError()
+            if not segredo:
+                codigo = 'credencial_ausente'
+                raise ValueError()
             req = urllib.request.Request(self.base + acao,
                 data=json.dumps({**corpo, 'estacao': self.estacao}).encode(), method='POST',
                 headers={'Content-Type':'application/json', 'X-Agente-Segredo':segredo})
             with self.abrir(req, timeout=20) as resposta:
-                if getattr(resposta, 'status', 200) != 200: raise ValueError()
+                if getattr(resposta, 'status', 200) != 200:
+                    raise urllib.error.HTTPError('', resposta.status, '', {}, None)
+                codigo = 'resposta_invalida'
                 limite = (8 if acao in ('conferir-pedido', 'abrir-pedido') else 1) * 1024 * 1024
                 raw = resposta.read(limite + 1)
                 if len(raw) > limite: raise ValueError()
                 return json.loads(raw)
-        except Exception:
-            raise ConferenciaIndisponivel('Canal autônomo não confirmado; confira habilitação e acesso da estação.') from None
+        except Exception as erro:
+            ident = registrar_diagnostico(erro, codigo, acao, pedido=corpo.get('pedido'),
+                modelo=corpo.get('modelo'), duracao_ms=int((time.monotonic()-inicio)*1000))
+            falha = ConferenciaIndisponivel('Canal autônomo não confirmado; confira habilitação e acesso da estação.')
+            falha.diagnostico_id = ident
+            raise falha from None
 
     def conferir(self, item):
         corpo = {k:item[k] for k in ('empresa','modelo','fontes')}
