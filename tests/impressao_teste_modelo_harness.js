@@ -23,6 +23,10 @@ function extract(name) {
     await page.evaluate(() => {
       window.calls = []; window.fail = false; window.messages = [];
       window.fetch = async (url, init) => {
+        if (url.endsWith('/api/hotfolder/drop')) {
+          calls.push({url, folder:init.body.get('folder'), file:await init.body.get('file').text()});
+          return {ok:!window.fail, json:async()=>window.fail ? {detail:'Pasta indisponivel'} : {path:'C:/pasta-salva/teste.pdf'}};
+        }
         if (url.endsWith('/capabilities')) return {ok: true, json: async () => ({schema: 2, perfil_destino: 1, lote_gdi: 1, modos: ['gdi_atual','experimental_gdi','pdf_raw'], max_pages: null, max_bytes: null})};
         if (url.endsWith('/destino')) {
           window.preflight = JSON.parse(init.body);
@@ -54,6 +58,8 @@ function extract(name) {
       _aplicarEstadoHotFolder();
     });
     assert.equal(await page.$eval('#ped-print-printer', e=>e.disabled), true);
+    assert.equal(await page.$eval('#ped-teste-saida', e=>e.disabled), true);
+    await page.evaluate(() => {window._hotFolderAtivo=()=>false; _aplicarEstadoHotFolder();});
     assert.equal(await page.$$eval('#ped-teste-saida', es => es.length), 1);
     assert.equal(await page.$$eval('#ped-teste-saida option[value]:not([value=""])', es => es.length), 3);
     await page.addScriptTag({content: extract('getPedPrintOptions')});
@@ -114,9 +120,7 @@ function extract(name) {
       assert.equal(await page.$eval('#jg-config-corpo', e=>e.style.display), 'block');
       const result = await page.evaluate(async cfg => {
         calls.length = 0;
-        cfg.options.hot_folder_path = 'C:/pasta-salva';
         const testeModelo = await NewProdTesteModelo.capturar(cfg);
-        if ('hot_folder_path' in testeModelo.options || cfg.options.hot_folder_path !== 'C:/pasta-salva') throw new Error('Pasta nao isolada do teste');
         cfg.options.copies = 9; // estado posterior nao muda o trabalho capturado
         const ok = await sendPrintJobDirect([
           {name:'1001_capa.pdf',blob:new Blob(['PDF capa gerado pelo modelo'])},
@@ -186,9 +190,39 @@ function extract(name) {
       return preflight.options.duplex;
     }, config);
     assert.equal(simplex, 1, 'face única conferida como simplex antes da geração');
+    // Pasta selecionada vence inclusive um modo de driver escolhido anteriormente.
+    for (const mode of ['', 'gdi_atual', 'experimental_gdi', 'pdf_raw']) {
+      await page.select('#ped-teste-saida', mode);
+      const hot = await page.evaluate(async cfg => {
+        calls.length=0; window.fail=false; window.destinoFail=true;
+        window._hotFolderAtivo=()=>true; _aplicarEstadoHotFolder();
+        cfg.printerName='';
+        cfg.options.hot_folder_path='C:/pasta-salva';
+        cfg.options.trabalho_unico=true;
+        const testeModelo=await NewProdTesteModelo.capturar(cfg);
+        cfg.options.hot_folder_path='C:/outra-pasta';
+        const ok=await sendPrintJobDirect([{name:'hot.pdf',blob:new Blob(['HOT'])}],{testeModelo});
+        window.destinoFail=false;
+        return {ok,calls,disabled:document.getElementById('ped-print-printer').disabled};
+      }, config);
+      assert.equal(hot.ok,true);
+      assert.equal(hot.disabled,true);
+      assert.deepEqual(hot.calls.map(c=>[c.url,c.folder]),[['/api/hotfolder/drop','C:/pasta-salva']]);
+      await page.evaluate(() => {window._hotFolderAtivo=()=>false; _aplicarEstadoHotFolder();});
+      assert.equal(await page.$eval('#ped-teste-saida', e=>e.disabled), false);
+    }
+    const hotFail = await page.evaluate(async cfg => {
+      calls.length=0; window.fail=true;
+      cfg.options.hot_folder_path='C:/pasta-salva';
+      const testeModelo=await NewProdTesteModelo.capturar(cfg);
+      try {await sendPrintJobDirect([{name:'a.pdf',blob:new Blob(['A'])},{name:'b.pdf',blob:new Blob(['B'])}],{testeModelo});} catch {}
+      window.fail=false;
+      return calls;
+    }, config);
+    assert.deepEqual(hotFail.map(c=>c.url),['/api/hotfolder/drop'],'falha na pasta interrompe sem usar impressora');
     assert.equal((pedido.match(/if \(ok && !testeModelo && alvoImpressao.length\)/g)||[]).length,4,'todos os caminhos de conclusao excluem status comercial no teste');
     assert(pedido.includes('const opcoesDeFace = { testeModelo,'));
-    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=3'));
+    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=4'));
     // A entrega normal continua usando o endpoint e opcoes anteriores quando nao ha teste.
     const normal = await page.evaluate(async cfg => {
       calls.length=0; window.fail=false; window._hotFolderAtivo=()=>false; window.getPedPrintOptions=()=>structuredClone(cfg);
@@ -197,6 +231,6 @@ function extract(name) {
     }, config);
     assert.equal(normal[0].url, 'http://127.0.0.1:9001/api/print/submit');
     assert.equal(normal[0].options.experimental, undefined);
-    console.log('OK: seletor unico no HTML real, 3 modos, configuracao/capas/miolo preservados, snapshot, falha sem fallback, sem confirmacao comercial.');
+    console.log('OK: Hot Folder prioritario nos 4 estados do seletor, snapshot e falha sem impressora; 3 modos de driver, capas/miolo e bloqueio comercial preservados.');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

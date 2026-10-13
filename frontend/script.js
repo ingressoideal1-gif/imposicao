@@ -45823,7 +45823,15 @@ window.esquecerHotFolder = esquecerHotFolder;
 // Reversa e Folha a Folha sao aplicadas ao PDF pelo navegador antes do envio, e
 // por isso continuam valendo.
 function _aplicarEstadoHotFolder() {
-    const ativo = _hotFolderAtivo() && !window.NewProdTesteModelo?.ativo();
+    const ativo = _hotFolderAtivo();
+    const saidaTeste = document.getElementById('ped-teste-saida');
+    if (saidaTeste) saidaTeste.disabled = ativo;
+    const avisoTeste = document.getElementById('ped-teste-aviso');
+    if (avisoTeste) avisoTeste.textContent = ativo
+        ? 'Destino: Hot Folder selecionado. O PDF sera entregue somente a pasta. O pedido nao sera marcado como impresso.'
+        : 'Selecione a forma de envio para a impressora. O teste nao marca o pedido como impresso.';
+    const destinoTeste = document.getElementById('ped-teste-destino');
+    if (destinoTeste) destinoTeste.textContent = '';
 
     // O ESTADO nao se esconde com os controles: fechado o grupo, o selo continua
     // dizendo para onde o material vai. Mesma regra do Gerenciamento de Cores.
@@ -46189,7 +46197,7 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historic
                     toast(`Processando páginas (${modoDesc})...`, 'info');
                     avisouTransformacao = true;
                 }
-                fila = testeModelo && options.modo !== 'pdf_raw'
+                fila = testeModelo && ['gdi_atual', 'experimental_gdi'].includes(options.modo)
                     ? await window.NewProdTesteModelo.prepararFolhasGdi(fila, options)
                     : await processPrintQueueOptions(fila, options);
             }
@@ -46225,7 +46233,9 @@ function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historic
             if (ok) {
                 const destino = hotFolder ? `a pasta "${hotFolder}"` : `"${printerName}"`;
                 toast(`✓ ${successCount} arquivo(s) enviado(s) para ${destino}!`, 'success');
-                if (testeModelo) toast('Teste entregue ao Windows. Confira o spool e as folhas; o pedido não foi marcado como impresso.', 'info');
+                if (testeModelo) toast(hotFolder
+                    ? 'Teste entregue ao Hot Folder. Confira o RIP; o pedido não foi marcado como impresso.'
+                    : 'Teste entregue ao Windows. Confira o spool e as folhas; o pedido não foi marcado como impresso.', 'info');
                 _conferirConsumoHotFolder(caminhosSoltos);
             } else if (successCount > 0) {
                 // Papel entregue nao volta: quem parou no meio ainda precisa da

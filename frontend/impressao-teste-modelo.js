@@ -31,6 +31,19 @@
         });
     }
     async function capturar(current, {apenasUmaFace = false} = {}) {
+        // A pasta escolhida tem prioridade sobre qualquer modo de driver salvo.
+        // Mantemos o snapshot de teste para nao confirmar o pedido comercialmente.
+        if (current.options.hot_folder_path) {
+            if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) throw new Error('Abra o modelo no painel local do NewProd Teste.');
+            const snapshot = structuredClone(current);
+            delete snapshot.options.trabalho_unico;
+            delete snapshot.options.experimental;
+            delete snapshot.options.perfil_driver;
+            delete snapshot.options.raw_confirmado;
+            snapshot.options.modo = 'hot_folder';
+            if (apenasUmaFace) snapshot.options.duplex = 1;
+            return snapshot;
+        }
         const mode = document.getElementById('ped-teste-saida')?.value;
         if (!modes.has(mode)) throw new Error('Selecione a forma de envio do teste na configuração do modelo.');
         if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) throw new Error('Abra o modelo no painel local do NewProd Teste.');
