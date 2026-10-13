@@ -40,3 +40,10 @@ consulta_reprovados_browser_harness.js usa as funcoes reais de abertura de
 Pedido e Imposicao, com transporte/PDF e catalogos sinteticos. Dois modelos
 permanecem REPROVADA_CLIENTE, com CAMAROTE e SEQUENCIAL: arte carregada,
 geracao bloqueada, nenhuma gravacao ou aprovacao. Passou nos dois canais.
+
+## Publicado
+
+Em 13/10/2026, oficial e teste 1.2.391 publicados; downloads completos
+conferidos por tamanho e SHA-256, manifestos reconsultados apos ativacao.
+Listas de estacoes preservadas. Instalacao da 1.2.391 ainda nao confirmada.
+Evidencia: docs/evidencias/publicacao-consulta-modelos-391.json.
