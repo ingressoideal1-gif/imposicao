@@ -15,7 +15,7 @@ def test_oficial_preserva_identidade_recebe_porta_piloto_e_versao_release(tmp_pa
             'm.pasta_dados().name,v.AGENT_VERSION]))')
     r=subprocess.run([sys.executable,'-c',script],env=env,capture_output=True,text=True,check=True)
     import re
-    base=re.search(r'AGENT_VERSION = "([\d.]+)"',Path('agent_version.py').read_text()).group(1)
+    base=re.search(r'AGENT_VERSION = "([\d.]+(?:-teste\.\d+)?)"',Path('agent_version.py').read_text()).group(1)
     assert json.loads(r.stdout)==[True,True,9001,'NewProd Piloto','NewProd Agent',
                                  'NewProd Dados Protegidos',base]
 

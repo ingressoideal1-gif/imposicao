@@ -1222,9 +1222,8 @@ function idIntDoBancoOuModelo(bancoId, modeloId) {
 async function carregarBancosDoPedidoNovo(osId, idInt) {
     if (!Array.isArray(state.bancosDoPedido)) state.bancosDoPedido = [];
     if (!state.vinculosDeBanco) state.vinculosDeBanco = {};
-    if (typeof supabaseClient === 'undefined' || !supabaseClient || !idInt) return 0;
-
     const local = window.PilotoSelecao?.snapshotPedido?.(osId);
+    if (!idInt || (!local && (typeof supabaseClient === 'undefined' || !supabaseClient))) return 0;
     const resposta = local ? {bancos:structuredClone(local.bancos),vinculos:structuredClone(local.vinculos)}
         : await chamarBancosPedido('consultar', { id_int: idInt });
     state.bancosDoPedido = resposta.bancos || [];
@@ -1629,7 +1628,8 @@ async function garantirBancosDoTrabalho(osIds) {
         // marca em localStorage). Marcar como consultado aqui recriaria o
         // defeito calado: o `carregarBancosDoPedidoNovo` devolve 0 nesse caso,
         // que e indistinguivel de "este pedido nao tem banco".
-        if (typeof supabaseClient === 'undefined' || !supabaseClient) continue;
+        if (!window.PilotoSelecao?.snapshotPedido?.(osId)
+            && (typeof supabaseClient === 'undefined' || !supabaseClient)) continue;
         try {
             await carregarBancosDoPedidoNovo(osId, idInt);
             state._bancosConsultados[osId] = true;
@@ -33393,7 +33393,10 @@ async function enviarParaImposicao(itemId, osId, switchTab = true, contexto = {}
     state.imposicaoSelecaoErro = null;
     const anterior = contexto.aindaAtual || (() => true);
     const aindaAtual = () => state.imposicaoSelecaoCarregando === carga && anterior();
-    try { await carregarModeloParaImposicao(itemId, osId, switchTab, { ...contexto, aindaAtual }); }
+    try {
+        await carregarModeloParaImposicao(itemId, osId, switchTab, { ...contexto, aindaAtual });
+        if (aindaAtual()) state.imposicaoSelecaoErro = window.PilotoSelecao?.motivoConsulta(itemId, osId) || null;
+    }
     catch (erro) {
         if (aindaAtual()) {
             state.imposicaoSelecaoErro = erro.message;
@@ -33615,7 +33618,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
             const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
             const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
             
-            await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(arteUrl) : fetch(arteUrl))
+            await (window.PilotoSelecao ? window.PilotoSelecao.lerUrlParaConsulta(arteUrl, itemId, osId) : fetch(arteUrl))
                 .then(res => {
                     if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                     const ct = res.headers.get('content-type') || '';
@@ -33646,7 +33649,7 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
             state.impArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
-                await (window.PilotoSelecao ? window.PilotoSelecao.lerUrl(item.verso_arte_url) : fetch(item.verso_arte_url))
+                await (window.PilotoSelecao ? window.PilotoSelecao.lerUrlParaConsulta(item.verso_arte_url, itemId, osId) : fetch(item.verso_arte_url))
                     .then(res => {
                         if (!res.ok) throw new Error('Falha ao baixar arte obrigatória.');
                         const ct = res.headers.get('content-type') || '';

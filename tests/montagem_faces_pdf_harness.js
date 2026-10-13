@@ -6,7 +6,8 @@ const vm = require('node:vm');
 const PDFLib = require('pdf-lib');
 const raiz = path.dirname(__dirname);
 const contexto = {
-    window: { PDFLib }, Blob, console,
+    window: { PDFLib }, Blob, console, structuredClone,
+    idIntDoPedido: osId => ({ A: 101, B: 102 })[osId],
     state: { numeracoes: [], osItens: {}, formatos: [], saidas: [] },
     document: { getElementById: () => null },
 };

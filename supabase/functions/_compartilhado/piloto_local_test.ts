@@ -1,5 +1,20 @@
 import { strict as assert } from 'node:assert';
-import { conferirPiloto, digestPiloto } from './piloto_local.ts';
+import { conferirPiloto, digestPiloto, fontesPiloto } from './piloto_local.ts';
+
+Deno.test('piloto: origem de importacao nao vira recurso quando linhas estao no snapshot', () => {
+  const foto = 'https://storage.invalid/foto.jpg';
+  const fonte = 'https://storage.invalid/fonte.ttf';
+  const origem = 'https://docs.google.com/spreadsheets/d/sintetico/edit?usp=sharing';
+  const banco = {csv_url:origem, csv_data:[{foto, csv_url:foto}], elements:[{font_url:fonte}]};
+  const antes = JSON.stringify(banco);
+  const recursos = Object.values(fontesPiloto({arte_url:'https://storage.invalid/frente.pdf'}, [banco]));
+  assert.ok(!recursos.includes(origem));
+  assert.ok(recursos.includes(foto));
+  assert.ok(recursos.includes(fonte));
+  assert.equal(JSON.stringify(banco), antes);
+  // Sem linhas importadas, nao ocultar uma dependencia nao resolvida.
+  assert.ok(Object.values(fontesPiloto({}, [{csv_url:origem}])).includes(origem));
+});
 
 const permitido = { perm_producao_view: true, perm_imprimir: true };
 function ambiente() {

@@ -17,7 +17,15 @@ export function fontesPiloto(m: any, nums: any[]) {
     else if (Array.isArray(v)) v.forEach(visitar);
     else if (v && typeof v === 'object') Object.values(v).forEach(visitar);
   }
-  visitar(nums); extras.delete(frente); extras.delete(verso);
+  // csv_url identifica a origem da importacao; a impressao usa csv_data.
+  // Nao baixar a pagina de edicao da planilha quando suas linhas ja vieram
+  // no snapshot. URLs dentro das linhas/elementos continuam obrigatorias.
+  visitar(nums.map(registro => {
+    if (!registro || !Array.isArray(registro.csv_data)) return registro;
+    const { csv_url: _origemImportacao, ...dados } = registro;
+    return dados;
+  }));
+  extras.delete(frente); extras.delete(verso);
   [...extras].sort().forEach((url, i) => { fontes['recurso_' + i] = url; });
   if (Object.keys(fontes).length > 256) throw new Recusa(422, 'recursos excedem limite');
   return fontes;

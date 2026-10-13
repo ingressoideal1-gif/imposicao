@@ -1,0 +1,43 @@
+{
+  "verificado_em": "2026-10-12T16:40:01.497420+00:00",
+  "oficial": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.2.389",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.2.389.msi",
+    "sha256": "e3bfb64b311c8da940fbf782015281d45956f29ae941d23f5e4ce6e93c3f75c5",
+    "bytes": 194953216,
+    "size": 194953216,
+    "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+    "estacoes": [
+      "LASER-04",
+      "TEX-01",
+      "FLEXO",
+      "LAPTOP-9BSK81S0",
+      "GUSTAVO-PROD",
+      "LASER-02",
+      "ACABAMENTO",
+      "DESKTOP-PM6TG1B"
+    ],
+    "download_conferido": true,
+    "ativado": true,
+    "bootstrap_legado": true
+  },
+  "teste": {
+    "schema": 1,
+    "produto": "NewProdPilotoTeste",
+    "version": "1.2.389",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.389.msi",
+    "bytes": 196632576,
+    "sha256": "24d52158ea7c51d2956a8a88df7a6584ea516a33c7bd07c77bc681d1baaf3008",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME"
+    ],
+    "notes": "Cache de artes persistente, ETag, espera crescente, trava horaria e logs; preserva recursos do Teste 388.",
+    "download_conferido": true,
+    "ativado": true
+  },
+  "instalacao_remota_executada": false,
+  "desligamento_executado": false
+}

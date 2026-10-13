@@ -10,6 +10,19 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pacotes_locais import _sem_links, LimiteRecursoExcedido
 
 
+def _erro_diagnosticado(status, detalhe, erro, etapa, corpo):
+    from diagnostico_estacao import registrar
+    try:
+        dados = json.loads(corpo)
+        if not isinstance(dados, dict):
+            dados = {}
+    except (ValueError, TypeError):
+        dados = {}
+    ident = registrar(erro, 'selecionar_modelo' if etapa == 'selecionar' else 'abrir_pedido',
+                      etapa, pedido=dados.get('pedido'), modelo=dados.get('modelo'))
+    return HTTPException(status, detalhe, headers={'X-NewProd-Diagnostico': ident} if ident else None)
+
+
 def resumo(servico):
     modelos = []
     # Resumo de presença: uma conexão e uma visita por modelo, sem reabrir
@@ -135,14 +148,14 @@ def criar_router_estatisticas(servico):
         try:
             resultado = await run_in_threadpool(selecao.preparar, json.loads(corpo))
             return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
-        except ConferenciaIndisponivel:
-            raise HTTPException(409, 'Modelo não conferido. Aguarde a preparação e selecione novamente.') from None
+        except ConferenciaIndisponivel as erro:
+            raise _erro_diagnosticado(409, 'Modelo não conferido. Aguarde a preparação e selecione novamente.', erro, 'selecionar', corpo) from None
         except LimiteRecursoExcedido as erro:
-            raise HTTPException(413, erro.detalhe) from None
-        except (ValueError, KeyError, TypeError, StopIteration):
-            raise HTTPException(422, 'Seleção ou pacote local incompatível.') from None
-        except OSError:
-            raise HTTPException(507, 'Não foi possível preparar os arquivos locais.') from None
+            raise _erro_diagnosticado(413, erro.detalhe, erro, 'selecionar', corpo) from None
+        except (ValueError, KeyError, TypeError, StopIteration) as erro:
+            raise _erro_diagnosticado(422, 'Seleção ou pacote local incompatível.', erro, 'selecionar', corpo) from None
+        except OSError as erro:
+            raise _erro_diagnosticado(507, 'Não foi possível preparar os arquivos locais.', erro, 'selecionar', corpo) from None
 
     @router.post('/api/pacotes-locais/abrir-pedido-painel')
     @router.post('/api/pacotes-locais/preparar-pedido-painel')
@@ -153,18 +166,19 @@ def criar_router_estatisticas(servico):
             corpo.extend(parte)
             if len(corpo) > 65536:
                 raise HTTPException(413, 'Pedido excede limite de preparação.')
+        etapa = 'abrir-pedido' if request.url.path.endswith('/abrir-pedido-painel') else 'preparar-pedido'
         try:
             operacao = selecao.abrir_pedido if request.url.path.endswith('/abrir-pedido-painel') else selecao.preparar_pedido
             resultado = await run_in_threadpool(operacao, json.loads(corpo))
             return Response(json.dumps(resultado), media_type='application/json', headers={'Cache-Control':'no-store'})
-        except ConferenciaIndisponivel:
-            raise HTTPException(409, 'Pedido não conferido. Reabra e tente novamente.') from None
+        except ConferenciaIndisponivel as erro:
+            raise _erro_diagnosticado(409, 'Pedido não conferido. Reabra e tente novamente.', erro, etapa, corpo) from None
         except LimiteRecursoExcedido as erro:
-            raise HTTPException(413, erro.detalhe) from None
-        except (ValueError, KeyError, TypeError, StopIteration):
-            raise HTTPException(422, 'Pedido ou pacote local incompatível.') from None
-        except OSError:
-            raise HTTPException(507, 'Não foi possível preparar os arquivos do pedido.') from None
+            raise _erro_diagnosticado(413, erro.detalhe, erro, etapa, corpo) from None
+        except (ValueError, KeyError, TypeError, StopIteration) as erro:
+            raise _erro_diagnosticado(422, 'Pedido ou pacote local incompatível.', erro, etapa, corpo) from None
+        except OSError as erro:
+            raise _erro_diagnosticado(507, 'Não foi possível preparar os arquivos do pedido.', erro, etapa, corpo) from None
 
     @router.get('/api/pacotes-locais/recurso-painel/{modelo}/{revisao}/{nome}')
     def recurso_painel(modelo: str, revisao: str, nome: str, request: Request):

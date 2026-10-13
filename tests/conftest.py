@@ -35,6 +35,19 @@ import re
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def diagnosticos_isolados(tmp_path, monkeypatch):
+    # A instrumentação dos erros não deve escrever no perfil real durante testes.
+    import diagnostico_estacao as modulo
+    registros = modulo.Diagnosticos(lambda: tmp_path / 'diagnosticos')
+    monkeypatch.setattr(modulo, '_registros', registros)
+    yield registros
+    if registros.thread:
+        registros.fila.put(None, timeout=5)
+        registros.thread.join(timeout=10)
+        assert not registros.thread.is_alive()
+
 # Arquivos cujos testes gravam com nome RELATIVO na pasta do repositorio.
 #
 # Manter esta lista a mao seria esquece-la. O `test_paralelismo.py` confere que

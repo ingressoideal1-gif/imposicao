@@ -34,6 +34,11 @@ function montar() {
     return c;
 }
 (async()=>{
+    const erroLocal=montar();
+    erroLocal.fetch=async()=>({ok:false,status:409,headers:{get:()=> 'D-123456789abc'},json:async()=>({detail:'Pedido nao conferido'})});
+    const contextoErro=erroLocal.PilotoSelecao.iniciarPedido('vibe_99');
+    await assert.rejects(erroLocal.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contextoErro),/D-123456789abc/);
+
     const local=montar(); const row={id:10,id_int:99};
     local.getOSItens()[0]._modeloOnline=row;
     const digestLocal=Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([row,[]])))).toString('hex');
@@ -52,6 +57,64 @@ function montar() {
     assert.equal(local.chamadas.length,1);
     local.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
     assert.equal(local.PilotoSelecao.snapshotPedido('outro'),null);
+
+    // Pedido misto: produto de estoque em sem_arte nao e um impresso ausente.
+    for (const comprovado of [true,false]) {
+        const misto=montar(), impresso={id:10,id_int:99,status_arte:'APROVADO'};
+        const estoque={id:11,id_int:99,id_produto_proposta_origem:7};
+        misto.getOSItens=()=>[{id:10,_modeloOnline:impresso},{id:11,_modeloOnline:estoque,_produto_prateleira:true}];
+        const dig=Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(
+            [Object.fromEntries(Object.entries(impresso).sort(([a],[b])=>a.localeCompare(b))),[]])))).toString('hex');
+        misto.fetch=async()=>({ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),
+            sem_arte:['11'],pacotes:[{modelo:'10',digest:dig,revisao:'b'.repeat(64),origem:'local'}],
+            snapshot:{modelos:[impresso,estoque],numeracoes:[],origens:[{id:7,id_produto:8}],
+                produtos:[{id_produto:8,is_estoque:comprovado}],bancos:[],vinculos:[],artes:[],mapas:[]}})});
+        const contexto=misto.PilotoSelecao.iniciarPedido('vibe_99');
+        await misto.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contexto);
+        if(comprovado) {
+            await misto.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto);
+            misto.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
+            assert.throws(()=>misto.PilotoSelecao.validarTrabalho([{itemId:11,osId:'vibe_99'}]));
+        } else await assert.rejects(misto.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto),/incompleta/);
+    }
+
+    // Snapshot inclui reprovados, mas a preparacao nao pode libera-los para imprimir.
+    for (const semArte of [[], ['10']]) for (const statusArte of ['REPROVADA_CLIENTE', 'EM ARTE', 'APROVADO']) {
+        const consulta=montar(); const modelo={id:10,id_int:99,status_arte:statusArte,arte_url:'https://test.invalid/a.pdf'};
+        consulta.getOSItens()[0]._modeloOnline=modelo;
+        consulta.fetch=async()=>({ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),
+            sem_arte:semArte,pacotes:[],snapshot:{modelos:[modelo],numeracoes:[],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]}})});
+        const contexto=consulta.PilotoSelecao.iniciarPedido('vibe_99');
+        await consulta.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contexto);
+        if(statusArte==='APROVADO') {
+            if (!semArte.length) await assert.rejects(consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto),/incompleta/);
+            else {
+                await consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto);
+                await assert.rejects(consulta.PilotoSelecao.conferir(10,'vibe_99',()=>true,true),/Reabra/);
+            }
+            continue;
+        }
+        await consulta.PilotoSelecao.conferirPedido('vibe_99',()=>true,contexto);
+        consulta.carregarModeloParaPedido=async(id,os,ctx)=>{
+            assert.equal(ctx.pacoteLocal,null); consulta.cargas.push(id);
+        };
+        await consulta.enviarParaPedido(10,'vibe_99');
+        assert.equal(consulta.cargas.length,1);
+        let leitura=null;
+        consulta.fetch=async(url)=>{leitura=url;return {ok:true};};
+        assert.equal((await consulta.PilotoSelecao.lerUrlParaConsulta(modelo.arte_url,10,'vibe_99')).ok,true);
+        assert.equal(leitura,modelo.arte_url);
+        await assert.rejects(consulta.PilotoSelecao.lerUrlParaConsulta('https://test.invalid/outro.pdf',10,'vibe_99'),/nao pertence/);
+        assert.match(consulta.state.pedidoSelecaoErro,/somente para consulta/);
+        const alvo={itemId:10,osId:'vibe_99'};
+        assert.throws(()=>consulta.PilotoSelecao.validarTrabalho([alvo]),/somente para consulta/);
+        assert.throws(()=>consulta.PilotoSelecao.referencias([alvo]),/somente para consulta/);
+        await assert.rejects(consulta.PilotoSelecao.conferir(10,'vibe_99',()=>true),/somente para consulta/);
+        modelo.quantidade=99;
+        await assert.rejects(consulta.PilotoSelecao.conferir(10,'vibe_99',()=>true,true),/Reabra/);
+        consulta.PilotoSelecao.iniciarPedido('outro');
+        assert.equal(consulta.PilotoSelecao.motivoConsulta(10,'vibe_99'),null);
+    }
 
     for (const [status, detail, esperado] of [
         [413, {codigo:'limite_recurso', tamanho_bytes:300*1024*1024, limite_bytes:256*1024*1024, modelo:'10'}, /modelo 10.*300,00 MiB.*256,00 MiB/],

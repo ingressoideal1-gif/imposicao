@@ -2,6 +2,8 @@
 (function () {
     'use strict';
     const liberados = new Map();
+    const consultas = new Map();
+    const aprovados = new Set(['APROVADO','APROVADA','APROVADA_CLIENTE','LIBERADA','ARTE_APROVADA','ARTE APROVADA']);
     const revisoesPedidos = new Map();
     let pedidoAtual = null;
     let popupConferencia = null;
@@ -57,8 +59,15 @@
             popupConferencia = null;
         };
     }
-    function iniciarPedido(osId) {
-        liberados.clear();
+    function iniciarPedido(osId, preservarOutrosPedidos = false) {
+        if (preservarOutrosPedidos) {
+            for (const mapa of [liberados, consultas]) {
+                for (const id of mapa.keys()) if (id.startsWith(String(osId) + ':')) mapa.delete(id);
+            }
+        } else {
+            liberados.clear();
+            consultas.clear();
+        }
         pedidoAtual = {osId:String(osId)};
         state.multiArtesPdfCache = {};
         return pedidoAtual;
@@ -84,7 +93,9 @@
             body:JSON.stringify({pedido:String(pedido.numero)}), signal:AbortSignal.timeout(600000)
         });
         if (!r.ok) {
-            throw Error('Nao foi possivel abrir a revisao local (HTTP ' + r.status + '). Confira a atualizacao do agente e do sinal no banco.');
+            const codigo = r.headers.get('X-NewProd-Diagnostico') || '';
+            const referencia = /^D-[a-f0-9]{12}$/.test(codigo) ? ' Informe ao suporte o codigo ' + codigo + '.' : '';
+            throw Error('Nao foi possivel abrir o pedido (HTTP ' + r.status + ').' + referencia);
         }
         const resposta = await r.json();
         if (!atual() || contexto !== pedidoAtual) return null;
@@ -149,9 +160,30 @@
         const resposta = await r.json();
         if (!atual() || contexto !== pedidoAtual) return null;
         const pacotes = resposta.pacotes;
-        if (resposta.pedido !== String(pedido.numero) || !Array.isArray(pacotes) || !Array.isArray(resposta.sem_arte)
-            || new Set([...pacotes.map(p => p.modelo), ...resposta.sem_arte]).size !== modelos.length
-            || pacotes.length + resposta.sem_arte.length !== modelos.length) throw Error('Resposta local incompleta.');
+        // A resposta inclui o pedido inteiro; a tela confere apenas impressos.
+        // Excluir somente estoque comprovado pelo snapshot, nunca IDs desconhecidos.
+        const snapshot = contexto.preparado?.snapshot;
+        const estoque = new Set((snapshot?.modelos || []).filter(m => {
+            const origem = (snapshot.origens || []).find(o => String(o.id) === String(m.id_produto_proposta_origem));
+            const produtoId = m._vibe_id_produto ?? m.id_produto ?? m.produto_id ?? origem?.id_produto;
+            return produtoId != null && (snapshot.produtos || []).some(p =>
+                String(p.id_produto) === String(produtoId) && p.is_estoque === true)
+                && (getOSItens(osId) || []).some(i => String(i.id) === String(m.id) && i._produto_prateleira === true);
+        }).map(m => String(m.id)));
+        const semArte = Array.isArray(resposta.sem_arte) ? resposta.sem_arte.filter(id => !estoque.has(id)) : null;
+        // Apenas um snapshot confirmado pode conceder consulta sem impressao.
+        // Uma resposta incompleta para modelo aprovado continua sendo erro.
+        const somenteConsulta = contexto.preparado ? itens.filter(item => {
+            const raw = contexto.preparado.snapshot.modelos.find(m => String(m.id) === String(item.id));
+            return raw && JSON.stringify(canonico(raw)) === fotografias.get(String(item.id))
+                && !aprovados.has(String(raw.status_arte || '').trim().toUpperCase())
+                && !pacotes?.some(p => p.modelo === String(item.id));
+        }) : [];
+        const idsConsulta = somenteConsulta.map(i => String(i.id));
+        const idsConsultaAdicionais = idsConsulta.filter(id => !semArte?.includes(id));
+        if (resposta.pedido !== String(pedido.numero) || !Array.isArray(pacotes) || !semArte
+            || new Set([...pacotes.map(p => p.modelo), ...semArte, ...idsConsulta]).size !== modelos.length
+            || pacotes.length + semArte.length + idsConsultaAdicionais.length !== modelos.length) throw Error('Resposta local incompleta.');
         for (const pacote of pacotes) {
             const esperado = modelos.find(m => m.modelo === pacote.modelo);
             const itemAtual = (getOSItens(osId) || []).find(i => String(i.id) === pacote.modelo);
@@ -159,7 +191,7 @@
                 || !/^[a-f0-9]{64}$/.test(pacote.revisao)
                 || fotografias.get(pacote.modelo) !== JSON.stringify(canonico(itemAtual?._modeloOnline))) throw Error('Resposta local não corresponde ao pedido.');
         }
-        if (resposta.sem_arte.some(id => !modelos.some(m => m.modelo === id))) throw Error('Modelo local desconhecido.');
+        if (semArte.some(id => !modelos.some(m => m.modelo === id))) throw Error('Modelo local desconhecido.');
         if (/^[a-f0-9]{64}$/.test(resposta.revisao_pedido || '')) {
             // Bancos do pedido/vinculos tambem participam da revisao. A marca
             // anterior nao pode dispensar a carga depois de uma alteracao.
@@ -182,12 +214,23 @@
             const item = itens.find(i => String(i.id) === pacote.modelo);
             liberados.set(chave(item.id, osId), {pacote, modelo:fotografias.get(pacote.modelo)});
         }
+        for (const item of somenteConsulta) {
+            consultas.set(chave(item.id, osId), {modelo:fotografias.get(String(item.id)),
+                motivo:'Modelo disponivel somente para consulta: arte ' + String(item._modeloOnline.status_arte || 'sem aprovacao')
+                    + '. Geracao e impressao indisponiveis enquanto a arte nao estiver aprovada.'});
+        }
         contexto.pronto = true;
-        toast('Pedido conferido. Modelos preparados para leitura local.', 'success');
+        toast(idsConsulta.length ? 'Pedido conferido. Ha modelos sem aprovacao disponiveis somente para consulta.' : 'Pedido conferido. Modelos preparados para leitura local.', 'success');
         return resposta;
     }
-    async function conferir(itemId, osId, atual) {
+    function motivoConsulta(itemId, osId) {
+        const registro = consultas.get(chave(itemId, osId));
+        const item = (getOSItens(osId) || []).find(i => String(i.id) === String(itemId));
+        return registro && registro.modelo === JSON.stringify(canonico(item?._modeloOnline)) ? registro.motivo : null;
+    }
+    async function conferir(itemId, osId, atual, somenteVisualizar = false) {
         if (!atual()) return null;
+        if (somenteVisualizar && motivoConsulta(itemId, osId)) return null;
         validarTrabalho([{itemId, osId}]);
         return liberados.get(chave(itemId, osId)).pacote;
     }
@@ -202,6 +245,8 @@
     function validarTrabalho(alvos) {
         if (!alvos?.length) throw Error('Selecione e confira um modelo antes de imprimir.');
         for (const alvo of alvos) {
+            const motivo = motivoConsulta(alvo.itemId, alvo.osId);
+            if (motivo) throw Error(motivo);
             const liberado = liberados.get(chave(alvo.itemId, alvo.osId));
             const item = (getOSItens(alvo.osId) || []).find(i => String(i.id) === String(alvo.itemId));
             if (!liberado || !item?._modeloOnline || liberado.modelo !== JSON.stringify(canonico(item._modeloOnline))) {
@@ -209,8 +254,17 @@
             }
         }
     }
-    async function lerUrl(url) {
-        const alvos = state.selectedOSItems?.length > 1 ? state.selectedOSItems : [state.activeOSItem].filter(Boolean);
+    async function lerUrlParaConsulta(url, itemId, osId) {
+        if (!motivoConsulta(itemId, osId)) return lerUrl(url);
+        const item = (getOSItens(osId) || []).find(i => String(i.id) === String(itemId));
+        const raw = item._modeloOnline;
+        if (!url || ![raw.arte_url, raw.verso_arte_url].includes(url)) {
+            throw Error('Arte nao pertence ao modelo conferido para consulta.');
+        }
+        return fetch(url, {signal:AbortSignal.timeout(30000)});
+    }
+    async function lerUrl(url, opcoes, selecaoExplicita) {
+        const alvos = selecaoExplicita || (state.selectedOSItems?.length > 1 ? state.selectedOSItems : [state.activeOSItem].filter(Boolean));
         validarTrabalho(alvos);
         const candidatos = [];
         for (const alvo of alvos) {
@@ -234,7 +288,7 @@
         if (new Set(locais.map(l => l.hash)).size > 1) throw Error('Revisões locais divergentes. Reabra o pedido.');
         return locais[0]?.chave || url;
     }
-    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, iniciarPedido, conferirPedido, conferir, lerArte, lerUrl, validarTrabalho, referencias, chaveRecurso};
+    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, iniciarPedido, conferirPedido, conferir, motivoConsulta, lerArte, lerUrl, lerUrlParaConsulta, validarTrabalho, referencias, chaveRecurso};
     // A injeção exclusiva do Piloto ocorre depois do script principal. Manter
     // o fluxo original e acompanhar também seus retornos antecipados e erros.
     const abrirPedido = window.abrirImposicaoDoPedido;

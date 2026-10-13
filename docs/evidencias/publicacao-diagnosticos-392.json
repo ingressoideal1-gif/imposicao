@@ -1,0 +1,65 @@
+{
+  "version": "1.2.392",
+  "manifestos": {
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.2.392",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.2.392.msi",
+      "sha256": "f86b554bf039cde11eec7088eb9631c49d6cd8b2817cd5b7680266f95a1e1d3b",
+      "bytes": 194973696,
+      "size": 194973696,
+      "notes": "Diagnosticos remotos estruturados, codigo de erro no painel e historico local limitado; preserva recursos do canal.",
+      "estacoes": [
+        "LASER-04",
+        "TEX-01",
+        "FLEXO",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02",
+        "ACABAMENTO",
+        "DESKTOP-PM6TG1B"
+      ]
+    },
+    "newprod-piloto-teste.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.2.392",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.2.392.msi",
+      "bytes": 196657152,
+      "sha256": "1c0183ef90100f4eb8caed9ef190c0ac449f9d01fbfdf9f146bb57e8d126a0ee",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME"
+      ],
+      "notes": "Diagnosticos remotos estruturados, codigo de erro no painel e historico local limitado; preserva recursos do canal."
+    },
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.2.392",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.2.392.msi",
+      "sha256": "f86b554bf039cde11eec7088eb9631c49d6cd8b2817cd5b7680266f95a1e1d3b",
+      "bytes": 194973696,
+      "size": 194973696,
+      "notes": "Diagnosticos remotos estruturados, codigo de erro no painel e historico local limitado; preserva recursos do canal.",
+      "estacoes": [
+        "LASER-04",
+        "TEX-01",
+        "FLEXO",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02",
+        "ACABAMENTO",
+        "DESKTOP-PM6TG1B"
+      ]
+    }
+  },
+  "download_completo_sha256_conferido": true,
+  "estacoes_instaladas_verificadas": false,
+  "compilacao_auditada": true,
+  "testes": {
+    "piloto": 90,
+    "teste": 116
+  }
+}

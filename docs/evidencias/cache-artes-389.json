@@ -1,0 +1,38 @@
+{
+  "primeiro_real": true,
+  "segundo_real": false,
+  "tamanhos": {
+    "/primeiro.pdf": 157955806,
+    "/segundo.pdf": 163577856
+  },
+  "sha256_primeiro": "ee4ecaf7742907b79b69a77bfbc39bbf00910f8d2fb028410ee66758a2ff8724",
+  "eventos": [
+    {
+      "arquivo": "/primeiro.pdf",
+      "status": 200,
+      "bytes": 157955806,
+      "if_none_match": null
+    },
+    {
+      "arquivo": "/segundo.pdf",
+      "status": 200,
+      "bytes": 33554432,
+      "if_none_match": null
+    },
+    {
+      "arquivo": "/primeiro.pdf",
+      "status": 304,
+      "bytes": 0,
+      "if_none_match": "\"primeiro.pdf\""
+    },
+    {
+      "arquivo": "/segundo.pdf",
+      "status": 200,
+      "bytes": 163577856,
+      "if_none_match": null
+    }
+  ],
+  "polling_sem_rede": 3,
+  "espera_segundo_segundos": 3600,
+  "sucesso": true
+}

@@ -37,7 +37,20 @@ async function casos() {
             ? { ok: true, json: async () => ({ capabilities: ['integridade_impressao_v1'] }) }
             : { ok: true, blob: async () => arte };
         return { estado, modelo, num, fd, cliente, mudar(fn) { mudarConsulta = fn; },
-            executar() { return confirmarIntegridadeDoTrabalho(fd, 'http://localhost', estado, cliente); } };
+            executar(selecao, bancos) { return confirmarIntegridadeDoTrabalho(fd, 'http://localhost', estado, cliente, undefined, selecao, bancos); } };
+    }
+    {
+        const c = montar();
+        const banco = {id:'b1', csv_data:[{N:'A'}]};
+        globalThis.chamarBancosPedido = async () => ({bancos:[structuredClone(banco)],vinculos:[]});
+        // O painel global esta em outro pedido; a Montagem conserva sua copia.
+        c.estado.bancosDoPedido = [{id:'outro'}];
+        const preparados = {'123':{bancos:[structuredClone(banco)],vinculos:{}}};
+        await c.executar(undefined, preparados);
+        ok(c.fd.has('file'), 'Montagem confere banco do seu pedido sem usar banco da outra tela');
+        banco.csv_data[0].N='ALTERADO';
+        await recusa(()=>c.executar(undefined, preparados), 'banco do pedido mudou');
+        await recusa(()=>c.executar(undefined, {}), 'Banco não preparado');
     }
     {
         const c = montar({ verso:null, modo:'front' });

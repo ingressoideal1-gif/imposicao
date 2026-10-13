@@ -34,6 +34,22 @@ FOLHA_W, FOLHA_H = 200.0, 150.0
 TOLERANCIA_MM = 0.6   # ~5 pixels a 200 dpi
 
 
+@pytest.mark.parametrize('escala', [100, 104])
+def test_modelo_unico_em_blocos_preserva_ampliacao(tmp_path, escala):
+    arte = _arte_preta(tmp_path, 40, 20)
+    saida = str(tmp_path / 'bloco.pdf')
+    cfg = ImpositionConfig(base_file=arte, out_pdf=saida,
+        formato={'width_mm':100, 'height_mm':50, 'cols':1, 'rows':1},
+        saida={'width_mm':200, 'height_mm':150, 'file_format':'pdf'},
+        numeracao={'elements':[]}, seq_start=1, seq_end=2,
+        layout_schema='cut_stack', cut_stack_mode='strict_assembly',
+        sheets_per_block=2, arte_escala_h=escala, arte_escala_v=escala)
+    ImpositionEngine(cfg).process()
+    caixa = _caixa_da_tinta(str(next(tmp_path.glob('bloco_*_miolo.pdf'))))
+    assert caixa[2] - caixa[0] == pytest.approx(40 * escala / 100, abs=TOLERANCIA_MM)
+    assert caixa[3] - caixa[1] == pytest.approx(20 * escala / 100, abs=TOLERANCIA_MM)
+
+
 def _arte_preta(tmp_path, w_mm=PECA_W, h_mm=PECA_H, nome="arte.pdf"):
     """A arte do cliente: uma pagina preta, para a tinta ser mensuravel."""
     caminho = str(tmp_path / nome)

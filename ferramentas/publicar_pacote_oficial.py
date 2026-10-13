@@ -11,7 +11,7 @@ import urllib.request
 import urllib.error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manifesto_oficial import BASE, validar
+from manifesto_oficial import BASE, validar, PRODUTO, PREFIXO_MSI, NOME_MANIFESTO
 
 
 def requisicao(url, *, dados=None, chave=None, substituir=False):
@@ -25,16 +25,18 @@ def requisicao(url, *, dados=None, chave=None, substituir=False):
 
 
 def publicar(msi, estacoes=None, ativar=False, bootstrap=False, promover=False):
+    if bootstrap and PRODUTO != 'NewProdPilotoOficial':
+        raise ValueError('Canal de teste nao pode alterar a ponte legada oficial.')
     msi=Path(msi).resolve(strict=True)
-    m=re.fullmatch(r'NewProdPiloto_Oficial_v(\d+\.\d+\.\d+)\.msi',msi.name)
+    m=re.fullmatch(re.escape(PREFIXO_MSI) + r'(\d+\.\d+\.\d+)\.msi',msi.name)
     if not m:raise ValueError('Nome MSI oficial invalido')
     dados=msi.read_bytes();digest=hashlib.sha256(dados).hexdigest()
-    manifest=dict(schema=1,produto='NewProdPilotoOficial',version=m[1],url=BASE+msi.name,
+    manifest=dict(schema=1,produto=PRODUTO,version=m[1],url=BASE+msi.name,
                   sha256=digest,bytes=len(dados),size=len(dados),notes='NewProd Piloto oficial; atualizacao por estacao.')
     if not estacoes:
         # Uma publicacao rotineira conserva a liberacao existente; nao habilita
         # automaticamente cadastros antigos, testes ou estacoes desconhecidas.
-        with requisicao(BASE+'newprod-piloto-oficial.json?t='+str(time.time_ns())) as r:
+        with requisicao(BASE+NOME_MANIFESTO+'?t='+str(time.time_ns())) as r:
             anterior=validar(json.load(r))
         estacoes=anterior.get('estacoes')
         if not estacoes:raise ValueError('Informe as estacoes autorizadas para a primeira liberacao')
@@ -51,7 +53,7 @@ def publicar(msi, estacoes=None, ativar=False, bootstrap=False, promover=False):
         conferir_upload(msi, manifest, dados, chave)
     resultado={**manifest,'download_conferido':True,'ativado':False,'bootstrap_legado':False}
     if ativar:
-        for nome in ['newprod-piloto-oficial.json']+(['latest.json'] if bootstrap else []):
+        for nome in [NOME_MANIFESTO]+(['latest.json'] if bootstrap else []):
             url=BASE+nome
             try:
                 with requisicao(url+'?t='+str(time.time_ns())) as r:anterior=r.read(65537)

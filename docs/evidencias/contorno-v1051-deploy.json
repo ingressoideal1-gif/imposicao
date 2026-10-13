@@ -1,0 +1,11 @@
+{
+  "commit": "3259cfb204120a88b419f2c2d4dc32f4b4ac72fb",
+  "checks": [
+    {
+      "name": "Cloudflare Pages",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/c25c55f3-f62f-47f5-beb2-7a2f6a08e8ba"
+    }
+  ]
+}
