@@ -44182,7 +44182,7 @@ window.dispararEmailDiretoCliente = dispararEmailDiretoCliente;
 /**
  * O pedido entra no recorte de setores escolhido nos cards?
  *
- * SOMA: basta ter um item em QUALQUER um dos setores acesos. Lista vazia é
+ * SOMA: basta ter um item pendente em QUALQUER um dos setores acesos. Lista vazia é
  * "Todos os Setores", e então todo pedido entra.
  *
  * Está aqui, com nome, e não solta dentro do filtro, porque é a regra que o
@@ -44193,7 +44193,11 @@ function pedidoBateNosSetores(itens, escolhidos) {
     if (!setores.length) return true;
     const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
     const alvos = new Set(setores.map(norm));
-    return (itens || []).some(item => alvos.has(norm(item.setor || '')));
+    return (itens || []).some(item => {
+        if (!alvos.has(norm(item.setor || ''))) return false;
+        const status = normalizarStatusImpressao(item.impressao || item.status_impressao);
+        return status === 'Aguardando' || status === STATUS_CORRIGIR_ARTE;
+    });
 }
 
 /**

@@ -1,0 +1,16 @@
+{
+  "version": "1.3.4",
+  "msi": "NewProdPiloto_Oficial_v1.3.4.msi",
+  "bytes": 196677632,
+  "sha256": "e2e786a3401213918777b7a222b8c54ec505f04e02e69482ee12117bc2a02bf1",
+  "exe_sha256": "bca9dcdb0826ef9e09f20e6dc52b381a43591f4f61e94b5db04e4624ecea3ed1",
+  "propriedades_msi": {
+    "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}",
+    "ProductCode": "{17C214B9-1EAD-40B6-8F13-BEB9B9743FC5}",
+    "ProductName": "NewProd",
+    "ProductVersion": "1.3.4"
+  },
+  "painel_arquivos_conferidos": 375,
+  "motor_compilado_identico_fonte": true,
+  "instalacao_executada": false
+}
