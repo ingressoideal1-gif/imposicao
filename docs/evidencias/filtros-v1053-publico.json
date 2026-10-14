@@ -1,0 +1,38 @@
+[
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "index.html",
+    "sha256": "8d2c98225fd15a5cd14cf062bd40afb16da2a8cb51cd203b139b602a423bd270",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "producao.html",
+    "sha256": "65c0b66b6e3a904caa9b6912e25e2c6435f31221b092127794c2665ea5fa9edd",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "script.js",
+    "sha256": "598295f84289a2b888941bc36bdd0b69ffe3283617702008929b52069e4f08b6",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "index.html",
+    "sha256": "8d2c98225fd15a5cd14cf062bd40afb16da2a8cb51cd203b139b602a423bd270",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "producao.html",
+    "sha256": "65c0b66b6e3a904caa9b6912e25e2c6435f31221b092127794c2665ea5fa9edd",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "script.js",
+    "sha256": "598295f84289a2b888941bc36bdd0b69ffe3283617702008929b52069e4f08b6",
+    "confere": true
+  }
+]
