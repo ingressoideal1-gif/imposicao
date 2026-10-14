@@ -4788,7 +4788,23 @@ class ImpositionEngine:
         stack_size = set_def["num_sheets"] if set_def.get("teatro") else cfg.sheets_per_block
         poses = cfg.rows * cfg.cols
 
+        ordem_celulas = list(range(poses))
+        if set_def["type"] == "assembly":
+            # Capas avulsas: coluna da esquerda de cima para baixo, na
+            # orientacao FINAL do PDF. Miolo e capas estritas mantem a
+            # correspondencia original com as pilhas de corte.
+            def posicao_visual(P):
+                row, col = divmod(P, cfg.cols)
+                centro = fitz.Point(
+                    start_x + col * (cfg.item_w + cfg.gap_h) + cfg.item_w / 2,
+                    start_y + row * (cfg.item_h + cfg.gap_v) + cfg.item_h / 2,
+                ) * p.rotation_matrix
+                return (round(centro.x, 6), round(centro.y, 6))
+
+            ordem_celulas.sort(key=posicao_visual)
+
         def canto_da_celula(P):
+            P = ordem_celulas[P]
             row, col = divmod(P, cfg.cols)
             return (
                 start_x + col * (cfg.item_w + cfg.gap_h),
