@@ -29,10 +29,25 @@ do snapshot/digest, fotos compartilhando coluna, contexto ausente, fontes/PDFs
 e recusa de volume excessivo de arquivos/dados. Dados dos testes são sintéticos.
 `git diff --check` passou.
 
-## Estado da entrega
+## Entrega autorizada e verificada
 
-Correção local preparada mediante autorização específica para o servidor.
-Não publicada. A abertura real do pedido deve ser conferida após uma publicação
-autorizada; os testes locais não comprovam a recuperação nas estações.
-Para recuperação de uma futura publicação, preservar e republicar o bundle
-anterior das funções afetadas; não modificar bancos nem links do pedido.
+O pedido posterior de "entrega segura" autorizou a publicação. Publicada somente
+`piloto-local` no projeto `vwbtitjlpelrcnsytzqw`, versão 11 para 12, estado
+`ACTIVE`, mantendo `verify_jwt=false` e as verificações internas de identidade.
+Não houve publicação de outras funções, alteração de banco ou novo instalador.
+
+Os 12 arquivos remotos conferem com a fonte, normalizando apenas finais de linha.
+Os 20 testes direcionados também passaram contra o código baixado do servidor.
+Evidência: `docs/evidencias/pedido-23600-edge-publicacao.json`.
+Código registrado no commit `f2228f61` e enviado à branch
+`fix/compatibilidade-newprod-teste-20261013`. Essa branch ainda não foi integrada
+à `main`; os checkouts operacionais foram preservados.
+
+Backup anterior: `dist/compatibilidade/edge-23600-antes`, neste worktree.
+Para recuperação autorizada, republicar apenas `piloto-local` a partir desse
+diretório, usando o mesmo projeto e `--use-api --no-verify-jwt`; conferir os
+arquivos remotos novamente. Não modificar bancos nem links do pedido.
+
+Pendente em campo: Junior ou Gustavo reabrir o pedido 23600 e confirmar a tela.
+A comparação do bundle e os testes sintéticos não comprovam essa abertura real
+nem impressão física.

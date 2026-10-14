@@ -1,0 +1,61 @@
+{
+  "funcao": "piloto-local",
+  "projeto": "vwbtitjlpelrcnsytzqw",
+  "commit": "f2228f61",
+  "versao_anterior": 11,
+  "versao_publicada": 12,
+  "status": "ACTIVE",
+  "verify_jwt": false,
+  "fontes": [
+    {
+      "arquivo": "supabase\\functions\\piloto-local\\index.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\assinatura.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\banco.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\piloto_catalogo.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\piloto_estacao.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\piloto_lista.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\piloto_local.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\piloto_offline.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\piloto_pedido.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\propostas.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\segredos.ts",
+      "igual": true
+    },
+    {
+      "arquivo": "supabase\\functions\\_compartilhado\\sessao.ts",
+      "igual": true
+    }
+  ],
+  "testes_edge": 353,
+  "backup": "dist/compatibilidade/edge-23600-antes"
+}
