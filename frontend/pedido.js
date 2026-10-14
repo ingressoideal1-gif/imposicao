@@ -6168,6 +6168,11 @@ async function executarPedImposition(mode, isRefazer) {
     const ativoInicial = JSON.stringify(state.activeOSItem || null);
     // A confirmação pertence aos modelos capturados antes dos carregamentos.
     const alvosDoTrabalho = (isRefazer || folha1 ? [] : alvosDaImpressao((state.selectedOSItems || []).length > 1));
+    const confirmarPdfSalvo = async () => {
+        if (!alvosDoTrabalho.length) return;
+        document.getElementById('loading-overlay')?.classList.remove('active');
+        await confirmarImpressaoModelos(alvosDoTrabalho, { origem: 'pdf' });
+    };
     if (window.PilotoSelecao) window.PilotoSelecao.validarTrabalho(isRefazer || folha1 ? [state.activeOSItem].filter(Boolean) : alvosDoTrabalho);
     const selecaoAindaAtual = () => selecaoInicial === JSON.stringify(state.selectedOSItems || [])
         && ativoInicial === JSON.stringify(state.activeOSItem || null);
@@ -7214,10 +7219,12 @@ async function executarPedImposition(mode, isRefazer) {
                 // Refazer é reimpressão de uma parte: o modelo já estava impresso
                 // (ou continua não estando). Ver a nota do bloco abaixo.
                 const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
-                const ok = entrega.finalizar({ interrompido: cancelouNoMeio });
+                const ok = await entrega.finalizar({ interrompido: cancelouNoMeio });
                 if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 return;
             }
+
+            if (cancelouNoMeio) return;
 
             if (mode === 'print' && printBlobQueue.length > 0) {
                 if (overlay) overlay.classList.remove('active');
@@ -7239,10 +7246,11 @@ async function executarPedImposition(mode, isRefazer) {
                 return;
             }
 
-            // Gerar/salvar PDF não altera o status de impressão
+            // O status só muda se o operador confirmar.
             toast(isRefazer
                 ? `Refazer concluído: ${arquivosRecebidos} arquivo(s) salvo(s).`
                 : 'Processo de imposição concluído e arquivos salvos!', 'success');
+            await confirmarPdfSalvo();
             return;
         }
 
@@ -7283,7 +7291,7 @@ async function executarPedImposition(mode, isRefazer) {
                             await writable.write(item.blob);
                             await writable.close();
                         } catch (errSave) {
-                            console.error(`Erro ao salvar ${item.name} na pasta:`, errSave);
+                            throw new Error(`Não foi possível salvar ${item.name}: ${errSave.message}`);
                         }
                     } else {
                         const url = window.URL.createObjectURL(item.blob);
@@ -7297,8 +7305,9 @@ async function executarPedImposition(mode, isRefazer) {
                         await new Promise(r => setTimeout(r, 500));
                     }
                 }
-                // Gerar/salvar PDF não altera o status de impressão
+                // O status só muda se o operador confirmar.
                 toast('Arquivos de imposição salvos com sucesso!', 'success');
+                if (multiBlobs.length) await confirmarPdfSalvo();
                 return;
             }
         }
@@ -7329,8 +7338,9 @@ async function executarPedImposition(mode, isRefazer) {
                 await writable.write(blob);
                 await writable.close();
 
-                // Gerar/salvar PDF não altera o status de impressão
+                // O status só muda se o operador confirmar.
                 toast('PDF salvo com sucesso!', 'success');
+                await confirmarPdfSalvo();
                 return;
             } catch (errSave) {
                 console.error("Falha ao salvar PDF na pasta escolhida, usando fallback:", errSave);
@@ -7343,8 +7353,9 @@ async function executarPedImposition(mode, isRefazer) {
                 const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
-                // Gerar/salvar PDF não altera o status de impressão
+                // O status só muda se o operador confirmar.
                 toast('PDF salvo com sucesso!', 'success');
+                await confirmarPdfSalvo();
                 return;
             } catch (err) {
                 console.error("Falha ao salvar no arquivo escolhido previamente, usando fallback:", err);
@@ -7394,8 +7405,9 @@ async function executarPedImposition(mode, isRefazer) {
 
         document.body.removeChild(a);
 
-        // Gerar/baixar PDF não altera o status de impressão
+        // O status só muda se o operador confirmar.
         toast('PDF baixado com sucesso!', 'success');
+        await confirmarPdfSalvo();
 
     } catch (err) {
 
