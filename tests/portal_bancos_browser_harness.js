@@ -79,6 +79,47 @@ const root = path.join(__dirname, '..');
             }, { timeout: 8000 }, idx, pagina, total);
         }
         await pronto(0, 1, 6); await pronto(1, 1, 4);
+        // Verso duplicado usa a arte da frente e ainda exige as duas faces prontas.
+        await page.evaluate(() => {
+            state.numeracoes[0].print_mode = 'pdf_duplicate_back';
+            state.osItens.vibe_123[0].verso = true;
+            state.osItens.vibe_123[0].verso_arte_url = null;
+            renderAmostrasOSItens('vibe_123');
+        });
+        await pronto(0, 1, 6);
+        assert.equal(await page.$eval('[data-aprovar-banco="501"]', b => b.disabled), false);
+        assert.deepEqual(await page.$eval('#amostra-item-canvas-verso-0', c =>
+            Array.from(c.getContext('2d').getImageData(400, 250, 1, 1).data)),
+            [255, 255, 255, 255], 'verso composto com a arte da frente');
+        await page.evaluate(() => {
+            window.__arteOriginal = state.osItens.vibe_123[0].arte_url;
+            state.osItens.vibe_123[0].arte_url = '';
+            renderAmostrasOSItens('vibe_123');
+        });
+        assert.equal(await page.$eval('[data-aprovar-banco="501"]', b => b.disabled), true,
+            'duplicar verso ainda exige o original da frente');
+        await page.evaluate(() => {
+            state.osItens.vibe_123[0].arte_url = __arteOriginal;
+            state.numeracoes[0].print_mode = 'duplex_unico';
+            renderAmostrasOSItens('vibe_123');
+        });
+        assert.equal(await page.$eval('[data-aprovar-banco="501"]', b => b.disabled), true,
+            'verso independente continua exigindo seu original');
+        assert.match(await page.$eval('[data-aviso-banco="501"]', el => el.textContent), /Falta a arte original/);
+        await page.evaluate(() => {
+            state.numeracoes[0].print_mode = 'pdf_duplicate_back';
+            renderAmostrasOSItens('vibe_123');
+        });
+        await pronto(0, 1, 6);
+        await page.click('#amostra-csv-next-0'); await pronto(0, 2, 6);
+        assert.equal(await page.$eval('[data-aprovar-banco="501"]', b => b.disabled), false);
+        await page.click('#amostra-csv-prev-0'); await pronto(0, 1, 6);
+        await page.evaluate(() => {
+            delete state.numeracoes[0].print_mode;
+            state.osItens.vibe_123[0].verso = false;
+            renderAmostrasOSItens('vibe_123');
+        });
+        await pronto(0, 1, 6);
         const pixel = () => page.$eval('#amostra-item-canvas-0', c => Array.from(c.getContext('2d').getImageData(118, 148, 1, 1).data));
         assert.deepEqual(await pixel(), [255, 0, 0, 255], 'foto vermelha da primeira linha');
         assert.ok(await page.evaluate(() => __labels.some(x => x.includes('PESSOA_1'))));

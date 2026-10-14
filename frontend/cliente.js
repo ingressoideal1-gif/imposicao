@@ -593,7 +593,7 @@ function renderAmostrasOSItens(osId) {
         // com o que trabalhar. Sem `arte_url` o canvas sairia com a cor e a
         // numeração e SEM a arte — pior do que não paginar. Modo PDF fica de
         // fora porque já tem o seletor de páginas dele.
-        const temArteParaDesenhar = !!item.arte_url && (!item.verso || !!item.verso_arte_url);
+        const temArteParaDesenhar = !!item.arte_url && (!item.verso || pdfCopiaNoPortal(item) || !!item.verso_arte_url);
         const paginaCsv = temCsvVariavel(numDoModelo) && !item.modo_pdf && temArteParaDesenhar;
 
         // A imagem aprovada (o snapshot composto que o painel salva) é o caminho
@@ -2983,7 +2983,7 @@ function problemaDoBancoCliente(item, num) {
     const problema = window.PortalBancos.problema(item, num);
     if (problema) return problema;
     if (!temCsvVariavel(num)) return '';
-    if (!item.arte_url || (item.verso && !item.verso_arte_url)) return 'Falta a arte original para conferir as linhas do banco.';
+    if (!item.arte_url || (item.verso && !pdfCopiaNoPortal(item) && !item.verso_arte_url)) return 'Falta a arte original para conferir as linhas do banco.';
     if (!linhasDaAmostra(item, num).length) return 'Este modelo não tem linhas ativas selecionadas para conferir.';
     const desenho = bancoDesenhosCliente.get(String(item.id));
     if (desenho && desenho.erro) return desenho.erro;
@@ -3044,7 +3044,7 @@ async function desenharBancoDoCliente(idx, osId, item, num, cor, container) {
     atualizarAvisoBancoCliente(item, num);
     try {
         if (!linhas.length) throw new Error('Este modelo não tem linhas ativas selecionadas para conferir.');
-        if (!item.arte_url || (item.verso && !item.verso_arte_url)) throw new Error('Falta a arte original para conferir as linhas do banco.');
+        if (!item.arte_url || (item.verso && !pdfCopiaNoPortal(item) && !item.verso_arte_url)) throw new Error('Falta a arte original para conferir as linhas do banco.');
         const fmtId = (cor && cor.formato_id) || num.formato_id;
         const fmt = (state.formatos || []).find(f => String(f.id) === String(fmtId));
         if (!fmt || !fmt.width_mm || !fmt.height_mm) throw new Error('O formato desta arte não foi carregado.');
