@@ -36,11 +36,12 @@ vizinhas num mesmo bloco de texto. Os testes novos foram incluídos na bateria
 de compatibilidade com instalações antigas. Existe um único NewProd oficial;
 os nomes históricos dos perfis de teste não representam versões separadas.
 
-Esta alteração ainda não foi publicada ou instalada. Nenhum pedido real,
-impressora, banco compartilhado ou manifesto foi alterado nesta tarefa.
+Publicação concluída na NewProd 1.3.3 oficial; ver
+`newprod-oficial-133-20261014.md`. Nenhum pedido real foi alterado nem trabalho
+foi enviado à impressora nesta tarefa. Instalação nas estações não foi forçada.
 
 O usuário aprovou o PDF de exemplo e autorizou a entrega segura. A alteração
-será distribuída como NewProd 1.3.3 oficial, mantendo a liberação das 12
+foi distribuída como NewProd 1.3.3 oficial, mantendo a liberação das 12
 estações. Os 40 testes dos contratos de versão/instalação/publicação passaram
 após incrementar a versão. Os instaladores anteriores permanecem imutáveis.
 
