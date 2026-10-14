@@ -65,6 +65,8 @@ function montar() {
     let renderizou = 0;
 
     const fonte = [
+        'const STATUS_CORRIGIR_ARTE = "Corrigir Arte";',
+        recortar('normalizarStatusImpressao'),
         recortar('pedidoBateNosSetores'),
         recortar('setFiltroSetor'),
         recortar('pintarCardsDeSetor'),
@@ -112,6 +114,29 @@ function montar() {
     ok(bate([{ setor: 'flexo' }], ['FLEXO']) === true, 'a caixa das letras tambem nao');
     ok(bate([{ setor: '' }], ['FLEXO']) === false, 'item sem setor nao entra em recorte nenhum');
     ok(bate([{}], ['FLEXO']) === false, 'item sem a chave setor tambem nao');
+})();
+
+(function pendenciaPertenceAoSetorEscolhido() {
+    const { api } = montar();
+    const bate = api.pedidoBateNosSetores;
+    const item = (setor, impressao) => ({ setor, impressao });
+    for (const setor of ['LASER', 'TEXTIL', 'PVC', 'FLEXO']) {
+        const outro = setor === 'FLEXO' ? 'LASER' : 'FLEXO';
+        const misto = [item(setor, 'Impresso'), item(outro, 'Aguardando')];
+        ok(!bate(misto, [setor]), setor + ': pendencia de outro setor nao inclui pedido');
+        ok(bate(misto, []), setor + ': Todos restaura listagem sem restricao de pendencia');
+        for (const status of ['Aguardando', 'Corrigir Arte', 'AGUARD.', 'CORRIGIR_ARTE']) {
+            ok(bate([item(setor, status), item(outro, 'Impresso')], [setor]), setor + ': aceita ' + status);
+        }
+        ok(bate([item(setor, 'Impresso'), item(setor, 'Aguardando')], [setor]), setor + ': basta um modelo pendente');
+    }
+    ok(bate([item('LASER', 'Impresso'), item('PVC', 'Corrigir Arte')], ['LASER', 'PVC']), 'Laser + PVC inclui pendencia PVC');
+    ok(bate([item('LASER', 'Aguardando'), item('PVC', 'Impresso')], ['LASER', 'PVC']), 'Laser + PVC inclui pendencia Laser');
+    ok(!bate([item('LASER', 'Impresso'), item('PVC', 'Impresso'), item('FLEXO', 'Aguardando')], ['LASER', 'PVC']), 'Laser + PVC ignora pendencia Flexo');
+    const impressos = [item('LASER', 'Impresso')];
+    ok(!bate(impressos, ['LASER', 'PVC', 'TEXTIL', 'FLEXO']), 'quatro setores selecionados exigem pendencia');
+    ok(bate(impressos, []), 'Todos permite impressos, sujeito aos demais filtros');
+    ok(!bate([item('LASER', 'Cancelado')], ['LASER']), 'status nao pendente nao entra');
 })();
 
 // ─── 2. O clique liga, e o segundo clique desliga ────────────────────────────
