@@ -2,9 +2,15 @@ import pytest
 from manifesto_oficial import BASE, validar
 
 
+def test_versao_oficial_supera_instalacoes_de_teste():
+    from agent_version import AGENT_VERSION, como_tupla
+    assert '-teste' not in AGENT_VERSION
+    assert como_tupla(AGENT_VERSION) > como_tupla('1.3.1-teste.1')
+
+
 def manifesto():
-    return dict(schema=1,produto='NewProdPilotoTeste',version='1.2.366',
-                url=BASE+'NewProdPiloto_Teste_v1.2.366.msi',sha256='a'*64,
+    return dict(schema=1,produto='NewProdPilotoOficial',version='1.2.366',
+                url=BASE+'NewProdPiloto_Oficial_v1.2.366.msi',sha256='a'*64,
                 bytes=153000000,estacoes=['PC-JR-HOME'])
 
 

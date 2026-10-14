@@ -6,9 +6,9 @@ import time
 import urllib.request
 
 BASE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/'
-PRODUTO = 'NewProdPilotoTeste'
-PREFIXO_MSI = 'NewProdPiloto_Teste_v'
-NOME_MANIFESTO = 'newprod-piloto-teste.json'
+PRODUTO = 'NewProdPilotoOficial'
+PREFIXO_MSI = 'NewProdPiloto_Oficial_v'
+NOME_MANIFESTO = 'newprod-piloto-oficial.json'
 URL = BASE + NOME_MANIFESTO
 
 

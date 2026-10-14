@@ -225,7 +225,8 @@ function extract(name) {
     assert.deepEqual(hotFail.map(c=>c.url),['/api/hotfolder/drop'],'falha na pasta interrompe sem usar impressora');
     assert.equal((pedido.match(/if \(ok && !testeModelo && alvoImpressao.length\)/g)||[]).length,4,'todos os caminhos de conclusao excluem status comercial no teste');
     assert(pedido.includes('const opcoesDeFace = { testeModelo,'));
-    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=5'));
+    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=6-oficial'));
+    assert.equal(await page.$eval('#ped-teste-config label', e=>e.textContent), 'Forma de envio');
     // A entrega normal continua usando o endpoint e opcoes anteriores quando nao ha teste.
     const normal = await page.evaluate(async cfg => {
       calls.length=0; window.fail=false; window._hotFolderAtivo=()=>false; window.getPedPrintOptions=()=>structuredClone(cfg);

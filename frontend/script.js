@@ -45829,7 +45829,7 @@ function _aplicarEstadoHotFolder() {
     const avisoTeste = document.getElementById('ped-teste-aviso');
     if (avisoTeste) avisoTeste.textContent = ativo
         ? 'Destino: Hot Folder selecionado. O PDF sera entregue somente a pasta. O pedido nao sera marcado como impresso.'
-        : 'Selecione a forma de envio para a impressora. O teste nao marca o pedido como impresso.';
+        : 'Selecione a forma de envio para a impressora. O envio nao marca o pedido como impresso.';
     const destinoTeste = document.getElementById('ped-teste-destino');
     if (destinoTeste) destinoTeste.textContent = '';
 
