@@ -1,0 +1,106 @@
+{
+  "manifestos": {
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.2",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.2.msi",
+      "sha256": "9794b786f367bc2f9546b8d6860f07c2c97212247e94d36ae5cd74d80709eadd",
+      "bytes": 196677632,
+      "size": 196677632,
+      "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME",
+        "TEX-01",
+        "LASER-04",
+        "FLEXO",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02",
+        "ACABAMENTO",
+        "DESKTOP-PM6TG1B",
+        "CESAR-CPD",
+        "PRD-ACABAMENTO"
+      ]
+    },
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.2",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.2.msi",
+      "sha256": "9794b786f367bc2f9546b8d6860f07c2c97212247e94d36ae5cd74d80709eadd",
+      "bytes": 196677632,
+      "size": 196677632,
+      "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME",
+        "TEX-01",
+        "LASER-04",
+        "FLEXO",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02",
+        "ACABAMENTO",
+        "DESKTOP-PM6TG1B",
+        "CESAR-CPD",
+        "PRD-ACABAMENTO"
+      ]
+    },
+    "newprod-piloto-teste.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.3.2",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.2.msi",
+      "sha256": "9794b786f367bc2f9546b8d6860f07c2c97212247e94d36ae5cd74d80709eadd",
+      "bytes": 196677632,
+      "size": 196677632,
+      "notes": "NewProd 1.3.2 oficial; ponte para migrar runtimes antigos ao manifesto oficial.",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME",
+        "TEX-01",
+        "LASER-04",
+        "FLEXO",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02",
+        "ACABAMENTO",
+        "DESKTOP-PM6TG1B",
+        "CESAR-CPD",
+        "PRD-ACABAMENTO"
+      ]
+    }
+  },
+  "download_oficial_e_ponte_conferidos": true,
+  "runtime": "1.3.2",
+  "instalacao_forcada": false,
+  "resultado": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.3.2",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.2.msi",
+    "sha256": "9794b786f367bc2f9546b8d6860f07c2c97212247e94d36ae5cd74d80709eadd",
+    "bytes": 196677632,
+    "size": 196677632,
+    "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME",
+      "TEX-01",
+      "LASER-04",
+      "FLEXO",
+      "LAPTOP-9BSK81S0",
+      "GUSTAVO-PROD",
+      "LASER-02",
+      "ACABAMENTO",
+      "DESKTOP-PM6TG1B",
+      "CESAR-CPD",
+      "PRD-ACABAMENTO"
+    ],
+    "download_conferido": true,
+    "ativado": true,
+    "bootstrap_legado": true
+  }
+}

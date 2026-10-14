@@ -1,5 +1,9 @@
 # NewProd: versão única a partir da 1.3.1
 
+Continuidade autorizada: `newprod-oficial-132-20261014.md` registra a 1.3.2
+oficial, sem sufixo, para permitir atualização automática das instalações
+1.3.1-teste.1. Esta página preserva o histórico da unificação inicial.
+
 Decisão do usuário em 14/10/2026: a NewProd 1.3.1 passa a ser a única versão
 operacional; todas as estações devem atualizar. Esta decisão substitui a
 restrição anterior de entrega somente no teste.
