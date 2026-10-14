@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "produto": "NewProdPilotoTeste",
+  "version": "1.3.1",
+  "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.1.msi",
+  "sha256": "61e71d4d2c4f913ed43b55eb0157159982c0e0f870c4ad22c910f84246aeb394",
+  "bytes": 196673536,
+  "size": 196673536,
+  "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+  "estacoes": [
+    "LASER-01",
+    "PC-JR-HOME",
+    "TEX-01"
+  ],
+  "download_conferido": true,
+  "ativado": true,
+  "bootstrap_legado": false,
+  "manifestos_oficiais_preservados": true
+}

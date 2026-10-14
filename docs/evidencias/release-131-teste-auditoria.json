@@ -1,0 +1,15 @@
+{
+  "version": "1.3.1-teste.1",
+  "msi": "NewProdPiloto_Teste_v1.3.1.msi",
+  "bytes": 196673536,
+  "sha256": "61e71d4d2c4f913ed43b55eb0157159982c0e0f870c4ad22c910f84246aeb394",
+  "exe_sha256": "51cae5b0991a6b8cc1be803499648345ee72520d8c1868c82747b3ccf87db051",
+  "propriedades_msi": {
+    "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}",
+    "ProductCode": "{9139BC11-5102-42C4-8D32-563318F09F85}",
+    "ProductName": "NewProd Piloto Teste",
+    "ProductVersion": "1.3.1"
+  },
+  "painel_arquivos_conferidos": 375,
+  "instalacao_executada": false
+}

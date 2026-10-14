@@ -28,5 +28,29 @@ JavaScript. Permanecem duas exclusões por ausência do pool real de QR e um avi
 preexistente de depreciação Starlette/httpx. O relatório do perfil oficial é
 `dist/compatibilidade/montagem-formatos-oficial.json`.
 
-Esta correção está preparada no código; não foi publicada nem instalada.
-A geração do PDF na estação com o pedido 23138 permanece como validação de campo.
+## Entrega 1.3.1 de teste
+
+Publicada em 14/10/2026 após autorização de entrega segura. TEX-01 foi incluída
+por autorização adicional, junto de LASER-01 e PC-JR-HOME. O manifesto de teste
+foi relido e confirmou exatamente essas três estações. Os manifestos oficial
+e legado permaneceram idênticos, em 1.2.401. Liberar TEX-01 no teste não comprova
+sua instalação ou migração do canal normal.
+
+Fonte: commit `0b55a01e`, branch `fix/compatibilidade-newprod-teste-20261013`.
+Runtime `1.3.1-teste.1`; pacote `NewProdPiloto_Teste_v1.3.1.msi`.
+Auditoria conferiu identidade MSI, ausência de arquivos privados e os 375
+arquivos do painel contra a fonte. Os 39 testes adicionais dos contratos de
+versão, instalação e publicação passaram. Evidências:
+`evidencias/release-131-teste-auditoria.json` e
+`evidencias/release-131-teste-publicacao.json`.
+
+O MSI público foi baixado integralmente antes da ativação: 196673536 bytes,
+SHA-256 `61e71d4d2c4f913ed43b55eb0157159982c0e0f870c4ad22c910f84246aeb394`.
+Binários anteriores preservados em `dist/compatibilidade/base-130-binarios`,
+MSI 1.3.0 mantido. Manifestos anteriores guardados em
+`dist/compatibilidade/manifestos-antes-release-131.json`. A reversão automática
+exige publicar a fonte anterior com versão superior; não há downgrade automático.
+
+Nenhuma instalação, reinício, impressão ou alteração de dados de pedidos foi
+executada. A geração do PDF na estação com o pedido 23138 permanece como
+validação de campo após a atualização.
