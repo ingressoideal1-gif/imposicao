@@ -15,7 +15,7 @@
     'use strict';
 
     // A versão vem da tag que carregou ESTE arquivo, e não de uma constante:
-    // o `entrega-segura.ps1` versiona este asset junto com o leitor e o fluxo de movimentos;
+    // o `entrega-segura.ps1` versiona este asset junto com a navegacao do AO VIVO nas configuracoes;
     // uma constante teria de
     // ser lembrada a cada release — a que ninguém lembra é a que envelhece.
     function versaoDeste() {

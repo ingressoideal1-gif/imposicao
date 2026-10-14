@@ -457,6 +457,7 @@
              deixaria o dono sem nenhum caminho de volta para a lista. -->
         <button id="btn-fechar-engrenagem" class="secundario">← Voltar aos meus eventos</button>
         <h1 id="nome-evento-titulo">Evento</h1>
+        <button id="btn-config-ao-vivo" class="secundario" type="button">AO VIVO</button>
 
         <div id="aviso-gravacao" class="aviso sumindo" role="status"></div>
 
@@ -724,7 +725,7 @@
 <!-- Esta é a casa (`/ic/` abre aqui), e o Chrome só oferece "Instalar
      aplicativo" numa página que tenha service worker registrado. Sem isto, o
      botão de instalar nunca apareceria — que é o ponto do aplicativo. -->
-<script src="sw-registro.js?v=1049"></script>
+<script src="sw-registro.js?v=1057"></script>
 
 <!-- A ordem importa. `chaveiro.js` é puro e vem antes de quem o usa; a lista e
      o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
@@ -740,7 +741,7 @@
      assim que este defeito passou por toda a suíte de testes e só apareceu no
      navegador de verdade. -->
 <script src="portaria-deposito.js?v=1049"></script>
-<script src="lista-eventos.js?v=1023"></script>
+<script src="lista-eventos.js?v=1057"></script>
 <!-- A conta do cliente na casa: entrar, trocar a senha provisória, sair. Vem
      DEPOIS da lista porque é ela quem decide, no arranque, se a casa abre na
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
@@ -767,12 +768,12 @@
 <!-- O evento acontecendo: "Ao vivo" enquanto ele roda, "Relatório" depois. É a
      tela que a lista de eventos abre pelo botão do meio da linha, e a lista de
      finalizados pelo toque na linha inteira. -->
-<script src="ao-vivo.js?v=1046"></script>
+<script src="ao-vivo.js?v=1057"></script>
 <script src="caixa-confirmar.js?v=1023"></script>
 <script src="menu-geral.js?v=1023"></script>
 <script src="fila-presa.js?v=1023"></script>
 <script src="virar-portao.js?v=1023"></script>
-<script src="controle.js?v=1023"></script>
+<script src="controle.js?v=1057"></script>
 <script src="parede-pwa.js?v=1023"></script>
 </body>
 </html>

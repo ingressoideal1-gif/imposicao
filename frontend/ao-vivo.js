@@ -59,6 +59,7 @@
         evento_id: null,
         nome: '',
         dados: null,
+        voltarConfiguracao: false,
         relogio: null,
         // A busca em andamento, para uma resposta atrasada não pintar por cima
         // de uma busca mais nova. Sem isto, digitar `12` e depois `123`
@@ -441,8 +442,9 @@
     function pedirParaEntrar() {
         var id = estado.evento_id;
         var nome = estado.nome;
+        var configuracao = estado.voltarConfiguracao;
         return window.conta.mostrarEntrar({
-            depois: function () { return abrir(id, nome); }
+            depois: function () { return abrir(id, nome, configuracao); }
         });
     }
 
@@ -506,20 +508,25 @@
         });
     }
 
-    function abrir(eventoId, nome) {
+    function abrir(eventoId, nome, voltarConfiguracao) {
         estado.evento_id = eventoId;
         estado.nome = nome || '';
         estado.dados = null;
+        estado.voltarConfiguracao = !!voltarConfiguracao;
         // Mesma cautela do `meus-pedidos.js`: `AcessoConta.sessao()` LANÇA de
         // forma síncrona quando não há `supabaseClient`, e um throw solto sai
         // do ouvinte do toque como erro não tratado — o dono tocaria no botão e
         // nada aconteceria.
-        return fecharEngrenagemSeAberta().then(function () {
+        // Consultar dentro da configuracao nao encerra seu login temporario
+        // nem descarta campos editados. A saida continua no fecharEngrenagem.
+        return (estado.voltarConfiguracao ? Promise.resolve() : fecharEngrenagemSeAberta()).then(function () {
             return window.AcessoConta.sessao();
         }).catch(function () { return null; }).then(function (s) {
             if (!s) { return pedirParaEntrar(); }
             window.conta.esconderTelaInicial(true);
             $('ao-vivo').classList.remove('sumindo');
+            $('btn-voltar-ao-vivo').textContent = estado.voltarConfiguracao
+                ? '← Voltar às configurações' : '← Voltar aos meus eventos';
             $('ao-vivo-corpo').classList.add('sumindo');
             $('ao-vivo-busca').value = '';
             $('ao-vivo-achados').innerHTML = '';
@@ -538,6 +545,11 @@
         // `sumindo` em si mesmo ANTES de pedir a tela inicial de volta: é o que
         // o contrato do `conta.js` exige de quem fecha um estado de topo.
         $('ao-vivo').classList.add('sumindo');
+        if (estado.voltarConfiguracao) {
+            estado.voltarConfiguracao = false;
+            $('engrenagem').classList.remove('sumindo');
+            return Promise.resolve();
+        }
         window.conta.esconderTelaInicial(false);
         return window.listaEventos.recarregar();
     }
