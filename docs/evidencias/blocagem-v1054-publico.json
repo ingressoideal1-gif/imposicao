@@ -1,0 +1,86 @@
+[
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "index.html",
+    "sha256": "1db4f643a62b2a2444c9a048fc1ca31c3c6b9f5d5f938683aca7fce648bc3004",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "producao.html",
+    "sha256": "f68b80aa16299b98fb13e21ff78d453636710a252d1196bd5ff2bf4120ad80dc",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "cliente.html",
+    "sha256": "2c5b1dd4e0cfa1e9967d05a67c676a3e24a28067c2030646b9981e4be7444de6",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "controle.html",
+    "sha256": "2539d206c60cb49615b31484d7be42576f0a7e5ecab36a4dd053a6b5af6ecc33",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "script.js",
+    "sha256": "4838cb2c585491194047e34b08f8c3c66d8a5a3817593254bc1e585fdedcca33",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "pedido.js",
+    "sha256": "6688de6e071501a1f1aa46a66e51303b2a00afc9173c444efef7334701ebf1c7",
+    "confere": true
+  },
+  {
+    "dominio": "imposition.ai-ideal.com.br",
+    "arquivo": "montagem.js",
+    "sha256": "e93616a8cb4abd520dc38613c15d11d61939edd5a7c43c4d58f56c8b95ad3dff",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "index.html",
+    "sha256": "1db4f643a62b2a2444c9a048fc1ca31c3c6b9f5d5f938683aca7fce648bc3004",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "producao.html",
+    "sha256": "f68b80aa16299b98fb13e21ff78d453636710a252d1196bd5ff2bf4120ad80dc",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "cliente.html",
+    "sha256": "2c5b1dd4e0cfa1e9967d05a67c676a3e24a28067c2030646b9981e4be7444de6",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "controle.html",
+    "sha256": "2539d206c60cb49615b31484d7be42576f0a7e5ecab36a4dd053a6b5af6ecc33",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "script.js",
+    "sha256": "4838cb2c585491194047e34b08f8c3c66d8a5a3817593254bc1e585fdedcca33",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "pedido.js",
+    "sha256": "6688de6e071501a1f1aa46a66e51303b2a00afc9173c444efef7334701ebf1c7",
+    "confere": true
+  },
+  {
+    "dominio": "imposicao.pages.dev",
+    "arquivo": "montagem.js",
+    "sha256": "e93616a8cb4abd520dc38613c15d11d61939edd5a7c43c4d58f56c8b95ad3dff",
+    "confere": true
+  }
+]
