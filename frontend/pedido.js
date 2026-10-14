@@ -5339,7 +5339,7 @@ function renderPedOSQueue(opcoes = {}) {
             <div class="card-header" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c; display:flex; align-items:center; gap:14px;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1 1 0; min-width:0;" onclick="toggleBox('box-body-${prodId}-renderPedOSQueue', 'box-arrow-${prodId}-renderPedOSQueue')">
                     <h5 class="mb-0" style="color: #facc15; font-size: calc(0.9rem + 2pt); font-weight:bold;">
-                        ${nomeReal} ${setorBadge}
+                        ${escapeHtml(nomeReal)} ${setorBadge}
                     </h5>
                 </div>
                 <div style="flex:0 0 auto;">${resumoDoProduto}</div>

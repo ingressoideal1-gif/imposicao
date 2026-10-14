@@ -34080,7 +34080,7 @@ function renderImpOSQueue(opcoes = {}) {
             <div class="card-header d-flex justify-content-between align-items-center" style="background:#0f172a; padding: 10px 15px; border-bottom:1px solid #918f8c;">
                 <div style="cursor:pointer; display:flex; align-items:center; flex:1;" onclick="toggleBox('box-body-${prodId}-renderImpOSQueue', 'box-arrow-${prodId}-renderImpOSQueue')">
                     <h5 class="mb-0" style="color:var(--warning); font-size:1.1rem; font-weight:bold;">
-                        <i class="fas fa-box-open me-2" style="color:#918f8c;"></i>${nomeReal} ${setorBadge}
+                        <i class="fas fa-box-open me-2" style="color:#918f8c;"></i>${escapeHtml(nomeReal)} ${setorBadge}
                     </h5>
                 </div>
                 ${headerDropdowns}
@@ -46308,7 +46308,7 @@ function _updateSaveButtonLabel() {
     nota.innerHTML = info
         ? `Guarda nesta esta&ccedil;&atilde;o, para <b style="color:#cbd5e1;">${escapeHtml(info.prodNome)}</b>, `
           + 'a pasta observada, a configura&ccedil;&atilde;o de impress&atilde;o, a entrega por bloco '
-          + 'e o gerenciamento de cores.'
+          + 'e o gerenciamento de cores.' + (window.NewProdTesteModelo ? ' Inclui a forma de envio selecionada.' : '')
         : 'Este modelo n&atilde;o tem produto do ERP, ent&atilde;o n&atilde;o h&aacute; a quem '
           + 'atribuir a configura&ccedil;&atilde;o. Abra um modelo vindo do pedido para grav&aacute;-la.';
 }
@@ -46363,6 +46363,8 @@ async function savePrintConfigForProduct() {
 
         updated_at: new Date().toISOString()
     };
+
+    if (window.NewProdTesteModelo) config.forma_envio = window.NewProdTesteModelo.formaEnvio();
 
     // 1. Salvar no cache local
     _printConfigCache[info.prodId] = config;
@@ -46420,6 +46422,7 @@ async function savePrintConfigForProduct() {
 }
 
 async function loadPrintConfigForProduct(produtoId) {
+    window.NewProdTesteModelo?.restaurar(null);
     if (!produtoId) return;
     const prodId = String(produtoId);
 
@@ -46465,6 +46468,7 @@ async function loadPrintConfigForProduct(produtoId) {
 
 async function _applyPrintConfig(config) {
     if (!config) return;
+    window.NewProdTesteModelo?.restaurar(config);
 
     // Hot folder vem antes da impressora, e fora do ramo dela de proposito: um
     // produto configurado so para hot folder nao tem printer_name para casar com

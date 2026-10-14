@@ -1,0 +1,25 @@
+{
+  "funcao": "piloto-local",
+  "projeto": "vwbtitjlpelrcnsytzqw",
+  "versao_anterior": 10,
+  "versao_publicada": 11,
+  "status": "ACTIVE",
+  "verify_jwt": false,
+  "fontes_conferidas": [
+    "supabase\\functions\\piloto-local\\index.ts",
+    "supabase\\functions\\_compartilhado\\assinatura.ts",
+    "supabase\\functions\\_compartilhado\\banco.ts",
+    "supabase\\functions\\_compartilhado\\piloto_catalogo.ts",
+    "supabase\\functions\\_compartilhado\\piloto_estacao.ts",
+    "supabase\\functions\\_compartilhado\\piloto_lista.ts",
+    "supabase\\functions\\_compartilhado\\piloto_local.ts",
+    "supabase\\functions\\_compartilhado\\piloto_offline.ts",
+    "supabase\\functions\\_compartilhado\\piloto_pedido.ts",
+    "supabase\\functions\\_compartilhado\\propostas.ts",
+    "supabase\\functions\\_compartilhado\\segredos.ts",
+    "supabase\\functions\\_compartilhado\\sessao.ts"
+  ],
+  "alteracao": "Inclui nomeReal na consulta de produtos",
+  "testes_edge": 350,
+  "backup": "dist/compatibilidade/edge-130-antes"
+}

@@ -50,7 +50,7 @@ export async function listaOffline(entrada:any, operador:any, consultar=banco,
     lotes('pedidos_artes','id,id_int,status,nome_evento,designer_nome,designer_uid,entrega_dados','id_int',ids)
   ]);
   const produtosIds=[...new Set(origens.map(p=>String(p.id_produto)).filter(id=>/^\d+$/.test(id)))];
-  const produtos=await lotes('produtos','id_produto,setor_pcp,is_estoque','id_produto',produtosIds);
+  const produtos=await lotes('produtos','id_produto,nomeReal,setor_pcp,is_estoque','id_produto',produtosIds);
   const lista={pedidos,origens,modelos,prazos,produtos,artes};
   const revisao=await digestPiloto(lista);
   return {empresa,revisao,sem_mudanca:entrada.revisao===revisao,

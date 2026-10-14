@@ -2,6 +2,18 @@
 (() => {
     'use strict';
     const modes = new Set(['gdi_atual', 'experimental_gdi', 'pdf_raw']);
+    let modoRestaurado = 'gdi_atual';
+    function formaEnvio() {
+        const value = document.getElementById('ped-teste-saida')?.value || modoRestaurado;
+        return modes.has(value) ? value : 'gdi_atual';
+    }
+    function restaurar(config) {
+        modoRestaurado = modes.has(config?.forma_envio) ? config.forma_envio : 'gdi_atual';
+        const select = document.getElementById('ped-teste-saida');
+        if (select) select.value = modoRestaurado;
+        const destino = document.getElementById('ped-teste-destino');
+        if (destino) destino.textContent = '';
+    }
     const ativo = () => modes.has(document.getElementById('ped-teste-saida')?.value);
     function montar(panel) {
         if (document.getElementById('ped-teste-saida')) return;
@@ -10,15 +22,17 @@
         box.style.cssText = 'padding:12px;border:1px solid #f59e0b;border-radius:8px;margin-bottom:12px;color:#e2e8f0';
         box.innerHTML = `<label for="ped-teste-saida">Teste — forma de envio</label>
           <select id="ped-teste-saida" style="display:block;width:100%;padding:9px;background:#0f172a;color:white">
-            <option value="" disabled selected>Selecione a saída do teste…</option>
-            <option value="gdi_atual">1 — GDI atual (resolução do driver)</option>
+            <option value="" disabled>Selecione a saída do teste…</option>
+            <option value="gdi_atual" selected>1 — GDI atual (resolução do driver)</option>
             <option value="experimental_gdi">2 — GDI otimizado (300 DPI)</option>
             <option value="pdf_raw">3 — PDF direto ao RIP (RAW)</option>
           </select>
           <p id="ped-teste-aviso" style="font-size:12px;margin:8px 0 0">Use Imprimir no modelo. O teste usa o PDF e as configurações do modelo e não marca o pedido como impresso.</p>
           <p id="ped-teste-destino" style="font-size:12px;margin:8px 0 0"></p>`;
-        const group = panel.closest('#jg-config');
-        (group || panel).before(box);
+        const refazer = document.getElementById('jg-refazer');
+        if (!refazer) return;
+        refazer.after(box);
+        box.querySelector('select').value = modoRestaurado;
         box.querySelector('select').addEventListener('change', event => {
             document.getElementById('ped-teste-destino').textContent = '';
             window._aplicarEstadoHotFolder?.();
@@ -196,5 +210,5 @@
             }
         };
     }
-    window.NewProdTesteModelo = {montar, capturar, opcoesEnvio, ativo, criarEntregaUnica, prepararFolhasGdi};
+    window.NewProdTesteModelo = {montar, capturar, opcoesEnvio, ativo, criarEntregaUnica, prepararFolhasGdi, formaEnvio, restaurar};
 })();

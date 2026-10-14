@@ -61,6 +61,9 @@ function extract(name) {
     assert.equal(await page.$eval('#ped-teste-saida', e=>e.disabled), true);
     await page.evaluate(() => {window._hotFolderAtivo=()=>false; _aplicarEstadoHotFolder();});
     assert.equal(await page.$$eval('#ped-teste-saida', es => es.length), 1);
+    assert.equal(await page.$eval('#ped-teste-saida', e => e.value), 'gdi_atual', 'GDI atual selecionado ao abrir');
+    assert.equal(await page.$eval('#jg-refazer', e => e.nextElementSibling?.id), 'ped-teste-config');
+    assert.equal(await page.$eval('#ped-teste-config', e => e.parentElement.lastElementChild === e), true, 'forma de envio no fim da coluna');
     assert.equal(await page.$$eval('#ped-teste-saida option[value]:not([value=""])', es => es.length), 3);
     await page.addScriptTag({content: extract('getPedPrintOptions')});
     const config = {printerName: 'Sintetica', options: {copies: 3, paper_size: 8, tray: 7, tray_capa: 2, tray_miolo: 4, duplex: 2, color: 1, orientation: 2}};
@@ -222,7 +225,7 @@ function extract(name) {
     assert.deepEqual(hotFail.map(c=>c.url),['/api/hotfolder/drop'],'falha na pasta interrompe sem usar impressora');
     assert.equal((pedido.match(/if \(ok && !testeModelo && alvoImpressao.length\)/g)||[]).length,4,'todos os caminhos de conclusao excluem status comercial no teste');
     assert(pedido.includes('const opcoesDeFace = { testeModelo,'));
-    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=4'));
+    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=5'));
     // A entrega normal continua usando o endpoint e opcoes anteriores quando nao ha teste.
     const normal = await page.evaluate(async cfg => {
       calls.length=0; window.fail=false; window._hotFolderAtivo=()=>false; window.getPedPrintOptions=()=>structuredClone(cfg);
@@ -231,6 +234,64 @@ function extract(name) {
     }, config);
     assert.equal(normal[0].url, 'http://127.0.0.1:9001/api/print/submit');
     assert.equal(normal[0].options.experimental, undefined);
+    await page.addScriptTag({content: [extract('savePrintConfigForProduct'), extract('loadPrintConfigForProduct'), extract('_applyPrintConfig')].join('\n')});
+    const persistence = await page.evaluate(async () => {
+      window._printConfigCache={}; localStorage.clear();
+      window._getActiveProductInfo=()=>({prodId:'produto-a',prodNome:'Produto sintetico'});
+      window._hotFolderAtivo=()=>true;
+      window._hotFolderPath=()=> 'C:/pasta-sintetica';
+      window._hotFolderStatus=()=>{};
+      window.salvarCorImpressora=async()=>{};
+      window.onPedPrinterChange=async()=>{};
+      const store={};
+      window.fetch=async (url, init) => {
+        if (init?.method==='POST') {
+          const config=JSON.parse(init.body);
+          store[config.produto_id]=structuredClone(config);
+          return {ok:true,json:async()=>({ok:true})};
+        }
+        const id=decodeURIComponent(url.split('/').pop());
+        return {ok:true,json:async()=>({ok:true,config:store[id]||null})};
+      };
+      const sel=document.getElementById('ped-teste-saida');
+      const results=[];
+      for (const mode of ['gdi_atual','experimental_gdi','pdf_raw']) {
+        sel.value=mode;
+        await savePrintConfigForProduct();
+        const cached=JSON.parse(localStorage.getItem('printConfig_produto-a')).forma_envio;
+        window._printConfigCache={}; localStorage.clear(); sel.value='gdi_atual';
+        await loadPrintConfigForProduct('produto-a');
+        results.push([mode,store['produto-a'].forma_envio,cached,sel.value]);
+      }
+      await loadPrintConfigForProduct('produto-sem-config');
+      const novo=sel.value;
+      await _applyPrintConfig({produto_id:'antigo'});
+      const antigo=sel.value;
+      await _applyPrintConfig({forma_envio:'modo-inexistente'});
+      const invalido=sel.value;
+      window._printConfigCache={}; localStorage.clear();
+      window.fetch=async()=>{throw new Error('offline simulado');};
+      localStorage.setItem('printConfig_offline',JSON.stringify({forma_envio:'experimental_gdi'}));
+      await loadPrintConfigForProduct('offline');
+      const offline=sel.value;
+      await loadPrintConfigForProduct('outra-estacao-sem-config');
+      return {results,novo,antigo,invalido,offline,semConfig:sel.value};
+    });
+    assert.deepEqual(persistence.results,['gdi_atual','experimental_gdi','pdf_raw'].map(mode=>[mode,mode,mode,mode]));
+    for (const key of ['novo','antigo','invalido','semConfig']) assert.equal(persistence[key],'gdi_atual',key);
+    assert.equal(persistence.offline,'experimental_gdi');
+    await page.addStyleTag({path:path.join(root,'frontend/style.css')});
+    const layout = await page.evaluate(() => {
+      const box=document.getElementById('ped-teste-config');
+      for(let el=box.parentElement;el;el=el.parentElement) {
+        if(getComputedStyle(el).display==='none') el.style.display='block';
+        el.style.visibility='visible';
+      }
+      const refazer=document.getElementById('jg-refazer');
+      return {visivel:box.checkVisibility(),coluna:!!box.closest('.ped-janela-direita'),abaixo:box.getBoundingClientRect().top>=refazer.getBoundingClientRect().bottom};
+    });
+    assert.deepEqual(layout,{visivel:true,coluna:true,abaixo:true});
+    console.log('OK: posicao final, GDI padrao, salvar/reabrir os 3 modos por produto, configuracao antiga e fallback offline.');
     console.log('OK: Hot Folder prioritario nos 4 estados do seletor, snapshot e falha sem impressora; 3 modos de driver, capas/miolo e bloqueio comercial preservados.');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

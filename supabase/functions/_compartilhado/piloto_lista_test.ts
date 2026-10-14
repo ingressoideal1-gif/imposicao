@@ -26,3 +26,22 @@ Deno.test('lista: recusa permissao e empresa divergentes, falha nao vira lista v
   await assert.rejects(()=>listaOffline({empresa:'teste',revisao:''},{...op,empresa_id:'2'},a.banco,'teste','1'));
   await assert.rejects(()=>listaOffline({empresa:'teste',revisao:''},op,async()=>{throw Error('sem rede');},'teste','1'));
 });
+Deno.test('lista: nome oficial do produto acompanha o catalogo e altera a revisao',async()=>{
+  const a=ambiente(); let nome='Credencial 10x15';
+  const banco:any=async(method:string,path:string)=>{
+    if(path.startsWith('produtos_proposta?')) return [{id:1,id_int:100,id_produto:911,nome_produto:'Nome anterior'}];
+    if(path.startsWith('produtos?')) {
+      assert.equal(method,'GET');
+      const campos=new URL('https://local/'+path).searchParams.get('select')!.split(',');
+      assert(campos.includes('nomeReal'));
+      return [{id_produto:911,nomeReal:nome,setor_pcp:'LASER',is_estoque:false}];
+    }
+    return a.banco(method,path);
+  };
+  const primeiro=await listaOffline({empresa:'teste',revisao:''},op,banco,'teste','1');
+  assert.equal(primeiro.lista?.produtos[0].nomeReal,nome);
+  nome='Credencial 10x15 atualizada';
+  const novo=await listaOffline({empresa:'teste',revisao:primeiro.revisao},op,banco,'teste','1');
+  assert.equal(novo.sem_mudanca,false);
+  assert.equal(novo.lista?.produtos[0].nomeReal,nome);
+});

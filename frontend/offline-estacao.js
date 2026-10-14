@@ -67,7 +67,21 @@
         const dados = chave => lista ? lista[chave] : unir(registros,chave,
             ['pedidos','prazos'].includes(chave) ? 'id_int' : chave === 'produtos' ? 'id_produto' : 'id');
         state.todasArtes = dados('artes');
-        state.produtosGlobais = dados('produtos');
+        // Listas antigas nao traziam nomeReal. Recuperar apenas nomes de produto
+        // inequivocos das origens, sem usar o nome do modelo nem alterar snapshots.
+        const nomesPorProduto = new Map();
+        for (const origem of dados('origens')) {
+            const nome = String(origem.nome_produto || '').trim();
+            if (origem.id_produto == null || !nome) continue;
+            const id = String(origem.id_produto);
+            if (!nomesPorProduto.has(id)) nomesPorProduto.set(id, new Set());
+            nomesPorProduto.get(id).add(nome);
+        }
+        state.produtosGlobais = dados('produtos').map(produto => {
+            if (String(produto.nomeReal || '').trim()) return {...produto};
+            const nomes = nomesPorProduto.get(String(produto.id_produto));
+            return nomes?.size === 1 ? {...produto, nomeReal: [...nomes][0]} : {...produto};
+        });
         const propostas = dados('pedidos');
         const ok = await loadOrdensFromVibecode(propostas, dados('origens'), {
             propostasPreloaded:propostas, prazosPreloaded:dados('prazos'),

@@ -9,7 +9,14 @@ function extrair(nome) {
 (async()=>{
  let browser;
  const snapshot={pedidos:[{id_int:99,status_interno:'EM PRODUCAO',cliente_nome:'Cliente sintetico'}],
-   origens:[],produtos:[],modelos:[{id:10,id_int:99}],numeracoes:[{id:1,elements:[]}],
+   origens:[{id:1,id_int:99,id_produto:911,nome_produto:'Credencial 10x15'},
+     {id:2,id_int:99,id_produto:'2004',nome_produto:'Cordão Preto'},
+     {id:3,id_int:99,id_produto:3002,nome_produto:'Nome anterior'},
+     {id:4,id_int:99,id_produto:9,nome_produto:'Nome A'},
+     {id:5,id_int:99,id_produto:9,nome_produto:'Nome B'}],
+   produtos:[{id_produto:911,setor_pcp:'LASER'}, {id_produto:2004,setor_pcp:'TEXTIL',is_estoque:true},
+     {id_produto:3002,nomeReal:'Chaveiro & Cordão',setor_pcp:'TEXTIL'}, {id_produto:9}, {id_produto:10}],
+   modelos:[{id:10,id_int:99}],numeracoes:[{id:1,elements:[]}],
    prazos:[{id_int:99,data_termino:'2026-10-15'}],artes:[],bancos:[],vinculos:[]};
  const dados={catalogos:{formatos:[{id:1}],saidas:[{id:2}],cores:[],modelos_imposicao:[]},
    pedidos:[{pedido:'99',revisao:'a'.repeat(64),snapshot}],confirmacoes:[]};
@@ -44,6 +51,7 @@ function extrair(nome) {
      window.state={osItens:{},modelosGlobais:{},selectedOSItems:[]};
      window.toast=()=>{};window.renderOrdens=()=>{};window.normalizarNumeracaoLida=()=>{};
      window.arteFoiLancada=()=>true;window.lerStatusOverride=()=>null;
+     window.mapVibecodeProdutoToOSItem=p=>({...p});
      window.nomePreferencialDaProposta=p=>p.cliente_exibicao || p.cliente_nome;window.comporPrazoDoERP=d=>d;
      window.pedidosJaNaGrafica=()=>new Set(['99']);window.pedidoEntraNoPainel=()=>true;
      window.vibeClient={from(){throw Error('Tentou consultar nuvem');}};
@@ -63,6 +71,10 @@ function extrair(nome) {
    assert(result.ok);assert.equal(result.ordens[0].numero,99);assert.equal(result.ordens[0].prazo_entrega,'2026-10-15');
    assert.equal(result.formatos[0].id,1);assert.equal(result.modelos[0].id,10);assert(result.item._confirmacaoLocalPendente);
    assert.equal(dados.confirmacoes.length,1);
+   assert.deepEqual(await page.evaluate(()=>state.produtosGlobais.map(p=>p.nomeReal||null)),
+     ['Credencial 10x15','Cordão Preto','Chaveiro & Cordão',null,null]);
+   assert.equal(snapshot.produtos[0].nomeReal,undefined,'snapshot original preservado');
+   assert.equal(await page.evaluate(()=>state.produtosGlobais[1].is_estoque),true);
    const catalogoAtualizado=await page.evaluate(()=>{
      const novo={formatos:[{id:1,height_mm:480}],saidas:[{id:2,name:'Cartaz'}],cores:[],modelos_imposicao:[]};
      PilotoOffline.aplicarCatalogos(novo);

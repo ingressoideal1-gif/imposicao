@@ -31,7 +31,7 @@ function ok(cond, oque, detalhe) {
 }
 
 function extrair(nome) {
-    const fonte = ['formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao'].includes(nome) ? SCRIPT : PEDIDO;
+    const fonte = ['escapeHtml', 'formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao'].includes(nome) ? SCRIPT : PEDIDO;
     const i = fonte.indexOf('\nfunction ' + nome + '(');
     if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no pedido.js');
     const fim = fonte.indexOf('\n}', i);
@@ -40,7 +40,7 @@ function extrair(nome) {
 
 // As funcoes de verdade que decidem o que a fila mostra. As outras (salvar
 // campo, redesenhar barra, mover a janela) sao dubles: nao mudam o desenho.
-const REAIS = ['formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao', 'renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
+const REAIS = ['escapeHtml', 'formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao', 'renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
                'modeloEhCamarote', 'textoLegivelSobre',
                'coresDoFormato', 'numeracoesDoFormato',
                'opcoesDeCorDaFila', 'opcoesDeNumeracaoDaFila', 'encherSeletorDaFila',
@@ -142,6 +142,13 @@ function cenario(quantos, comCamarote) {
     }
 
     // ── 1. A fila cabe em 100%, sem o zoom ──────────────────────────────────
+    const produtoNome = cenario(1, false);
+    produtoNome.produtosGlobais[0].nomeReal = 'Credencial <Laser> & Cordão';
+    await desenhar(produtoNome);
+    const tituloProduto = await aba.$eval('#ped-os-queue-body h5', el => ({texto:el.textContent, visivel:el.checkVisibility(), markup:!!el.querySelector('laser')}));
+    ok(tituloProduto.texto.includes('Credencial <Laser> & Cordão'), 'cabecalho mostra nome do produto, nao codigo');
+    ok(!tituloProduto.texto.includes('Produto #'), 'nome disponivel nao cai no codigo');
+    ok(tituloProduto.visivel && !tituloProduto.markup, 'nome visivel e tratado como texto');
     await desenhar(cenario(52, false));
 
     const medida = await aba.evaluate(() => {
