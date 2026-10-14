@@ -1,0 +1,86 @@
+{
+  "manifestos": {
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.6",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.6.msi",
+      "sha256": "b2d33a7bf7719d6f1d708d50c3254b21c2cb6dc7827d689d954166f2c05c3a3e",
+      "bytes": 196673536,
+      "size": 196673536,
+      "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME",
+        "TEX-01",
+        "LASER-04",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02"
+      ]
+    },
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.6",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.6.msi",
+      "sha256": "b2d33a7bf7719d6f1d708d50c3254b21c2cb6dc7827d689d954166f2c05c3a3e",
+      "bytes": 196673536,
+      "size": 196673536,
+      "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME",
+        "TEX-01",
+        "LASER-04",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02"
+      ]
+    },
+    "newprod-piloto-teste.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.3.6",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.6.msi",
+      "sha256": "b2d33a7bf7719d6f1d708d50c3254b21c2cb6dc7827d689d954166f2c05c3a3e",
+      "bytes": 196673536,
+      "size": 196673536,
+      "notes": "NewProd 1.3.6 oficial; ponte para migrar runtimes antigos ao manifesto oficial.",
+      "estacoes": [
+        "LASER-01",
+        "PC-JR-HOME",
+        "TEX-01",
+        "LASER-04",
+        "LAPTOP-9BSK81S0",
+        "GUSTAVO-PROD",
+        "LASER-02"
+      ]
+    }
+  },
+  "download_oficial_e_ponte_conferidos": true,
+  "runtime": "1.3.6",
+  "instalacao_forcada": false,
+  "resultado": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.3.6",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.6.msi",
+    "sha256": "b2d33a7bf7719d6f1d708d50c3254b21c2cb6dc7827d689d954166f2c05c3a3e",
+    "bytes": 196673536,
+    "size": 196673536,
+    "notes": "NewProd Piloto oficial; atualizacao por estacao.",
+    "estacoes": [
+      "LASER-01",
+      "PC-JR-HOME",
+      "TEX-01",
+      "LASER-04",
+      "LAPTOP-9BSK81S0",
+      "GUSTAVO-PROD",
+      "LASER-02"
+    ],
+    "download_conferido": true,
+    "ativado": true,
+    "bootstrap_legado": true
+  }
+}

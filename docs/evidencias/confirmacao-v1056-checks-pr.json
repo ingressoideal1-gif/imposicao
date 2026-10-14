@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Windows - seguranca e recuperacao",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38615978941/job/116033127289"
+  },
+  {
+    "name": "Cloudflare Pages",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/c97ffa1f-e9dc-4978-b66b-861ece148547"
+  },
+  {
+    "name": "NewProd e Piloto - oficial",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38615978941/job/116031041405"
+  },
+  {
+    "name": "NewProd e Piloto - piloto",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38615978941/job/116031041208"
+  },
+  {
+    "name": "NewProd e Piloto - producao",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38615978941/job/116031041102"
+  },
+  {
+    "name": "Piloto - consulta autenticada sem escrita",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/ingressoideal1-gif/imposicao/actions/runs/38615978941/job/116031040701"
+  }
+]
