@@ -1150,7 +1150,7 @@ class ImpositionConfig:
                  rotate_page: bool = False,
                  multi_artes: list[dict] | None = None,
                  cut_stack_mode: str = "independent",
-                 sheets_per_block: int = 50,
+                 sheets_per_block: int = 5,
                  block_depth: int = 1,
                  c_ini: int = 1,
                  q_cam: int = 0,
@@ -1201,7 +1201,8 @@ class ImpositionConfig:
                    or not (a.get("pdf_verso_url") or a.get("local_verso_path")) for a in self.multi_artes):
                 raise ValueError("A combinação paginada exige PDF de frente e verso por modelo.")
         self.cut_stack_mode = cut_stack_mode
-        self.sheets_per_block = sheets_per_block
+        # Zero explicito desativa o corte por lote em chamadas existentes.
+        self.sheets_per_block = 5 if sheets_per_block in (None, '') else sheets_per_block
         self.block_depth = block_depth
         # ENTREGAR ENQUANTO GERA (27/08/2026).
         #

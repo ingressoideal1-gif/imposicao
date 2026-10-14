@@ -438,7 +438,7 @@ function pecaDaMontagem(item) {
         // peca. Em Multi-Artes, modelos com blocos diferentes nunca podem ser
         // combinados, mesmo que esta tela hoje use o caminho independente.
         bloco: item ? (parseInt(item.bloco) || parseInt(item.cutstack_folhas)
-            || (fmt && parseInt(fmt.default_sheets_per_block)) || 50) : 50,
+            || (fmt && parseInt(fmt.default_sheets_per_block)) || 5) : 5,
         verso_tipo: item ? item.verso_tipo : null,
         print_mode: modoDoModeloNaMontagem(item),
         _item: item,
@@ -4327,7 +4327,7 @@ function payloadDaMontagem(celulas, modelos, artes) {
         seq_start: 1,
         seq_increment: 1,
         cut_stack_mode: 'independent',
-        sheets_per_block: parseInt(primeiro.bloco) || 50,
+        sheets_per_block: parseInt(primeiro.bloco) || 5,
         block_depth: 1,
         c_ini: 1,
         q_cam: 0,
