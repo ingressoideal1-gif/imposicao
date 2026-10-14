@@ -1,0 +1,67 @@
+{
+  "consulta_utc": "2026-10-14T11:23:10.064722+00:00",
+  "estacoes": [
+    {
+      "estacao": "LASER-01",
+      "ultimo_heartbeat": "2026-10-14T11:23:07.018147+00:00",
+      "versao": "1.2.402-teste.1"
+    },
+    {
+      "estacao": "PC-JR-HOME",
+      "ultimo_heartbeat": "2026-10-14T11:23:01.878954+00:00",
+      "versao": "1.3.1-teste.1"
+    },
+    {
+      "estacao": "LASER-02",
+      "ultimo_heartbeat": "2026-10-14T11:23:01.082203+00:00",
+      "versao": "1.2.374"
+    },
+    {
+      "estacao": "GUSTAVO-PROD",
+      "ultimo_heartbeat": "2026-10-14T11:22:56.220616+00:00",
+      "versao": "1.2.393"
+    },
+    {
+      "estacao": "TEX-01",
+      "ultimo_heartbeat": "2026-10-14T11:22:46.285133+00:00",
+      "versao": "1.2.401"
+    },
+    {
+      "estacao": "LAPTOP-9BSK81S0",
+      "ultimo_heartbeat": "2026-10-14T11:22:44.470725+00:00",
+      "versao": "1.2.401"
+    },
+    {
+      "estacao": "LASER-04",
+      "ultimo_heartbeat": "2026-10-14T11:22:42.48906+00:00",
+      "versao": "1.2.401"
+    },
+    {
+      "estacao": "FLEXO",
+      "ultimo_heartbeat": "2026-10-08T12:14:18.970407+00:00",
+      "versao": "1.2.371"
+    },
+    {
+      "estacao": "DESKTOP-PM6TG1B",
+      "ultimo_heartbeat": "2026-10-08T11:46:46.175025+00:00",
+      "versao": "1.2.233"
+    },
+    {
+      "estacao": "ACABAMENTO",
+      "ultimo_heartbeat": "2026-10-08T11:14:59.523236+00:00",
+      "versao": "1.2.363"
+    },
+    {
+      "estacao": "CESAR-CPD",
+      "ultimo_heartbeat": "2026-09-22T01:12:31.275352+00:00",
+      "versao": null
+    },
+    {
+      "estacao": "PRD-ACABAMENTO",
+      "ultimo_heartbeat": "2026-08-20T17:03:38.217753+00:00",
+      "versao": null
+    }
+  ],
+  "pc_jr_home_http_9001": "NewProd 1.3.1-teste.1",
+  "instalacao_remota_forcada": false
+}

@@ -1,5 +1,9 @@
 # NewProd Piloto como produto oficial
 
+Atualização de 14/10/2026: o usuário adotou a 1.3.1 como versão única para
+todas as estações. Ver `newprod-versao-unica-131.md` para as pontes de atualização
+e a fonte vigente. O relato abaixo preserva o histórico da migração.
+
 Decisao humana de 07/10/2026: descontinuar o NewProd anterior e substitui-lo
 pelo NewProd Piloto. Nao manter dois produtos operacionais apos a migracao.
 As autorizacoes anteriores para correcao, gerenciamento e entrega permanecem

@@ -97,6 +97,11 @@ Não oculte erros nem repita verificações sem motivo. Informe falhas preexiste
 
 ### NewProd de producao e Piloto
 
+Decisao humana de 14/10/2026: NewProd 1.3.1 e a versao unica para todas as
+estacoes. Nao manter releases operacionais divergentes de teste e producao.
+Leia docs/newprod-versao-unica-131.md: os manifestos antigos sao pontes para
+o mesmo pacote imutavel e precisam continuar compativeis com agentes antigos.
+
 Decisao humana de 07/10/2026: NewProd Piloto substitui o produto original.
 A entrega oficial usa agent_oficial.py, porta 9001, NewProd.exe e identidade
 original preservada. O MSI oficial usa UpgradeCode original para transportar
