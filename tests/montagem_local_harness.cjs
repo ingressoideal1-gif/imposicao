@@ -16,7 +16,9 @@ function extract(file, name) {
     c.getOSItens=id=>c.state.osItens[id]||[];
     c.idIntDoPedido=id=>c.findOSInState(id)?.numero;
     c.PilotoOffline={carregarOrdens:async()=>{c.state.ordens=[{id:'a',numero:1},{id:'b',numero:2}];},aplicarConfirmacoes:async()=>{}};
-    c.loadOSItens=async(id,opts)=>{assert.ok(opts.snapshotLocal);c.state.osItens[id]=opts.snapshotLocal.modelos.map(m=>({id:m.id,_modeloOnline:m}));return true;};
+    c.state.produtosGlobais=[{id_produto:3001}]; // Lista resumida sem id_formato.
+    c.state.formatos=[{id:'F1',id_formato_num:3},{id:'F2',id_formato_num:18}];
+    c.loadOSItens=async(id,opts)=>{assert.ok(opts.snapshotLocal);c.state.osItens[id]=opts.snapshotLocal.modelos.map(m=>({id:m.id,os_id:id,_vibe_id_produto:3001,_modeloOnline:m}));return true;};
     c.fetch=async(url,opts)=>{
         c.reads.push(url);
         if(url.includes('recurso-painel'))return {ok:true,headers:{get:()=> 'local'}};
@@ -25,7 +27,7 @@ function extract(file, name) {
         const row={id:Number(pedido)*10,id_int:Number(pedido)};
         const digest=Buffer.from(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([row,[]])))).toString('hex');
         return {ok:true,json:async()=>({protocolo:2,pedido,revisao_pedido:'c'.repeat(64),sem_arte:[],
-            snapshot:{modelos:[row],numeracoes:[],origens:[],produtos:[],bancos:pedido==='1'?[{id:'banco1'}]:[],vinculos:[],artes:[],mapas:[]},
+            snapshot:{modelos:[row],numeracoes:[],origens:[],produtos:[{id_produto:3001,id_formato:pedido==='1'?3:18}],bancos:pedido==='1'?[{id:'banco1'}]:[],vinculos:[],artes:[],mapas:[]},
             pacotes:[{modelo:String(row.id),digest,origem:'local',revisao:'b'.repeat(64),
                 fontes:{frente:'https://synthetic.test/'+pedido},hashes:{frente:'f'.repeat(64)},
                 recursos:{frente:'/api/pacotes-locais/recurso-painel/'+row.id+'/'+'b'.repeat(64)+'/frente'}}]})};
@@ -34,13 +36,29 @@ function extract(file, name) {
     vm.createContext(c);
     vm.runInContext(fs.readFileSync('frontend/selecao-piloto.js','utf8')+'\n'+
         extract('frontend/montagem.js','_mtgPrepararPedidoLocal')+'\n'+
+        extract('frontend/montagem.js','formatoDoItem')+'\n'+
+        extract('frontend/montagem.js','porQueNaoCabeNaMontagem')+'\n'+
         extract('frontend/script.js','carregarBancosDoPedidoNovo')+'\n'+
         extract('frontend/script.js','garantirBancosDoTrabalho'),c);
     await c._mtgPrepararPedidoLocal('a');
+    assert.equal(c.getOSItens('a')[0].formato_id,undefined);
+    assert.equal(c.formatoDoItem(c.getOSItens('a')[0]).id,'F1');
+    assert.equal(c.state.produtosGlobais[0].id_formato,undefined);
+    // Uma revisao realmente diferente precisa continuar bloqueada.
+    const produto=c.PilotoSelecao.snapshotPedido('a').produtos[0];
+    produto.id_formato=18;
+    assert.equal(c.porQueNaoCabeNaMontagem({formato_id:'F1'},
+        {formato_id:c.formatoDoItem(c.getOSItens('a')[0]).id}),'o formato é outro');
+    produto.id_formato=999;
+    assert.equal(c.formatoDoItem(c.getOSItens('a')[0]),null);
+    produto.id_formato=3;
     await c.garantirBancosDoTrabalho(['a']);
     assert.equal(c.state.bancosDoPedido[0].id,'banco1');
     assert.equal(c.state._bancosConsultados.a,true);
     await c._mtgPrepararPedidoLocal('b');
+    assert.equal(c.formatoDoItem(c.getOSItens('b')[0]).id,'F2');
+    assert.equal(c.formatoDoItem(c.getOSItens('a')[0]),null); // Nunca usar o snapshot do outro pedido.
+    assert.equal(c.formatoDoItem({formato_id:'F1'}).id,'F1'); // Caminho legado.
     await c.garantirBancosDoTrabalho(['b']);
     assert.equal(c.state.bancosDoPedido.length,0);
     assert.equal(c.state._bancosConsultados.b,true);

@@ -380,9 +380,15 @@ function totalDeItensDoModelo(item, num) {
 function formatoDoItem(item) {
     if (!item) return null;
 
-    const prodId = item._vibe_id_produto;
+    // A lista resumida do painel local nao inclui id_formato. Na conferencia,
+    // usar o catalogo completo do pedido preparado, sem depender do formato
+    // temporario que renderPedOSQueue escreve nos itens antes da recarga.
+    const snapshot = typeof window !== 'undefined'
+        ? window.PilotoSelecao?.snapshotPedido?.(item.os_id) : null;
+    const produtos = snapshot ? snapshot.produtos : state.produtosGlobais;
+    const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
     if (prodId && prodId !== 'sem_produto') {
-        const prod = (state.produtosGlobais || [])
+        const prod = (produtos || [])
             .find(p => String(p.id_produto) === String(prodId));
         if (prod && prod.id_formato) {
             const f = (state.formatos || [])
