@@ -17,6 +17,27 @@ Deno.test('piloto: origem de importacao nao vira recurso quando linhas estao no 
 });
 
 const permitido = { perm_producao_view: true, perm_imprimir: true };
+Deno.test('piloto: conteudo QR/texto nao e arquivo; fontes, PDF e fotos continuam recursos', () => {
+  const dados:any = {elements:[
+    {type:'QR',source:'database',csv_column:'URL',fixed_value:'https://conteudo.invalid/fixo'},
+    {type:'TEXT',source:'database',csv_column:'TEXTO',font_url:'https://arquivos.invalid/fonte.ttf'},
+    {type:'PDF',url:'https://arquivos.invalid/verso.pdf'},
+    {type:'FOTO',source:'database',csv_column:'FOTO'}],
+    csv_data:Array.from({length:300},(_,i)=>({URL:`https://conteudo.invalid/${i}`,TEXTO:`https://texto.invalid/${i}`,
+      FOTO:{url:'https://arquivos.invalid/foto.jpg'}}))};
+  const antes=JSON.stringify(dados);
+  assert.deepEqual(Object.values(fontesPiloto({},[dados])).sort(),[
+    'https://arquivos.invalid/fonte.ttf','https://arquivos.invalid/foto.jpg','https://arquivos.invalid/verso.pdf']);
+  assert.equal(JSON.stringify(dados),antes);
+  // A mesma coluna usada por foto nao pode perder suas dependencias.
+  dados.elements.push({type:'FOTO',source:'database',csv_column:'URL'});
+  assert.throws(()=>fontesPiloto({},[dados]),{status:422});
+});
+Deno.test('piloto: mantem limites de arquivos reais e volume de dados',()=>{
+  assert.throws(()=>fontesPiloto({},[{csv_data:Array.from({length:257},(_,i)=>({foto:`https://foto.invalid/${i}`}))}]),{status:422});
+  assert.throws(()=>fontesPiloto({},[{elements:[{type:'QR',source:'database',csv_column:'URL'}],
+    csv_data:[{URL:Array(100001).fill('https://conteudo.invalid/')}]}]),{status:422});
+});
 function ambiente() {
   const modelo: any = { id: 10, id_int: 20, amostra_num_id: 5, status_arte: 'APROVADO',
     status_impressao: 'Aguardando', arte_url: 'https://storage.invalid/frente.pdf' };

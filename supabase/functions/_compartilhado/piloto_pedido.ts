@@ -31,6 +31,27 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
   const d = resposta.snapshot;
   if (!d || ['modelos','numeracoes','origens','produtos','pedidos','prazos','recursos'].some(k=>!Array.isArray(d[k]))
     || d.modelos.length>128 || d.pedidos.length !== 1) throw new Recusa(409,'pedido incompleto');
+  if (persistida && ['bancos','vinculos','artes','mapas'].some(k=>!Array.isArray(d[k]))) throw new Recusa(503,'snapshot local incompleto');
+  const consumidores = new Map<any, any[]>();
+  if (persistida) for (const b of d.bancos) {
+    const links = d.vinculos.filter((v:any)=>String(v.banco_id)===String(b.id));
+    const elementos:any[] = [];
+    let completo = links.length > 0;
+    for (const v of links) {
+      const modelos = d.modelos.filter((m:any)=>String(m.id)===String(v.modelo_id));
+      const numId = modelos[0]?.amostra_num_id || modelos[0]?.numeracao_id;
+      const nums = d.numeracoes.filter((n:any)=>numId != null && String(n.id)===String(numId));
+      if (modelos.length !== 1 || nums.length !== 1 || !Array.isArray(nums[0].elements)) { completo=false; break; }
+      const mapa = v.csv_mapa || {};
+      for (const el of nums[0].elements) {
+        const coluna = String(el?.csv_column || '').trim();
+        const porElemento = el?.id != null ? String(mapa['el:'+el.id] ?? '').trim() : '';
+        elementos.push(el?.source === 'database' ? {...el,csv_column:porElemento || String(mapa[coluna] ?? '').trim() || coluna} : el);
+      }
+    }
+    // Sem vinculo resolvido, preservar a descoberta conservadora de arquivos.
+    if (completo) consumidores.set(b,elementos);
+  }
   for (const row of [...d.modelos,...d.numeracoes,...d.origens,...d.produtos,
     ...(persistida ? [...(d.bancos || []),...(d.artes || []),...(d.mapas || [])] : [])]) {
     const id = row.empresa_id ?? row.id_empresa;
@@ -57,7 +78,7 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
     const produtos = d.produtos.filter((p:any)=>String(p.id_produto)===String(produtoId));
     const produto = produtos.length === 1 ? produtos[0] : null;
     if (produto?.is_estoque === true) continue;
-    const fontes = fontesPiloto(m,persistida ? [...nums,...d.bancos,...d.mapas] : nums);
+    const fontes = fontesPiloto(m,persistida ? [...nums,...d.bancos,...d.mapas] : nums,consumidores);
     if (!fontes.frente) continue;
     const versoes_fontes:Record<string,any> = {};
     for (const [nome,url] of Object.entries(fontes)) {
@@ -71,6 +92,5 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
       setor:String(produto?.setor_pcp || ''),prazo_erp:d.prazos[0]?.data_termino || null,
       observacao:{digest:await digestPiloto([m,nums]),aprovacao:normal(m.status_arte)}});
   }
-  if (persistida && ['bancos','vinculos','artes','mapas'].some(k=>!Array.isArray(d[k]))) throw new Recusa(503,'snapshot local incompleto');
   return {...recibo,itens,...(persistida ? {protocolo:2,snapshot:d} : {})};
 }

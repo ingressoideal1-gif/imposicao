@@ -4,27 +4,50 @@ import { Recusa } from './sessao.ts';
 
 const aprovados = new Set(['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA']);
 const normal = (v: unknown) => String(v ?? '').trim().toUpperCase();
-export function fontesPiloto(m: any, nums: any[]) {
+export function fontesPiloto(m: any, nums: any[], consumidores = new Map<any, any[]>()) {
   const fontes: Record<string, string> = {}, extras = new Set<string>();
   const frente = m.arte_url || m.url_arquivo_arte || m.url_arquivo;
   const verso = m.verso_arte_url || m.url_arquivo_arte_verso || m.verso_url_arquivo;
   if (typeof frente === 'string' && frente.startsWith('https://')) fontes.frente = frente;
   if (typeof verso === 'string' && verso.startsWith('https://')) fontes.verso = verso;
   let visitados = 0;
-  function visitar(v: any) {
+  function visitar(v: any, recurso = true) {
     if (++visitados > 100000) throw new Recusa(422, 'recursos excedem limite');
-    if (typeof v === 'string' && v.startsWith('https://')) extras.add(v);
-    else if (Array.isArray(v)) v.forEach(visitar);
-    else if (v && typeof v === 'object') Object.values(v).forEach(visitar);
+    if (typeof v === 'string' && v.startsWith('https://')) { if (recurso) extras.add(v); }
+    else if (Array.isArray(v)) v.forEach(dado=>visitar(dado,recurso));
+    else if (v && typeof v === 'object') Object.values(v).forEach(dado=>visitar(dado,recurso));
   }
-  // csv_url identifica a origem da importacao; a impressao usa csv_data.
-  // Nao baixar a pagina de edicao da planilha quando suas linhas ja vieram
-  // no snapshot. URLs dentro das linhas/elementos continuam obrigatorias.
-  visitar(nums.map(registro => {
-    if (!registro || !Array.isArray(registro.csv_data)) return registro;
-    const { csv_url: _origemImportacao, ...dados } = registro;
-    return dados;
-  }));
+  const tiposConteudo = new Set(['QR', 'QR_IDEAL', 'TEXT', 'FIXED', 'BARCODE']);
+  for (const registro of nums) {
+    if (!registro || typeof registro !== 'object') { visitar(registro); continue; }
+    const elementos = consumidores.get(registro) ?? registro.elements ?? [];
+    const conteudo = new Set<string>(), arquivos = new Set<string>();
+    for (const el of elementos) {
+      if (el?.source !== 'database') continue;
+      const coluna = String(el.csv_column || '').trim();
+      if (coluna) (tiposConteudo.has(el.type) ? conteudo : arquivos).add(coluna);
+    }
+    for (const [chave, valor] of Object.entries(registro)) {
+      // A origem da importacao nao e necessaria se as linhas ja vieram.
+      if (chave === 'csv_url' && Array.isArray(registro.csv_data)) continue;
+      if (chave === 'csv_data' && Array.isArray(valor)) {
+        for (const linha of valor) {
+          if (!linha || typeof linha !== 'object' || Array.isArray(linha)) { visitar(linha); continue; }
+          for (const [coluna, dado] of Object.entries(linha)) {
+            // Colunas desconhecidas e compartilhadas com FOTO continuam seguras.
+            visitar(dado,!conteudo.has(coluna) || arquivos.has(coluna));
+          }
+        }
+      } else if (chave === 'elements' && Array.isArray(valor)) {
+        for (const el of valor) {
+          if (!el || !tiposConteudo.has(el.type)) { visitar(el); continue; }
+          for (const [campo, dado] of Object.entries(el)) {
+            visitar(dado,!['fixed_value', 'prefix', 'suffix'].includes(campo));
+          }
+        }
+      } else visitar(valor);
+    }
+  }
   extras.delete(frente); extras.delete(verso);
   [...extras].sort().forEach((url, i) => { fontes['recurso_' + i] = url; });
   if (Object.keys(fontes).length > 256) throw new Recusa(422, 'recursos excedem limite');

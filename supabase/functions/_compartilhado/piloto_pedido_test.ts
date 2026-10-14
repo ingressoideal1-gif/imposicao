@@ -3,6 +3,31 @@ import { conferirPedidoPiloto } from './piloto_pedido.ts';
 import { digestPiloto } from './piloto_local.ts';
 
 const permissoes={perm_producao_view:true,perm_imprimir:true};
+Deno.test('pedido v2: 300 links de QR preservados sem virar downloads, com mapa por elemento e legado',async()=>{
+ for (const legado of [false,true]) {
+  const a=ambiente();
+  (a.numero as any).elements=[{id:'qr',type:'QR',source:'database',csv_column:'antiga'},
+    {id:'texto',type:'TEXT',source:'database',csv_column:'CARTAO'}];
+  const b={id:'banco',csv_data:Array.from({length:300},(_,i)=>({URL:`https://qr.invalid/${i}`,CARTAO:String(i)}))};
+  const snapshot:any={...a.snapshot,bancos:[b],vinculos:[{modelo_id:10,banco_id:'banco',
+    csv_mapa:legado?{antiga:'URL'}:{'el:qr':'URL',antiga:'OUTRA'}}],artes:[],mapas:[]};
+  const antes=JSON.stringify(snapshot);
+  const abrir=()=>conferirPedidoPiloto({empresa:'teste',pedido:'20',revisao:''},permissoes,
+    async()=>({protocolo:2,pedido:'20',revisao:'a'.repeat(64),sem_mudanca:false,snapshot}),
+    'teste',undefined,'test.supabase.co',true);
+  const r:any=await abrir();
+  assert.deepEqual(r.itens[0].fontes,{frente:a.modelo.arte_url});
+  assert.equal(r.itens[0].observacao.digest,await digestPiloto([a.modelo,[a.numero]]));
+  assert.equal(JSON.stringify(r.snapshot),antes);assert.equal(JSON.stringify(snapshot),antes);
+  // Outro consumidor do banco exige os arquivos da mesma coluna.
+  snapshot.modelos.push({...a.modelo,id:11,amostra_num_id:'foto'});
+  snapshot.numeracoes.push({id:'foto',elements:[{type:'FOTO',source:'database',csv_column:'URL'}]});
+  snapshot.vinculos.push({modelo_id:11,banco_id:'banco'});
+  await assert.rejects(abrir(),{status:422});
+  snapshot.vinculos=[]; // Sem contexto, nao adivinhar que uma URL e apenas conteudo.
+  await assert.rejects(abrir(),{status:422});
+ }
+});
 function ambiente() {
  const modelo={id:10,id_int:20,amostra_num_id:'num-5',id_produto_proposta_origem:30,
    status_arte:'APROVADO',status_impressao:'Aguardando',arte_url:'https://test.supabase.co/storage/v1/object/public/artes/a.pdf'};
