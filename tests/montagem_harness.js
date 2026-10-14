@@ -497,7 +497,7 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(p.item_w_mm === 245 && p.item_h_mm === 20, 'e as medidas da peça em mm', p);
     ok(p.gap_v_mm === 2, 'e os vãos entre as células', p);
     ok(p.saida_id === 'S1', 'e a saida', p);
-    ok(p.bloco === 50, 'e a blocagem efetiva do formato', p);
+    ok(p.bloco === 5, 'sem blocagem definida, usa o padrao 5', p);
     ok(p.formato_nome === 'Triband 245x20 mm', 'e o nome, para a trava mostrar', p);
     ok(p._item && p._item.id === '1', 'e guarda o item, que o payload usa para a arte', !!p._item);
 

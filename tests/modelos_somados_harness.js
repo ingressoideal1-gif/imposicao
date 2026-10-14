@@ -34,6 +34,7 @@ global.document = {
     body: { appendChild() {} }
 };
 require(path.join(RAIZ, 'frontend', 'csv-editor.js'));
+global.VersoDoModelo = require(path.join(RAIZ, 'frontend', 'cor-numeracao-do-modelo.js')).VersoDoModelo;
 
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
@@ -58,7 +59,7 @@ const NOMES = ['linhasAtivasCsv', 'numeracaoIdDoItem',
                'imprimeNumeroDoModelo', 'modoDeImpressaoDoModelo', 'blocagemDoModelo',
                // Os tres Modos de Impressao (31/08/2026): o porQueNaoCombina
                // separa FxVerso de FxVersoUnico, que o `face()` dele nao ve.
-               'temVerso', 'versoUnico', 'modoDeVersoDoModelo',
+               'temVerso', 'versoUnico', 'modoDeVersoDoModelo', 'escalaDaArteDoModelo',
                'modoDeImpressaoDaSelecao', 'blocagemDaSelecao',
                'esquemaDaSelecaoCombinada', 'modoCutStackDaSelecao',
                'nomeDosModelosCombinados', 'alvosDaImpressao'];
@@ -350,12 +351,16 @@ const apiSel = new Function('state', 'window',
         'blocos = S no ERP de um so ja impede, porque o modo efetivo difere');
 })();
 
-(function aBlocagemSemNadaSalvoEAquiloQueJaEra() {
-    // Ligar o recurso nao pode mudar tiragem nenhuma que ja saia certa: sem nada
-    // gravado, a blocagem tem de ser exatamente o que a v634 mandava.
+(function aBlocagemPadraoPreservaValoresDefinidos() {
     const nu = api.blocagemDoModelo(modelo('A', 10));
     ok(nu.modo === 'strict_assembly', 'sem nada salvo, o modo de blocos e o de sempre', nu);
-    ok(nu.folhas === 50, 'sem nada salvo e sem bloco no ERP, 50 folhas', nu);
+    ok(nu.folhas === 5, 'sem nada salvo e sem bloco no ERP, 5 folhas', nu);
+    for (const vazio of [null, '', 0]) {
+        ok(api.blocagemDoModelo(modelo('A', 10, {bloco:vazio, cutstack_folhas:vazio})).folhas === 5,
+            'blocagem vazia ou zerada usa 5');
+    }
+    ok(api.blocagemDoModelo(modelo('A', 10, {bloco:50})).folhas === 50,
+        '50 explicitamente definido continua 50');
 
     const comBlocoErp = api.blocagemDoModelo(modelo('A', 10, { bloco: 25 }));
     ok(comBlocoErp.folhas === 25, 'o bloco do ERP continua mandando nas folhas', comBlocoErp);
