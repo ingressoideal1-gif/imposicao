@@ -25,6 +25,7 @@ HARNESSES = [
     "mapas_teatro_harness.js",  # cadastro, editor e carregamento nas duas telas
     "mapas_teatro_browser_harness.js",  # editor real com transporte simulado
     "impressao_combinada_harness.js",  # previa completa e payload dos modelos selecionados
+    "confirmacao_impressao_harness.js",  # popup real e consentimento antes de alterar status
     "impressao_combinada_fluxo_harness.js",  # geracao e confirmacao com transporte simulado
     "csv_fatia_do_modelo_harness.js",   # a fatia do banco por modelo
     "modelos_somados_harness.js",       # somar modelos aproveitando a folha
