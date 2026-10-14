@@ -179,17 +179,6 @@
         ]);
     }
 
-    /**
-     * O pulso do "Ao vivo": a linha de um monitor cardiaco.
-     *
-     * Desenhado aqui, como os outros dois desta tela, e pelo mesmo motivo --
-     * esta pagina precisa abrir sem rede, e cada arquivo de imagem e mais uma
-     * requisicao que pode faltar.
-     */
-    function iconePulso() {
-        return svg(['M3 12h4l3 8 4-16 3 8h4']);
-    }
-
     function iconeEngrenagem() {
         return svg([
             'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
@@ -302,30 +291,6 @@
             window.virarPortao.abrir(ev.id, ev.nome);
         });
         linha.appendChild(barra);
-
-        // O caminho para os numeros do evento. Fica ENTRE a barra e a
-        // engrenagem de proposito: a barra e o que o porteiro toca com pressa,
-        // a engrenagem e configuracao, e olhar quanta gente entrou nao e nem
-        // uma coisa nem outra -- e o que o dono faz a noite inteira.
-        //
-        // Com rotulo em texto, e nao so o icone: controle novo nesta aplicacao
-        // se explica sozinho. A engrenagem passa sem ele porque e um desenho
-        // que todo mundo ja conhece; um pulso, nao.
-        var aoVivo = document.createElement('button');
-        aoVivo.type = 'button';
-        aoVivo.className = 'botao-ao-vivo';
-        aoVivo.id = 'ao-vivo-' + ev.id;
-        aoVivo.appendChild(iconePulso());
-        var rotuloVivo = document.createElement('span');
-        rotuloVivo.className = 'rotulo-ao-vivo';
-        rotuloVivo.textContent = 'AO VIVO';
-        aoVivo.appendChild(rotuloVivo);
-        aoVivo.setAttribute('aria-label', 'Ver os números de ' + ev.nome);
-        aoVivo.title = 'Ao vivo';
-        aoVivo.addEventListener('click', function () {
-            window.aoVivo.abrir(ev.id, ev.nome);
-        });
-        linha.appendChild(aoVivo);
 
         var engrenagem = document.createElement('button');
         engrenagem.type = 'button';

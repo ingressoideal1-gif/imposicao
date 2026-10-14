@@ -24,11 +24,11 @@ HARNESS = os.path.join(RAIZ, "tests", "ao_vivo_harness.js")
 pytestmark = pytest.mark.xdist_group("ao_vivo")
 
 
-def _chamar(chamada, argumentos):
+def _chamar(chamada, argumentos, **opcoes):
     r = subprocess.run(
         ["node", HARNESS], cwd=RAIZ, timeout=300, capture_output=True,
         encoding="utf-8",
-        input=json.dumps({"chamada": chamada, "argumentos": argumentos}),
+        input=json.dumps({"chamada": chamada, "argumentos": argumentos, **opcoes}),
     )
     if r.returncode != 0:
         pytest.fail(f"o harness falhou:\n{r.stdout}\n{r.stderr}")
@@ -37,6 +37,22 @@ def _chamar(chamada, argumentos):
 
 def desenhar(dados):
     return _chamar("desenhar", [dados])
+
+
+def test_abrir_pelas_configuracoes_preserva_sessao_e_volta_sem_perder_edicao():
+    r = _chamar('abrir', ['e1', 'Evento', True], configuracao=True, voltar=True)
+    assert r['botaoNasConfiguracoes']
+    assert r['retorno'] == '← Voltar às configurações'
+    assert r['configuracaoVisivel'] and not r['aoVivoVisivel']
+    assert not r['configuracaoEncerrada']
+    assert r['nomeEditado'] == 'Edicao ainda nao salva'
+
+
+def test_relatorio_aberto_fora_da_configuracao_mantem_saida_anterior():
+    r = _chamar('abrir', ['e1', 'Evento'], configuracao=True, voltar=True)
+    assert r['retorno'] == '← Voltar aos meus eventos'
+    assert r['configuracaoEncerrada']
+    assert not r['configuracaoVisivel'] and not r['aoVivoVisivel']
 
 
 # ── Um evento de mesa, com o formato que o servidor devolve ─────────────────

@@ -18,7 +18,16 @@ const puppeteer = require(path.join(REPO, 'node_modules', 'puppeteer'));
 
 let bruto = '';
 process.stdin.on('data', d => (bruto += d));
-process.stdin.on('end', () => rodar(JSON.parse(bruto)));
+process.stdin.on('end', () => {
+    if (bruto.trim()) return rodar(JSON.parse(bruto));
+    // A entrega segura chama os harnesses sem stdin: executar a suite real.
+    const { spawnSync } = require('child_process');
+    const r = spawnSync(process.env.IDEAL_TEST_PYTHON || 'python',
+        ['-m', 'pytest', '-n', '0', '-q', 'tests/test_ao_vivo.py'],
+        { cwd: REPO, stdio: 'inherit' });
+    if (r.error) console.error(r.error.message);
+    process.exit(r.status === null ? 1 : r.status);
+});
 
 async function rodar(caso) {
     const html = fs.readFileSync(path.join(REPO, 'frontend', 'controle.html'), 'utf-8');
@@ -46,7 +55,7 @@ async function rodar(caso) {
     // `fechar()` os chamam; `desenhar()` não toca em nenhum.
     await page.evaluate(() => {
         window.conta = {
-            esconderTelaInicial: function () {},
+            esconderTelaInicial: function () { document.getElementById('engrenagem').classList.add('sumindo'); },
             mostrarEntrar: function () { window.__pediuEntrar = true; }
         };
         window.AcessoConta = {
@@ -58,7 +67,7 @@ async function rodar(caso) {
         };
         window.botaoEspera = { comecar: function () {}, terminar: function () {} };
         window.listaEventos = { recarregar: function () { return Promise.resolve(); } };
-        window.Controle = { fecharEngrenagem: function () { return Promise.resolve(); } };
+        window.Controle = { fecharEngrenagem: function () { window.__configFechada = true; return Promise.resolve(); } };
     });
 
     await page.addScriptTag({ path: path.join(REPO, 'frontend', 'ao-vivo.js') });
@@ -74,8 +83,14 @@ async function rodar(caso) {
         process.exit(1);
     }
 
-    const saida = await page.evaluate((c) => {
-        var r = window.aoVivo[c.chamada].apply(null, c.argumentos);
+    const saida = await page.evaluate(async (c) => {
+        if (c.configuracao) {
+            document.getElementById('engrenagem').classList.remove('sumindo');
+            document.getElementById('campo-nome-evento').value = 'Edicao ainda nao salva';
+        }
+        var r = await window.aoVivo[c.chamada].apply(null, c.argumentos);
+        var retorno = document.getElementById('btn-voltar-ao-vivo').textContent;
+        if (c.voltar) await window.aoVivo.fechar();
         var texto = function (sel) {
             var el = document.querySelector(sel);
             return el ? el.textContent.trim() : null;
@@ -91,6 +106,12 @@ async function rodar(caso) {
             return el ? el.classList.contains('sumindo') : null;
         };
         return {
+            retorno,
+            configuracaoVisivel: !escondido('engrenagem'),
+            configuracaoEncerrada: !!window.__configFechada,
+            nomeEditado: document.getElementById('campo-nome-evento').value,
+            aoVivoVisivel: !escondido('ao-vivo'),
+            botaoNasConfiguracoes: !!document.querySelector('#engrenagem #btn-config-ao-vivo'),
             resultado: typeof r === 'undefined' ? null : r,
             titulo: texto('#ao-vivo-titulo'),
             nome: texto('#ao-vivo-nome'),

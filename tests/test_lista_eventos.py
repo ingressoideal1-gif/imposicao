@@ -547,13 +547,11 @@ def test_sem_saber_o_numero_a_barra_tambem_cala():
     assert _sub_evento(desenhar_html([linha])) == "lê neste aparelho"
 
 
-def test_a_linha_do_evento_leva_o_botao_do_ao_vivo_com_rotulo_em_texto():
-    """Controle novo nesta aplicação se explica sozinho. A engrenagem passa só
-    com o ícone porque é um desenho que todo mundo conhece; um pulso, não."""
+def test_ao_vivo_fica_nas_configuracoes_e_nao_na_linha_do_evento():
     html = desenhar_html([dict(LINHA_BASE, entradas=10)])
-    assert "botao-ao-vivo" in html
-    assert "AO VIVO" in html
-    assert 'aria-label="Ver os números de' in html
+    assert "botao-ao-vivo" not in html
+    assert "AO VIVO" not in html
+    assert 'botao-engrenagem' in html
 
 
 def test_o_evento_finalizado_tem_como_abrir_o_relatorio():

@@ -2475,6 +2475,12 @@
             fecharEngrenagem();
         });
 
+        $('btn-config-ao-vivo').addEventListener('click', function () {
+            if (!estado.evento_id) { return; }
+            var evento = (estado.painel || {}).evento || {};
+            window.aoVivo.abrir(estado.evento_id, evento.nome_evento || '', true);
+        });
+
         $('btn-elevar').addEventListener('click', function () {
             // O `.catch` vazio existe porque a promessa desta caixa serve a
             // OUTRO chamador: o `gravar()`, que precisa saber se a senha veio
