@@ -27,7 +27,7 @@
             <option value="experimental_gdi">2 — GDI otimizado (300 DPI)</option>
             <option value="pdf_raw">3 — PDF direto ao RIP (RAW)</option>
           </select>
-          <p id="ped-teste-aviso" style="font-size:12px;margin:8px 0 0">Use Imprimir no modelo. O envio usa o PDF e as configurações do modelo e não marca o pedido como impresso.</p>
+          <p id="ped-teste-aviso" style="font-size:12px;margin:8px 0 0">Use Imprimir no modelo. O envio usa o PDF e as configurações do modelo e pede confirmação antes de marcar como impresso.</p>
           <p id="ped-teste-destino" style="font-size:12px;margin:8px 0 0"></p>`;
         const refazer = document.getElementById('jg-refazer');
         if (!refazer) return;
@@ -41,12 +41,12 @@
             document.querySelector('#jg-config .jg-botao')?.setAttribute('aria-expanded', 'true');
             document.getElementById('ped-teste-aviso').textContent = event.target.value === 'pdf_raw'
                 ? 'PDF intacto: papel, bandeja, duplex, cópias e cores precisam estar configurados no preset do RIP. As opções do driver não acompanham o PDF RAW.'
-                : 'Use Imprimir no modelo. Papel, bandejas de capa/miolo, duplex, cópias e cores vêm da configuração atual. O envio não marca o pedido como impresso.';
+                : 'Use Imprimir no modelo. Papel, bandejas de capa/miolo, duplex, cópias e cores vêm da configuração atual. Ao concluir, confirme se deseja marcar como impresso.';
         });
     }
     async function capturar(current, {apenasUmaFace = false} = {}) {
         // A pasta escolhida tem prioridade sobre qualquer modo de driver salvo.
-        // Mantemos o snapshot de teste para nao confirmar o pedido comercialmente.
+        // Mantemos as opções capturadas até concluir o envio.
         if (current.options.hot_folder_path) {
             if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) throw new Error('Abra o modelo no painel local do NewProd.');
             const snapshot = structuredClone(current);

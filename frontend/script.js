@@ -32960,7 +32960,7 @@ window.confirmarPopup = confirmarPopup;
  * Pergunta se a impressão saiu e só então marca os modelos como IMPRESSO.
  * alvos: [{ itemId, osId }]
  */
-async function confirmarImpressaoModelos(alvos) {
+async function confirmarImpressaoModelos(alvos, { origem = 'print' } = {}) {
     const lista = (alvos || []).filter(a => a && a.itemId);
     if (!lista.length) return false;
 
@@ -32973,11 +32973,15 @@ async function confirmarImpressaoModelos(alvos) {
     const umSo = lista.length === 1;
     const confirmou = await confirmarPopup({
         titulo: '🖨️ Confirmar impressão',
-        mensagem: umSo
+        mensagem: origem === 'pdf'
+            ? 'PDF gerado. Deseja marcar ' + (umSo ? `<strong>${escHtmlSimples(nomes[0])}</strong>` : `os <strong>${lista.length} modelos</strong>`) + ' como impresso?'
+            : umSo
             ? `A impressão de <strong>${escHtmlSimples(nomes[0])}</strong> foi concluída?`
             : `A impressão dos <strong>${lista.length} modelos</strong> foi concluída?`,
         detalhe: (umSo ? '' : escHtmlSimples(nomes.join('  •  ')) + '<br><br>')
-            + 'Confira o material na impressora antes de confirmar. O status só muda para IMPRESSO depois da sua confirmação.',
+            + (origem === 'pdf'
+                ? 'Gerar o PDF não comprova a impressão. Confirme somente se deseja atualizar o status para IMPRESSO.'
+                : 'Confira o material na impressora antes de confirmar. O status só muda para IMPRESSO depois da sua confirmação.'),
         textoOk: '✅ Sim, marcar como Impresso',
         textoCancelar: 'Ainda não'
     });

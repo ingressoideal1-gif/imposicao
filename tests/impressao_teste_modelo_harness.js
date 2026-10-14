@@ -223,9 +223,9 @@ function extract(name) {
       return calls;
     }, config);
     assert.deepEqual(hotFail.map(c=>c.url),['/api/hotfolder/drop'],'falha na pasta interrompe sem usar impressora');
-    assert.equal((pedido.match(/if \(ok && !testeModelo && alvoImpressao.length\)/g)||[]).length,4,'todos os caminhos de conclusao excluem status comercial no teste');
+    assert.equal((pedido.match(/if \(ok && alvoImpressao.length\)/g)||[]).length,4,'todos os caminhos de envio concluido pedem confirmacao no NewProd oficial');
     assert(pedido.includes('const opcoesDeFace = { testeModelo,'));
-    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=6-oficial'));
+    for(const file of ['index.html']) assert(fs.readFileSync(path.join(root,'frontend',file),'utf8').includes('/impressao-teste-modelo.js?v=1056'));
     assert.equal(await page.$eval('#ped-teste-config label', e=>e.textContent), 'Forma de envio');
     // A entrega normal continua usando o endpoint e opcoes anteriores quando nao ha teste.
     const normal = await page.evaluate(async cfg => {
@@ -293,6 +293,6 @@ function extract(name) {
     });
     assert.deepEqual(layout,{visivel:true,coluna:true,abaixo:true});
     console.log('OK: posicao final, GDI padrao, salvar/reabrir os 3 modos por produto, configuracao antiga e fallback offline.');
-    console.log('OK: Hot Folder prioritario nos 4 estados do seletor, snapshot e falha sem impressora; 3 modos de driver, capas/miolo e bloqueio comercial preservados.');
+    console.log('OK: Hot Folder prioritario nos 4 estados do seletor, snapshot e falha sem impressora; 3 modos de driver, capas/miolo e confirmacao comercial habilitada.');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

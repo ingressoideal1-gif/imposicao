@@ -71,10 +71,34 @@ async function tests() {
             assert.deepEqual(f.calls.confirmed[0].map(a=>a.itemId),['96','97','98']);
         } else {
             assert.equal(f.calls.saved.length,1);
-            assert.equal(f.calls.confirmed.length,0);
+            assert.deepEqual(f.calls.confirmed[0].map(a=>a.itemId),['96','97','98']);
         }
         assert.equal(f.c.isImposing,false);
     }
+    for (const modo of ['gdi_atual','experimental_gdi','pdf_raw','hot_folder']) {
+        for (const ok of [true, false]) {
+            const f=fixture();
+            f.c.NewProdTesteModelo={capturar:async()=>({printerName:'Simulada',options:{modo}})};
+            f.c.getPedPrintOptions=()=>({});
+            f.c.sendPrintJobDirect=async()=>ok;
+            await f.c.runPedImposition('print');
+            assert.equal(f.calls.requests.length,1,JSON.stringify(f.calls.notices));
+            assert.equal(f.calls.confirmed.length,ok?1:0,modo + ': só pergunta após sucesso');
+        }
+    }
+    const erro=fixture();
+    erro.c.sendPrintJobDirect=async()=>{throw new Error('Falha simulada');};
+    await erro.c.runPedImposition('print');
+    assert.equal(erro.calls.confirmed.length,0);
+    const falhaSalvar=fixture({response:{ok:true,headers:{get:()=> 'application/json'},
+        json:async()=>({type:'multi_file',files:[{name:'sintetico.pdf',data:btoa('pdf')}]})}});
+    falhaSalvar.c.atob=atob;
+    falhaSalvar.c.showDirectoryPicker=async()=>({getFileHandle:async()=>{throw new Error('Sem acesso');}});
+    await falhaSalvar.c.runPedImposition('pdf');
+    assert.equal(falhaSalvar.calls.confirmed.length,0,'falha ao salvar nao confirma');
+    assert(falhaSalvar.calls.notices.some(n=>String(n[0]).includes('Sem acesso')));
+    const pdfRefazer=fixture(); await pdfRefazer.c.runPedImposition('pdf',true);
+    assert.equal(pdfRefazer.calls.confirmed.length,0);
     const repeat=fixture(); await repeat.c.runPedImposition('print',true);
     assert.equal(repeat.calls.printed.length,1);
     assert.equal(repeat.calls.confirmed.length,0,'refazer nao altera status, inclusive no retorno PDF simples');
@@ -155,6 +179,14 @@ async function tests() {
             body:{getReader:()=>({cancel:async()=>{},read:async()=>read?{done:true}:(read=true,{done:false,value:text})})}};
         const x=fixture({paginadoDuplex:true,response});
         x.c.PDFLib=PDFLib; x.c.TextDecoder=TextDecoder; x.c.atob=atob;
+        if (mode==='print') {
+            x.c.NewProdTesteModelo={capturar:async()=>({printerName:'Simulada',options:{modo:'gdi_atual'}})};
+            x.c.getPedPrintOptions=()=>({});
+            if (kind==='stream') x.c.criarEntregaDeImpressao=()=>({
+                entregar:async jobs=>x.calls.printed.push(...jobs),
+                finalizar:async()=>true,
+            });
+        }
         x.c.state.printMode='duplex_unico';
         x.elements['ped-print-only-'+face]={checked:true};
         await x.c.runPedImposition(mode);
@@ -162,7 +194,8 @@ async function tests() {
         assert.equal(delivered.length,1,JSON.stringify(x.calls.notices));
         const result=await PDFLib.PDFDocument.load(await delivered[0].blob.arrayBuffer());
         assert.deepEqual(result.getPages().map(p=>p.getWidth()),face==='front'?[200,202]:[201,203]);
-        if(mode==='print') assert.equal(x.calls.printOptions.apenasUmaFace,true);
+        assert.equal(x.calls.confirmed.length,1, 'confirma uma vez após ' + kind + '/' + mode);
+        if(mode==='print' && kind!=='stream') assert.equal(x.calls.printOptions.apenasUmaFace,true);
     }
     console.log('OK: PDF/impressao, alvo congelado, refazer, bloqueios e troca assincrona de selecao');
 }
