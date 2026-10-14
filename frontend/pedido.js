@@ -1081,7 +1081,7 @@ function drawPedPreview() {
     }
 
     let is_strict_mode = false;
-    let stack_size = 50;
+    let stack_size = 5;
     let sets_needed = 1;
     // O PLANO DE MONTAGEM É ZERADO ANTES DE QUALQUER DECISÃO (02/09/2026).
     //
@@ -1098,7 +1098,7 @@ function drawPedPreview() {
     if (schema === "cut_stack" || schema === "multi_artes") {
         const cutstackMode = modoCutStack;
         const folhasDoBloco = blocagemCombinada ? blocagemCombinada.folhas
-            : (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50);
+            : (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 5);
         stack_size = folhasDoBloco * (cutstackMode === 'strict_assembly' ? 1
             : (parseInt(document.getElementById('ped-block-depth')?.value) || 1));
         // A FOLHA SOMADA NÃO É PILHA (02/09/2026).
@@ -1950,7 +1950,7 @@ function drawPedPreview() {
                     const sheetsInput = document.getElementById('ped-sheets-per-block');
                     const sheetsPerBlock = item_bloco || ((sheetsInput && sheetsInput.value) 
                         ? parseInt(sheetsInput.value) 
-                        : (parseInt(fmt.default_sheets_per_block) || 50));
+                        : (parseInt(fmt.default_sheets_per_block) || 5));
                         
                     let item_ticket_qtd = 1;
                     if (multiArteItem) {
@@ -3590,7 +3590,7 @@ function updatePedSummary() {
 
     const cutstackMode = document.getElementById('ped-cutstack-mode')?.value;
     if (schema === 'cut_stack' || schema === 'multi_artes') {
-        const stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 50) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
+        const stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 5) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
         if (schema === 'multi_artes' || cutstackMode === 'strict_assembly') {
             if (typeof buildStrictAssemblySets === 'function') {
                 const artesList = schema === 'multi_artes' ? state.impMultiArtes : [];
@@ -6670,7 +6670,7 @@ async function executarPedImposition(mode, isRefazer) {
 
         sheets_per_block: isMultiSelected && typeof blocagemDaSelecao === 'function'
             ? blocagemDaSelecao().folhas
-            : (document.getElementById('ped-sheets-per-block') ? parseInt(document.getElementById('ped-sheets-per-block').value) || 50 : 50),
+            : (document.getElementById('ped-sheets-per-block') ? parseInt(document.getElementById('ped-sheets-per-block').value) || 5 : 5),
 
         block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
 
