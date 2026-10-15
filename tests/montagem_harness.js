@@ -23,6 +23,12 @@ const RAIZ = path.dirname(__dirname);
 
 const FONTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
+const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo'].map(nome => {
+    const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
+}).join('\n');
+
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
     total++;
@@ -117,7 +123,7 @@ const GLOBAIS = [
     'pedidosComBancoDesconhecido', 'bancoVazioNoPayload', 'recadoDeBancoVazio',
     'arteParaImpor', 'numeracaoIdDoItem', 'numeracaoSemElementosDeLayout', 'loadOSItens', 'numeroDoPedidoDoItem',
 ];
-const fabrica = new Function(...GLOBAIS,
+const fabrica = new Function(...GLOBAIS, RESOLVER_FORMATO + '\n' +
     FONTE.slice(FONTE.indexOf('const MontagemDominio ='), FONTE.indexOf('\n/**\n * As posições digitadas')).trim() + '\n'
     + CONSTANTES.map(extrairConst).join('\n') + '\n'
     + NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};');
@@ -470,6 +476,31 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
        'com distribuição do banco vale a fatia do modelo, e só ela');
     ok(apiFatia.totalDeItensDoModelo(comBanco, num) === 2800,
        'sem distribuição, a fatia inteira limitada pela quantidade');
+}
+
+// Regressão: catálogo ERP ausente não apaga o formato da cor do modelo.
+{
+    const s = novoState();
+    s.produtosGlobais = [];
+    s.cores = [{ id: 'C1', formato_id: 'F1' }, { id: 'C2', formato_id: 'ausente' }];
+    s.numeracoes = [{ id: 'N1', formato_id: 'F2' }];
+    const a = montarApi({ state: s });
+    const item = { id: 'modelo', amostra_cor_id: 'C1', amostra_num_id: 'N1', cor: 'Azul', bloco: 50 };
+    const antes = JSON.stringify(item);
+    ok(a.formatoDoItem(item)?.id === 'F1', 'cor resolve sem catálogo ERP e vence numeração');
+    ok(a.formatoDoItem({ amostra_num_id: 'N1' })?.id === 'F2', 'sem cor, usa formato da numeração');
+    ok(a.formatoDoItem({ amostra_cor_id: 'C2', formato_id: 'F1' }) === null,
+        'formato explícito inexistente bloqueia sem substituir por outro');
+    const peca = a.pecaDaMontagem(item);
+    ok(peca.formato_id === 'F1' && peca.saida_id === 'S1', 'peça recebe formato e saída resolvidos');
+    ok(a.porQueNaoCabeNaMontagem(peca, a.pecaDaMontagem({ ...item })) === null,
+        'modelo com cor conhecida cabe na mesma folha sem abrir Pedido');
+    ok(a.porQueNaoCabeNaMontagem(peca, a.pecaDaMontagem({ ...item, amostra_cor_id: null })) !== null,
+        'formato diferente continua bloqueado');
+    ok(JSON.stringify(item) === antes, 'resolver não altera o modelo');
+    s.produtosGlobais = [{ id_produto: 501, id_formato: 88 }];
+    ok(a.formatoDoItem({ ...item, _vibe_id_produto: 501 })?.id === 'F1', 'cor vence produto ERP divergente');
+    ok(a.formatoDoItem({ id_produto: 501 })?.id === 'F2', 'sem cor e numeração, resolve pelo produto');
 }
 
 // ── 10. O FORMATO, resolvido pela própria tela ──────────────────────────────

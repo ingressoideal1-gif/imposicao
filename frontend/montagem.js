@@ -350,53 +350,18 @@ function totalDeItensDoModelo(item, num) {
     return 0;
 }
 
-/**
- * O FORMATO deste modelo, resolvido aqui — e essa é a parte que quase custou
- * caro.
- *
- * `formato_id` NÃO existe em `pedidos_modelos`: quem o preenche na memória é o
- * DESENHO da fila do Pedido (`renderPedOSQueue`), a partir do produto do ERP.
- * A Montagem carrega os modelos com o `loadOSItens` e nunca desenha aquela
- * fila, então os itens chegavam aqui **sem formato**.
- *
- * Isso produziu duas falhas em 29/08/2026, e a segunda é pior que a primeira:
- *
- *  1. o payload ia com `formato: null` e o motor recusava — "Formato não
- *     encontrado", que ao menos aparece na tela;
- *  2. o `porQueNaoCabeNaMontagem` comparava `'' !== ''` e devolvia "cabe"
- *     SEMPRE. A regra que o usuário decidiu — formato e configuração de frente/verso —
- *     estava **inerte**, e uma folha com dois materiais diferentes teria
- *     passado sem um aviso.
- *
- * A regra abaixo é a MESMA do desenho da fila, e não uma aproximação: produto
- * do item → `id_formato` do produto → o formato cujo `id_formato_num` casa.
- * Sem produto ou sem casamento, vale o `formato_id` que o item porventura
- * traga do banco.
- *
- * Não grava nada. O desenho da fila escreve o resultado de volta com
- * `autoSaveOSItemField`; a Montagem é tela de leitura e não tem por que
- * carimbar o pedido de ninguém.
+/** Resolve o formato pela mesma regra da tela Pedido, sem gravar no modelo.
+ * Cor e numeração têm prioridade sobre o formato do modelo/produto ERP.
+ * Assim a Montagem não depende de abrir o Pedido para preencher formato_id.
  */
 function formatoDoItem(item) {
     if (!item) return null;
-
-    const prodId = item._vibe_id_produto;
-    if (prodId && prodId !== 'sem_produto') {
-        const prod = (state.produtosGlobais || [])
-            .find(p => String(p.id_produto) === String(prodId));
-        if (prod && prod.id_formato) {
-            const f = (state.formatos || [])
-                .find(x => String(x.id_formato_num) === String(prod.id_formato));
-            if (f) return f;
-        }
-    }
-
-    if (item.formato_id) {
-        return (state.formatos || [])
-            .find(x => String(x.id) === String(item.formato_id)) || null;
-    }
-
-    return null;
+    const corId = item.amostra_cor_id || item.id_cor || item.cor_id;
+    const numId = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
+    const cor = corId ? (state.cores || []).find(c => String(c.id) === String(corId)) : null;
+    const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
+    return formatoDoModelo(item, cor, num);
 }
 
 /** A saída: a do item, ou a padrão do formato — a mesma ordem do desenho da fila. */

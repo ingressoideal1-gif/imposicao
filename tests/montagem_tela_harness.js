@@ -18,6 +18,11 @@ catch (_) { puppeteer = require('puppeteer'); }
 
 const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
+const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo'].map(nome => {
+    const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
+}).join('\n');
 const MTG = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
 const FOTO = process.argv[2] || null;
@@ -188,6 +193,13 @@ const PECAS = [
         "  return String(s == null ? '' : s).replace(/[&<>\"']/g, function (c) {",
         "    return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]; });",
         "}",
+        // A integração remota é simulada aqui; seu contrato real tem harness próprio.
+        "const supabaseClient = null;",
+        "window.__integridades = [];",
+        "async function confirmarIntegridadeDoTrabalho(fd, base, estado, cliente, signal, selecao) {",
+        "  window.__integridades.push({ payload: JSON.parse(fd.get('payload')), selecao });",
+        "  if (window.__erroIntegridade) throw new Error(window.__erroIntegridade);",
+        "}",
         "function fatiaCsvDoItem(i, n) { return n.csv_data; }",
         "function resolverNumeracaoParaModelo(n) { return n; }",
         "function numeracaoIdDoItem(i) { return i.amostra_num_id; }",
@@ -232,7 +244,7 @@ const PECAS = [
         // formato e' o `pecaDaMontagem`, pelo produto — que e' o caminho que
         // faltava e derrubou a primeira versao em producao.
         "window.__item = function (p) { return {",
-        "  id: p.id, nome_modelo: p.nome, quantidade: p.qtd,",
+        "  id: p.id, nome_modelo: p.nome, quantidade: p.qtd, bloco: 50,",
         "  _vibe_id_produto: p.produto || 501, cor: 'Azul Celeste', verso_tipo: 'Frente',",
         "  amostra_num_id: null, arte_url: 'x.pdf', num_inicial: 1 }; };",
         "window.__itensPorPedido = { a: ['1000565', '1000589'], b: ['1000412'], c: ['1000203'] };",
@@ -262,7 +274,7 @@ const PECAS = [
     ].join('\n');
 
     const DOMINIO = MTG.slice(MTG.indexOf('const MontagemDominio ='), MTG.indexOf('\n/**\n * As posições digitadas')).trim();
-    await aba.evaluate(PRELUDIO + '\n' + DOMINIO + '\n' + CONSTANTES.map(extrairConst).join('\n') + '\n'
+    await aba.evaluate(PRELUDIO + '\n' + RESOLVER_FORMATO + '\n' + DOMINIO + '\n' + CONSTANTES.map(extrairConst).join('\n') + '\n'
         + FUNCOES.map(extrair).join('\n') + '\n' + POSLUDIO);
 
     // ── 2. O estado vazio se explica ────────────────────────────────────────
@@ -1955,6 +1967,25 @@ const PECAS = [
         await lado.screenshot({ path: fotoLado });
         console.log('foto em ' + fotoLado);
     }
+
+    const integridade = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        window._mtgEstacao = async () => 'http://estacao-simulada';
+        window.prepararArtesDaMontagem = async () => window.__artes();
+        window.__integridades = [];
+        window.__erroIntegridade = 'Divergência simulada';
+        let envios = 0;
+        window.fetch = async () => { envios++; throw new Error('Envio indevido'); };
+        await gerarPdfDaMontagem();
+        window.__erroIntegridade = null;
+        return { chamadas: window.__integridades.length, envios,
+            selecao: window.__integridades[0]?.selecao.length,
+            liberou: !state.montagem.gerando };
+    }, PECAS);
+    ok(integridade.chamadas === 1 && integridade.selecao === PECAS.length,
+        'geração confere todos os modelos antes do envio', integridade);
+    ok(integridade.envios === 0 && integridade.liberou,
+        'falha na conferência impede envio e libera edição', integridade);
 
     await navegador.close();
 
