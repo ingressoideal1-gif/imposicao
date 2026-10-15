@@ -8,7 +8,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1062">
+    <link rel="stylesheet" href="/style.css?v=1063">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=897"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -117,6 +117,10 @@
                     <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5.5h9M3 10h9M3 14.5h5"/><path d="M13.2 13.4l1.7 1.7 3.1-3.4"/></svg>
                     Painel de Produção
                     <span class="nav-badge" id="badge-impressao">0</span>
+                </button>
+                <button class="nav-btn" data-view="view-dashboard-producao" id="nav-dashboard-producao">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v14h14M6 13V9M10 13V5M14 13V7"/></svg>
+                    Dashboard de Produção
                 </button>
                 <button class="nav-btn active" data-view="view-lista-arte" id="nav-lista-arte">
                     <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.6a7.4 7.4 0 0 0 0 14.8c.9 0 1.6-.7 1.6-1.6 0-.4-.1-.8-.4-1.1-.2-.3-.4-.6-.4-1 0-.9.7-1.6 1.6-1.6h1.9a3.7 3.7 0 0 0 3.7-3.7c0-3.5-3.6-5.8-8-5.8Z"/><circle cx="6.5" cy="9.3" r="1"/><circle cx="9.4" cy="6.4" r="1"/><circle cx="13.2" cy="7.3" r="1"/></svg>
@@ -1606,11 +1610,18 @@
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: LISTA DE IMPRESSÃO                                       -->
             <!-- ══════════════════════════════════════════════════════════════ -->
+            <section id="view-dashboard-producao" class="view-section">
+                <div class="dp-cabecalho">
+                    <div><h1>Dashboard de Produção</h1><p>Quantidades e impressão por produto, conforme o prazo previsto.</p></div>
+                    <button type="button" class="prod-btn-outline" onclick="loadOrdens()">Atualizar</button>
+                </div>
+                <div id="dashboard-producao"></div>
+            </section>
+
             <section id="view-lista-impressao" class="view-section prod-panel-section" style="max-width: 100%; height: 100%;">
                 <div class="prod-panel-container">
                     
                     <div class="prod-main-area">
-                        <details id="dashboard-producao" open></details>
                         <!-- Top bar (Search, Filters, Sectors) -->
                         <div class="prod-top-bar">
                             <div class="prod-top-header" style="position: relative;">
@@ -2197,9 +2208,9 @@
     <script src="/mapa-teatro-do-pedido.js?v=1060"></script>
     <script src="/csv-editor.js?v=954"></script>
     <script src="/pedido-colunas.js?v=982"></script>
-    <script src="/script.js?v=1062"></script>
+    <script src="/script.js?v=1063"></script>
     <script src="/acesso-estacao.js?v=1010"></script>
-    <script src="/dashboard-arte.js?v=1062"></script>
+    <script src="/dashboard-arte.js?v=1063"></script>
     <script src="/criador-arte.js?v=964"></script>
     <script src="/pedido.js?v=1060"></script>
 
