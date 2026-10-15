@@ -44,3 +44,16 @@ dashboard com todos os status e navegação em desktop/celular aprovados.
 
 Bateria completa aprovada nos três perfis: 1.048 testes Python, dois pulados,
 dois subtestes e 19 harnesses JavaScript por perfil. Evidência: `evidencias/newprod-139-testes.json`.
+
+## Publicação confirmada
+
+Fonte `83fc918d`, tag `agente-v1.3.9`, branch
+`release/newprod-1.3.9-dashboard-montagem` publicadas no repositório.
+Os dois downloads públicos completos conferiram com o tamanho e SHA-256
+do MSI auditado. `newprod-piloto-oficial.json`, `latest.json` e
+`newprod-piloto-teste.json` foram ativados e relidos em 1.3.9, preservando
+as sete estações da liberação anterior. Evidência:
+`evidencias/release-139-oficial-publicacao.json`.
+
+Nenhuma instalação foi executada nesta entrega. Adoção nas estações permanece
+para verificação posterior; a publicação não comprova instalação.
