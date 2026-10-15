@@ -13650,17 +13650,17 @@ window.runImposition = async function (mode, returnBlob = false) {
     let directoryHandle = null;
     let fileHandle = null;
 
-    // Obter o código do modelo para usar no nome do arquivo
+    // Obter pedido e nome descritivo do modelo para o arquivo
     let modeloNum = '';
     if (isMultiSelected && state.selectedOSItems && state.selectedOSItems.length > 0) {
         // Todos os modelos da folha, não só o primeiro: o arquivo tem o material
         // de vários, e quem o encontra na pasta precisa saber disso sem abrir.
-        modeloNum = nomeDosModelosCombinados(itensDaImposicao(true));
+        modeloNum = nomeBaseDosArquivosDeImpressao(itensDaImposicao(true));
     } else if (state.activeOSItem) {
         const itens = state.osItens[state.activeOSItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(state.activeOSItem.itemId));
-        if (item && item.modelo) {
-            modeloNum = item.modelo;
+        if (item) {
+            modeloNum = nomeBaseDosArquivosDeImpressao([item], state.activeOSItem.osId);
         }
     }
 
@@ -20839,6 +20839,26 @@ function modoCutStackDaSelecao() {
 window.modoCutStackDaSelecao = modoCutStackDaSelecao;
 
 
+
+/** Nome-base compartilhado pela produção e pelas montagens. */
+function nomeBaseDosArquivosDeImpressao(itens, osId) {
+    const limpar = valor => String(valor || '').trim()
+        .replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, '_')
+        .replace(/\s+/g, '_').replace(/\.pdf/gi, '_pdf').replace(/[. ]+$/g, '');
+    const nomes = (itens || []).filter(Boolean).map(item => {
+        const origem = item.osId || osId || Object.keys(state.osItens || {}).find(id =>
+            (state.osItens[id] || []).some(it => it === item));
+        const pedido = limpar(item.pedidoNumero || numeroDoPedidoDoItem(origem) || item.id_int);
+        const nome = limpar(item.nome_modelo || item.produto || item.nome || item.modelo);
+        return [pedido, nome].filter(Boolean).join('_');
+    }).filter(Boolean);
+    const completo = nomes.join('_');
+    if (completo.length <= 150) return completo;
+    // Reserva espaço para os sufixos de refazer, set, capa e miolo.
+    const resumo = nomes.length > 1 ? '_' + nomes.length + 'modelos' : '';
+    return completo.slice(0, 150 - resumo.length).replace(/[. ]+$/g, '') + resumo;
+}
+window.nomeBaseDosArquivosDeImpressao = nomeBaseDosArquivosDeImpressao;
 
 /**
  * O nome do arquivo de uma imposição com vários modelos: todos eles, porque o

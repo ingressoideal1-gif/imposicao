@@ -6439,19 +6439,19 @@ async function executarPedImposition(mode, isRefazer) {
     let directoryHandle = null;
     let fileHandle = null;
 
-    // Obter o código do modelo para usar no nome do arquivo
+    // Obter pedido e nome descritivo do modelo para o arquivo
     let modeloNum = '';
     if (isMultiSelected && state.selectedOSItems && state.selectedOSItems.length > 0) {
         // Todos os modelos da folha, não só o primeiro: o arquivo tem o material
         // de vários, e quem o encontra na pasta precisa saber disso sem abrir.
-        modeloNum = (typeof nomeDosModelosCombinados === 'function')
-            ? nomeDosModelosCombinados(itensDaImposicao(true))
+        modeloNum = (typeof nomeBaseDosArquivosDeImpressao === 'function')
+            ? nomeBaseDosArquivosDeImpressao(itensDaImposicao(true))
             : '';
     } else if (state.activeOSItem) {
         const itens = state.osItens[state.activeOSItem.osId] || [];
         const item = itens.find(i => String(i.id) === String(state.activeOSItem.itemId));
-        if (item && item.modelo) {
-            modeloNum = item.modelo;
+        if (item) {
+            modeloNum = nomeBaseDosArquivosDeImpressao([item], state.activeOSItem.osId);
         }
     }
 
