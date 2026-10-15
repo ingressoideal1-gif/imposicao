@@ -12,6 +12,11 @@ const contexto = {
     document: { getElementById: () => null },
 };
 vm.createContext(contexto);
+const script = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8').replace(/\r\n/g, '\n');
+for (const nome of ['formatoDoProduto', 'formatoDoModelo']) {
+    const inicio = script.indexOf('\nfunction ' + nome + '(');
+    vm.runInContext(script.slice(inicio, script.indexOf('\n}', inicio) + 2), contexto);
+}
 vm.runInContext(fs.readFileSync(path.join(raiz, 'frontend/montagem.js'), 'utf8'), contexto);
 
 async function testar() {
