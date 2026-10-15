@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const raiz = path.resolve(__dirname, '..');
 const cliente = fs.readFileSync(path.join(raiz, 'frontend/cliente.js'), 'utf8');
 const shell = fs.readFileSync(path.join(raiz, 'frontend/cliente-shell.js'), 'utf8');
+const { VersoDoModelo } = require('../frontend/cor-numeracao-do-modelo.js');
 function funcao(fonte, nome) {
     const inicio = fonte.search(new RegExp('(?:async )?function ' + nome + '\\('));
     assert.ok(inicio >= 0, nome);
@@ -64,6 +65,7 @@ function ambiente(opcoes = {}) {
         }
     };
     const c = {
+        VersoDoModelo,
         console: { log() {}, warn() {}, error() {} },
         state: { osItens: {}, numeracoes: [], cores: [] }, clienteState: {}, supabaseClient: banco,
         document: { getElementById: id => campos[id] || null, querySelector: () => ({ style: {} }) },

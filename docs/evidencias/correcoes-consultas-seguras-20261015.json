@@ -1,0 +1,403 @@
+{
+  "data": "2026-10-15",
+  "estado": "implementado e validado localmente; nao publicado",
+  "branch": "fix/consultas-seguras-20261015",
+  "base": "0de3595b2be32d6ee2bd0ba9cc3321282b6e8c13",
+  "alteracoes": [
+    "Catalogo Deno reutiliza consultas identicas apenas durante uma requisicao, depois da validacao de empresa. Conferencia de admissao preservada.",
+    "Lista de Arte le candidatos em lotes de 100 pedidos e paginas de 500 linhas. Antes de escrever, rele o pedido pelo fluxo original.",
+    "Removidos tres PATCH auxiliares com id_modelo/versao inexistentes. Decisao e observacao continuam persistidas em pedidos_modelos.",
+    "Fotos opcionais consultadas somente com sessao do proprio vibeClient. Nenhuma permissao ampliada."
+  ],
+  "validacoes": {
+    "deno": {
+      "aprovados": 345,
+      "falhas": 0,
+      "flags_adicionais": "--node-modules-dir=none --cached-only",
+      "rede_de_teste": "sem --allow-net"
+    },
+    "newprod": {
+      "canais": [
+        "producao",
+        "piloto",
+        "oficial"
+      ],
+      "por_canal": {
+        "pytest_aprovados": 823,
+        "pytest_pulados": 2,
+        "subtestes_aprovados": 2,
+        "harnesses_node_aprovados": 19
+      },
+      "etapas": [
+        {
+          "etapa": "producao/pytest",
+          "segundos": 75.597,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/montagem_harness.js",
+          "segundos": 0.198,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/montagem_local_harness.cjs",
+          "segundos": 0.112,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/montagem_estacao_harness.cjs",
+          "segundos": 0.072,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/historico_impressao_harness.js",
+          "segundos": 0.102,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/gestao_estacoes_harness.js",
+          "segundos": 15.917,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/modelos_pedido_carregamento_harness.js",
+          "segundos": 0.106,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/fidelidade_numeracao_harness.js",
+          "segundos": 0.105,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/foto_piloto_harness.js",
+          "segundos": 0.068,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/foto_lib_harness.js",
+          "segundos": 0.166,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/selecao_piloto_harness.js",
+          "segundos": 0.135,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/integridade_impressao_harness.js",
+          "segundos": 0.161,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/token_estacao_harness.js",
+          "segundos": 0.121,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/ticket_condicoes_harness.js",
+          "segundos": 1.518,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/ticket_previas_harness.js",
+          "segundos": 0.067,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/numeracao_compatibilidade_harness.js",
+          "segundos": 1.38,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/mapas_teatro_harness.js",
+          "segundos": 0.696,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/mapas_teatro_browser_harness.js",
+          "segundos": 10.68,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/teatro_snapshot_harness.js",
+          "segundos": 0.103,
+          "sucesso": true
+        },
+        {
+          "etapa": "producao/teatro_vertical_modelo_harness.js",
+          "segundos": 0.111,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/pytest",
+          "segundos": 64.547,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/montagem_harness.js",
+          "segundos": 0.171,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/montagem_local_harness.cjs",
+          "segundos": 0.092,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/montagem_estacao_harness.cjs",
+          "segundos": 0.055,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/historico_impressao_harness.js",
+          "segundos": 0.086,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/gestao_estacoes_harness.js",
+          "segundos": 15.9,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/modelos_pedido_carregamento_harness.js",
+          "segundos": 0.091,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/fidelidade_numeracao_harness.js",
+          "segundos": 0.088,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/foto_piloto_harness.js",
+          "segundos": 0.054,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/foto_lib_harness.js",
+          "segundos": 0.144,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/selecao_piloto_harness.js",
+          "segundos": 0.102,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/integridade_impressao_harness.js",
+          "segundos": 0.136,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/token_estacao_harness.js",
+          "segundos": 0.099,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/ticket_condicoes_harness.js",
+          "segundos": 1.316,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/ticket_previas_harness.js",
+          "segundos": 0.064,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/numeracao_compatibilidade_harness.js",
+          "segundos": 1.245,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/mapas_teatro_harness.js",
+          "segundos": 0.661,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/mapas_teatro_browser_harness.js",
+          "segundos": 11.135,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/teatro_snapshot_harness.js",
+          "segundos": 0.102,
+          "sucesso": true
+        },
+        {
+          "etapa": "piloto/teatro_vertical_modelo_harness.js",
+          "segundos": 0.112,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/pytest",
+          "segundos": 62.822,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/montagem_harness.js",
+          "segundos": 0.177,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/montagem_local_harness.cjs",
+          "segundos": 0.092,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/montagem_estacao_harness.cjs",
+          "segundos": 0.059,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/historico_impressao_harness.js",
+          "segundos": 0.09,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/gestao_estacoes_harness.js",
+          "segundos": 15.898,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/modelos_pedido_carregamento_harness.js",
+          "segundos": 0.087,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/fidelidade_numeracao_harness.js",
+          "segundos": 0.099,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/foto_piloto_harness.js",
+          "segundos": 0.053,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/foto_lib_harness.js",
+          "segundos": 0.151,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/selecao_piloto_harness.js",
+          "segundos": 0.106,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/integridade_impressao_harness.js",
+          "segundos": 0.129,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/token_estacao_harness.js",
+          "segundos": 0.105,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/ticket_condicoes_harness.js",
+          "segundos": 1.325,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/ticket_previas_harness.js",
+          "segundos": 0.063,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/numeracao_compatibilidade_harness.js",
+          "segundos": 1.327,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/mapas_teatro_harness.js",
+          "segundos": 0.656,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/mapas_teatro_browser_harness.js",
+          "segundos": 10.662,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/teatro_snapshot_harness.js",
+          "segundos": 0.094,
+          "sucesso": true
+        },
+        {
+          "etapa": "oficial/teatro_vertical_modelo_harness.js",
+          "segundos": 0.113,
+          "sucesso": true
+        }
+      ]
+    },
+    "direcionados": [
+      "test_consultas_seguras.py e test_status_pedidos_artes.py: 2 aprovados",
+      "portal_persistencia_harness.js: 36 cenarios aprovados",
+      "portal_confirmacoes_harness.js: 143 conferencias aprovadas",
+      "correcao_do_cliente_harness.js: 45 conferencias aprovadas",
+      "node --check nos dois JS e git diff --check aprovados"
+    ],
+    "regressao_reproduzida": "Novo teste de PATCH invalido falha usando frontend/cliente.js de origin/main e passa com o arquivo corrigido.",
+    "catalogo_sintetico": {
+      "modelos_do_mesmo_pedido": 16,
+      "consultas_antes": 81,
+      "consultas_depois": 6,
+      "limite": "Nao e medicao de reducao em producao."
+    },
+    "retomada_portal": {
+      "resultado": "10 passed in 4.21s",
+      "comando": "pytest -n 0 -q tests/test_harnesses_do_portal.py tests/test_consultas_seguras.py tests/test_status_pedidos_artes.py",
+      "causa_corrigida": "Os dois simuladores de carga do portal omitiam o modulo real cor-numeracao-do-modelo.js, que exporta VersoDoModelo. Adicionada a mesma dependencia usada no HTML real, sem alterar as assercoes.",
+      "cenarios_carga_status_historico": 34,
+      "navegador_real": "aprovado com requisicoes externas bloqueadas"
+    }
+  },
+  "pendencias": [
+    "Aviso preexistente StarletteDeprecationWarning/httpx. Dependencias preservadas.",
+    "Autorizacao do chat requer corrigir conjuntamente os dois gatilhos de autoria e a politica permissiva. Nenhum GRANT nem SECURITY DEFINER aplicado.",
+    "Modal legado de historico/upload de arte ainda referencia id_modelo/versao e outros campos ausentes. Requer definicao de contrato e tratamento de historico; nao foi migrado automaticamente.",
+    "Publicacao, comparacao com ativos vigentes, instalacao de estacoes, observacao de logs e prova de impressao fisica nao realizadas."
+  ],
+  "entrega_e_recuperacao": {
+    "schema_e_permissoes": "sem alteracoes",
+    "banco_filas_e_estacoes": "sem mutacoes operacionais",
+    "escopo_publicacao_futura": "somente diff revisado da funcao piloto-local e frontend; conferir base publicada e compatibilidade do painel antes de empacotar",
+    "recuperacao_local": "checkout principal preservado; branch isolada permite revisar ou abandonar somente estas alteracoes",
+    "recuperacao_publicacao_futura": "preservar artefatos atualmente publicados e reimplanta-los se necessario; nenhuma reversao de schema exigida"
+  },
+  "sha256": {
+    "frontend/script.js": "e194ca5270d79011e1ef7ab86fd55cc36b41fff79c98f83c250236e972a93690",
+    "frontend/cliente.js": "2b23c49b67d069314911f1670d81b0dfa6fcc5d9249aa9dcb3997f4a28095718",
+    "supabase/functions/_compartilhado/piloto_catalogo.ts": "9bbce745ddad9d0b48f0be38c5184c9523ad4d9681d514ce7c091a8ed84ef318",
+    "supabase/functions/_compartilhado/piloto_catalogo_test.ts": "cfb0c5420f3bbf0b453abca58b1c353b9e36816384093f4c48f6374d0e218d21",
+    "tests/status_pedidos_artes_harness.js": "ea87f1724fabb90336e6d81c8e7975158ceada2672d58c90df8dadb9c5fccb34",
+    "tests/portal_persistencia_harness.js": "09565aafda8beb659e246208e7539fee15a31629ca45dc697cd18c14aaaeffb2",
+    "tests/consultas_seguras_harness.js": "5f367f130cdd77008780d88ed8507c1bcb7022c9f3933328ae0175bb15518f5d",
+    "tests/test_consultas_seguras.py": "736fbdc6711ea317e347d9f9e1fdb98116400d0f074a70a63a660503329a8097",
+    "tests/portal_carga_status_chat_harness.js": "6d4a322853c9020bb237ccf554c8c1ec779e0061e35c67b01ec7afe70c5ae3bf",
+    "tests/portal_carga_status_chat_browser_harness.js": "eb69b7c533e45b6147c4941bdc931a6ea68b22f7f2a3dc1b84c5efdf9f9596db"
+  },
+  "diagnostico_revalidado": {
+    "projeto": "vwbtitjlpelrcnsytzqw",
+    "acesso": "Management API /database/query/read-only, somente metadados",
+    "pedidos_artes_colunas_ausentes": [
+      "id_modelo",
+      "versao",
+      "url_arquivo",
+      "tipo_arquivo",
+      "tamanho_bytes"
+    ],
+    "chat": {
+      "gatilhos": [
+        "trg_normalizar_propostas_chat_autor",
+        "trg_preencher_autor_propostas_chat"
+      ],
+      "funcoes_consultam_usuarios": "ambas como invoker quando autor_uid nao e nulo",
+      "politica": "rls_temp_manter_acesso_atual: ALL, anon/authenticated, USING true, WITH CHECK true",
+      "autor_uid_default": null,
+      "emissores_no_checkout": "Os INSERT diretos em cliente.js e script.js nao enviam autor_uid. O banco tampouco define um valor padrao. A origem das chamadas com autor_uid deve ser identificada antes de atribuir o erro a estes emissores.",
+      "proxima_correcao": "Identificar cliente emissor e contrato de autoria por operador/empresa; testar rejeicao de autoria forjada e acesso entre empresas antes de migrar autorizacao."
+    }
+  }
+}
