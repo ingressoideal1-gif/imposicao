@@ -91,11 +91,71 @@ def test_recusa_online_nao_se_transforma_em_permissao_offline(tmp_path):
 @pytest.mark.parametrize('erro,offline', [
     (urllib.error.URLError('DNS indisponivel'), True), (TimeoutError(), True),
     (urllib.error.HTTPError('https://test.invalid',403,'recusado',{},None), False),
-    (urllib.error.HTTPError('https://test.invalid',500,'erro',{},None), False),
+    (urllib.error.HTTPError('https://test.invalid',500,'erro',{},None), True),
     (urllib.error.URLError(ssl.SSLError('certificado')), False), (ValueError(), False)])
-def test_so_falhas_de_transporte_autorizam_leitura_offline(erro, offline):
+def test_transporte_e_servico_indisponiveis_permitem_tentar_copia_validada(erro, offline):
     def abrir(*args, **kwargs): raise erro
     cliente = ClienteAutonomo('test.invalid','teste','PC',segredo=lambda:'sintetico',abrir=abrir)
     with pytest.raises(ConferenciaIndisponivel) as exc:
         cliente.abrir_pedido('99')
     assert isinstance(exc.value, ConexaoPilotoIndisponivel) is offline
+
+
+def cliente_http(status):
+    def abrir(*args, **kwargs):
+        raise urllib.error.HTTPError('https://test.invalid', status, 'simulado', {}, None)
+    return ClienteAutonomo('test.invalid', 'teste', 'PC', segredo=lambda: 'sintetico', abrir=abrir)
+
+
+@pytest.mark.parametrize('status', [500, 502, 503, 504, 544])
+def test_banco_indisponivel_reabre_cache_e_reconexao_revalida(tmp_path, status):
+    s, e, _, snapshot = ambiente_v2(tmp_path)
+    p = SelecaoPiloto(s)
+    antes = p.abrir_pedido({'pedido': '99'})
+    online = s.coleta_autonoma.cliente
+    s.coleta_autonoma.cliente = cliente_http(status)
+    depois = SelecaoPiloto(s).abrir_pedido({'pedido': '99'})
+    assert depois['execucao_offline'] and depois['snapshot'] == snapshot
+    assert depois['revisao_pedido'] == antes['revisao_pedido']
+    assert not p._cache.obter('99').get('offline_bloqueado')
+    for pacote in depois['pacotes']:
+        assert p.ler(pacote['modelo'], pacote['revisao'], 'frente') == e['bytes'][pacote['modelo']]
+    s.coleta_autonoma.cliente = online
+    assert not p.abrir_pedido({'pedido': '99'})['execucao_offline']
+
+
+@pytest.mark.parametrize('falha', ['sem_cache', 'corrompido', 'revogado'])
+def test_503_nao_libera_cache_ausente_corrompido_ou_revogado(tmp_path, falha):
+    s, _, _, _ = ambiente_v2(tmp_path)
+    p = SelecaoPiloto(s)
+    if falha != 'sem_cache':
+        p.abrir_pedido({'pedido': '99'})
+    if falha == 'corrompido':
+        obj = next(s.local.raiz.rglob('objetos/*'))
+        obj.write_bytes(b'x' * obj.stat().st_size)
+    if falha == 'revogado':
+        p._cache.bloquear_offline('99')
+    s.coleta_autonoma.cliente = cliente_http(503)
+    with pytest.raises(PedidoLocalIndisponivel):
+        SelecaoPiloto(s).abrir_pedido({'pedido': '99'})
+
+
+@pytest.mark.parametrize('status', [400, 401, 403, 404, 409, 422, 429, 501, 505])
+def test_recusa_http_bloqueia_cache_mesmo_se_depois_ocorrer_503(tmp_path, status):
+    s, _, _, _ = ambiente_v2(tmp_path)
+    p = SelecaoPiloto(s)
+    p.abrir_pedido({'pedido': '99'})
+    s.coleta_autonoma.cliente = cliente_http(status)
+    with pytest.raises(ConferenciaIndisponivel) as exc:
+        p.abrir_pedido({'pedido': '99'})
+    assert not isinstance(exc.value, ConexaoPilotoIndisponivel)
+    s.coleta_autonoma.cliente = cliente_http(503)
+    with pytest.raises(PedidoLocalIndisponivel):
+        p.abrir_pedido({'pedido': '99'})
+
+
+@pytest.mark.parametrize('acao', ['listar', 'conferir', 'conferir-pedido', 'confirmar-offline'])
+def test_503_nao_simula_sucesso_nas_demais_operacoes(acao):
+    with pytest.raises(ConferenciaIndisponivel) as exc:
+        cliente_http(503).chamar(acao, {'pedido': '99'})
+    assert not isinstance(exc.value, ConexaoPilotoIndisponivel)

@@ -51,6 +51,10 @@ class ClienteAutonomo:
                 if len(raw) > limite: raise ValueError()
                 return json.loads(raw)
         except urllib.error.HTTPError as erro:
+            # Apenas a abertura pode recorrer ao snapshot local ja validado.
+            # Falha do servidor nao revoga o cache; recusas 4xx continuam fechadas.
+            if acao == 'abrir-pedido' and erro.code in (500, 502, 503, 504, 544):
+                raise diagnosticada(erro, ConexaoPilotoIndisponivel('Servico da nuvem temporariamente indisponivel.')) from None
             raise diagnosticada(erro, ConferenciaIndisponivel('Canal autônomo recusou a consulta.')) from None
         except urllib.error.URLError as erro:
             if isinstance(erro.reason, ssl.SSLError):
