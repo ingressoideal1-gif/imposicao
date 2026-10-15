@@ -22652,7 +22652,7 @@ const PERM_NAV_MAP = {
     perm_imposicao_view:   ['nav-imposicao'],
     perm_pedidos_view:     ['nav-pedido'],
     perm_amostras_view:    ['nav-amostras'],
-    perm_producao_view:    ['nav-lista-impressao', 'nav-producao-cor', 'nav-montagem'],
+    perm_producao_view:    ['nav-lista-impressao', 'nav-dashboard-producao', 'nav-producao-cor', 'nav-montagem'],
     perm_acabamento_view:  ['nav-acabamento'],
     perm_lista_arte_view:  ['nav-lista-arte'],
     perm_impressoras_view: ['nav-impressoras'],
@@ -22675,7 +22675,7 @@ const PERM_VIEW_MAP = {
     perm_imposicao_view:   ['view-imposicao'],
     perm_pedidos_view:     ['view-pedido'],
     perm_amostras_view:    ['view-amostras'],
-    perm_producao_view:    ['view-lista-impressao', 'view-producao-cor', 'view-montagem'],
+    perm_producao_view:    ['view-lista-impressao', 'view-dashboard-producao', 'view-producao-cor', 'view-montagem'],
     perm_acabamento_view:  ['view-acabamento'],
     perm_lista_arte_view:  ['view-lista-arte'],
     perm_impressoras_view: ['view-impressoras'],
@@ -26682,7 +26682,7 @@ async function lerLotesDaLista(ids, consultar) {
 }
 
 function mostrarEstadoCargaLista(mensagem, erro = false) {
-    const paineis = ['lista-arte', 'lista-impressao', 'acabamento'];
+    const paineis = ['lista-arte', 'lista-impressao', 'acabamento', 'dashboard-producao'];
     const ativo = paineis.find(id => document.getElementById(`view-${id}`)?.classList.contains('active')) || 'lista-arte';
     paineis.forEach(id => {
         const anterior = document.getElementById(`${id}-estado-carga`);
@@ -26939,7 +26939,7 @@ function loadOrdens(opcoes = {}) {
 
 async function carregarOrdensDados(opcoes = {}) {
     if (window.PilotoOffline && opcoes.recorteGrafica) return window.PilotoOffline.carregarOrdens();
-    const anteriores = { ordens: state.ordens, osItens: state.osItens,
+    const anteriores = { ordens: state.ordens, ordensDashboardProducao: state.ordensDashboardProducao, osItens: state.osItens,
         modelosGlobais: state.modelosGlobais, produtosPropostaGlobais: state.produtosPropostaGlobais,
         todasArtes: state.todasArtes, linksCliente: state.linksCliente, linksClienteData: state.linksClienteData,
         listaArteSomenteAtivos: state.listaArteSomenteAtivos };
@@ -27135,6 +27135,7 @@ async function carregarOrdensDados(opcoes = {}) {
                 throw new Error('Não foi possível ler os pedidos locais (HTTP ' + res.status + ').');
             }
         }
+        state.ordensDashboardProducao = state.ordens;
         await carregarModelosGlobais(true);
         state.listaArteSomenteAtivos = false;
         renderOrdens();
@@ -27348,10 +27349,12 @@ function celulaDePagamentoHtml(os) {
 
 async function carregarModelosGlobais(exigirSucesso = false, numerosDaPesquisa = null) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
-    if (!numerosDaPesquisa && (!state.ordens || state.ordens.length === 0)) return;
+    if (!numerosDaPesquisa && !state.ordens?.length && !state.ordensDashboardProducao?.length) return;
 
     try {
-        const todosNumeros = numerosDaPesquisa || state.ordens.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
+        const ordensDosModelos = typeof document !== 'undefined' && document.getElementById('view-dashboard-producao')?.classList.contains('active')
+            ? (state.ordensDashboardProducao || state.ordens) : state.ordens;
+        const todosNumeros = numerosDaPesquisa || ordensDosModelos.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
         const chunkSize = 200;
         const lotes = [];
         let proximo = 0;
@@ -27804,6 +27807,17 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             ordens.forEach(os => { delete os._itens_raw; });
             return { ordens };
         }
+        // O dashboard possui base própria: status e entrada na fila não excluem
+        // produtos previstos, mesmo antes da arte ou depois da expedição.
+        const pedidosDashboard = new Map();
+        produtos.forEach(p => {
+            if (p.id_int && !pedidosDashboard.has(String(p.id_int))) pedidosDashboard.set(String(p.id_int), criarOS(p.id_int, p.created_at));
+        });
+        propostas.forEach(p => {
+            if (p.id_int && !pedidosDashboard.has(String(p.id_int))) pedidosDashboard.set(String(p.id_int), criarOS(p.id_int, p.created_at));
+        });
+        state.ordensDashboardProducao = [...pedidosDashboard.values()];
+
         // Converter para array ordenado por número (desc)
         state.produtosPropostaGlobais = produtos;
         state.osItens = { ...state.osItens };
@@ -31670,6 +31684,10 @@ function previewDaArteDoPedidoHtml(os) {
 window.previewDaArteDoPedidoHtml = previewDaArteDoPedidoHtml;
 
 function renderOrdens() {
+    if (document.getElementById('view-dashboard-producao')?.classList.contains('active')) {
+        if (typeof window.renderDashboardProducao === 'function') window.renderDashboardProducao();
+        return;
+    }
     const viewArte = document.getElementById('view-lista-arte');
     const viewImpressao = document.getElementById('view-lista-impressao');
     // A carga pode concluir com o pedido aberto. O retorno a cada painel chama
@@ -31723,8 +31741,6 @@ function renderOrdens() {
         if (pedidoJaPassouDaGrafica(os)) return false;
         return pedidoNaGrafica(os);
     });
-
-    if (tbodyImpressao && typeof window.renderDashboardProducao === 'function') window.renderDashboardProducao();
 
     // --- Calcular Estatísticas Dinâmicas ---
     let totalItensImpressao = 0;
@@ -34748,7 +34764,7 @@ window.showView = function(viewId) {
             conteudoPrincipal.scrollTop = state.posicaoListaArte || 0;
         }
     }
- else if (viewId === 'view-lista-impressao') {
+ else if (viewId === 'view-lista-impressao' || viewId === 'view-dashboard-producao') {
         renderOrdens();
         loadOrdens();
     }
