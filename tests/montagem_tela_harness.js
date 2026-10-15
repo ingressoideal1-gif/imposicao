@@ -18,6 +18,11 @@ catch (_) { puppeteer = require('puppeteer'); }
 
 const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
+const RESOLVER_FORMATO = ['nomeBaseDosArquivosDeImpressao'].map(nome => {
+    const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
+}).join('\n');
 const MTG = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
 const FOTO = process.argv[2] || null;
@@ -263,7 +268,7 @@ const PECAS = [
 
     const DOMINIO = MTG.slice(MTG.indexOf('const MontagemDominio ='), MTG.indexOf('\n/**\n * As posições digitadas')).trim();
     await aba.evaluate(PRELUDIO + '\n' + DOMINIO + '\n' + CONSTANTES.map(extrairConst).join('\n') + '\n'
-        + FUNCOES.map(extrair).join('\n') + '\n' + POSLUDIO);
+        + RESOLVER_FORMATO + '\n' + FUNCOES.map(extrair).join('\n') + '\n' + POSLUDIO);
 
     // ── 2. O estado vazio se explica ────────────────────────────────────────
     await aba.evaluate(() => renderMontagem());
@@ -1045,7 +1050,7 @@ const PECAS = [
 
     ok(destino.nasceMarcada,
        'a caixa "abrir na tela" nasce MARCADA: é ela que devolve o PDF que sumia', destino);
-    ok(destino.semPasta.some(l => /^baixou montagem_/.test(l))
+    ok(destino.semPasta.some(l => /^baixou 21202_05_set_CAMAROTE_PRESIDENTE_/.test(l))
        && !destino.semPasta.some(l => /gravou/.test(l)),
        'sem pasta escolhida, o PDF desce pelo navegador', destino.semPasta);
     ok(!destino.semPasta.some(l => /^abriu /.test(l)),
@@ -1053,17 +1058,17 @@ const PECAS = [
     ok(destino.comPasta.some(l => l === 'gravou em D:\\Hot')
        && !destino.comPasta.some(l => /^baixou/.test(l)),
        'com pasta escolhida, quem grava é a estação — e o navegador não baixa nada', destino.comPasta);
-    ok(destino.comPasta.some(l => /^abriu montagem_/.test(l)),
+    ok(destino.comPasta.some(l => /^abriu 21202_05_set_CAMAROTE_PRESIDENTE_/.test(l)),
        'e marcada a caixa, o PDF abre na tela do painel', destino.comPasta);
     ok(destino.comPasta.some(l => /success: .*D:\\Hot/.test(l)),
        'o aviso diz ONDE o arquivo ficou — pasta não se procura no escuro', destino.comPasta);
-    ok(destino.pastaQuebrada.some(l => /^baixou montagem_/.test(l)),
+    ok(destino.pastaQuebrada.some(l => /^baixou 21202_05_set_CAMAROTE_PRESIDENTE_/.test(l)),
        'pasta que falha na hora de gravar NÃO perde o trabalho: o PDF desce pelo navegador',
        destino.pastaQuebrada);
     ok(destino.pastaQuebrada.some(l => /warning: .*a pasta sumiu/.test(l)),
        'e o operador fica sabendo o que falhou, com o motivo do disco', destino.pastaQuebrada);
-    ok(destino.nome === 'montagem_21202-21188-20990_4-modelos_2026-08-29_1405.pdf',
-       'o nome identifica pedidos/modelos, data e hora sem precisar abrir o PDF', destino.nome);
+    ok(destino.nome === '21202_05_set_CAMAROTE_PRESIDENTE_21202_11_set_CAMAROTE_PATROCINADORES_21188_STAFF_PALCO_20990_PULSEIRA_CAMAROTE_OURO.pdf',
+       'o nome identifica os pedidos e nomes descritivos dos modelos', destino.nome);
 
     const pl = destino.payload;
     ok(pl && pl.schema === 'multi_artes' && pl.refazer_repetir === true,

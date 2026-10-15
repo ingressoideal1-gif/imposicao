@@ -23,6 +23,12 @@ const RAIZ = path.dirname(__dirname);
 
 const FONTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
+const RESOLVER_FORMATO = ['nomeBaseDosArquivosDeImpressao'].map(nome => {
+    const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
+}).join('\n');
+
 let total = 0, falhas = 0;
 function ok(cond, oque, detalhe) {
     total++;
@@ -117,7 +123,7 @@ const GLOBAIS = [
     'pedidosComBancoDesconhecido', 'bancoVazioNoPayload', 'recadoDeBancoVazio',
     'arteParaImpor', 'numeracaoIdDoItem', 'numeracaoSemElementosDeLayout', 'loadOSItens', 'numeroDoPedidoDoItem',
 ];
-const fabrica = new Function(...GLOBAIS,
+const fabrica = new Function(...GLOBAIS, RESOLVER_FORMATO + "\n" +
     FONTE.slice(FONTE.indexOf('const MontagemDominio ='), FONTE.indexOf('\n/**\n * As posições digitadas')).trim() + '\n'
     + CONSTANTES.map(extrairConst).join('\n') + '\n'
     + NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};');
