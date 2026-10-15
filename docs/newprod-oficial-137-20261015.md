@@ -36,3 +36,25 @@ A chave de recuperação permanece separada, no local protegido já existente.
 
 Recuperação automática exige nova versão superior com a fonte anterior.
 Publicação, instalação e impressão física são verificações distintas.
+
+## Publicação e instalação confirmadas
+
+Os dois downloads públicos (196.677.632 bytes cada) conferiram com SHA-256
+`c31102a388284c19301323dec2e41a47ffa56d628961b480277588b2abbb55a4`.
+Os três manifestos foram relidos em 1.3.7, preservando as sete estações.
+Tag da fonte: `agente-v1.3.7`, commit `59a1ee39`.
+
+Nesta máquina, o menu normal "Atualizar agora" executou o instalador com
+retorno 0. A API local confirmou NewProd 1.3.7, e o SHA-256 do EXE instalado
+confere com o pacote auditado. Três arquivos JS e dois HTML conferiram;
+nos HTML foi descontada somente a identificação acrescentada pelo runtime.
+O teste de nomes foi repetido com os JavaScripts efetivamente servidos pela estação.
+
+Configurações preservadas por hash; os 23 acessos permanecem idênticos após
+abrir o envelope DPAPI (o envelope cifrado foi renovado na sincronização).
+Fila de impressão permaneceu vazia e a coleta foi retomada ao estado anterior.
+Evidências: `evidencias/release-137-oficial-publicacao.json` e
+`evidencias/newprod-137-estacao-local.json`.
+
+Não foi enviado trabalho à impressora. Instalação nas demais estações e
+impressão física continuam sem comprovação nesta entrega.
