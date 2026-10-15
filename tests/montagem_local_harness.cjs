@@ -36,6 +36,8 @@ function extract(file, name) {
     vm.createContext(c);
     vm.runInContext(fs.readFileSync('frontend/selecao-piloto.js','utf8')+'\n'+
         extract('frontend/montagem.js','_mtgPrepararPedidoLocal')+'\n'+
+        extract('frontend/script.js','formatoDoProduto')+'\n'+
+        extract('frontend/script.js','formatoDoModelo')+'\n'+
         extract('frontend/montagem.js','formatoDoItem')+'\n'+
         extract('frontend/montagem.js','porQueNaoCabeNaMontagem')+'\n'+
         extract('frontend/script.js','carregarBancosDoPedidoNovo')+'\n'+
@@ -44,6 +46,11 @@ function extract(file, name) {
     assert.equal(c.getOSItens('a')[0].formato_id,undefined);
     assert.equal(c.formatoDoItem(c.getOSItens('a')[0]).id,'F1');
     assert.equal(c.state.produtosGlobais[0].id_formato,undefined);
+    c.state.cores=[{id:'cor',formato_id:'F2'}];
+    c.getOSItens('a')[0].amostra_cor_id='cor';
+    assert.equal(c.formatoDoItem(c.getOSItens('a')[0]).id,'F2'); // Cor explícita vence o catálogo do snapshot.
+    delete c.getOSItens('a')[0].amostra_cor_id;
+    assert.equal(c.formatoDoItem(c.getOSItens('a')[0]).id,'F1');
     // Uma revisao realmente diferente precisa continuar bloqueada.
     const produto=c.PilotoSelecao.snapshotPedido('a').produtos[0];
     produto.id_formato=18;

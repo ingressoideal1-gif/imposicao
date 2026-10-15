@@ -379,30 +379,20 @@ function totalDeItensDoModelo(item, num) {
  */
 function formatoDoItem(item) {
     if (!item) return null;
-
-    // A lista resumida do painel local nao inclui id_formato. Na conferencia,
-    // usar o catalogo completo do pedido preparado, sem depender do formato
-    // temporario que renderPedOSQueue escreve nos itens antes da recarga.
+    const corId = item.amostra_cor_id || item.id_cor || item.cor_id;
+    const numId = typeof numeracaoIdDoItem === 'function'
+        ? numeracaoIdDoItem(item) : (item.amostra_num_id || item.numeracao_id);
+    const cor = corId ? (state.cores || []).find(c => String(c.id) === String(corId)) : null;
+    const num = numId ? (state.numeracoes || []).find(n => String(n.id) === String(numId)) : null;
+    if (cor?.formato_id || num?.formato_id) return formatoDoModelo(item, cor, num);
+    // No NewProd, o catálogo confirmado do pedido tem o formato completo.
+    // Preserve seu isolamento; a lista global local pode ser apenas resumida.
     const snapshot = typeof window !== 'undefined'
         ? window.PilotoSelecao?.snapshotPedido?.(item.os_id) : null;
-    const produtos = snapshot ? snapshot.produtos : state.produtosGlobais;
-    const prodId = item._vibe_id_produto || item.id_produto || item.produto_id;
-    if (prodId && prodId !== 'sem_produto') {
-        const prod = (produtos || [])
-            .find(p => String(p.id_produto) === String(prodId));
-        if (prod && prod.id_formato) {
-            const f = (state.formatos || [])
-                .find(x => String(x.id_formato_num) === String(prod.id_formato));
-            if (f) return f;
-        }
-    }
-
-    if (item.formato_id) {
-        return (state.formatos || [])
-            .find(x => String(x.id) === String(item.formato_id)) || null;
-    }
-
-    return null;
+    const produtoId = item._vibe_id_produto || item.id_produto || item.produto_id;
+    const produto = (snapshot?.produtos || []).find(p => String(p.id_produto) === String(produtoId));
+    if (produto?.id_formato) return formatoDoProduto(produto);
+    return formatoDoModelo(item, cor, num);
 }
 
 /** A saída: a do item, ou a padrão do formato — a mesma ordem do desenho da fila. */
@@ -1809,7 +1799,7 @@ function pedidosParaMontagem() {
         .slice().sort((a, b) => String(b.numero || b.id).localeCompare(String(a.numero || a.id), 'pt-BR', { numeric: true }));
 }
 
-function encherFormatosDaMontagem() {
+function encherFormatosDaMontagem(incluirCatalogo = false) {
     const sel = document.getElementById('mtg-formato');
     if (!sel) return;
     const aguardando = new Set();
@@ -1822,7 +1812,7 @@ function encherFormatosDaMontagem() {
             }
         }
     }
-    const formatos = new Map((state.formatos || []).filter(f => aguardando.has(String(f.id))).map(f => {
+    const formatos = new Map((state.formatos || []).filter(f => incluirCatalogo || aguardando.has(String(f.id))).map(f => {
         const nome = f.name || f.nome || 'Formato sem nome';
         const tamanho = Number(f.width_mm) > 0 && Number(f.height_mm) > 0
             ? ` (${f.width_mm} × ${f.height_mm} mm)` : '';
@@ -1835,6 +1825,7 @@ function encherFormatosDaMontagem() {
         + Array.from(formatos).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
             .map(([id, nome]) => `<option value="${escapeHtml(id)}">${escapeHtml(String(nome))}</option>`).join('');
     sel.value = state.montagem.formatoSel || '';
+    sel.disabled = false;
 }
 
 function onMontagemFormatoChange() {
@@ -3873,6 +3864,30 @@ function renderMontagem() {
 async function abrirMontagem() {
     if (state.montagem && state.montagem.gerando) { renderMontagem(); return; }
     if (!state.montagem || !state.montagem.celulas) state.montagem = montagemVazia();
+    // O catálogo pode ser escolhido enquanto a consulta de pedidos está em voo.
+    // Não trocar os formatos por um campo desabilitado durante falhas de rede.
+    const abertura = state.montagem.abertura = (state.montagem.abertura || 0) + 1;
+    encherFormatosDaMontagem(true);
+    encherPedidosDaMontagem();
+    const listaPedidos = document.getElementById('mtg-pedido');
+    if (listaPedidos && listaPedidos.disabled) {
+        listaPedidos.innerHTML = '<option value="">Carregando pedidos…</option>';
+    }
+    try {
+        if (typeof loadOrdens === 'function' && await loadOrdens({ completa: true }) === false) {
+            throw new Error('Carga de pedidos incompleta');
+        }
+    } catch (erro) {
+        if (state.montagem.abertura !== abertura) return;
+        encherFormatosDaMontagem(true);
+        encherPedidosDaMontagem();
+        if (listaPedidos && listaPedidos.disabled) {
+            listaPedidos.innerHTML = '<option value="">Falha ao carregar pedidos. Abra a Montagem novamente.</option>';
+        }
+        if (typeof toast === 'function') toast('Não foi possível atualizar os pedidos. Os formatos continuam disponíveis. Abra a Montagem novamente para tentar.', 'error');
+        return;
+    }
+    if (state.montagem.abertura !== abertura) return;
     const restaurado = !state.montagem.celulas.length && !state.montagem.modelos.length
         ? restaurarRascunhoDaMontagem() : false;
     encherFormatosDaMontagem();

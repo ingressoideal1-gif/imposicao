@@ -1,0 +1,15 @@
+{
+  "versao": "1.3.9",
+  "perfis": [
+    "producao",
+    "piloto",
+    "oficial"
+  ],
+  "pytest": [
+    "1048 passed, 2 skipped, 1 warning, 2 subtests passed in 97.89s (0:01:37)",
+    "1048 passed, 2 skipped, 1 warning, 2 subtests passed in 94.90s (0:01:34)",
+    "1048 passed, 2 skipped, 1 warning, 2 subtests passed in 96.52s (0:01:36)"
+  ],
+  "etapas_aprovadas": 60,
+  "instalacao_executada": false
+}

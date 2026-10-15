@@ -24,7 +24,7 @@ const RAIZ = path.dirname(__dirname);
 const FONTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
-const RESOLVER_FORMATO = ['nomeBaseDosArquivosDeImpressao'].map(nome => {
+const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo', 'nomeBaseDosArquivosDeImpressao'].map(nome => {
     const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
     return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
 }).join('\n');
