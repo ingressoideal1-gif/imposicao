@@ -430,7 +430,7 @@ function pecaDaMontagem(item) {
     const rows = fmt ? (parseInt(fmt.rows) || 0) : 0;
     return {
         formato_id: fmt ? String(fmt.id) : '',
-        formato_nome: fmt ? (fmt.nome || '') : '',
+        formato_nome: fmt ? (fmt.name || fmt.nome || '') : '',
         cols: cols,
         rows: rows,
         celulas_por_folha: cols * rows,
@@ -1760,7 +1760,9 @@ function produtoDoModeloNaMontagem(item, osId) {
     if (id) return String(id);
     const os = (state.ordens || []).find(o => String(o.id) === String(osId));
     const origem = item.id_produto_proposta_origem || item.id;
-    const produto = ((os && os._itens_raw) || []).find(p => String(p.id) === String(origem));
+    const produto = ((os && os._itens_raw) || []).find(p => String(p.id) === String(origem))
+        || (state.produtosPropostaGlobais || []).find(p => String(p.id) === String(origem)
+            && os && String(p.id_int) === String(os.numero));
     return produto && produto.id_produto ? String(produto.id_produto) : '';
 }
 
@@ -1771,11 +1773,20 @@ function formatoDoModeloNaMontagem(item, osId) {
     return formato ? String(formato.id) : '';
 }
 
+function modelosDoPedidoNaMontagem(os) {
+    if (!os) return [];
+    const abertos = (state.osItens || {})[os.id] || [];
+    if (abertos.length && abertos.every(it => it._dbLoaded === true)) return abertos;
+    const resumo = (state.modelosGlobais || {})[os.numero] || [];
+    if (resumo.length) return resumo;
+    // Itens comerciais ainda não são modelos: seu status padrão não confirma
+    // que haja impressão aguardando. O resumo da fila traz os modelos reais.
+    return abertos.filter(it => !String(it.id).startsWith('vibe_item_'));
+}
+
 function pedidoDisponivelNaMontagem(os, formatoId = state.montagem.formatoSel) {
     if (!pedidoEmProducaoNaMontagem(os)) return false;
-    if (!formatoId) return true;
-    return (os._itens_raw || []).some(p => formatoDoModeloNaMontagem(p, os.id) === String(formatoId))
-        || (state.osItens[os.id] || []).some(it => formatoDoModeloNaMontagem(it, os.id) === String(formatoId));
+    return modelosDoPedidoNaMontagem(os).some(it => modeloDisponivelNaMontagem(os.id, it, formatoId));
 }
 
 function modeloDisponivelNaMontagem(osId, item, formatoId = state.montagem.formatoSel) {
@@ -1801,14 +1812,24 @@ function pedidosParaMontagem() {
 function encherFormatosDaMontagem() {
     const sel = document.getElementById('mtg-formato');
     if (!sel) return;
-    const formatos = new Map((state.formatos || []).map(f => {
+    const aguardando = new Set();
+    for (const os of (state.ordens || [])) {
+        if (!pedidoEmProducaoNaMontagem(os)) continue;
+        for (const item of modelosDoPedidoNaMontagem(os)) {
+            if (modeloDisponivelNaMontagem(os.id, item, null)) {
+                const id = formatoDoModeloNaMontagem(item, os.id);
+                if (id) aguardando.add(id);
+            }
+        }
+    }
+    const formatos = new Map((state.formatos || []).filter(f => aguardando.has(String(f.id))).map(f => {
         const nome = f.name || f.nome || 'Formato sem nome';
         const tamanho = Number(f.width_mm) > 0 && Number(f.height_mm) > 0
             ? ` (${f.width_mm} × ${f.height_mm} mm)` : '';
         return [String(f.id), nome + tamanho];
     }));
     if (state.montagem.formatoSel && !formatos.has(String(state.montagem.formatoSel))) {
-        formatos.set(String(state.montagem.formatoSel), 'Formato indisponível');
+        state.montagem.formatoSel = null;
     }
     sel.innerHTML = '<option value="">Todos os formatos</option>'
         + Array.from(formatos).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))

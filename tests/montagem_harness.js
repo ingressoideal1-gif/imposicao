@@ -64,7 +64,7 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const NOMES = [
-    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem',
     'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
     'porQueNaoCabeNaMontagem', 'validarMontagemParaGerar', 'chaveDoModelo', 'modeloDaMontagem',
@@ -476,6 +476,71 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
        'com distribuição do banco vale a fatia do modelo, e só ela');
     ok(apiFatia.totalDeItensDoModelo(comBanco, num) === 2800,
        'sem distribuição, a fatia inteira limitada pela quantidade');
+}
+
+// Regressão: catálogo ERP ausente não apaga o formato da cor do modelo.
+{
+    const s = novoState();
+    s.produtosGlobais = [];
+    s.cores = [{ id: 'C1', formato_id: 'F1' }, { id: 'C2', formato_id: 'ausente' }];
+    s.numeracoes = [{ id: 'N1', formato_id: 'F2' }];
+    const a = montarApi({ state: s });
+    const item = { id: 'modelo', amostra_cor_id: 'C1', amostra_num_id: 'N1', cor: 'Azul', bloco: 50 };
+    const antes = JSON.stringify(item);
+    ok(a.formatoDoItem(item)?.id === 'F1', 'cor resolve sem catálogo ERP e vence numeração');
+    ok(a.formatoDoItem({ amostra_num_id: 'N1' })?.id === 'F2', 'sem cor, usa formato da numeração');
+    ok(a.formatoDoItem({ amostra_cor_id: 'C2', formato_id: 'F1' }) === null,
+        'formato explícito inexistente bloqueia sem substituir por outro');
+    const peca = a.pecaDaMontagem(item);
+    ok(peca.formato_id === 'F1' && peca.saida_id === 'S1', 'peça recebe formato e saída resolvidos');
+    ok(a.porQueNaoCabeNaMontagem(peca, a.pecaDaMontagem({ ...item })) === null,
+        'modelo com cor conhecida cabe na mesma folha sem abrir Pedido');
+    ok(a.porQueNaoCabeNaMontagem(peca, a.pecaDaMontagem({ ...item, amostra_cor_id: null })) !== null,
+        'formato diferente continua bloqueado');
+    ok(JSON.stringify(item) === antes, 'resolver não altera o modelo');
+    s.produtosGlobais = [{ id_produto: 501, id_formato: 88 }];
+    ok(a.formatoDoItem({ ...item, _vibe_id_produto: 501 })?.id === 'F1', 'cor vence produto ERP divergente');
+    ok(a.formatoDoItem({ id_produto: 501 })?.id === 'F2', 'sem cor e numeração, resolve pelo produto');
+}
+
+// Antes de abrir Pedido, os modelos reais ficam no resumo global da fila.
+{
+    const s = novoState();
+    s.ordens = [{ id: 'os-a', numero: 90001, status_interno: 'EM PRODUCAO' },
+        { id: 'os-b', numero: 90002, status_interno: 'EM PRODUCAO' }];
+    s.osItens = { 'os-a': [{ id: 'vibe_item_11', _vibe_id_produto: 501 }], 'os-b': [] };
+    s.produtosGlobais = [];
+    s.numeracoes = [{ id: 'N1', formato_id: 'F1' }];
+    s.modelosGlobais = { 90001: [{ id: 101, id_produto_proposta_origem: 11, amostra_num_id: 'N1' }] };
+    const a = montarApi({ state: s });
+    ok(a.pedidoDisponivelNaMontagem(s.ordens[0], 'F1'),
+        'filtro encontra formato da numeração no resumo global antes de abrir Pedido');
+    ok(!a.pedidoDisponivelNaMontagem(s.ordens[0], 'F2'), 'outro formato continua excluído');
+    ok(!a.pedidoDisponivelNaMontagem(s.ordens[1], 'F1'), 'não usa modelos de outro pedido');
+    s.produtosGlobais = [{ id_produto: 501, id_formato: 77 }];
+    s.produtosPropostaGlobais = [{ id: 11, id_int: 90001, id_produto: 501 }];
+    s.osItens = {};
+    s.modelosGlobais[90001][0].amostra_num_id = null;
+    ok(a.pedidoDisponivelNaMontagem(s.ordens[0], 'F1'),
+        'origem global preserva produto e formato depois da limpeza de _itens_raw');
+    ok(a.produtoDoModeloNaMontagem(s.modelosGlobais[90001][0], 'os-a') === '501',
+        'resolve origem pelo cache de produtos do pedido');
+    s.ordens[0].status_interno = 'CANCELADO';
+    ok(!a.pedidoDisponivelNaMontagem(s.ordens[0], 'F1'), 'resumo global não libera pedido cancelado');
+}
+
+// O catálogo remoto usa name; o nome deve acompanhar o formato reconhecido.
+{
+    const s = novoState();
+    s.formatos[0].name = 'Tirante Plus 120cm';
+    delete s.formatos[0].nome;
+    const a = montarApi({ state: s });
+    const p = a.pecaDaMontagem({ id: 'modelo', _vibe_id_produto: 501 });
+    ok(p.formato_id === 'F1' && p.formato_nome === 'Tirante Plus 120cm',
+        'catálogo com name mostra o nome do formato, não apenas seu código', p);
+    s.formatos[0].nome = 'Nome legado';
+    ok(a.pecaDaMontagem({ formato_id: 'F1' }).formato_nome === 'Tirante Plus 120cm',
+        'name tem a mesma prioridade usada no seletor de formatos');
 }
 
 // ── 10. O FORMATO, resolvido pela própria tela ──────────────────────────────
