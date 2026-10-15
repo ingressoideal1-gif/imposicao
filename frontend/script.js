@@ -31724,6 +31724,8 @@ function renderOrdens() {
         return pedidoNaGrafica(os);
     });
 
+    if (tbodyImpressao && typeof window.renderDashboardProducao === 'function') window.renderDashboardProducao();
+
     // --- Calcular Estatísticas Dinâmicas ---
     let totalItensImpressao = 0;
     let totalItensAprovados = 0;
