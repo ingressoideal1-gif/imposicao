@@ -67,7 +67,7 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const FUNCOES = [
-    'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'encherFormatosDaMontagem', 'encherPedidosDaMontagem', 'pedidosParaMontagem', 'onMontagemFormatoChange', 'buscarPedidoDaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem', '_mtgRenderFaces',
     '_mtgAtualizarGeracao', 'mudarFaceDaMontagem', 'selecionarFacesDoPdfDaMontagem',
@@ -171,7 +171,7 @@ const PECAS = [
     const PRELUDIO = [
         "const state = {",
         // O catalogo com as MEDIDAS: e' delas que a folha sai na proporcao real.
-        "  formatos: [{ id: 'F1', id_formato_num: 77, nome: 'Triband 245x20 mm',",
+        "  formatos: [{ id: 'F1', id_formato_num: 77, name: 'Triband 245x20 mm',",
         "               cols: 1, rows: 10, width_mm: 245, height_mm: 20,",
         "               gap_h_mm: 0, gap_v_mm: 2,",
         "               default_saida_id: 'S1', default_rotate_page: true },",
@@ -1601,6 +1601,40 @@ const PECAS = [
     // A partir daqui a seleção usa os handlers reais, com a carga de dados simulada.
     await aba.evaluate(['_mtgOpcaoDoModelo', 'onMontagemPedidoChange', '_mtgGarantirBancosDoPedido',
         '_mtgNumeracaoDoItem', 'adicionarNaMontagem', 'modeloTemDadoVariavel'].map(extrair).join('\n'));
+    const filtroInicial = await aba.evaluate(() => {
+        const anterior = { ...state };
+        try {
+            state.montagem = montagemVazia();
+            state.produtosGlobais = [];
+            state.ordens = [{ id: 'os-1', numero: 90001, status_interno: 'EM PRODUCAO' },
+                { id: 'os-2', numero: 90002, status_interno: 'EM PRODUCAO' },
+                { id: 'os-3', numero: 90003, status_interno: 'CANCELADO' }];
+            state.osItens = { 'os-1': [{ id: 'vibe_item_1', _vibe_id_produto: 501 }] };
+            state.numeracoes = [{ id: 'N1', formato_id: 'F1' }, { id: 'N2', formato_id: 'F2' }];
+            state.modelosGlobais = {
+                90001: [{ id: 1, amostra_num_id: 'N1', status_impressao: null },
+                    { id: 2, amostra_num_id: 'N2', status_impressao: 'IMPRESSO' }],
+                90002: [{ id: 3, amostra_num_id: 'N1', status_impressao: 'Aguardando' }],
+                90003: [{ id: 4, amostra_num_id: 'N2', status_impressao: 'Aguardando' }],
+            };
+            encherFormatosDaMontagem();
+            const formatos = Array.from(document.getElementById('mtg-formato').options).map(o => o.value).filter(Boolean);
+            state.montagem.formatoSel = 'F1';
+            encherPedidosDaMontagem();
+            const pedidos = Array.from(document.getElementById('mtg-pedido').options).map(o => o.value)
+                .filter(v => v && v !== '__todos__').sort();
+            state.modelosGlobais[90001][0].status_impressao = 'IMPRESSO';
+            state.modelosGlobais[90002][0].status_impressao = 'IMPRESSO';
+            encherFormatosDaMontagem();
+            const esgotado = document.getElementById('mtg-formato').options.length === 1
+                && state.montagem.formatoSel === null;
+            return { formatos, pedidos, esgotado };
+        } finally { Object.assign(state, anterior); delete state.modelosGlobais; }
+    });
+    ok(filtroInicial.formatos.join() === 'F1', 'formatos apenas com modelos Aguardando em pedidos Em produção', filtroInicial);
+    ok(filtroInicial.pedidos.join() === 'os-1,os-2', 'filtro encontra pedidos antes de abrir modelos completos, sem catálogo ERP', filtroInicial);
+    ok(filtroInicial.esgotado, 'último modelo impresso remove formato e limpa seleção indisponível', filtroInicial);
+
     const filtros = await aba.evaluate(async () => {
         state.montagem = montagemVazia();
         state.produtosGlobais = [
@@ -1640,7 +1674,7 @@ const PECAS = [
         document.getElementById('mtg-modelo').value = 'b::B1'; onMontagemModeloChange();
         const selecaoGeral = { pedido: state.montagem.pedidoSel, modelo: state.montagem.modeloSel };
         const formatos = valores('mtg-formato');
-        const rotulo = document.querySelector('#mtg-formato option[value=F3]').textContent;
+        const rotulo = document.querySelector('#mtg-formato option[value=F1]').textContent;
         const fallback = formatoDoModeloNaMontagem({ formato_id: 'F2' }, 'a');
         const desconhecido = formatoDoModeloNaMontagem({ id_produto: 999 }, 'a');
         const vinculo = formatoDoModeloNaMontagem({ id_produto_proposta_origem: 15 }, 'd');
@@ -1683,7 +1717,7 @@ const PECAS = [
         const retornoRecusado = !state.montagem.pedidoSel;
         document.getElementById('mtg-pedido').value = 'a'; await onMontagemPedidoChange();
         const modelosPvc = valores('mtg-modelo');
-        document.getElementById('mtg-formato').value = 'F3'; onMontagemFormatoChange();
+        state.montagem.formatoSel = 'F3'; encherPedidosDaMontagem();
         const vazio = document.getElementById('mtg-pedido').disabled && !valores('mtg-pedido').length;
         // Troca de produto enquanto o pedido carrega: a resposta antiga não volta.
         document.getElementById('mtg-formato').value = 'F1'; onMontagemFormatoChange();
@@ -1700,8 +1734,8 @@ const PECAS = [
             limpou, preservou, retornoRecusado, modelosPvc, vazio, semRespostaAntiga,
             produtoPorVinculo: produtoDoModeloNaMontagem(state.osItens.d[0], 'd') };
     });
-    ok(filtros.rotulo === 'Credencial <PVC> (85 × 54 mm)', 'formato mostra name e tamanho com texto escapado, mantendo id interno', filtros.rotulo);
-    ok(filtros.formatos.join() === 'F1,F2,F3' && filtros.fallback === 'F2' && filtros.desconhecido === '' && filtros.vinculo === 'F1', 'lista formatos sem duplicar produtos e resolve formato direto, vinculo e desconhecido', filtros);
+    ok(filtros.rotulo === 'Triband 245x20 mm (245 × 20 mm)', 'formato mostra name e tamanho, mantendo id interno', filtros.rotulo);
+    ok(filtros.formatos.join() === 'F1,F2' && filtros.fallback === 'F2' && filtros.desconhecido === '' && filtros.vinculo === 'F1', 'lista somente formatos com modelos aguardando e resolve formato direto, vinculo e desconhecido', filtros);
     ok(filtros.todos.join() === 'a,b,d' && filtros.triband.join() === 'a,d', 'pedidos apenas Em produção, com formato escolhido e sem limite antigo de 30 dias', filtros);
     ok(filtros.modelosGerais.join() === 'a::A1,a::A4,a::A5,b::B1,d::D1'
         && filtros.selecaoGeral.pedido === 'b' && filtros.selecaoGeral.modelo === 'B1',
