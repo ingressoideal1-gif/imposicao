@@ -6319,3 +6319,22 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .briefing-obs-editor .ql-editor td { border: 1px solid #99f6e4; padding: 4px 8px; }
 .briefing-obs-ferramentas button[aria-pressed="true"] { background: #0f766e; border-color: #5eead4; }
 .briefing-obs-aviso { display: block; margin-top: 8px; color: #cbd5e1; font-size: .78rem; min-height: 1.4em; }
+
+/* Dashboard de produção por produto */
+#dashboard-producao { flex: 0 0 auto; max-height: 45vh; overflow: auto; border: 1px solid #334155; border-radius: 12px; background: #111827; color: #e2e8f0; }
+#dashboard-producao summary { padding: 14px 18px; cursor: pointer; font-weight: 700; color: #93c5fd; }
+#dashboard-producao .dp-conteudo { padding: 0 18px 14px; }
+#dashboard-producao p { font-size: .78rem; color: #94a3b8; margin: 10px 0; }
+#dashboard-producao .dp-periodo { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+#dashboard-producao label { display: grid; gap: 4px; font-size: .8rem; }
+#dashboard-producao input { color-scheme: dark; background: #0f172a; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; padding: 7px; }
+#dashboard-producao .dp-resumo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; }
+#dashboard-producao .dp-resumo > div { background: #1e293b; border-radius: 8px; padding: 12px; font-size: .8rem; }
+#dashboard-producao strong { display: block; font-size: 1.5rem; margin-top: 4px; }
+#dashboard-producao .dp-tabela { overflow-x: auto; }
+#dashboard-producao table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+#dashboard-producao caption { text-align: left; padding-bottom: 8px; color: #94a3b8; }
+#dashboard-producao th, #dashboard-producao td { padding: 9px; border-bottom: 1px solid #334155; text-align: right; }
+#dashboard-producao th:first-child { text-align: left; min-width: 150px; }
+#dashboard-producao progress { width: 75px; accent-color: #34d399; }
+@media (max-width: 600px) { #dashboard-producao { max-height: 55vh; } #dashboard-producao strong { font-size: 1.1rem; } }
