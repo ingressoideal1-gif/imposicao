@@ -18,6 +18,11 @@ catch (_) { puppeteer = require('puppeteer'); }
 
 const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
+const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo'].map(nome => {
+    const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
+}).join('\n');
 const MTG = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
 
 const FOTO = process.argv[2] || null;
@@ -262,7 +267,7 @@ const PECAS = [
     ].join('\n');
 
     const DOMINIO = MTG.slice(MTG.indexOf('const MontagemDominio ='), MTG.indexOf('\n/**\n * As posições digitadas')).trim();
-    await aba.evaluate(PRELUDIO + '\n' + DOMINIO + '\n' + CONSTANTES.map(extrairConst).join('\n') + '\n'
+    await aba.evaluate(PRELUDIO + '\n' + RESOLVER_FORMATO + '\n' + DOMINIO + '\n' + CONSTANTES.map(extrairConst).join('\n') + '\n'
         + FUNCOES.map(extrair).join('\n') + '\n' + POSLUDIO);
 
     // ── 2. O estado vazio se explica ────────────────────────────────────────
