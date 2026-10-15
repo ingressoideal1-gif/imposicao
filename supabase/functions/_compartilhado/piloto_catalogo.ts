@@ -14,7 +14,11 @@ export async function listarPiloto(entrada: any, permissoes: any, consultar = ba
       || Object.keys(entrada).some(k => !['empresa','cursor','pedido'].includes(k))) throw new Recusa(422, 'cursor invalido');
   const pedido = entrada.pedido;
   if (pedido !== undefined && (typeof pedido !== 'string' || !/^[1-9][0-9]{0,14}$/.test(pedido))) throw new Recusa(422, 'pedido invalido');
+  // Somente nesta página: a admissão continua relendo o banco e a próxima
+  // requisição recebe dados novos. Nunca reutilizar respostas não validadas.
+  const leituras = new Map<string, any[]>();
   const ler = async (query: string) => {
+    if (leituras.has(query)) return leituras.get(query)!;
     let rows;
     try { rows = await consultar('GET', query); } catch { throw new Recusa(503, 'catalogo indisponivel'); }
     if (!Array.isArray(rows)) throw new Recusa(503, 'catalogo incompleto');
@@ -22,6 +26,7 @@ export async function listarPiloto(entrada: any, permissoes: any, consultar = ba
       const id = r.empresa_id ?? r.id_empresa;
       if (id != null && String(id) !== empresaId) throw new Recusa(403, 'empresa divergente');
     }
+    leituras.set(query, rows);
     return rows;
   };
   // Busca limitada e cursor por chave, sem OFFSET que pula linhas em fila mutável.
