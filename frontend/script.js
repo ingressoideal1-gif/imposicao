@@ -2079,6 +2079,17 @@ async function apiSemConfirmacao(method, path, body = null) {
 
 // - Load All Data -
 
+async function consultarFotosProdutosComSessao() {
+    if (typeof vibeClient === 'undefined' || !vibeClient) return { data: [] };
+    const { data, error } = await vibeClient.auth.getSession();
+    if (error) throw error;
+    if (!data?.session) return { data: [] };
+    return vibeClient.from('vw_produto_fotos')
+        .select('id_produto,foto_id,url,nome_produto,posicao')
+        .order('id_produto', { ascending: true })
+        .order('posicao', { ascending: true });
+}
+
 async function loadAll() {
 
     try {
@@ -2101,12 +2112,7 @@ async function loadAll() {
                     console.error('[loadAll] Exception ao buscar produtos:', err);
                     return [];
                 }),
-            (typeof vibeClient !== 'undefined' && vibeClient
-                ? vibeClient.from('vw_produto_fotos')
-                    .select('id_produto,foto_id,url,nome_produto,posicao')
-                    .order('id_produto', { ascending: true })
-                    .order('posicao', { ascending: true })
-                : Promise.resolve({ data: [] }))
+            consultarFotosProdutosComSessao()
                 .then(r => {
                     if (r && r.error) {
                         console.warn('[loadAll] Fotos dos produtos indisponiveis:', r.error);
@@ -26491,6 +26497,9 @@ async function reconciliarStatusPersistidosDaListaArte() {
         return !pedidoSaiuDaArte(os) || statusParaReconciliarAposArte.includes(statusArte);
     });
 
+    const artesPorPedido = await carregarArtesParaReconciliacao(
+        candidatos.map(os => parseInt(os.numero || os.id_int, 10))
+    );
     const falhas = [];
     let proximo = 0;
     const trabalhar = async () => {
@@ -26499,7 +26508,7 @@ async function reconciliarStatusPersistidosDaListaArte() {
             const numero = parseInt(os.numero || os.id_int, 10);
             try {
                 const modelos = (state.modelosGlobais && state.modelosGlobais[numero]) || [];
-                await sincronizarStatusConsolidadoPedidoArte(numero, modelos);
+                await sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesPorPedido.get(numero));
             } catch (e) {
                 falhas.push({ pedido: numero, erro: e && (e.message || e) });
             }
@@ -30799,11 +30808,41 @@ async function atualizarPedidoArteConfirmado(numero, payload) {
 }
 window.atualizarPedidoArteConfirmado = atualizarPedidoArteConfirmado;
 
-async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
+async function carregarArtesParaReconciliacao(numeros) {
+    const ids = [...new Set(numeros)];
+    const porPedido = new Map(ids.map(id => [id, []]));
+    const vistos = new Set();
+    for (let inicio = 0; inicio < ids.length; inicio += 100) {
+        const lote = ids.slice(inicio, inicio + 100);
+        for (let pagina = 0; ; pagina++) {
+            const { data, error } = await supabaseClient.from('pedidos_artes')
+                .select('id, id_int, status, entrega_dados, observacoes')
+                .in('id_int', lote)
+                .order('id_int', { ascending: true })
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: true })
+                .range(pagina * 500, pagina * 500 + 499);
+            if (error) throw error;
+            if (!Array.isArray(data)) throw new Error('leitura incompleta das artes para reconciliação');
+            for (const arte of data) {
+                const numero = Number(arte.id_int);
+                if (!arte.id || !lote.includes(numero) || vistos.has(arte.id)) {
+                    throw new Error('leitura inconsistente das artes para reconciliação');
+                }
+                vistos.add(arte.id);
+                porPedido.get(numero).push(arte);
+            }
+            if (data.length < 500) break;
+        }
+    }
+    return porPedido;
+}
+
+async function sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesLote) {
     const numInt = parseInt(numero, 10);
     if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
 
-    const { data: artes, error } = await supabaseClient
+    const { data: artes, error } = artesLote !== undefined ? { data: artesLote, error: null } : await supabaseClient
         .from('pedidos_artes')
         .select('id, status, entrega_dados, observacoes')
         .eq('id_int', numInt)
@@ -30855,6 +30894,9 @@ async function sincronizarStatusConsolidadoPedidoArte(numero, modelos) {
             }
         }
         if (Object.keys(payload).length === 0) continue;
+        // O lote serve para eliminar leituras sem trabalho. Antes de qualquer
+        // alteração, refazemos a leitura individual e o cálculo pelo fluxo normal.
+        if (artesLote !== undefined) return sincronizarStatusConsolidadoPedidoArte(numInt, listaModelos);
         const { data: linhaConfirmada, error: erroUpdate } = await supabaseClient
             .from('pedidos_artes')
             .update(payload)
@@ -41374,17 +41416,8 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
                 console.warn('Erro ao inserir mensagem no chat:', chatErr);
             }
             
-            // Se for reprovado e for o fluxo do cliente, podemos atualizar a tabela pedidos_artes também
-            if (status === 'REPROVADA') {
-                try {
-                    await supabaseClient
-                        .from('pedidos_artes')
-                        .update({ comentarios_revisao: obs })
-                        .eq('id_modelo', itemId)
-                        .order('versao', { ascending: false })
-                        .limit(1);
-                } catch (e) { /* silencioso */ }
-            }
+            // A observação do item já foi persistida por saveAmostraToDB.
+            // pedidos_artes é consolidado por pedido, sem id_modelo/versao.
         }
         
         let msg = '';

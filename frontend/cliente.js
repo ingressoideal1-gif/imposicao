@@ -1818,18 +1818,8 @@ async function clienteFinalizarFluxo(fluxoTipo) {
             const falha = resultados.find(r => r.status === 'rejected');
             if (falha) throw falha.reason;
 
-            // Registra autoria por arte; o status da tabela é consolidado por pedido logo abaixo.
-            const artesPromises = itens.map(async (item) => {
-                try {
-                    await supabaseClient
-                        .from('pedidos_artes')
-                        .update({ aprovado_por: 'Cliente (via link)', data_aprovacao: new Date().toISOString() })
-                        .eq('id_modelo', item.id)
-                        .order('versao', { ascending: false })
-                        .limit(1);
-                } catch (e) { /* silencioso */ }
-            });
-            await Promise.all(artesPromises);
+            // A decisão dos itens foi persistida acima. pedidos_artes é por
+            // pedido: não possui id_modelo/versao para atribuição por item.
             const statusConsolidado = await sincronizarStatusConsolidadoPedidoArteCliente(
                 parseInt(clienteState.numero), itens, clienteState.entregaStatus || ''
             );
@@ -2520,17 +2510,7 @@ async function decisionAmostraItem(itemId, osId, status) {
             });
             if (status !== 'APROVADA') await registroChat;
             
-            // A observação continua na versão afetada; o status é consolidado por pedido.
-            if (status === 'REPROVADA') {
-                try {
-                    await supabaseClient
-                        .from('pedidos_artes')
-                        .update({ comentarios_revisao: obs })
-                        .eq('id_modelo', itemId)
-                        .order('versao', { ascending: false })
-                        .limit(1);
-                } catch (e) { /* silencioso */ }
-            }
+            // A observação do item já foi persistida por saveAmostraToDB.
             await sincronizarStatusConsolidadoPedidoArteCliente(
                 parseInt(clienteState.numero), state.osItens[osId] || [], clienteState.entregaStatus || ''
             );

@@ -172,6 +172,25 @@ async function executar() {
         await a.c.clienteFinalizarFluxo('APROVAR_TUDO');
         assert.deepEqual(a.aberturas, ['recibo-arte']);
         assert.equal(a.c.state.arteSomenteLeitura, true);
+        assert.equal(a.chamadas.includes('pedidos_artes'), false,
+            'aprovação por item não usa id_modelo/versao inexistentes');
+    });
+    await teste('reprovação persiste observação no modelo sem PATCH em versão inexistente', async () => {
+        const a = ambiente();
+        a.campos['amostra-obs-12'] = { value: 'Ajustar o texto' };
+        const gravacoes = [];
+        a.banco.responder = ({ tabela, payload }) => {
+            gravacoes.push({ tabela, payload });
+            return { data: [{ id: 12, id_int: 123, ...payload }], error: null };
+        };
+        a.c.registrarChatCliente = async () => {};
+        a.c.sincronizarStatusConsolidadoPedidoArteCliente = async () => 'Em Alteração';
+        await a.c.decisionAmostraItem(12, 'vibe_123', 'REPROVADA');
+        assert.equal(gravacoes.length, 1);
+        assert.equal(gravacoes[0].tabela, 'pedidos_modelos');
+        assert.equal(gravacoes[0].payload.observacao_arte, 'Ajustar o texto');
+        assert.equal(gravacoes[0].payload.status_arte, 'REPROVADA_CLIENTE');
+        assert.equal(a.modelo.amostra_obs, 'Ajustar o texto');
     });
     await teste('status consolidado recusa retorno vazio ou divergente e aceita todas as linhas confirmadas', async () => {
         const a = ambiente();
