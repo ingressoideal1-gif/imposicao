@@ -18,6 +18,29 @@ function ambiente() {
   };
   return {modelos,consultas,ler};
 }
+Deno.test('catalogo: 16 modelos compartilham leituras somente dentro da requisicao', async()=>{
+  const a=ambiente();const modelo={...a.modelos[0]};
+  a.modelos.splice(0,1,...Array.from({length:16},(_,i)=>({...modelo,id:i+10})));
+  const r=await listarPiloto({empresa:'teste',cursor:0},permissoes,a.ler,'teste');
+  assert.equal(r.itens.length,16);assert.equal(r.proximo,25);assert.equal(r.fim,false);
+  assert.equal(a.consultas.length,6); // Antes: 1 + 16 * 5 = 81.
+  a.consultas.length=0;
+  const novoBanco=async(m:string,q:string)=>{
+    const rows=await a.ler(m,q);
+    return q.startsWith('propostas?')?[{id_int:20,status_interno:'CANCELADO'}]:rows;
+  };
+  assert.equal((await listarPiloto({empresa:'teste',cursor:0},permissoes,novoBanco,'teste')).itens.length,0);
+  assert.equal(a.consultas.length,2);
+});
+Deno.test('catalogo: compartilhamento nao aceita proposta ambigua nem de outra empresa',async()=>{
+  const a=ambiente();a.modelos.push({...a.modelos[0],id:11});
+  for(const propostas of [[],[{id_int:20},{id_int:20}]]) {
+    const ler=async(m:string,q:string)=>q.startsWith('propostas?')?propostas:await a.ler(m,q);
+    assert.equal((await listarPiloto({empresa:'teste',cursor:0},permissoes,ler,'teste')).itens.length,0);
+  }
+  const ler=async(m:string,q:string)=>q.startsWith('propostas?')?[{empresa_id:'outra'}]:await a.ler(m,q);
+  await assert.rejects(listarPiloto({empresa:'teste',cursor:0},permissoes,ler,'teste','empresa'),{status:403});
+});
 Deno.test('catalogo autonomo: modelo, setor, prazo ERP e digest sem dados comerciais',async()=>{
   const a=ambiente();const r=await listarPiloto({empresa:'teste',cursor:0},permissoes,a.ler,'teste');
   assert.equal(r.fim,true);assert.equal(r.proximo,0);assert.equal(r.itens.length,1);
