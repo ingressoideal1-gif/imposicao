@@ -26520,6 +26520,11 @@ async function reconciliarStatusPersistidosDaListaArte() {
     const artesPorPedido = await carregarArtesParaReconciliacao(
         candidatos.map(os => parseInt(os.numero || os.id_int, 10))
     );
+    // Lote ausente nao pode acionar silenciosamente o caminho individual.
+    // Valida todos os candidatos antes de qualquer consolidacao/gravação.
+    if (candidatos.some(os => !Array.isArray(artesPorPedido.get(parseInt(os.numero || os.id_int, 10))))) {
+        throw new Error('lote incompleto das artes para reconciliação');
+    }
     const falhas = [];
     let proximo = 0;
     const trabalhar = async () => {
@@ -30835,13 +30840,17 @@ async function carregarArtesParaReconciliacao(numeros) {
     for (let inicio = 0; inicio < ids.length; inicio += 100) {
         const lote = ids.slice(inicio, inicio + 100);
         for (let pagina = 0; ; pagina++) {
-            const { data, error } = await supabaseClient.from('pedidos_artes')
+            const consulta = supabaseClient.from('pedidos_artes')
                 .select('id, id_int, status, entrega_dados, observacoes')
                 .in('id_int', lote)
                 .order('id_int', { ascending: true })
                 .order('created_at', { ascending: false })
                 .order('id', { ascending: true })
                 .range(pagina * 500, pagina * 500 + 499);
+            if (typeof consulta.setHeader === 'function') {
+                consulta.setHeader('x-client-info', 'imposition-artes/2 lote');
+            }
+            const { data, error } = await consulta;
             if (error) throw error;
             if (!Array.isArray(data)) throw new Error('leitura incompleta das artes para reconciliação');
             for (const arte of data) {
@@ -30858,15 +30867,24 @@ async function carregarArtesParaReconciliacao(numeros) {
     return porPedido;
 }
 
-async function sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesLote) {
+async function sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesLote, revalidando = false) {
     const numInt = parseInt(numero, 10);
     if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
 
-    const { data: artes, error } = artesLote !== undefined ? { data: artesLote, error: null } : await supabaseClient
-        .from('pedidos_artes')
-        .select('id, status, entrega_dados, observacoes')
-        .eq('id_int', numInt)
-        .order('created_at', { ascending: false });
+    let resultado = { data: artesLote, error: null };
+    if (artesLote === undefined) {
+        const consulta = supabaseClient.from('pedidos_artes')
+            .select('id, status, entrega_dados, observacoes')
+            .eq('id_int', numInt)
+            .order('created_at', { ascending: false });
+        // Identifica o caminho no log existente, sem IDs, tokens ou dados do pedido.
+        if (typeof consulta.setHeader === 'function') {
+            consulta.setHeader('x-client-info', revalidando
+                ? 'imposition-artes/2 revalidacao' : 'imposition-artes/2 individual');
+        }
+        resultado = await consulta;
+    }
+    const { data: artes, error } = resultado;
     if (error) throw error;
     if (!artes || artes.length === 0) return null;
 
@@ -30916,7 +30934,7 @@ async function sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesLote
         if (Object.keys(payload).length === 0) continue;
         // O lote serve para eliminar leituras sem trabalho. Antes de qualquer
         // alteração, refazemos a leitura individual e o cálculo pelo fluxo normal.
-        if (artesLote !== undefined) return sincronizarStatusConsolidadoPedidoArte(numInt, listaModelos);
+        if (artesLote !== undefined) return sincronizarStatusConsolidadoPedidoArte(numInt, listaModelos, undefined, true);
         const { data: linhaConfirmada, error: erroUpdate } = await supabaseClient
             .from('pedidos_artes')
             .update(payload)

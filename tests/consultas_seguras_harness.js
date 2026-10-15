@@ -94,9 +94,47 @@ async function fotos() {
     await assert.rejects(ctx.consultarFotosProdutosComSessao(), /sessão indisponível/);
     assert.equal(consultas, 1);
 }
+async function origemEIntegridade() {
+    const marcas = [];
+    const ctx = contexto({
+        calcularStatusConsolidadoPedidoArte: () => 'APROVADO',
+        supabaseClient: { from() {
+            return {
+                select() { return this; }, eq() { return this; }, in() { return this; },
+                order() { return this; }, range() { return this; },
+                setHeader(nome, valor) { assert.equal(nome, 'x-client-info'); marcas.push(valor); return this; },
+                then(resolve) { return Promise.resolve({ data: [{ id: 'a', id_int: 1, status: 'APROVADO' }] }).then(resolve); },
+                update() { throw new Error('Nao deve gravar status inalterado'); }
+            };
+        } }
+    });
+    const modelos = [{ status_arte: 'APROVADA' }];
+    const lote = await ctx.carregarArtesParaReconciliacao([1]);
+    await ctx.sincronizarStatusConsolidadoPedidoArte(1, modelos, lote.get(1));
+    assert.deepEqual(marcas, ['imposition-artes/2 lote']);
+    await ctx.sincronizarStatusConsolidadoPedidoArte(1, modelos);
+    await ctx.sincronizarStatusConsolidadoPedidoArte(1, modelos, [{ id: 'a', status: 'ENVIAR ARTE' }]);
+    assert.deepEqual(marcas, ['imposition-artes/2 lote', 'imposition-artes/2 individual', 'imposition-artes/2 revalidacao']);
+
+    let consolidacoes = 0;
+    ctx.state.ordens = [{ numero: 1 }, { numero: 2 }];
+    Object.assign(ctx, {
+        temSessaoDoSupabase: async () => true, pedidoCancelado: () => false,
+        pedidoIgnoradoNosPaineis: () => false, pedidoSaiuDaArte: () => false,
+        carregarArtesParaReconciliacao: async () => new Map([[1, []]]),
+        sincronizarStatusConsolidadoPedidoArte: async () => { consolidacoes++; }
+    });
+    vm.runInContext(funcao('reconciliarStatusPersistidosDaListaArte'), ctx);
+    await assert.rejects(ctx.reconciliarStatusPersistidosDaListaArte(), /lote incompleto/);
+    assert.equal(consolidacoes, 0, 'lote incompleto falha antes de qualquer pedido');
+    ctx.carregarArtesParaReconciliacao = async () => new Map([[1, []], [2, []]]);
+    await ctx.reconciliarStatusPersistidosDaListaArte();
+    assert.equal(consolidacoes, 2, 'ausencia confirmada de artes e valida');
+}
 (async () => {
     await lotes();
     await concorrencia();
     await fotos();
+    await origemEIntegridade();
     console.log('consultas seguras: lotes, paginação, falhas, concorrência e sessão OK');
 })().catch(e => { console.error(e); process.exitCode = 1; });
