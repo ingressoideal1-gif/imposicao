@@ -531,18 +531,24 @@
     const escapar = valor => String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const numero = valor => Number.isFinite(Number(valor)) ? Math.max(0, Number(valor)) : 0;
 
-    function calcular({ ordens, modelos, itens, produtos, catalogo, inicio, fim, elegivel, normalizar }) {
+    function calcular({ ordens, modelos, itens, produtos, catalogo, inicio, fim, normalizar }) {
         const grupos = new Map();
         const origens = new Map(produtos.map(p => [String(p.id), p]));
+        const produtosPorPedido = new Map();
+        produtos.forEach(p => {
+            const chave = String(p.id_int);
+            if (!produtosPorPedido.has(chave)) produtosPorPedido.set(chave, []);
+            produtosPorPedido.get(chave).push(p);
+        });
         const nomes = new Map(catalogo.map(p => [String(p.id_produto), p.nome_produto]));
         let semPrazo = 0;
         let semItens = 0;
         for (const os of ordens) {
-            if (!elegivel(os)) continue;
             const dia = String(os.prazo_entrega || '').slice(0, 10);
             if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) { semPrazo++; continue; }
             if (dia < inicio || dia > fim) continue;
-            const lista = modelos[parseInt(os.numero, 10)]?.length ? modelos[parseInt(os.numero, 10)] : (itens[os.id] || []);
+            const lista = modelos[parseInt(os.numero, 10)]?.length ? modelos[parseInt(os.numero, 10)]
+                : itens[os.id]?.length ? itens[os.id] : (produtosPorPedido.get(String(os.numero)) || []);
             if (!lista.length) semItens++;
             const vistos = new Set();
             for (const item of lista) {
@@ -550,7 +556,7 @@
                 if (item.id != null) vistos.add(String(item.id));
                 const origem = origens.get(String(item.id_produto_proposta_origem ?? item._vibe_produto_id));
                 const id = item._vibe_id_produto ?? item.id_produto ?? item.produto_id ?? origem?.id_produto;
-                const nome = nomes.get(String(id)) || origem?.nome_produto || item.nome_produto_real || item._nome_original || item.produto || 'Produto não identificado';
+                const nome = nomes.get(String(id)) || origem?.nome_produto || item.nome_produto_real || item.nome_produto || item._nome_original || item.produto || 'Produto não identificado';
                 const chave = id != null ? `id:${id}` : `nome:${nome}`;
                 if (!grupos.has(chave)) grupos.set(chave, { nome, total: 0, impresso: 0 });
                 const grupo = grupos.get(chave);
@@ -566,7 +572,7 @@
         const raiz = document.getElementById('dashboard-producao');
         if (!raiz || typeof state === 'undefined') return;
         if (!raiz.dataset.iniciado) {
-            raiz.innerHTML = `<summary>Dashboard de produção · por produto</summary>
+            raiz.innerHTML = `<h2>Produção por produto</h2>
                 <div class="dp-conteudo"><div class="dp-periodo">
                 <label>De <input id="dp-inicio" type="date" value="${hoje()}"></label>
                 <label>Até <input id="dp-fim" type="date" value="${hoje()}"></label>
@@ -591,16 +597,15 @@
             resultado.textContent = 'Selecione um período válido: a data inicial deve ser anterior ou igual à final.';
             return;
         }
-        const dados = calcular({ ordens: state.ordens || [], modelos: state.modelosGlobais || {}, itens: state.osItens || {},
+        const dados = calcular({ ordens: state.ordensDashboardProducao || state.ordens || [], modelos: state.modelosGlobais || {}, itens: state.osItens || {},
             produtos: state.produtosPropostaGlobais || [], catalogo: state.produtosGlobais || [], inicio: de.value, fim: ate.value,
-            elegivel: os => !pedidoIgnoradoNosPaineis(os) && (pedidoNaGrafica(os) || pedidoJaPassouDaGrafica(os) || pedidoTotalmenteImpresso(os)),
             normalizar: normalizarStatusImpressao });
         const total = dados.linhas.reduce((s, p) => s + p.total, 0);
         const impresso = dados.linhas.reduce((s, p) => s + p.impresso, 0);
         const n = valor => valor.toLocaleString('pt-BR');
         resultado.innerHTML = `<div class="dp-resumo"><div>Total previsto<strong>${n(total)}</strong></div><div>Impresso<strong>${n(impresso)}</strong></div><div>Pendente<strong>${n(total - impresso)}</strong></div></div>
             ${dados.linhas.length ? `<div class="dp-tabela"><table><caption>Quantidades por produto no período selecionado</caption><thead><tr><th>Produto</th><th>Total</th><th>Impresso</th><th>Pendente</th><th>Progresso</th></tr></thead><tbody>${dados.linhas.map(p => `<tr><th scope="row">${escapar(p.nome)}</th><td>${n(p.total)}</td><td>${n(p.impresso)}</td><td>${n(p.total - p.impresso)}</td><td><progress aria-label="Impressão de ${escapar(p.nome)}" max="${p.total || 1}" value="${p.impresso}"></progress> ${p.total ? Math.round(p.impresso / p.total * 100) : 0}%</td></tr>`).join('')}</tbody></table></div>` : '<p>Nenhum produto com prazo neste período.</p>'}
-            <p>Base: pedidos de produção e histórico carregados no painel. Os filtros da fila abaixo não alteram este resumo.${dados.semPrazo ? ` ${n(dados.semPrazo)} pedido(s) sem prazo ficam fora do período.` : ''}${dados.semItens ? ` ${n(dados.semItens)} pedido(s) do período estão sem itens disponíveis.` : ''}</p>`;
+            <p>Base: todos os pedidos carregados, independentemente do status, inclusive expedidos e entregues. Os filtros da fila de produção não alteram este resumo.${dados.semPrazo ? ` ${n(dados.semPrazo)} pedido(s) sem prazo ficam fora do período.` : ''}${dados.semItens ? ` ${n(dados.semItens)} pedido(s) do período estão sem itens disponíveis.` : ''}</p>`;
     }
     global.renderDashboardProducao = renderDashboardProducao;
     if (typeof module !== 'undefined' && module.exports) module.exports = { calcular };
