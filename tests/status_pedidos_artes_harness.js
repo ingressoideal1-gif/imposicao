@@ -77,7 +77,7 @@ async function testarRetornoDaCorrecaoComModeloLegado() {
             };
         }
     };
-    const ctx = { supabaseClient: banco, state: {
+    const ctx = { window: {}, supabaseClient: banco, state: {
         modelosGlobais: { 20942: [{ status_arte: 'APROVADA_CLIENTE' }] }, todasArtes: []
     } };
     vm.createContext(ctx);
@@ -148,7 +148,7 @@ async function testarReconciliacaoComModelosDoBanco() {
             };
         }
     };
-    const ctx = { supabaseClient: banco, state: { modelosGlobais: {}, todasArtes: [] } };
+    const ctx = { window: {}, supabaseClient: banco, state: { modelosGlobais: {}, todasArtes: [] } };
     vm.createContext(ctx);
     vm.runInContext(
         trechoConst('ARTE_REPROVADOS') + '\n' + trechoConst('ARTE_APROVADOS') + '\n'
@@ -179,6 +179,7 @@ async function testarReconciliacaoDaLista() {
             modelosGlobais: { 1: [{ id: 11 }], 2: [{ id: 22 }] }
         },
         temSessaoDoSupabase: async () => true,
+        carregarArtesParaReconciliacao: async numeros => new Map(numeros.map(n => [n, []])),
         pedidoIgnoradoNosPaineis: os => os.ignorado === true,
         pedidoCancelado: os => os.status_interno === 'CANCELADO',
         pedidoSaiuDaArte: os => os.status_interno === 'EM PRODUCAO',

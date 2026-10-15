@@ -90,6 +90,7 @@ function preparar(cenario) {
             if (req.isNavigationRequest() && req.url().startsWith('http://portal.test/cliente/')) {
                 const corpo = html.replace('</head>', '<style>' + estilo + '</style></head>')
                     .replace('</body>', '<script>(' + preparar.toString() + ')(' + JSON.stringify(cenario) + ');\n'
+                        + ler('cor-numeracao-do-modelo.js') + '\n'
                         + ler('cliente-shell.js') + '\n' + codigo
                         + '\ninitClientePage("123", "sintetico").then(() => { window.testePronto = true; });</script></body>');
                 req.respond({ status: 200, contentType: 'text/html', body: corpo });
