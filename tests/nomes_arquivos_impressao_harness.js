@@ -1,0 +1,33 @@
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const assert = require('assert/strict');
+const raiz = path.dirname(__dirname);
+const script = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8');
+const montagem = fs.readFileSync(path.join(raiz, 'frontend/montagem.js'), 'utf8');
+const item = {id: 1, nome_modelo: 'VIP Azul', modelo: '1002834'};
+const state = {ordens: [{id: 'uuid', numero: 23541}], osItens: {uuid: [item]}, montagem: {modelos: []}};
+const ctx = vm.createContext({state, window: {}, Date});
+function carregar(source, name) {
+    const inicio = source.indexOf('function ' + name + '(');
+    assert.ok(inicio >= 0, name);
+    vm.runInContext(source.slice(inicio, source.indexOf('\n}', inicio) + 2), ctx);
+}
+carregar(script, 'numeroDoPedidoDoItem');
+carregar(script, 'nomeBaseDosArquivosDeImpressao');
+carregar(montagem, 'nomeDoArquivoDaMontagem');
+const nome = ctx.nomeBaseDosArquivosDeImpressao;
+assert.equal(nome([item], 'uuid'), '23541_VIP_Azul');
+assert.equal(nome([item]), '23541_VIP_Azul');
+assert.equal(nome([item, {id_int: 23542, nome_modelo: 'Pista'}]), '23541_VIP_Azul_23542_Pista');
+assert.equal(nome([{pedidoNumero: 23541, nome: 'VIP / Azul: "A"'}]), '23541_VIP___Azul___A_');
+assert.equal(nome([{id_int: 23541, nome_modelo: 'VIP.pdf / Azul.'}]), '23541_VIP_pdf___Azul');
+assert.equal(nome([]), '');
+assert.equal(nome([{id_int: 23541, produto: 'Área VIP'}]), '23541_Área_VIP');
+assert.ok(nome([{id_int: 23541, nome_modelo: 'A'.repeat(400)}]).length <= 150);
+assert.ok(nome(Array.from({length: 20}, () => item)).endsWith('_20modelos'));
+state.montagem.modelos = [{pedidoNumero: 23541, nome: 'VIP Azul', osId: 'uuid'}];
+assert.equal(ctx.nomeDoArquivoDaMontagem(), '23541_VIP_Azul.pdf');
+state.montagem.modelos = [];
+assert.equal(ctx.nomeDoArquivoDaMontagem(new Date(2026, 9, 15, 14, 30)), 'montagem_2026-10-15_1430.pdf');
+console.log('OK: nomes de arquivos por pedido e nome descritivo, combinações e limites.');

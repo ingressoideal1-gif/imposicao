@@ -44,7 +44,8 @@ function fixture(options={}) {
             return {ok:true,headers:{get:()=> 'application/pdf'},blob:async()=>new Blob(['pdf-sintetico'])};
         },
     });
-    vm.runInContext(extract(main,'nomeDosModelosCombinados'),c);
+    vm.runInContext(extract(main,'numeroDoPedidoDoItem'),c);
+    vm.runInContext(extract(main,'nomeBaseDosArquivosDeImpressao'),c);
     vm.runInContext(extract(main,'contextoHistoricoImpressao'),c);
     vm.runInContext(main.slice(main.indexOf('function populateImpMapasTeatro('), main.indexOf('function onImpNumeracaoSelect()')), c);
     vm.runInContext(extract(pedido,'faceDeImpressaoDoPedido'),c);

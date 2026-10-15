@@ -3887,26 +3887,14 @@ function abrirNaTelaDaMontagem() {
     return document.getElementById('mtg-abrir')?.checked === true;
 }
 
-/**
- * O nome do arquivo, com data E hora.
- *
- * Com a hora porque duas montagens do mesmo dia sao a regra, nao a excecao --
- * a gente refaz celula o dia inteiro. O `soltar()` da estacao ainda desvia
- * para "nome (2).pdf" se houver colisao, mas um nome que ja nasce distinto e'
- * o que o operador consegue reconhecer na pasta sem abrir.
- */
+/** Usa pedido e nome dos modelos; sem modelos, mantém data e hora como alternativa. */
 function nomeDoArquivoDaMontagem(quando) {
+    const modelos = (state.montagem && state.montagem.modelos) || [];
+    const base = nomeBaseDosArquivosDeImpressao(modelos);
+    if (base) return base + '.pdf';
     const d = quando || new Date();
     const p = n => String(n).padStart(2, '0');
-    const modelos = (typeof state !== 'undefined' && state.montagem && state.montagem.modelos) || [];
-    const pedidos = Array.from(new Set(modelos.map(m => String(m.pedidoNumero || m.osId || '').trim()).filter(Boolean)));
-    const visiveis = pedidos.slice(0, 3);
-    if (pedidos.length > 3) visiveis.push('mais' + (pedidos.length - 3));
-    const contexto = modelos.length
-        ? visiveis.join('-').replace(/[^a-zA-Z0-9_-]+/g, '-') + '_' + modelos.length
-          + (modelos.length === 1 ? '-modelo_' : '-modelos_')
-        : '';
-    return 'montagem_' + contexto + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    return 'montagem_' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
         + '_' + p(d.getHours()) + p(d.getMinutes()) + '.pdf';
 }
 
