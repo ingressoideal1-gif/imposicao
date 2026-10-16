@@ -589,11 +589,9 @@ function renderAmostrasOSItens(osId) {
             : null;
         const numDoModelo = resolverBancoDoCliente(item, numBrutaDoModelo);
         const problemaBanco = problemaDoBancoCliente(item, numDoModelo);
-        // Só troca a imagem aprovada pelo desenho ao vivo quando o desenho tem
-        // com o que trabalhar. Sem `arte_url` o canvas sairia com a cor e a
-        // numeração e SEM a arte — pior do que não paginar. Modo PDF fica de
-        // fora porque já tem o seletor de páginas dele.
-        const temArteParaDesenhar = !!item.arte_url && (!item.verso || pdfCopiaNoPortal(item) || !!item.verso_arte_url);
+        // A arte pode estar no modelo ou nos elementos do gabarito.
+        // Modo PDF mantém seu próprio seletor de páginas.
+        const temArteParaDesenhar = temArteParaConferirBanco(item, numDoModelo);
         const paginaCsv = temCsvVariavel(numDoModelo) && !item.modo_pdf && temArteParaDesenhar;
 
         // A imagem aprovada (o snapshot composto que o painel salva) é o caminho
@@ -2958,12 +2956,28 @@ function resolverBancoDoCliente(item, num) {
     return window.PortalBancos ? window.PortalBancos.resolver(item, num) : num;
 }
 
+// Uma imagem de aprovação não substitui os originais ao folhear o banco.
+// Credenciais podem guardar a arte inteira em elementos PDF/SVG, sem arte_url.
+function temArteParaConferirBanco(item, num) {
+    const temNaFace = face => {
+        const faceDaArte = face === 'back' && pdfCopiaNoPortal(item) ? 'front' : face;
+        if (faceDaArte === 'back' ? item.verso_arte_url : item.arte_url) return true;
+        if (item.modo_pdf || !temCsvVariavel(num)) return false;
+        return (num.elements || []).some(el => {
+            if (!el || (el.face && el.face !== 'both' && el.face !== face)) return false;
+            return (el.type === 'PDF' && !!el.pdf_content)
+                || (el.type === 'SVG' && !!el.svg_content);
+        });
+    };
+    return temNaFace('front') && (!item.verso || temNaFace('back'));
+}
+
 function problemaDoBancoCliente(item, num) {
     if (!window.PortalBancos || !window.PortalBancos.ativo()) return '';
     const problema = window.PortalBancos.problema(item, num);
     if (problema) return problema;
     if (!temCsvVariavel(num)) return '';
-    if (!item.arte_url || (item.verso && !pdfCopiaNoPortal(item) && !item.verso_arte_url)) return 'Falta a arte original para conferir as linhas do banco.';
+    if (!temArteParaConferirBanco(item, num)) return 'Falta a arte original para conferir as linhas do banco.';
     if (!linhasDaAmostra(item, num).length) return 'Este modelo não tem linhas ativas selecionadas para conferir.';
     const desenho = bancoDesenhosCliente.get(String(item.id));
     if (desenho && desenho.erro) return desenho.erro;
@@ -3024,7 +3038,7 @@ async function desenharBancoDoCliente(idx, osId, item, num, cor, container) {
     atualizarAvisoBancoCliente(item, num);
     try {
         if (!linhas.length) throw new Error('Este modelo não tem linhas ativas selecionadas para conferir.');
-        if (!item.arte_url || (item.verso && !pdfCopiaNoPortal(item) && !item.verso_arte_url)) throw new Error('Falta a arte original para conferir as linhas do banco.');
+        if (!temArteParaConferirBanco(item, num)) throw new Error('Falta a arte original para conferir as linhas do banco.');
         const fmtId = (cor && cor.formato_id) || num.formato_id;
         const fmt = (state.formatos || []).find(f => String(f.id) === String(fmtId));
         if (!fmt || !fmt.width_mm || !fmt.height_mm) throw new Error('O formato desta arte não foi carregado.');

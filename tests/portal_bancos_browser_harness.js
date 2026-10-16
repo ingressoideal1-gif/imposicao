@@ -79,6 +79,41 @@ const root = path.join(__dirname, '..');
             }, { timeout: 8000 }, idx, pagina, total);
         }
         await pronto(0, 1, 6); await pronto(1, 1, 4);
+        // Arte incorporada ao gabarito, sem arte_url: folhear muda nome e foto.
+        await page.evaluate(() => {
+            const item = state.osItens.vibe_123[0];
+            window.__originalArte = item.arte_url;
+            item.arte_url = ''; item.verso = true;
+            state.numeracoes[0] = { ...state.numeracoes[0], elements: [...state.numeracoes[0].elements] };
+            const canvas = document.createElement('canvas'); canvas.width = 20; canvas.height = 20;
+            const ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 20, 20);
+            state.numeracoes[0].elements.unshift({ id: 'arte', type: 'PDF', face: 'both',
+                pdf_content: 'sintetico', _pdfCanvas: canvas, x_mm: 50, y_mm: 30, width_mm: 100, height_mm: 60 });
+            renderAmostrasOSItens('vibe_123');
+        });
+        await pronto(0, 1, 6);
+        assert.ok(await page.$eval('#amostra-csv-next-0', b => b.checkVisibility() && !b.disabled));
+        await page.evaluate(() => { __labels = []; });
+        await page.click('#amostra-csv-next-0'); await pronto(0, 2, 6);
+        assert.ok(await page.evaluate(() => __labels.includes('PESSOA_2')));
+        assert.deepEqual(await page.$eval('#amostra-item-canvas-0', c =>
+            Array.from(c.getContext('2d').getImageData(120, 150, 1, 1).data)), [0, 255, 0, 255]);
+        await page.click('#amostra-csv-prev-0'); await pronto(0, 1, 6);
+        assert.deepEqual(await page.$eval('#amostra-item-canvas-0', c =>
+            Array.from(c.getContext('2d').getImageData(120, 150, 1, 1).data)), [255, 0, 0, 255]);
+        await page.evaluate(() => {
+            state.numeracoes[0] = { ...state.numeracoes[0], elements: state.numeracoes[0].elements.map((el, i) => i ? el : { ...el, face: 'front' }) };
+            renderAmostrasOSItens('vibe_123');
+        });
+        assert.equal(await page.$eval('[data-aprovar-banco="501"]', b => b.disabled), true,
+            'arte incorporada só na frente não libera verso independente');
+        await page.evaluate(() => {
+            state.numeracoes[0] = { ...state.numeracoes[0], elements: state.numeracoes[0].elements.slice(1) };
+            state.osItens.vibe_123[0].arte_url = __originalArte;
+            state.osItens.vibe_123[0].verso = false;
+            renderAmostrasOSItens('vibe_123');
+        });
+        await pronto(0, 1, 6);
         // Verso duplicado usa a arte da frente e ainda exige as duas faces prontas.
         await page.evaluate(() => {
             state.numeracoes[0].print_mode = 'pdf_duplicate_back';
