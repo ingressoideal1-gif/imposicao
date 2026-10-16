@@ -3346,7 +3346,8 @@ function _mtgRenderFolha() {
         ? (parseFloat(estiloJanela.paddingTop) || 0) + (parseFloat(estiloJanela.paddingBottom) || 0) : 24;
     const larg = Math.max(240, (alvo.clientWidth || 700) - paddingX);
     const alt = Math.max(240, (alvo.clientHeight || 520) - paddingY);
-    const escala = escalaDaFolhaDaMontagem(zoom, geo, larg, alt);
+    const larguraDosControles = 220 * geo.cols;
+    const escala = escalaDaFolhaDaMontagem(zoom, geo, Math.max(80, larg - larguraDosControles - 12), alt);
     const px = mm => (mm * escala);
 
     const mostraPapel = geo.temPapel && zoom !== 'peca';
@@ -3357,17 +3358,9 @@ function _mtgRenderFolha() {
 
     const alturaCelulaPx = px(geo.itemH);
     const larguraCelulaPx = px(geo.itemW);
-    // Abaixo de certo tamanho o rótulo não cabe e vira borrão: some, e ficam a
-    // cor do modelo e o número. Melhor uma célula limpa do que texto ilegível.
-    //
-    // Os limites baixaram em 04/09/2026, quando a janela passou a abrir com a
-    // folha inteira: numa tira Triband a célula fica com 21 px de altura, e os
-    // números antigos (26 e 34) apagavam rótulo e botões logo no modo padrão.
-    // A fonte da célula tem 10,5 px, então 16 px de caixa a comportam; o botão
-    // mede 19 px, e por isso o limite dele é maior — um botão que não cabe na
-    // célula vaza para a vizinha.
-    const cabeRotulo = alturaCelulaPx >= 13 && larguraCelulaPx >= 96;
-    const cabemBotoes = alturaCelulaPx >= 23 && larguraCelulaPx >= 110;
+    // Os controles ficam fora do papel, em uma faixa por coluna da montagem.
+    const cabeRotulo = alturaCelulaPx >= 13;
+    const cabemBotoes = alturaCelulaPx >= 19;
 
     // UMA FOLHA POR VEZ. Empilhadas, a segunda folha empurrava a primeira para
     // fora da tela e o operador rolava para tudo; agora a folha visível cabe
@@ -3378,6 +3371,7 @@ function _mtgRenderFolha() {
     const html = [];
     for (let f = visivel; f <= visivel; f++) {
         const celulasDaFolha = [];
+        const controles = [];
 
         for (let p = 0; p < porFolha; p++) {
             const i = f * porFolha + p;
@@ -3416,26 +3410,28 @@ function _mtgRenderFolha() {
             const numeroHtml = numero.imprimir
                 ? `<span style="${_mtgEstiloDoNumero(numero, escala, textoNum)}">${escapeHtml(textoNum)}</span>`
                 : '';
-            // O rótulo recua o que o número ocupa: sem isto ele fica por baixo.
-            const espaco = _mtgEspacoDoNumero(numero, escala, textoNum);
-            const recuo = (espaco.esquerda || espaco.direita)
-                ? `padding-left:${7 + espaco.esquerda}px;padding-right:${4 + espaco.direita}px;` : '';
+            controles.push(`<div class="mtg-celula-controles${marcada ? ' marcada' : ''}" data-i="${i}"
+                style="left:${lugar.coluna * 220}px;top:${px(y).toFixed(1)}px;width:220px;height:${alturaCelulaPx.toFixed(1)}px;color:${fg};background:${bg};"
+                onclick="selecionarCelulaDaMontagem(${i}, event)"
+                title="${escapeHtml(String(m.nome || ''))}">${rotulo}${botoes}</div>`);
 
             celulasDaFolha.push(
                 `<div class="mtg-celula${marcada ? ' marcada' : ''}${repetida ? ' repetida' : ''}"
                       draggable="true" data-i="${i}"
-                      style="${caixa}${recuo}background:${bg};border-color:${br};color:${fg};"
+                      style="${caixa}background:${bg};border-color:${br};color:${fg};"
                       onclick="selecionarCelulaDaMontagem(${i}, event)"
                       title="${escapeHtml(String(m.nome || ''))} — clique para selecionar, arraste para mudar a ordem">
                    <span class="mtg-celula-amostra" data-i="${i}" title="Amostra do modelo">Carregando amostra…</span>
-                   ${numeroHtml}${rotulo}${botoes}
+                   ${numeroHtml}
                  </div>`);
         }
 
         html.push(
-            `<div class="mtg-papel${mostraPapel ? '' : ' sem-papel'}" `
+            `<div class="mtg-folha-com-controles"><div class="mtg-papel${mostraPapel ? '' : ' sem-papel'}" `
             + `style="width:${px(larguraDesenho).toFixed(1)}px;height:${px(alturaDesenho).toFixed(1)}px;">`
-            + celulasDaFolha.join('') + '</div>');
+            + celulasDaFolha.join('') + '</div>'
+            + `<div class="mtg-controles-laterais" style="width:${larguraDosControles}px;height:${px(alturaDesenho).toFixed(1)}px;">`
+            + controles.join('') + '</div></div>');
     }
 
     alvo.innerHTML = (comVerso
