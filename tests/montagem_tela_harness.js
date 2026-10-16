@@ -21,7 +21,7 @@ const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
 const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo', 'nomeBaseDosArquivosDeImpressao',
     'previewDaArteDoPedidoHtml', '_corDaPasta', '_nomeDaPasta', '_mesmaPasta', '_svgDaPasta', '_svgDaPastaSumida',
-    'confirmarImpressaoModelos', 'escHtmlSimples'].map(nome => {
+    'confirmarImpressaoModelos', 'escHtmlSimples', 'recorteDaCargaDeOrdens'].map(nome => {
     let inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
     if (inicio < 0) inicio = SCRIPT.indexOf('\nasync function ' + nome + '(');
     return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
@@ -2093,6 +2093,41 @@ const PECAS = [
     ok(novasFuncoes.recusou && novasFuncoes.cadastrou && novasFuncoes.removeu && novasFuncoes.mesmaEstacao,
         'cadastro validado e remoção usam a estação da montagem', novasFuncoes);
     if (process.env.MTG_FOTO_AMOSTRA) await (await aba.$('.mtg-lista-card')).screenshot({path:process.env.MTG_FOTO_AMOSTRA});
+    await aba.addScriptTag({content: extrair('abrirMontagem')});
+    const abertura = await aba.evaluate(async pecas => {
+        const seletor = document.getElementById('mtg-formato');
+        window._mtgLigarTeclado = () => {};
+        window._mtgRedesenhoLigado = true;
+        window.encherPastasDaMontagem = () => {};
+        window.restaurarRascunhoDaMontagem = () => false;
+        state.montagem = montagemVazia(); state.ordens = []; state.osItens = {}; state.modelosGlobais = {};
+        let concluir, cargas = 0;
+        window.loadOrdens = () => { cargas++; return new Promise(resolve => { concluir = () => { window.__montar(pecas); resolve(true); }; }); };
+        const recorte = recorteDaCargaDeOrdens();
+        const pendente = abrirMontagem();
+        await Promise.resolve();
+        const aguardou = seletor.disabled && seletor.textContent.includes('Carregando');
+        if (concluir) concluir();
+        await pendente;
+        const carregou = Array.from(seletor.options).some(o => o.value === 'F1') && !seletor.disabled;
+        window.loadOrdens = async () => false;
+        await abrirMontagem();
+        const falhaVisivel = seletor.disabled && /falha|possível/i.test(seletor.textContent);
+        window.loadOrdens = async () => true;
+        await abrirMontagem();
+        const recuperou = !seletor.disabled;
+        const formatos = state.formatos;
+        state.formatos = [];
+        let catalogos = 0;
+        window.loadAll = async () => { catalogos++; state.formatos = formatos; };
+        await abrirMontagem();
+        return {cargas, aguardou, carregou, falhaVisivel, recuperou, recorte, catalogos};
+    }, PECAS);
+    ok(abertura.cargas === 1 && abertura.aguardou && abertura.carregou,
+        'abrir diretamente Montagem aguarda a carga da fila antes de preencher formatos', abertura);
+    ok(abertura.falhaVisivel && abertura.recuperou, 'erro de carga fica visível e reabrir permite tentar novamente', abertura);
+    ok(abertura.recorte === 'producao' && abertura.catalogos === 1,
+        'Montagem usa o recorte de produção e carrega o catálogo quando ainda está vazio', abertura);
     await navegador.close();
 
     if (falhas) {
