@@ -271,7 +271,7 @@ const PECAS = [
         "window.__artes = function () { return state.montagem.modelos.map(function (m) {",
         "  return { qtd: m.qtd, _tiragem: m.qtd, modelo: m.itemId, pedido: m.pedidoNumero, nome: '' }; }); };",
         "window.__rotulos = function () { return Array.from(",
-        "  document.querySelectorAll('#mtg-folha .mtg-celula:not(.mtg-celula-vazia) .mtg-celula-rotulo'))",
+        "  document.querySelectorAll('#mtg-folha .mtg-celula-controles .mtg-celula-rotulo'))",
         "  .map(function (e) { return e.textContent.trim(); }); };",
         // A caixa de cada celula, em px, para conferir a GRADE desenhada.
         "window.__caixas = function () { return Array.from(document.querySelectorAll('#mtg-folha .mtg-celula'))",
@@ -2145,6 +2145,12 @@ const PECAS = [
         const rotulo = document.querySelector('#mtg-folha .mtg-celula-rotulo');
         const exibiu = img.checkVisibility() && img.naturalWidth === 850 && img.getBoundingClientRect().width > 20;
         const direita = rotulo.getBoundingClientRect().left >= img.getBoundingClientRect().right;
+        const celula = img.closest('.mtg-celula');
+        const rc = celula.getBoundingClientRect(), ri = img.getBoundingClientRect();
+        const integral = Math.abs(ri.width - celula.clientWidth) < 1 && Math.abs(ri.height - celula.clientHeight) < 1
+            && getComputedStyle(img).objectFit === 'fill' && !celula.querySelector('.mtg-celula-btn, .mtg-celula-rotulo');
+        const externos = Array.from(document.querySelectorAll('#mtg-folha .mtg-celula-controles .mtg-celula-btn'))
+            .every(b => b.getBoundingClientRect().left >= rc.right);
         const frente = img.src;
         state.montagem.face = 'back'; renderMontagem();
         await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'back');
@@ -2184,9 +2190,10 @@ const PECAS = [
         liberar(); await antiga;
         const descartou = area.textContent === 'Nova montagem' && !area.querySelector('canvas');
         area.remove();
-        return {exibiu,direita,verso,manteve,paginas,pdfDesenhado,falha,descartou};
+        return {exibiu,direita,integral,externos,verso,manteve,paginas,pdfDesenhado,falha,descartou};
     }, PECAS);
     ok(previaFolha.exibiu && previaFolha.direita, 'amostra visível DENTRO da folha com informações à direita', previaFolha);
+    ok(previaFolha.integral && previaFolha.externos, 'amostra preenche toda a célula e controles ficam fora do papel', previaFolha);
     ok(previaFolha.verso && previaFolha.manteve, 'face e movimentação preservam a amostra da célula', previaFolha);
     ok(previaFolha.paginas.join() === '5,6,1' && previaFolha.pdfDesenhado, 'arte PDF desenha canvas e compartilha a rasterização da página', previaFolha);
     ok(previaFolha.falha && previaFolha.descartou, 'erro não mantém imagem anterior e resposta antiga não altera a nova folha', previaFolha);
