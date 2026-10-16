@@ -5395,6 +5395,13 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .mtg-campo .form-control { min-width: 0; width: 100%; }
 .mtg-campo-modelos { position: relative; }
+.mtg-modelos-carregados .mtg-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+.mtg-amostra-modelo { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mtg-amostra { flex: 0 0 96px; }
+.mtg-amostra > * { width: 96px !important; max-width: 100%; }
+.mtg-amostra-modelo > div:last-child { overflow-wrap: anywhere; }
+.mtg-lista-card { overflow-x: auto; }
+.mtg-amostra img { object-fit: contain !important; }
 .mtg-modelo-fonte, .mtg-modelos-multi[hidden] { display: none !important; }
 .mtg-ajustes { margin: 12px 0; }
 .mtg-ajustes > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }

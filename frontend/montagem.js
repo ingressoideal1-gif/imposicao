@@ -3610,6 +3610,13 @@ function _mtgLigarTeclado() {
     });
 }
 
+/** A amostra pertence ao modelo, nunca a outro modelo do mesmo pedido. */
+function amostraDoModeloDaMontagem(modelo) {
+    const item = (state.osItens[modelo.osId] || []).find(i => String(i.id) === String(modelo.itemId));
+    if (!item) return '<span>Amostra indisponível</span>';
+    return previewDaArteDoPedidoHtml({ id: modelo.osId, numero: modelo.pedidoNumero || _mtgNumeroDoPedido(modelo.osId) }, item);
+}
+
 /** Desenha a lista, o selo, a trava, a folha e o painel do número. */
 function renderMontagem() {
     const { celulas, modelos, selecao } = state.montagem;
@@ -3752,8 +3759,7 @@ function renderMontagem() {
             </div>`;
     } else {
         lista.innerHTML = `
-            <table class="data-table">
-              <tr><th>Modelo</th><th style="text-align:right;">Tiragem</th><th>Na folha</th><th style="width:32px;"></th></tr>
+            <div class="mtg-modelos-carregados">
               ${modelos.map((m, j) => {
                   const vezes = {};
                   const ordem = [];
@@ -3766,26 +3772,25 @@ function renderMontagem() {
                       `<span class="mtg-pos${vezes[p] > 1 ? ' repetida' : ''}">#${p}${vezes[p] > 1 ? ' ×' + vezes[p] : ''}</span>`).join('');
                   const quantas = celulasDoModelo(celulas, m).length;
                   return `
-                <tr class="mtg-linha${_mtgLinhaAtiva(m) ? ' mtg-linha-ativa' : ''}" tabindex="0" role="button"
+                <div class="mtg-linha${_mtgLinhaAtiva(m) ? ' mtg-linha-ativa' : ''}" tabindex="0" role="button"
                     onclick="retomarDaMontagem(${j})"
-                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();retomarDaMontagem(${j});}"
+                    onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();retomarDaMontagem(${j});}"
                     title="Voltar a este modelo para acrescentar posições">
-                  <td>
-                    <div style="display:flex;align-items:center;gap:7px;">
+                    <div class="mtg-amostra-modelo">
+                      <div class="mtg-amostra">${amostraDoModeloDaMontagem(m)}</div>
                       <span class="mtg-tom" style="background:${bg};"></span>
                       <div style="min-width:0;">
                         <div style="color:var(--text);font-weight:600;">${escapeHtml(String(m.pedidoNumero || m.osId))} · ${escapeHtml(String(m.itemId))}</div>
                         <div style="font-size:0.75rem;">${escapeHtml(String(m.nome).slice(0, 40))}</div>
                         <span class="mtg-face-modelo ${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'mtg-com-verso' : ''}">${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'MODELO COM VERSO' : 'Só frente'}</span>
+                        <div class="mtg-tiragem" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">Tiragem: <strong>${(m.qtd || 0).toLocaleString('pt-BR')}</strong></div>
+                        <div>Na folha: <span class="mtg-posicoes">${chips}</span> <span style="color:var(--text-faint);font-size:0.74rem;">(${quantas})</span></div>
                       </div>
                     </div>
-                  </td>
-                  <td style="text-align:right;" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">${(m.qtd || 0).toLocaleString('pt-BR')}</td>
-                  <td><span class="mtg-posicoes">${chips}</span> <span style="color:var(--text-faint);font-size:0.74rem;">(${quantas})</span></td>
-                  <td style="text-align:right;"><button type="button" class="mtg-tirar" aria-label="Tirar o modelo ${escapeHtml(String(m.itemId))} da montagem" title="Tirar este modelo da montagem, com todas as células dele" onclick="event.stopPropagation(); removerDaMontagem(${j})">&times;</button></td>
-                </tr>`;
+                  <button type="button" class="mtg-tirar" aria-label="Tirar o modelo ${escapeHtml(String(m.itemId))} da montagem" title="Tirar este modelo da montagem, com todas as células dele" onclick="event.stopPropagation(); removerDaMontagem(${j})">&times;</button>
+                </div>`;
               }).join('')}
-            </table>
+            </div>
             <p class="mtg-dica" style="margin-top:10px;">
               Clique numa linha para <strong>voltar àquele modelo</strong> e acrescentar posições.
             </p>`;
@@ -3964,6 +3969,8 @@ async function encherPastasDaMontagem() {
             + (p.existe === false ? ' (não encontrada)' : '') + '</option>').join('');
 
     if (anterior && pastas.some(p => p.path === anterior)) sel.value = anterior;
+    sel._pastasMontagem = pastas;
+    desenharPastasDaMontagem();
     _mtgDicaDoDestino();
 }
 
@@ -3971,6 +3978,83 @@ async function encherPastasDaMontagem() {
 function onMontagemPastaChange() {
     try { localStorage.setItem('montagem_pasta', pastaDaMontagem()); } catch (_) {}
     _mtgDicaDoDestino();
+    desenharPastasDaMontagem();
+}
+
+/** Mesmos ladrilhos e cadastro da produção, com destino próprio da Montagem. */
+function desenharPastasDaMontagem() {
+    const grade = document.getElementById('mtg-hotfolder-grade');
+    const sel = document.getElementById('mtg-pasta');
+    if (!grade || !sel) return;
+    grade.replaceChildren();
+    for (const pasta of sel._pastasMontagem || []) {
+        const cor = _corDaPasta(pasta.path);
+        const ativa = _mesmaPasta(pasta.path, pastaDaMontagem());
+        const bloco = document.createElement('div');
+        bloco.className = 'hf-ladrilho' + (ativa ? ' hf-sel' : '') + (pasta.existe === false ? ' hf-sumiu' : '');
+        bloco.style.cssText = `--hf-forte:${cor.forte};--hf-fraca:${cor.fraca};--hf-borda:${cor.borda};`;
+        bloco.title = pasta.path + (pasta.existe === false ? ' — pasta não acessível' : '');
+        bloco.tabIndex = 0;
+        bloco.setAttribute('role', 'button');
+        bloco.innerHTML = '<span class="hf-icone">' + (pasta.existe === false ? _svgDaPastaSumida() : _svgDaPasta())
+            + '</span><span class="hf-nome">' + escapeHtml(pasta.nome || _nomeDaPasta(pasta.path)) + '</span>';
+        const selecionar = () => {
+            if (state.montagem.gerando) return;
+            sel.value = ativa ? '' : pasta.path;
+            onMontagemPastaChange();
+        };
+        bloco.onclick = selecionar;
+        bloco.onkeydown = ev => { if (ev.target === bloco && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); selecionar(); } };
+        const tirar = document.createElement('button');
+        tirar.type = 'button';
+        tirar.className = 'hf-tirar';
+        tirar.textContent = '×';
+        tirar.title = 'Tirar esta pasta da lista da estação';
+        tirar.onclick = ev => { ev.stopPropagation(); esquecerPastaDaMontagem(pasta.path); };
+        bloco.appendChild(tirar);
+        grade.appendChild(bloco);
+    }
+}
+
+async function adicionarPastaColadaDaMontagem() {
+    if (state.montagem.gerando) return;
+    const campo = document.getElementById('mtg-hotfolder-colar');
+    const path = String(campo?.value || '').trim();
+    if (!path) return;
+    try {
+        const base = await _mtgEstacao();
+        if (!base) throw new Error('Abra o NewProd nesta estação.');
+        const resp = await fetch(base + '/api/hotfolder/validar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.detail || 'A estação recusou a pasta.');
+        await encherPastasDaMontagem();
+        document.getElementById('mtg-pasta').value = data.path;
+        onMontagemPastaChange();
+        campo.value = '';
+        toast(data.aviso_unidade_mapeada ? 'Pasta pronta. Unidade de rede mapeada: prefira o caminho UNC.' : 'Pasta pronta.', 'success');
+    } catch (e) { toast('Não foi possível conferir a pasta: ' + e.message, 'error'); }
+}
+
+async function esquecerPastaDaMontagem(path) {
+    if (state.montagem.gerando) return;
+    if (!confirm('Tirar esta pasta da lista desta estação? A pasta continua no disco e perde a autorização de receber material.')) return;
+    try {
+        const base = await _mtgEstacao();
+        if (!base) throw new Error('Abra o NewProd nesta estação.');
+        const resp = await fetch(base + '/api/hotfolder/esquecer', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.detail || 'A estação não retirou a pasta.');
+        if (_mesmaPasta(path, pastaDaMontagem())) {
+            document.getElementById('mtg-pasta').value = '';
+            onMontagemPastaChange();
+        }
+        await encherPastasDaMontagem();
+    } catch (e) { toast('Não foi possível tirar a pasta da lista: ' + e.message, 'error'); }
 }
 
 /**
@@ -4433,6 +4517,7 @@ async function gerarPdfDaMontagem() {
                 ? `${rotuloFace}: montagem gerada (${total} célula(s)) e gravada em ${onde}`
                 : `${rotuloFace}: montagem gerada com ${total} célula(s). O PDF desceu pelos downloads.`, 'success');
         }
+        await confirmarImpressaoModelos(selecaoMontagem, { origem: 'pdf' });
     } catch (e) {
         console.error('[montagem]', e);
         if (typeof toast === 'function') toast(e.message || String(e), 'error');
