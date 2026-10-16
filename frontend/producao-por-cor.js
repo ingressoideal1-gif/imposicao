@@ -414,6 +414,32 @@
         return item && item._dbLoaded === true ? item : null;
     }
 
+    async function prepareLocalItem(itemId, osId, aindaAtual) {
+        const selecao = window.PilotoSelecao;
+        if (!selecao) return loadFullItem(itemId, osId);
+        const contexto = selecao.iniciarPedido(osId);
+        const snapshotLocal = await selecao.carregarPedidoLocal(osId, aindaAtual, contexto);
+        if (!aindaAtual() || !snapshotLocal) return null;
+        await waitForItemLoad(osId);
+        if (!aindaAtual()) return null;
+        mesclarNumeracoesNoCatalogo(appState().numeracoes,
+            structuredClone(snapshotLocal.numeracoes).map(normalizarNumeracaoLida));
+        const carregado = await window.loadOSItens(osId, {
+            atualizar: true, exigirModelos: true, snapshotLocal,
+        });
+        if (!aindaAtual()) return null;
+        if (carregado === false) throw new Error('Não foi possível carregar os modelos locais do pedido.');
+        if (window.PilotoOffline) await window.PilotoOffline.aplicarConfirmacoes(osId);
+        if (!aindaAtual()) return null;
+        const items = window.getOSItens(osId) || [];
+        const item = items.find(candidate => String(candidate.id) === String(itemId));
+        if (!item || items.some(candidate => candidate._pedidoModeloId == null || candidate._dbLoaded !== true)) {
+            throw new Error('Os modelos de produção não foram confirmados. Atualize o pedido antes de abrir.');
+        }
+        await selecao.conferirPedido(osId, aindaAtual, contexto);
+        return aindaAtual() ? item : null;
+    }
+
     async function openModel(itemId, osId) {
         if (!local.active || local.loading || local.error || local.statusBusy.size) return;
         const record = modelosDoFiltro(local.records, local.productKey, local.colorKey)
@@ -432,9 +458,13 @@
         const aindaAtual = () => local.active && request === local.opening && modeloEstaAguardando(record);
         let fullItem = null;
         try {
-            fullItem = await loadFullItem(itemId, osId);
+            fullItem = await prepareLocalItem(itemId, osId, aindaAtual);
         } catch (error) {
             console.error('[Produção por Cor] Falha ao carregar modelo completo:', error);
+            if (aindaAtual() && typeof window.toast === 'function') {
+                window.toast(`Não foi possível abrir o modelo: ${error.message || error}`, 'error');
+            }
+            return;
         }
         if (!aindaAtual()) return;
         if (!fullItem) {

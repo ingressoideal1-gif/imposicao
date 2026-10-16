@@ -40,6 +40,14 @@ def test_filtro_exige_produto_e_cor():
     assert "OK:" in resultado.stdout
 
 
+def test_newprod_prepara_e_confere_pedido_antes_de_abrir_modelo_por_cor():
+    resultado = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "producao_por_cor_newprod_harness.js")],
+        cwd=RAIZ, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+    )
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+
 def test_a_lista_so_aceita_modelo_aguardando_e_abre_com_carga_completa():
     resultado = subprocess.run(
         ["node", os.path.join(RAIZ, "tests", "producao_por_cor_fluxo_harness.js")],

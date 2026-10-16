@@ -32,15 +32,11 @@ def publicar(msi, estacoes=None, ativar=False, bootstrap=False, promover=False):
     if not m:raise ValueError('Nome MSI oficial invalido')
     dados=msi.read_bytes();digest=hashlib.sha256(dados).hexdigest()
     manifest=dict(schema=1,produto=PRODUTO,version=m[1],url=BASE+msi.name,
-                  sha256=digest,bytes=len(dados),size=len(dados),notes='NewProd Piloto oficial; atualizacao por estacao.')
-    if not estacoes:
-        # Uma publicacao rotineira conserva a liberacao existente; nao habilita
-        # automaticamente cadastros antigos, testes ou estacoes desconhecidas.
-        with requisicao(BASE+NOME_MANIFESTO+'?t='+str(time.time_ns())) as r:
-            anterior=validar(json.load(r))
-        estacoes=anterior.get('estacoes')
-        if not estacoes:raise ValueError('Informe as estacoes autorizadas para a primeira liberacao')
-    manifest['estacoes']=estacoes
+                  sha256=digest,bytes=len(dados),size=len(dados),notes='NewProd: versao unica disponivel para todas as estacoes.')
+    # Publicacao padrao universal. Restricao somente quando explicitamente pedida.
+    if estacoes:
+        manifest['estacoes']=estacoes
+        manifest['notes']='NewProd: liberacao restrita explicitamente solicitada.'
     validar(manifest)
     chave=os.environ['SUPABASE_SERVICE_KEY']
     if promover:

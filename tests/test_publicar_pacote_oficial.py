@@ -42,6 +42,24 @@ def test_publicador_recusa_msi_de_outro_canal_antes_de_acessar_rede(tmp_path, mo
         p.publicar(msi, ['ESTACAO-TESTE'], True)
 
 
+def test_publicacao_padrao_nao_herda_restricao_por_estacao(tmp_path, monkeypatch):
+    msi = tmp_path / (p.PREFIXO_MSI + '1.3.10.msi')
+    msi.write_bytes(b'sintetico')
+    monkeypatch.setenv('SUPABASE_SERVICE_KEY', 'sintetica')
+    monkeypatch.setattr(p, 'conferir_upload', lambda *_args: None)
+    objetos = {}
+    def abrir(url, **kw):
+        nome = url.split('/')[-1].split('?')[0]
+        if 'dados' in kw:
+            objetos[nome] = kw['dados']
+        return io.BytesIO(objetos.get(nome, b'{"estacoes":["ANTIGA"]}'))
+    monkeypatch.setattr(p, 'requisicao', abrir)
+    resultado = p.publicar(msi, ativar=True, bootstrap=True)
+    assert 'estacoes' not in resultado
+    assert set(objetos) == {p.NOME_MANIFESTO, 'latest.json'}
+    assert all('estacoes' not in json.loads(v) for v in objetos.values())
+
+
 def test_canal_de_teste_nunca_escreve_latest(tmp_path, monkeypatch):
     monkeypatch.setattr(p, 'PRODUTO', 'NewProdPilotoTeste')
     monkeypatch.setattr(p, 'requisicao', lambda *_a, **_k: pytest.fail('Acesso de rede indevido'))
