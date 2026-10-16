@@ -76,6 +76,24 @@ const puppeteer = require('puppeteer');
             assert((await page.$eval('#dp-resultado', e => e.textContent)).includes('período válido'));
             await page.click('#dp-hoje');
             assert((await page.$eval('#dp-resultado', e => e.textContent)).includes('2.000'));
+            await page.evaluate(() => {
+                state.produtosGlobais[0].setor_pcp = 'LASER';
+                state.produtosGlobais.push({id_produto:8,nome_produto:'Etiqueta',setor_pcp:'FLEXO'}, {id_produto:9,nome_produto:'Avulso'});
+                state.modelosGlobais[1].push({id:2,id_produto:8,quantidade:500}, {id:3,id_produto:9,quantidade:100});
+                renderDashboardProducao();
+            });
+            assert.deepEqual(await page.$$eval('.dp-setor h3', nodes => nodes.map(n => n.textContent)), ['FLEXO','LASER','Sem setor']);
+            assert.deepEqual(await page.$$eval('.dp-setor tbody', nodes => nodes.map(n => n.rows.length)), [1,1,1]);
+            assert.deepEqual(await page.$$eval('.dp-setor thead tr', nodes => nodes.map(n => n.cells[1].textContent)), ['Pedidos','Pedidos','Pedidos']);
+            assert.deepEqual(await page.$$eval('.dp-setor tbody tr', nodes => nodes.map(n => n.cells[1].textContent)), ['1','1','1']);
+            assert.equal(await page.$eval('.dp-resumo strong', e => e.textContent), '2.600');
+            assert((await page.$eval('.dp-setor', e => e.textContent)).includes('500'));
+            for (const width of [1366,390]) {
+                await page.setViewport({width,height:768});
+                assert(await page.$$eval('.dp-setor h3', nodes => nodes.every(n => n.checkVisibility())));
+            }
+            await page.evaluate(() => {state.produtosGlobais[0].setor_pcp='<img src=x onerror=alert(1)>';renderDashboardProducao();});
+            assert.equal(await page.$$eval('#dp-resultado img', nodes => nodes.length),0);
         }
         console.log('Browser: ambas as páginas, desktop/celular, calendário, Hoje e escape HTML OK.');
     } finally { await browser.close(); }
