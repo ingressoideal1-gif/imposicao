@@ -1,0 +1,20 @@
+{
+  "versao": "1.3.11",
+  "exe_sha256": "972734e230099f416ac89e19f3bee7bed870e8d8ddf56f796ca9bf3a198bd2ad",
+  "painel_arquivos_conferidos": 375,
+  "modulos_conferidos": [
+    "estatisticas_piloto",
+    "pacotes_api",
+    "selecao_piloto",
+    "offline_estacao"
+  ],
+  "limite_resumo_ms": 30000,
+  "msi": "NewProdPiloto_Oficial_v1.3.11.msi",
+  "msi_bytes": 196685824,
+  "msi_sha256": "d25e56b7e09a00bbbd2d369ce070c056632100b344a291687370dc4cb04cc6b8",
+  "product_version": "1.3.11",
+  "product_name": "NewProd",
+  "upgrade_code": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}",
+  "auditoria_arquivos_privados": "aprovada",
+  "fonte": "b9a75ad7426a083c8a52499c8dd0ad9e0015399f"
+}
