@@ -9,3 +9,7 @@ Validações: 1055 testes Python aprovados, dois pulados e dois subtestes aprova
 Evidência: evidencias/newprod-1312-instalacao-montagem.json. A resposta HTML local inclui as intervenções esperadas dos middlewares do NewProd; o arquivo instalado e os imports atualizados foram conferidos, assim como os bytes JS/CSS servidos via HTTP. Não houve geração real ou impressão física como teste. Nenhum manifesto público ou MSI remoto foi alterado nesta instalação.
 
 Recuperação: executável anterior e recibo privado em NewProd Agent/gestao/backups, com nome executavel-antes-montagem-1312.exe e instalacao-montagem-1312.json. Não forçar downgrade MSI; uma entrega distribuída deve preservar a fonte instalada e usar versão superior se necessário.
+
+## Publicação universal posterior
+
+Por solicitação explícita, o mesmo MSI instalado foi publicado para todas as estações. Downloads completos oficial e alias legado passaram por tamanho e SHA-256 antes da ativação. Os três manifestos foram relidos com cache-buster: 1.3.12, hash 76a5d376e694306a7fcbb5011c2045ffb21c003b902bd1697777d2a99684562d, 196689920 bytes, sem restrição de estações. Fonte registrada em agente-v1.3.12. Disponibilidade não comprova instalação em toda a frota; trabalhos ativos podem adiar a atualização.
