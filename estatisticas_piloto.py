@@ -158,7 +158,10 @@ def criar_router_estatisticas(servico):
             elif acao == 'abrir' and set(dados) == {'acao', 'pedido'}:
                 servico.abrir_pedido(dados['pedido'])
             elif acao == 'iniciar' and set(dados) == {'acao'}:
-                servico.iniciar_copia()
+                try:
+                    await run_in_threadpool(servico.iniciar_copia)
+                except RuntimeError:
+                    raise HTTPException(409, 'Coleta ainda encerrando ou estação ocupada. Aguarde e tente novamente.') from None
             elif acao == 'pausar' and set(dados) == {'acao'}:
                 servico.pausar(True)
             else:

@@ -120,7 +120,7 @@ class SelecaoPiloto:
             self._lock.release()
         return {'pedido':dados['pedido'], 'pacotes':pacotes, 'sem_arte':indisponiveis}
 
-    def abrir_pedido(self, dados):
+    def abrir_pedido(self, dados, *, aguardar=True):
         if (not isinstance(dados, dict) or set(dados) != {'pedido'}
                 or not isinstance(dados['pedido'], str)
                 or not re.fullmatch(r'[1-9][0-9]{0,9}', dados['pedido'])):
@@ -128,10 +128,12 @@ class SelecaoPiloto:
         coleta = self.servico.coleta_autonoma
         if not coleta or not callable(getattr(coleta.cliente, 'abrir_pedido', None)):
             raise ConferenciaIndisponivel('Revisao persistida indisponivel.')
-        return self._preparar_por_revisao(dados['pedido'], None, coleta.cliente)
+        return self._preparar_por_revisao(dados['pedido'], None, coleta.cliente, aguardar=aguardar)
 
-    def _preparar_por_revisao(self, pedido, solicitados, cliente):
-        if not self._lock.acquire(blocking=False):
+    def _preparar_por_revisao(self, pedido, solicitados, cliente, *, aguardar=True):
+        # Abertura humana aguarda uma preparação breve, sem liberar dados antigos.
+        # A rotina automática deixa a tentativa para o próximo ciclo se ocupado.
+        if not self._lock.acquire(timeout=30 if aguardar else 0):
             raise ConferenciaIndisponivel('Outro pedido esta sendo preparado. Aguarde e reabra.')
         try:
             anterior = self._cache.obter(pedido)

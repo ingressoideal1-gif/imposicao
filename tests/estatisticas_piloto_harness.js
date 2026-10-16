@@ -4,7 +4,7 @@ const assert = require('assert/strict');
 (async()=>{
  const browser=await puppeteer.launch({headless:true, ...(process.env.PUPPETEER_EXECUTABLE_PATH ? {executablePath:process.env.PUPPETEER_EXECUTABLE_PATH} : {})});
  try {
-  const page=await browser.newPage();let falha=false;let preferencias=[];const comandos=[];let pausado=false;
+  const page=await browser.newPage();let falha=false;let demora=0;let consultas=0;let preferencias=[];const comandos=[];let pausado=false;
   await page.setRequestInterception(true);
   page.on('request',route=>{
    if(route.url().endsWith('/controle-painel')) {
@@ -14,8 +14,13 @@ const assert = require('assert/strict');
     if(cmd.acao==='iniciar')pausado=false;
     return route.respond({contentType:'application/json',body:'{}'});
    }
-   if(route.url().endsWith('/resumo-painel'))return falha ? route.abort() : route.respond({contentType:'application/json',body:JSON.stringify({
+   if(route.url().endsWith('/resumo-painel')) {
+    consultas++;
+    const responder=()=>falha ? route.abort() : route.respond({contentType:'application/json',body:JSON.stringify({
     preferenciais:preferencias,modelos:[{modelo:'1',estado:'recursos_antecipados'}],estatisticas:{arquivos_cache:1,bytes_cache:1048576,bytes_livres:1073741824,modelos_catalogados:1,revisoes_com_falha:0},fila:{pendentes:2,pausado},coleta:{}})});
+    if(demora)setTimeout(()=>responder().catch(()=>{}),demora);else responder();
+    return;
+   }
    return route.respond({contentType:'text/html',body:`<html><body><div class="prod-table-card"><div class="prod-table-body"><table id="table-impressao"><tr class="os-row" onclick="abrirImposicaoDoPedido('os1','1')"><td></td><td></td><td></td><td></td><td>2 modelos</td></tr></table></div></div><script>let aberturas=0;function abrirImposicaoDoPedido(){aberturas++;return 'aberto'};const state={ordens:[{id:'os1',numero:'1'}],modelosGlobais:{1:[{id:1},{id:2}]}};</script></body></html>`});
   });
   // O recurso experimental nao deve atuar sobre o painel de producao.
@@ -49,6 +54,29 @@ const assert = require('assert/strict');
   await page.evaluate(()=>{window._currentPerms.perm_producao_edit=true;});
   falha=true;
   await page.waitForFunction(()=>document.querySelector('[data-piloto-modelos]')?.textContent==='Local não verificado');
-  console.log('Estatisticas e selo parcial, sem falso verde; falha de rede confirmada.');
+  assert.equal(await page.$eval('[data-iniciar]',el=>el.disabled),false);
+  const antes=comandos.length;
+  await page.click('[data-iniciar]');
+  await page.waitForFunction(()=>!document.querySelector('[data-iniciar]').disabled);
+  assert.deepEqual(comandos[antes],{acao:'iniciar'});
+  assert.match(await page.$eval('#controles-copia-local',el=>el.textContent),/Cópia solicitada/);
+  assert.doesNotMatch(await page.$eval('#controles-copia-local',el=>el.textContent),/Não foi possível confirmar o comando/);
+  // Uma resposta depois dos antigos 5 s ainda é aceita; clique não duplica a consulta.
+  falha=false;demora=5500;
+  const antesConsultas=consultas;
+  await new Promise(r=>setTimeout(r,400));
+  await page.click('[data-iniciar]');
+  await new Promise(r=>setTimeout(r,800));
+  assert.equal(consultas,antesConsultas+1);
+  await page.waitForFunction(()=>document.querySelector('[data-piloto-modelos]')?.textContent.includes('1/2'),{timeout:10000});
+  // Confirma também o limite finito e a mensagem de tempo excedido.
+  demora=0;
+  await page.evaluate(()=>{const anterior=window.fetch;window.fetch=(url,...args)=>String(url).endsWith('/resumo-painel')
+    ? Promise.reject(new DOMException('demora simulada','TimeoutError')) : anterior(url,...args);});
+  await page.waitForFunction(()=>document.querySelector('#estatisticas-piloto-local')?.textContent.includes('excedeu 30 segundos'));
+  assert.equal(await page.$eval('[data-iniciar]',el=>el.disabled),false);
+  await page.evaluate(()=>{window._currentPerms.perm_producao_edit=false;});
+  await page.waitForFunction(()=>document.querySelector('[data-iniciar]').disabled);
+  console.log('Resumo lento, falha, comando independente e permissões: OK.');
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1);});

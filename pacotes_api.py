@@ -52,6 +52,7 @@ class ServicoPacotes:
         self.preparador = PreparadorLocal(integrado,
                                          setor_prioritario=setor, ocupado=ocupado)
         self.preparador.expirar_estado = False
+        self._retomada_lock = threading.Lock()
         self._stop = threading.Event()
         self._acordar = threading.Event()
         self._thread = None
@@ -243,6 +244,17 @@ class ServicoPacotes:
     def iniciar_copia(self):
         if not self.coleta_autonoma:
             raise ValueError('Coleta autônoma indisponível nesta estação.')
+        with self._retomada_lock:
+            if self._stop.is_set():
+                if ((self._thread and self._thread.is_alive())
+                        or (self.preparador._thread and self.preparador._thread.is_alive())
+                        or self.preparador.resumo()['ocupado']):
+                    raise RuntimeError('A estação ainda está ocupada ou encerrando a coleta. Aguarde e tente novamente.')
+                try:
+                    self.iniciar()
+                except Exception:
+                    self._stop.set()
+                    raise RuntimeError('Não foi possível retomar a coleta local.') from None
         for pedido in self.preferencias():
             self.abrir_pedido(pedido)
         self.coleta_autonoma.solicitar(manual=True)

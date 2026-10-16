@@ -2,7 +2,9 @@
     'use strict';
     if (location.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(location.hostname)
         || location.port !== '9001') return;
+    const ESPERA_RESUMO_MS = 30000;
     let dados = null, ultima = 0, painel, controles, gerenciamento, mensagem = '', comandoAtivo = false;
+    let consultaAtiva = null, erroResumo = '';
     const podeGerenciar = () => window._currentPerms?.perm_producao_edit === true
         || window._currentPerms?.perm_admin_edit === true;
     async function comando(corpo) {
@@ -17,17 +19,37 @@
                 mensagem = 'Seu acesso precisa da permissão de editar Produção para controlar a cópia local.';
                 return;
             }
+            if (r.status === 409) {
+                mensagem = 'A estação ainda está ocupada ou encerrando a coleta. Aguarde e tente novamente.';
+                return;
+            }
             if (!r.ok) throw Error();
             mensagem = corpo.acao === 'preferir' ? 'Preferência salva nesta estação.'
                 : corpo.acao === 'pausar' ? 'Cópia pausada.' : 'Cópia solicitada; aguardando disponibilidade da estação.';
-            await consultar();
+            // O comando já foi aceito. Falha no resumo não significa falha na cópia.
+            consultar().then(pintar, pintar);
         } catch (_) { mensagem = 'Não foi possível confirmar o comando. Confira a conexão com o agente e tente novamente.'; }
         finally { comandoAtivo = false; pintar(); }
     }
-    async function consultar() {
-        const r = await fetch('/api/pacotes-locais/resumo-painel', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-        if (!r.ok) throw Error();
-        dados = await r.json(); ultima = Date.now();
+    function consultar() {
+        // Clique e atualização periódica compartilham a mesma consulta em andamento.
+        if (consultaAtiva) return consultaAtiva;
+        consultaAtiva = (async () => {
+            try {
+                const r = await fetch('/api/pacotes-locais/resumo-painel', {
+                    cache:'no-store', signal:AbortSignal.timeout(ESPERA_RESUMO_MS)
+                });
+                if (!r.ok) throw Error('HTTP ' + r.status);
+                dados = await r.json(); ultima = Date.now(); erroResumo = '';
+            } catch (erro) {
+                dados = null; ultima = 0;
+                erroResumo = ['TimeoutError', 'AbortError'].includes(erro?.name)
+                    ? 'A consulta dos arquivos locais excedeu 30 segundos. Nova tentativa automática; os comandos de cópia continuam disponíveis para operadores autorizados.'
+                    : 'Não foi possível consultar os arquivos locais. Nova tentativa automática; os comandos de cópia continuam disponíveis para operadores autorizados.';
+                throw erro;
+            }
+        })().finally(() => { consultaAtiva = null; });
+        return consultaAtiva;
     }
     const copias = new Set(['local_validado', 'recursos_antecipados', 'fotos_fontes_locais', 'dependencias_pendentes']);
     const bytes = n => Number.isFinite(n) ? (n / 1048576).toLocaleString('pt-BR', {maximumFractionDigits: 1}) + ' MB' : 'não medido';
@@ -118,10 +140,10 @@
         const ativo = fresco && (dados.fila.ativo || ['iniciando','consultando'].includes(dados.coleta?.estado));
         const textoBotao = dados?.fila.pausado ? 'Retomar cópia local' : ativo ? 'Copiando…' : 'Iniciar cópia local';
         if (iniciar.textContent !== textoBotao) iniciar.textContent = textoBotao;
-        iniciar.disabled = !fresco || comandoAtivo || !podeGerenciar() || ativo && !dados.fila.pausado;
-        controles.querySelector('[data-pausar]').disabled = !fresco || comandoAtivo || !podeGerenciar() || dados.fila.pausado;
+        iniciar.disabled = comandoAtivo || !podeGerenciar() || ativo && !dados.fila.pausado;
+        controles.querySelector('[data-pausar]').disabled = comandoAtivo || !podeGerenciar() || fresco && dados.fila.pausado;
         const aviso = controles.querySelector('[role=status]');
-        const avisoTexto = fresco && !podeGerenciar()
+        const avisoTexto = !podeGerenciar()
             ? 'Acompanhamento disponível. Para controlar a cópia, seu acesso precisa da permissão de editar Produção.'
             : mensagem || 'Marque ao lado do número os pedidos preferenciais. A seleção vale nesta estação.';
         if (aviso.textContent !== avisoTexto) aviso.textContent = avisoTexto;
@@ -157,7 +179,7 @@
             dados.coleta?.motivo || '',
             ensaio ? `Ensaio separado de impressos: ${ensaio.arquivos} arquivos · ${bytes(ensaio.bytes)} · download ${ensaio.download_segundos.toFixed(2)} s · leitura local com cache ${ensaio.leitura_segundos.toFixed(3)} s · falhas ${ensaio.falhas}` : '',
             'Contagem por arquivo único. Arquivo em cache não significa modelo pronto para imprimir.'
-        ].filter(Boolean).join('\n\n') : 'Estatísticas locais indisponíveis. A impressão mantém o fluxo atual.';
+        ].filter(Boolean).join('\n\n') : erroResumo || 'Consultando os arquivos locais. A primeira resposta pode levar até 30 segundos.';
         const alvo = painel.querySelector('p');
         if (alvo.textContent !== texto) alvo.textContent = texto;
         const mapa = new Map();

@@ -117,7 +117,7 @@ class OfflineEstacao:
             checkpoint()
             self.tentativas[pedido] = time.monotonic() + 300
             try:
-                self.selecao.abrir_pedido({'pedido':pedido})
+                self.selecao.abrir_pedido({'pedido':pedido}, aguardar=False)
                 self.falhas.pop(pedido, None)
             except (ValueError, OSError):
                 # Um pedido incompleto nao impede preparar os demais.
