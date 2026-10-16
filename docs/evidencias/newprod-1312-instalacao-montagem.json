@@ -1,0 +1,43 @@
+{
+  "versao": "1.3.12",
+  "msi_bytes": 196689920,
+  "msi_sha256": "76a5d376e694306a7fcbb5011c2045ffb21c003b902bd1697777d2a99684562d",
+  "instalado": true,
+  "assets": [
+    {
+      "arquivo": "montagem.js",
+      "http_confere": true
+    },
+    {
+      "arquivo": "style.css",
+      "http_confere": true
+    },
+    {
+      "arquivo": "script.js",
+      "http_confere": true
+    },
+    {
+      "arquivo": "dashboard-arte.js",
+      "http_confere": true
+    },
+    {
+      "arquivo": "producao-por-cor.js",
+      "http_confere": true
+    },
+    {
+      "arquivo": "estatisticas-piloto.js",
+      "http_confere": true
+    },
+    {
+      "arquivo": "index.html",
+      "instalado_confere": true,
+      "http_imports": [
+        "style.css?v=1071-local1311",
+        "script.js?v=1071-local1311",
+        "montagem.js?v=1071-local1311"
+      ]
+    }
+  ],
+  "publicado_manifesto": false,
+  "impressao_fisica_verificada": false
+}

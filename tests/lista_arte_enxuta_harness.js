@@ -227,9 +227,9 @@ const LINHA = SCRIPT.slice(iLinha, SCRIPT.indexOf('</tr>', iLinha));
 (function oPreviewDaListaEOMesmoDoPainelDeProducao() {
     // "Igual ao do Painel de Producao" so continua verdade enquanto for o mesmo
     // codigo desenhando os dois.
-    ok(/function previewDaArteDoPedidoHtml\(os\)/.test(SCRIPT), 'o preview mora numa funcao');
+    ok(/function previewDaArteDoPedidoHtml\(os(?:, modelo = null)?\)/.test(SCRIPT), 'o preview mora numa funcao');
 
-    const chamadas = (SCRIPT.match(/previewDaArteDoPedidoHtml\(os\)/g) || []).length;
+    const chamadas = (SCRIPT.match(/previewDaArteDoPedidoHtml\(os(?:, modelo = null)?\)/g) || []).length;
     ok(chamadas === 3, 'chamada pelas duas tabelas (mais a declaracao)', chamadas);
 
     const iArte = LINHA.indexOf('previewDaArteDoPedidoHtml(os)');

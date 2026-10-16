@@ -3241,6 +3241,89 @@ function _mtgIndiceDoModelo(c, modelos) {
  * aparecesse seria uma célula sem alcance. As vazias só existem na última
  * folha, que é a única que pode ter sobra.
  */
+function fonteDaAmostraDaCelula(item, face, pos, modo) {
+    if (!item) return null;
+    const verso = face === 'back';
+    const duplicado = modo === 'pdf_duplicate_back';
+    const amostra = verso && !duplicado ? item.verso_amostra_arte_base64 : item.amostra_arte_base64;
+    if (amostra) return { url: amostra, pagina: 1 };
+    const frente = item.arte_url || item.url_arquivo_arte;
+    const atras = item.verso_arte_url || item.url_arquivo_arte_verso;
+    if (duplicado) return { url: frente, pagina: item.modo_pdf ? pos : 1 };
+    if (modo === 'pdf_odd_even' || (item.modo_pdf && modo === 'duplex')) {
+        return { url: frente, pagina: pos * 2 - (verso ? 0 : 1) };
+    }
+    if (verso && atras) return { url: atras, pagina: 1 };
+    return { url: frente, pagina: verso ? 2 : item.modo_pdf ? pos : 1 };
+}
+
+/** Prévia de tela: não altera as artes nem o payload de impressão. */
+async function desenharAmostrasDaFolha(alvo, celulas, modelos, face) {
+    const espacos = Array.from(alvo.querySelectorAll('.mtg-celula-amostra'));
+    let proximo = 0;
+    const desenhar = async () => {
+        while (proximo < espacos.length) {
+            const espaco = espacos[proximo++];
+            if (!espaco.isConnected) continue;
+            const celula = celulas[Number(espaco.dataset.i)];
+            const modelo = modelos.find(m => chaveDoModelo(m) === chaveDoModelo(celula));
+            const item = (state.osItens[celula.osId] || []).find(it => String(it.id) === String(celula.itemId));
+            const fonte = fonteDaAmostraDaCelula(item, face, celula.pos, modelo?.peca?.print_mode);
+            if (!fonte?.url) { espaco.textContent = 'Sem amostra'; continue; }
+            try {
+                const url = String(fonte.url);
+                if (!/^(https?:|data:|blob:)/i.test(url) && !url.startsWith('/')) throw new Error('Endereço da amostra indisponível.');
+                const pdf = /^data:application\/pdf/i.test(url) || /\.pdf(?:[?#]|$)/i.test(url);
+                if (pdf) {
+                    const raster = await rasterDaAmostra(['montagem', url, fonte.pagina], async () => {
+                        const resposta = await aguardarRecursoDaPrevia(window.PilotoSelecao
+                            ? window.PilotoSelecao.lerUrl(url) : fetch(url));
+                        if (!resposta.ok) throw new Error('Não foi possível ler a arte.');
+                        const bytes = await aguardarRecursoDaPrevia(resposta.arrayBuffer());
+                        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                        }
+                        const tarefa = pdfjsLib.getDocument({ data: bytes });
+                        let documento;
+                        try {
+                            documento = await aguardarRecursoDaPrevia(tarefa.promise, () => tarefa.destroy());
+                            const pagina = await aguardarRecursoDaPrevia(documento.getPage(fonte.pagina));
+                            const tamanho = pagina.getViewport({ scale: 1 });
+                            const viewport = pagina.getViewport({ scale: Math.min(2, 1600 / Math.max(tamanho.width, tamanho.height)) });
+                            const canvas = document.createElement('canvas');
+                            canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+                            const render = pagina.render({ canvasContext: canvas.getContext('2d'), viewport });
+                            await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
+                            return canvas;
+                        } finally { await tarefa.destroy(); }
+                    });
+                    if (!espaco.isConnected) continue;
+                    const copia = document.createElement('canvas');
+                    copia.width = raster.width; copia.height = raster.height;
+                    copia.getContext('2d').drawImage(raster, 0, 0);
+                    copia.setAttribute('aria-label', 'Amostra do modelo ' + celula.itemId);
+                    espaco.replaceChildren(copia);
+                } else {
+                    const img = new Image();
+                    img.alt = 'Amostra do modelo ' + celula.itemId;
+                    img.draggable = false;
+                    img.src = url;
+                    await aguardarRecursoDaPrevia(img.decode());
+                    if (!espaco.isConnected) continue;
+                    espaco.replaceChildren(img);
+                }
+                espaco.dataset.estado = 'pronto';
+            } catch (e) {
+                if (!espaco.isConnected) continue;
+                espaco.textContent = 'Amostra indisponível';
+                espaco.title = e.message || 'Não foi possível carregar a amostra.';
+                espaco.dataset.estado = 'erro';
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, espacos.length) }, desenhar));
+}
+
 function _mtgRenderFolha() {
     const alvo = document.getElementById('mtg-folha');
     const numFolha = document.getElementById('mtg-folha-num');
@@ -3295,7 +3378,8 @@ function _mtgRenderFolha() {
         ? (parseFloat(estiloJanela.paddingTop) || 0) + (parseFloat(estiloJanela.paddingBottom) || 0) : 24;
     const larg = Math.max(240, (alvo.clientWidth || 700) - paddingX);
     const alt = Math.max(240, (alvo.clientHeight || 520) - paddingY);
-    const escala = escalaDaFolhaDaMontagem(zoom, geo, larg, alt);
+    const larguraDosControles = 220 * geo.cols;
+    const escala = escalaDaFolhaDaMontagem(zoom, geo, Math.max(80, larg - larguraDosControles - 12), alt);
     const px = mm => (mm * escala);
 
     const mostraPapel = geo.temPapel && zoom !== 'peca';
@@ -3306,17 +3390,9 @@ function _mtgRenderFolha() {
 
     const alturaCelulaPx = px(geo.itemH);
     const larguraCelulaPx = px(geo.itemW);
-    // Abaixo de certo tamanho o rótulo não cabe e vira borrão: some, e ficam a
-    // cor do modelo e o número. Melhor uma célula limpa do que texto ilegível.
-    //
-    // Os limites baixaram em 04/09/2026, quando a janela passou a abrir com a
-    // folha inteira: numa tira Triband a célula fica com 21 px de altura, e os
-    // números antigos (26 e 34) apagavam rótulo e botões logo no modo padrão.
-    // A fonte da célula tem 10,5 px, então 16 px de caixa a comportam; o botão
-    // mede 19 px, e por isso o limite dele é maior — um botão que não cabe na
-    // célula vaza para a vizinha.
-    const cabeRotulo = alturaCelulaPx >= 13 && larguraCelulaPx >= 96;
-    const cabemBotoes = alturaCelulaPx >= 23 && larguraCelulaPx >= 110;
+    // Os controles ficam fora do papel, em uma faixa por coluna da montagem.
+    const cabeRotulo = alturaCelulaPx >= 13;
+    const cabemBotoes = alturaCelulaPx >= 19;
 
     // UMA FOLHA POR VEZ. Empilhadas, a segunda folha empurrava a primeira para
     // fora da tela e o operador rolava para tudo; agora a folha visível cabe
@@ -3327,6 +3403,7 @@ function _mtgRenderFolha() {
     const html = [];
     for (let f = visivel; f <= visivel; f++) {
         const celulasDaFolha = [];
+        const controles = [];
 
         for (let p = 0; p < porFolha; p++) {
             const i = f * porFolha + p;
@@ -3365,29 +3442,33 @@ function _mtgRenderFolha() {
             const numeroHtml = numero.imprimir
                 ? `<span style="${_mtgEstiloDoNumero(numero, escala, textoNum)}">${escapeHtml(textoNum)}</span>`
                 : '';
-            // O rótulo recua o que o número ocupa: sem isto ele fica por baixo.
-            const espaco = _mtgEspacoDoNumero(numero, escala, textoNum);
-            const recuo = (espaco.esquerda || espaco.direita)
-                ? `padding-left:${7 + espaco.esquerda}px;padding-right:${4 + espaco.direita}px;` : '';
+            controles.push(`<div class="mtg-celula-controles${marcada ? ' marcada' : ''}" data-i="${i}"
+                style="left:${lugar.coluna * 220}px;top:${px(y).toFixed(1)}px;width:220px;height:${alturaCelulaPx.toFixed(1)}px;color:${fg};background:${bg};"
+                onclick="selecionarCelulaDaMontagem(${i}, event)"
+                title="${escapeHtml(String(m.nome || ''))}">${rotulo}${botoes}</div>`);
 
             celulasDaFolha.push(
                 `<div class="mtg-celula${marcada ? ' marcada' : ''}${repetida ? ' repetida' : ''}"
                       draggable="true" data-i="${i}"
-                      style="${caixa}${recuo}background:${bg};border-color:${br};color:${fg};"
+                      style="${caixa}background:${bg};border-color:${br};color:${fg};"
                       onclick="selecionarCelulaDaMontagem(${i}, event)"
                       title="${escapeHtml(String(m.nome || ''))} — clique para selecionar, arraste para mudar a ordem">
-                   ${numeroHtml}${rotulo}${botoes}
+                   <span class="mtg-celula-amostra" data-i="${i}" title="Amostra do modelo">Carregando amostra…</span>
+                   ${numeroHtml}
                  </div>`);
         }
 
         html.push(
-            `<div class="mtg-papel${mostraPapel ? '' : ' sem-papel'}" `
+            `<div class="mtg-folha-com-controles"><div class="mtg-papel${mostraPapel ? '' : ' sem-papel'}" `
             + `style="width:${px(larguraDesenho).toFixed(1)}px;height:${px(alturaDesenho).toFixed(1)}px;">`
-            + celulasDaFolha.join('') + '</div>');
+            + celulasDaFolha.join('') + '</div>'
+            + `<div class="mtg-controles-laterais" style="width:${larguraDosControles}px;height:${px(alturaDesenho).toFixed(1)}px;">`
+            + controles.join('') + '</div></div>');
     }
 
     alvo.innerHTML = (comVerso
         ? '<span class="ped-modelo-verso-aviso">Modelo com Verso</span>' : '') + html.join('');
+    desenharAmostrasDaFolha(alvo, celulas, modelos, state.montagem.face === 'back' ? 'back' : 'front');
 
     if (numFolha) {
         const medida = geo.temPapel
@@ -3642,6 +3723,13 @@ function _mtgLigarTeclado() {
     });
 }
 
+/** A amostra pertence ao modelo, nunca a outro modelo do mesmo pedido. */
+function amostraDoModeloDaMontagem(modelo) {
+    const item = (state.osItens[modelo.osId] || []).find(i => String(i.id) === String(modelo.itemId));
+    if (!item) return '<span>Amostra indisponível</span>';
+    return previewDaArteDoPedidoHtml({ id: modelo.osId, numero: modelo.pedidoNumero || _mtgNumeroDoPedido(modelo.osId) }, item);
+}
+
 /** Desenha a lista, o selo, a trava, a folha e o painel do número. */
 function renderMontagem() {
     const { celulas, modelos, selecao } = state.montagem;
@@ -3784,8 +3872,7 @@ function renderMontagem() {
             </div>`;
     } else {
         lista.innerHTML = `
-            <table class="data-table">
-              <tr><th>Modelo</th><th style="text-align:right;">Tiragem</th><th>Na folha</th><th style="width:32px;"></th></tr>
+            <div class="mtg-modelos-carregados">
               ${modelos.map((m, j) => {
                   const vezes = {};
                   const ordem = [];
@@ -3798,26 +3885,25 @@ function renderMontagem() {
                       `<span class="mtg-pos${vezes[p] > 1 ? ' repetida' : ''}">#${p}${vezes[p] > 1 ? ' ×' + vezes[p] : ''}</span>`).join('');
                   const quantas = celulasDoModelo(celulas, m).length;
                   return `
-                <tr class="mtg-linha${_mtgLinhaAtiva(m) ? ' mtg-linha-ativa' : ''}" tabindex="0" role="button"
+                <div class="mtg-linha${_mtgLinhaAtiva(m) ? ' mtg-linha-ativa' : ''}" tabindex="0" role="button"
                     onclick="retomarDaMontagem(${j})"
-                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();retomarDaMontagem(${j});}"
+                    onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();retomarDaMontagem(${j});}"
                     title="Voltar a este modelo para acrescentar posições">
-                  <td>
-                    <div style="display:flex;align-items:center;gap:7px;">
+                    <div class="mtg-amostra-modelo">
+                      <div class="mtg-amostra">${amostraDoModeloDaMontagem(m)}</div>
                       <span class="mtg-tom" style="background:${bg};"></span>
                       <div style="min-width:0;">
                         <div style="color:var(--text);font-weight:600;">${escapeHtml(String(m.pedidoNumero || m.osId))} · ${escapeHtml(String(m.itemId))}</div>
                         <div style="font-size:0.75rem;">${escapeHtml(String(m.nome).slice(0, 40))}</div>
                         <span class="mtg-face-modelo ${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'mtg-com-verso' : ''}">${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'MODELO COM VERSO' : 'Só frente'}</span>
+                        <div class="mtg-tiragem" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">Tiragem: <strong>${(m.qtd || 0).toLocaleString('pt-BR')}</strong></div>
+                        <div>Na folha: <span class="mtg-posicoes">${chips}</span> <span style="color:var(--text-faint);font-size:0.74rem;">(${quantas})</span></div>
                       </div>
                     </div>
-                  </td>
-                  <td style="text-align:right;" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">${(m.qtd || 0).toLocaleString('pt-BR')}</td>
-                  <td><span class="mtg-posicoes">${chips}</span> <span style="color:var(--text-faint);font-size:0.74rem;">(${quantas})</span></td>
-                  <td style="text-align:right;"><button type="button" class="mtg-tirar" aria-label="Tirar o modelo ${escapeHtml(String(m.itemId))} da montagem" title="Tirar este modelo da montagem, com todas as células dele" onclick="event.stopPropagation(); removerDaMontagem(${j})">&times;</button></td>
-                </tr>`;
+                  <button type="button" class="mtg-tirar" aria-label="Tirar o modelo ${escapeHtml(String(m.itemId))} da montagem" title="Tirar este modelo da montagem, com todas as células dele" onclick="event.stopPropagation(); removerDaMontagem(${j})">&times;</button>
+                </div>`;
               }).join('')}
-            </table>
+            </div>
             <p class="mtg-dica" style="margin-top:10px;">
               Clique numa linha para <strong>voltar àquele modelo</strong> e acrescentar posições.
             </p>`;
@@ -3874,6 +3960,7 @@ async function abrirMontagem() {
         listaPedidos.innerHTML = '<option value="">Carregando pedidos…</option>';
     }
     try {
+        if (!(state.formatos || []).length) await loadAll();
         if (typeof loadOrdens === 'function' && await loadOrdens({ completa: true }) === false) {
             throw new Error('Carga de pedidos incompleta');
         }
@@ -4020,6 +4107,8 @@ async function encherPastasDaMontagem() {
             + (p.existe === false ? ' (não encontrada)' : '') + '</option>').join('');
 
     if (anterior && pastas.some(p => p.path === anterior)) sel.value = anterior;
+    sel._pastasMontagem = pastas;
+    desenharPastasDaMontagem();
     _mtgDicaDoDestino();
 }
 
@@ -4027,6 +4116,83 @@ async function encherPastasDaMontagem() {
 function onMontagemPastaChange() {
     try { localStorage.setItem('montagem_pasta', pastaDaMontagem()); } catch (_) {}
     _mtgDicaDoDestino();
+    desenharPastasDaMontagem();
+}
+
+/** Mesmos ladrilhos e cadastro da produção, com destino próprio da Montagem. */
+function desenharPastasDaMontagem() {
+    const grade = document.getElementById('mtg-hotfolder-grade');
+    const sel = document.getElementById('mtg-pasta');
+    if (!grade || !sel) return;
+    grade.replaceChildren();
+    for (const pasta of sel._pastasMontagem || []) {
+        const cor = _corDaPasta(pasta.path);
+        const ativa = _mesmaPasta(pasta.path, pastaDaMontagem());
+        const bloco = document.createElement('div');
+        bloco.className = 'hf-ladrilho' + (ativa ? ' hf-sel' : '') + (pasta.existe === false ? ' hf-sumiu' : '');
+        bloco.style.cssText = `--hf-forte:${cor.forte};--hf-fraca:${cor.fraca};--hf-borda:${cor.borda};`;
+        bloco.title = pasta.path + (pasta.existe === false ? ' — pasta não acessível' : '');
+        bloco.tabIndex = 0;
+        bloco.setAttribute('role', 'button');
+        bloco.innerHTML = '<span class="hf-icone">' + (pasta.existe === false ? _svgDaPastaSumida() : _svgDaPasta())
+            + '</span><span class="hf-nome">' + escapeHtml(pasta.nome || _nomeDaPasta(pasta.path)) + '</span>';
+        const selecionar = () => {
+            if (state.montagem.gerando) return;
+            sel.value = ativa ? '' : pasta.path;
+            onMontagemPastaChange();
+        };
+        bloco.onclick = selecionar;
+        bloco.onkeydown = ev => { if (ev.target === bloco && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); selecionar(); } };
+        const tirar = document.createElement('button');
+        tirar.type = 'button';
+        tirar.className = 'hf-tirar';
+        tirar.textContent = '×';
+        tirar.title = 'Tirar esta pasta da lista da estação';
+        tirar.onclick = ev => { ev.stopPropagation(); esquecerPastaDaMontagem(pasta.path); };
+        bloco.appendChild(tirar);
+        grade.appendChild(bloco);
+    }
+}
+
+async function adicionarPastaColadaDaMontagem() {
+    if (state.montagem.gerando) return;
+    const campo = document.getElementById('mtg-hotfolder-colar');
+    const path = String(campo?.value || '').trim();
+    if (!path) return;
+    try {
+        const base = await _mtgEstacao();
+        if (!base) throw new Error('Abra o NewProd nesta estação.');
+        const resp = await fetch(base + '/api/hotfolder/validar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.detail || 'A estação recusou a pasta.');
+        await encherPastasDaMontagem();
+        document.getElementById('mtg-pasta').value = data.path;
+        onMontagemPastaChange();
+        campo.value = '';
+        toast(data.aviso_unidade_mapeada ? 'Pasta pronta. Unidade de rede mapeada: prefira o caminho UNC.' : 'Pasta pronta.', 'success');
+    } catch (e) { toast('Não foi possível conferir a pasta: ' + e.message, 'error'); }
+}
+
+async function esquecerPastaDaMontagem(path) {
+    if (state.montagem.gerando) return;
+    if (!confirm('Tirar esta pasta da lista desta estação? A pasta continua no disco e perde a autorização de receber material.')) return;
+    try {
+        const base = await _mtgEstacao();
+        if (!base) throw new Error('Abra o NewProd nesta estação.');
+        const resp = await fetch(base + '/api/hotfolder/esquecer', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.detail || 'A estação não retirou a pasta.');
+        if (_mesmaPasta(path, pastaDaMontagem())) {
+            document.getElementById('mtg-pasta').value = '';
+            onMontagemPastaChange();
+        }
+        await encherPastasDaMontagem();
+    } catch (e) { toast('Não foi possível tirar a pasta da lista: ' + e.message, 'error'); }
 }
 
 /**
@@ -4489,6 +4655,7 @@ async function gerarPdfDaMontagem() {
                 ? `${rotuloFace}: montagem gerada (${total} célula(s)) e gravada em ${onde}`
                 : `${rotuloFace}: montagem gerada com ${total} célula(s). O PDF desceu pelos downloads.`, 'success');
         }
+        await confirmarImpressaoModelos(selecaoMontagem, { origem: 'pdf' });
     } catch (e) {
         console.error('[montagem]', e);
         if (typeof toast === 'function') toast(e.message || String(e), 'error');

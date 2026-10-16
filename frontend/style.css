@@ -5395,6 +5395,13 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-campo { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .mtg-campo .form-control { min-width: 0; width: 100%; }
 .mtg-campo-modelos { position: relative; }
+.mtg-modelos-carregados .mtg-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+.mtg-amostra-modelo { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mtg-amostra { flex: 0 0 96px; }
+.mtg-amostra > * { width: 96px !important; max-width: 100%; }
+.mtg-amostra-modelo > div:last-child { overflow-wrap: anywhere; }
+.mtg-lista-card { overflow-x: auto; }
+.mtg-amostra img { object-fit: contain !important; }
 .mtg-modelo-fonte, .mtg-modelos-multi[hidden] { display: none !important; }
 .mtg-ajustes { margin: 12px 0; }
 .mtg-ajustes > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
@@ -5700,20 +5707,26 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 /* No modo `Peca` nao ha papel em volta: so' a area imposta, ampliada. */
 .mtg-papel.sem-papel { background: transparent; border: none; box-shadow: none; }
 
-/* A CELULA E' UM CARTAO DE KANBAN (03/09/2026): tem alca para arrastar, o ⧉
-   que a repete na proxima e o × que tira so' ela. O rotulo e os botoes somem
-   quando a celula fica pequena demais — texto ilegivel e' pior que nenhum. */
+/* A célula mostra somente a amostra e a identificação impressa.
+   Informações e ações ficam na faixa lateral, alinhadas às linhas do papel. */
 .mtg-celula {
     position: absolute; overflow: hidden;
     border-radius: 2px; border: 1px solid;
     display: flex; align-items: center; gap: 5px;
-    padding: 0 4px 0 7px;
+    padding: 0;
     font-size: 0.66rem; font-weight: 600;
     font-family: ui-monospace, monospace;
     white-space: nowrap; cursor: pointer;
     transition: box-shadow 0.12s ease, opacity 0.12s ease;
 }
 .mtg-celula[draggable]:active { cursor: grabbing; }
+.mtg-folha-com-controles { display: flex; gap: 12px; flex: 0 0 auto; margin: auto; }
+.mtg-folha-com-controles .mtg-papel { margin: 0; }
+.mtg-controles-laterais { position: relative; flex: 0 0 auto; }
+.mtg-celula-controles { position: absolute; display: flex; align-items: center; gap: 5px; padding: 0 6px; overflow: hidden; font: 600 10px ui-monospace, monospace; white-space: nowrap; cursor: pointer; border-bottom: 1px solid var(--border); }
+.mtg-celula-controles.marcada { box-shadow: inset 3px 0 #2563eb; }
+.mtg-celula-amostra { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: none; font-size: 9px; font-weight: 400; }
+.mtg-celula-amostra img, .mtg-celula-amostra canvas { display: block; width: 100%; height: 100%; object-fit: fill; }
 .mtg-celula-rotulo {
     flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
     position: relative; z-index: 1;

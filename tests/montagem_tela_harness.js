@@ -19,8 +19,11 @@ catch (_) { puppeteer = require('puppeteer'); }
 const HTML = fs.readFileSync(path.join(RAIZ, 'frontend', 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
-const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo', 'nomeBaseDosArquivosDeImpressao'].map(nome => {
-    const inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo', 'nomeBaseDosArquivosDeImpressao',
+    'previewDaArteDoPedidoHtml', '_corDaPasta', '_nomeDaPasta', '_mesmaPasta', '_svgDaPasta', '_svgDaPastaSumida',
+    'confirmarImpressaoModelos', 'escHtmlSimples', 'recorteDaCargaDeOrdens', 'rasterDaAmostra', 'aguardarRecursoDaPrevia'].map(nome => {
+    let inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
+    if (inicio < 0) inicio = SCRIPT.indexOf('\nasync function ' + nome + '(');
     return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
 }).join('\n');
 const MTG = fs.readFileSync(path.join(RAIZ, 'frontend', 'montagem.js'), 'utf8').replace(/\r\n/g, '\n');
@@ -67,6 +70,8 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const FUNCOES = [
+    'fonteDaAmostraDaCelula', 'desenharAmostrasDaFolha',
+    'amostraDoModeloDaMontagem', 'desenharPastasDaMontagem', 'adicionarPastaColadaDaMontagem', 'esquecerPastaDaMontagem',
     'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'encherFormatosDaMontagem', 'encherPedidosDaMontagem', 'pedidosParaMontagem', 'onMontagemFormatoChange', 'buscarPedidoDaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem', '_mtgRenderFaces',
@@ -210,6 +215,8 @@ const PECAS = [
         "function onMontagemPosicoesChange() {}",
         "function toast(m, t) { (window.__toasts = window.__toasts || []).push((t||'info') + ': ' + m); }",
         "window.__confirmou = []; window.__confirmarResposta = true;",
+        "window.__statusGravados = [];",
+        "async function updateItemImpressao(...args) { window.__statusGravados.push(args); return true; }",
         "async function confirmarPopup(o) { window.__confirmou.push(o); return window.__confirmarResposta; }",
         // O de verdade consulta o banco (loadOSItens). Aqui ele so' faz o que a
         // tela ve': guarda o pedido escolhido e enche o seletor de modelos.
@@ -264,7 +271,7 @@ const PECAS = [
         "window.__artes = function () { return state.montagem.modelos.map(function (m) {",
         "  return { qtd: m.qtd, _tiragem: m.qtd, modelo: m.itemId, pedido: m.pedidoNumero, nome: '' }; }); };",
         "window.__rotulos = function () { return Array.from(",
-        "  document.querySelectorAll('#mtg-folha .mtg-celula:not(.mtg-celula-vazia) .mtg-celula-rotulo'))",
+        "  document.querySelectorAll('#mtg-folha .mtg-celula-controles .mtg-celula-rotulo'))",
         "  .map(function (e) { return e.textContent.trim(); }); };",
         // A caixa de cada celula, em px, para conferir a GRADE desenhada.
         "window.__caixas = function () { return Array.from(document.querySelectorAll('#mtg-folha .mtg-celula'))",
@@ -605,13 +612,13 @@ const PECAS = [
         r.marcadaRepetida = document.querySelectorAll('#mtg-folha .mtg-celula.repetida').length;
         document.querySelectorAll('#mtg-folha .mtg-celula-tirar')[1].click();
         r.depoisDeTirar = window.__rotulos().slice(0, 3);
-        r.linhas = document.querySelectorAll('#mtg-lista .data-table tr').length - 1;
+        r.linhas = document.querySelectorAll('#mtg-lista .mtg-linha').length;
         const antes = state.montagem.celulas.length;
         for (let k = 0; k < 3; k++) {
             removerCelulaDaMontagem(state.montagem.celulas.findIndex(c => c.osId === 'b'));
         }
         r.tiradas = antes - state.montagem.celulas.length;
-        r.linhasSemB = document.querySelectorAll('#mtg-lista .data-table tr').length - 1;
+        r.linhasSemB = document.querySelectorAll('#mtg-lista .mtg-linha').length;
         r.modelosSemB = state.montagem.modelos.map(m => m.osId).join('');
         return r;
     }, PECAS);
@@ -896,12 +903,12 @@ const PECAS = [
     // ── 8. A TIRAGEM no rótulo, e a lista ──────────────────────────────────
     const lista = await aba.evaluate(pecas => {
         window.__montar(pecas);
-        const cab = Array.from(document.querySelectorAll('#mtg-lista th')).map(e => e.textContent.trim());
-        const linhas = Array.from(document.querySelectorAll('#mtg-lista .data-table tr')).slice(1);
+        const cab = document.getElementById('mtg-lista').textContent;
+        const linhas = Array.from(document.querySelectorAll('#mtg-lista .mtg-linha'));
         return {
             cabecalho: cab,
-            tiragens: linhas.map(tr => tr.children[1].textContent.trim()),
-            dica: linhas[0].children[1].getAttribute('title') || '',
+            tiragens: linhas.map(tr => tr.querySelector('.mtg-tiragem strong').textContent.trim()),
+            dica: linhas[0].querySelector('.mtg-tiragem').getAttribute('title') || '',
             tons: document.querySelectorAll('#mtg-lista .mtg-tom').length,
             resumo: document.getElementById('mtg-resumo').textContent,
             conferencia: document.getElementById('mtg-confirmacao').textContent.replace(/\s+/g, ' ').trim(),
@@ -909,7 +916,7 @@ const PECAS = [
                 && !document.getElementById('mtg-btn-pdf').disabled,
         };
     }, PECAS);
-    ok(lista.cabecalho.join('|').indexOf('Modelo|Tiragem|Na folha') === 0,
+    ok(lista.cabecalho.includes('Tiragem:') && lista.cabecalho.includes('Na folha:'),
        'a lista traz modelo, tiragem e o que está na folha', lista.cabecalho);
     ok(lista.tiragens.join('|') === '3.000|1.920|150|800',
        'com a tiragem de CADA modelo, com separador de milhar', lista.tiragens);
@@ -978,7 +985,7 @@ const PECAS = [
         state.montagem.pedidoSel = null;
         state.montagem.modeloSel = null;
         document.querySelectorAll('#mtg-lista .mtg-tirar')[1].click();
-        return { linhas: document.querySelectorAll('#mtg-lista .data-table tr').length - 1,
+        return { linhas: document.querySelectorAll('#mtg-lista .mtg-linha').length,
                  celulas: state.montagem.celulas.length,
                  pedidoSel: state.montagem.pedidoSel };
     }, PECAS);
@@ -2021,6 +2028,179 @@ const PECAS = [
     ok(integridade.envios === 0 && integridade.liberou,
         'falha na conferência impede envio e libera edição', integridade);
 
+    const novasFuncoes = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        const primeiro = state.montagem.modelos[0];
+        const item = state.osItens[primeiro.osId].find(i => String(i.id) === String(primeiro.itemId));
+        item.amostra_arte_base64 = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"><rect width="100" height="40" fill="green"/></svg>');
+        state.modelosGlobais = { [primeiro.pedidoNumero]: [{ id: 'outro', amostra_arte_base64: 'errada.png' }] };
+        renderMontagem();
+        const img = document.querySelector('.mtg-amostra img');
+        await img.decode();
+        const info = document.querySelector('.mtg-amostra-modelo > div:last-child');
+        const preview = img.checkVisibility() && img.naturalWidth === 100 && info.getBoundingClientRect().left >= img.getBoundingClientRect().right;
+        const naoMisturou = !document.querySelector('#mtg-lista').innerHTML.includes('errada.png');
+        window._mtgEstacao = async () => 'http://estacao-simulada';
+        window.prepararArtesDaMontagem = async () => window.__artes();
+        window.fetch = async () => ({ok: true, blob: async () => new Blob(['PDF simulado'])});
+        document.getElementById('mtg-pasta').value = '';
+        window.__statusGravados = []; window.__confirmou = []; window.__confirmarResposta = false;
+        await gerarPdfDaMontagem();
+        const cancelou = window.__statusGravados.length === 0 && window.__confirmou.length === 1;
+        window.__confirmarResposta = true;
+        await gerarPdfDaMontagem();
+        const gravados = window.__statusGravados.slice();
+        window.__statusGravados = []; window.__confirmou = [];
+        window.fetch = async () => ({ok:false, status:500});
+        await gerarPdfDaMontagem();
+        const falha = window.__statusGravados.length === 0 && window.__confirmou.length === 0;
+        let pastas = [{path:'C:\\RIP\\Cor', nome:'Cor', existe:true}, {path:'C:\\RIP\\Sumida', nome:'Sumida', existe:false}];
+        const chamadas = [];
+        window.fetch = async (url, opts) => {
+            chamadas.push({url, body: opts?.body});
+            if (url.endsWith('/listar')) return {ok:true, json:async () => ({pastas})};
+            if (url.endsWith('/validar')) {
+                const {path} = JSON.parse(opts.body);
+                if (path === 'invalida') return {ok:false, json:async () => ({ok:false, detail:'Pasta inválida'})};
+                pastas.push({path, nome:'Nova', existe:true});
+                return {ok:true, json:async () => ({ok:true, path})};
+            }
+            if (url.endsWith('/esquecer')) { pastas = pastas.filter(p => p.path !== JSON.parse(opts.body).path); return {ok:true,json:async () => ({ok:true})}; }
+            throw new Error(url);
+        };
+        await encherPastasDaMontagem();
+        const visivel = document.querySelector('#mtg-hotfolder-grade .hf-ladrilho').checkVisibility();
+        document.querySelector('#mtg-hotfolder-grade .hf-ladrilho').click();
+        const selecionada = pastaDaMontagem();
+        document.querySelector('#mtg-hotfolder-grade .hf-ladrilho').click();
+        const desativou = !pastaDaMontagem();
+        const colar = document.getElementById('mtg-hotfolder-colar');
+        colar.value = 'invalida'; await adicionarPastaColadaDaMontagem();
+        const recusou = !pastaDaMontagem() && colar.value === 'invalida';
+        colar.value = 'C:\\RIP\\Nova'; await adicionarPastaColadaDaMontagem();
+        const cadastrou = pastaDaMontagem() === 'C:\\RIP\\Nova' && !colar.value;
+        window.confirm = () => true;
+        await esquecerPastaDaMontagem(pastaDaMontagem());
+        return {preview, naoMisturou, cancelou, gravados, falha, visivel, selecionada, desativou, recusou, cadastrou,
+            removeu: !pastaDaMontagem() && !pastas.some(p => p.nome === 'Nova'),
+            mesmaEstacao: chamadas.every(c => c.url.startsWith('http://estacao-simulada/'))};
+    }, PECAS);
+    ok(novasFuncoes.preview && novasFuncoes.naoMisturou, 'amostra carregada com informações à direita, isolada por modelo', novasFuncoes);
+    ok(novasFuncoes.cancelou && novasFuncoes.falha, 'Ainda não e falha do motor não gravam status', novasFuncoes);
+    ok(novasFuncoes.gravados.length === PECAS.length && PECAS.every(p => novasFuncoes.gravados.some(a => a[0] === p.id && a[1] === p.osId && a[2] === 'IMPRESSO')),
+        'Sim confirma todos os modelos de todos os pedidos da montagem', novasFuncoes.gravados);
+    ok(novasFuncoes.visivel && novasFuncoes.selecionada === 'C:\\RIP\\Cor' && novasFuncoes.desativou,
+        'ladrilhos visíveis selecionam e desativam o Hot Folder');
+    ok(novasFuncoes.recusou && novasFuncoes.cadastrou && novasFuncoes.removeu && novasFuncoes.mesmaEstacao,
+        'cadastro validado e remoção usam a estação da montagem', novasFuncoes);
+    if (process.env.MTG_FOTO_AMOSTRA) await (await aba.$('.mtg-lista-card')).screenshot({path:process.env.MTG_FOTO_AMOSTRA});
+    await aba.addScriptTag({content: extrair('abrirMontagem')});
+    const abertura = await aba.evaluate(async pecas => {
+        const seletor = document.getElementById('mtg-formato');
+        window._mtgLigarTeclado = () => {};
+        window._mtgRedesenhoLigado = true;
+        window.encherPastasDaMontagem = () => {};
+        window.restaurarRascunhoDaMontagem = () => false;
+        state.montagem = montagemVazia(); state.ordens = []; state.osItens = {}; state.modelosGlobais = {};
+        let concluir, cargas = 0, cargaCompleta = false, erroDeCarga = false;
+        const toastOriginal = window.toast;
+        window.toast = (texto, tipo) => { if (tipo === "error" && /pedidos/i.test(texto)) erroDeCarga = true; };
+        window.loadOrdens = opcoes => { cargas++; cargaCompleta = opcoes?.completa === true; return new Promise(resolve => { concluir = () => { window.__montar(pecas); resolve(true); }; }); };
+        const recorte = recorteDaCargaDeOrdens();
+        const pendente = abrirMontagem();
+        await Promise.resolve();
+        const aguardou = cargaCompleta && /Carregando/.test(document.getElementById('mtg-pedido').textContent);
+        if (concluir) concluir();
+        await pendente;
+        const carregou = Array.from(seletor.options).some(o => o.value === 'F1') && !seletor.disabled;
+        window.loadOrdens = async () => false;
+        await abrirMontagem();
+        const falhaVisivel = erroDeCarga && !seletor.disabled;
+        window.loadOrdens = async () => true;
+        await abrirMontagem();
+        const recuperou = !seletor.disabled;
+        const formatos = state.formatos;
+        state.formatos = [];
+        let catalogos = 0;
+        window.loadAll = async () => { catalogos++; state.formatos = formatos; };
+        await abrirMontagem();
+        window.toast = toastOriginal;
+        return {cargas, aguardou, carregou, falhaVisivel, recuperou, recorte, catalogos};
+    }, PECAS);
+    ok(abertura.cargas === 1 && abertura.aguardou && abertura.carregou,
+        'Montagem solicita a fila completa e mostra a espera na lista de pedidos', abertura);
+    ok(abertura.falhaVisivel && abertura.recuperou, 'erro de carga fica visível e reabrir permite tentar novamente', abertura);
+    ok(abertura.recorte === 'producao' && abertura.catalogos === 1,
+        'Montagem usa o recorte de produção e carrega o catálogo quando ainda está vazio', abertura);
+    const previaFolha = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        state.montagem.zoom = 'peca';
+        const imagem = cor => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="850" height="27"><rect width="850" height="27" fill="${cor}"/><text x="30" y="20" fill="white" font-size="18">AMOSTRA DO MODELO</text></svg>`);
+        state.montagem.modelos.forEach(m => {
+            const it = state.osItens[m.osId].find(i => i.id === m.itemId);
+            it.amostra_arte_base64 = imagem('green'); it.verso_amostra_arte_base64 = imagem('blue');
+            m.peca.print_mode = 'duplex';
+        });
+        state.montagem.face = 'front';
+        renderMontagem();
+        await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'front');
+        const img = document.querySelector('#mtg-folha .mtg-celula-amostra img');
+        const rotulo = document.querySelector('#mtg-folha .mtg-celula-rotulo');
+        const exibiu = img.checkVisibility() && img.naturalWidth === 850 && img.getBoundingClientRect().width > 20;
+        const direita = rotulo.getBoundingClientRect().left >= img.getBoundingClientRect().right;
+        const celula = img.closest('.mtg-celula');
+        const rc = celula.getBoundingClientRect(), ri = img.getBoundingClientRect();
+        const integral = Math.abs(ri.width - celula.clientWidth) < 1 && Math.abs(ri.height - celula.clientHeight) < 1
+            && getComputedStyle(img).objectFit === 'fill' && !celula.querySelector('.mtg-celula-btn, .mtg-celula-rotulo');
+        const externos = Array.from(document.querySelectorAll('#mtg-folha .mtg-celula-controles .mtg-celula-btn'))
+            .every(b => b.getBoundingClientRect().left >= rc.right);
+        const frente = img.src;
+        state.montagem.face = 'back'; renderMontagem();
+        await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'back');
+        const verso = document.querySelector('#mtg-folha .mtg-celula-amostra img').src !== frente;
+        const original = state.montagem.celulas[0];
+        moverCelulaDaMontagem(0, 1);
+        await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'back');
+        const manteve = state.montagem.celulas[1].itemId === original.itemId;
+        const pdf = {arte_url:'https://sintetico/arte.pdf', modo_pdf:true};
+        const paginas = [fonteDaAmostraDaCelula(pdf, 'front', 3, 'duplex').pagina,
+            fonteDaAmostraDaCelula(pdf, 'back', 3, 'duplex').pagina,
+            fonteDaAmostraDaCelula({...pdf,verso_arte_url:'https://sintetico/verso.pdf'}, 'back', 3, 'duplex_unico').pagina];
+        const area = document.createElement('div'); document.body.appendChild(area);
+        area.innerHTML = '<span class="mtg-celula-amostra" data-i="0"></span><span class="mtg-celula-amostra" data-i="1"></span>';
+        const c = [{osId:'teste',itemId:'pdf',pos:3},{osId:'teste',itemId:'pdf',pos:3}];
+        const m = [{osId:'teste',itemId:'pdf',peca:{print_mode:'front'}}];
+        state.osItens.teste = [{id:'pdf',...pdf}];
+        let downloads = 0, rasterizacoes = 0;
+        window.fetch = async () => { downloads++; return {ok:true,arrayBuffer:async () => new ArrayBuffer(4)}; };
+        window.pdfjsLib = {GlobalWorkerOptions:{},getDocument:() => ({destroy:async () => {},promise:Promise.resolve({
+            getPage:async pagina => ({getViewport:({scale}) => ({width:850*scale,height:27*scale}),render:({canvasContext}) => {
+                rasterizacoes++; canvasContext.fillStyle='red'; canvasContext.fillRect(0,0,100,20);
+                return {promise:Promise.resolve(),cancel:() => {}};
+            }})})})};
+        await desenharAmostrasDaFolha(area,c,m,'front');
+        const pdfDesenhado = area.querySelectorAll('canvas').length === 2 && downloads === 1 && rasterizacoes === 1;
+        state.osItens.teste = [{id:'pdf',arte_url:'https://sintetico/falha.pdf'}];
+        window.fetch = async () => { throw new Error('Falha simulada'); };
+        await desenharAmostrasDaFolha(area,c,m,'front');
+        const falha = area.querySelectorAll('[data-estado="erro"]').length === 2 && !area.querySelector('canvas');
+        let liberar;
+        state.osItens.teste = [{id:'pdf',arte_url:'https://sintetico/lento.pdf'}];
+        window.fetch = () => new Promise(resolve => { liberar = () => resolve({ok:true,arrayBuffer:async () => new ArrayBuffer(4)}); });
+        const antiga = desenharAmostrasDaFolha(area,c,m,'front');
+        await Promise.resolve(); await Promise.resolve();
+        area.innerHTML = '<span>Nova montagem</span>';
+        liberar(); await antiga;
+        const descartou = area.textContent === 'Nova montagem' && !area.querySelector('canvas');
+        area.remove();
+        return {exibiu,direita,integral,externos,verso,manteve,paginas,pdfDesenhado,falha,descartou};
+    }, PECAS);
+    ok(previaFolha.exibiu && previaFolha.direita, 'amostra visível DENTRO da folha com informações à direita', previaFolha);
+    ok(previaFolha.integral && previaFolha.externos, 'amostra preenche toda a célula e controles ficam fora do papel', previaFolha);
+    ok(previaFolha.verso && previaFolha.manteve, 'face e movimentação preservam a amostra da célula', previaFolha);
+    ok(previaFolha.paginas.join() === '5,6,1' && previaFolha.pdfDesenhado, 'arte PDF desenha canvas e compartilha a rasterização da página', previaFolha);
+    ok(previaFolha.falha && previaFolha.descartou, 'erro não mantém imagem anterior e resposta antiga não altera a nova folha', previaFolha);
+    if (process.env.MTG_FOTO_FOLHA) await (await aba.$('#mtg-folha')).screenshot({path:process.env.MTG_FOTO_FOLHA});
     await navegador.close();
 
     if (falhas) {
