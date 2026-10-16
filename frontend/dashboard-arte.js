@@ -533,6 +533,7 @@
 
     function calcular({ ordens, modelos, itens, produtos, catalogo, inicio, fim, normalizar }) {
         const grupos = new Map();
+        const pedidosPorProduto = new Map();
         const origens = new Map(produtos.map(p => [String(p.id), p]));
         const produtosPorPedido = new Map();
         produtos.forEach(p => {
@@ -540,7 +541,7 @@
             if (!produtosPorPedido.has(chave)) produtosPorPedido.set(chave, []);
             produtosPorPedido.get(chave).push(p);
         });
-        const nomes = new Map(catalogo.map(p => [String(p.id_produto), p.nome_produto]));
+        const cadastro = new Map(catalogo.map(p => [String(p.id_produto), p]));
         let semPrazo = 0;
         let semItens = 0;
         for (const os of ordens) {
@@ -556,10 +557,16 @@
                 if (item.id != null) vistos.add(String(item.id));
                 const origem = origens.get(String(item.id_produto_proposta_origem ?? item._vibe_produto_id));
                 const id = item._vibe_id_produto ?? item.id_produto ?? item.produto_id ?? origem?.id_produto;
-                const nome = nomes.get(String(id)) || origem?.nome_produto || item.nome_produto_real || item.nome_produto || item._nome_original || item.produto || 'Produto não identificado';
-                const chave = id != null ? `id:${id}` : `nome:${nome}`;
-                if (!grupos.has(chave)) grupos.set(chave, { nome, total: 0, impresso: 0 });
+                const produto = cadastro.get(String(id));
+                const setor = String((produto ? produto.setor_pcp : (item.setor || origem?.setor_pcp)) || '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() || 'Sem setor';
+                const nome = produto?.nome_produto || origem?.nome_produto || item.nome_produto_real || item.nome_produto || item._nome_original || item.produto || 'Produto não identificado';
+                const chave = JSON.stringify([setor, id != null ? `id:${id}` : `nome:${nome}`]);
+                if (!grupos.has(chave)) grupos.set(chave, { nome, setor, pedidos: 0, total: 0, impresso: 0 });
                 const grupo = grupos.get(chave);
+                if (!pedidosPorProduto.has(chave)) pedidosPorProduto.set(chave, new Set());
+                const pedidosDoProduto = pedidosPorProduto.get(chave);
+                pedidosDoProduto.add(String(os.numero ?? os.id));
+                grupo.pedidos = pedidosDoProduto.size;
                 const qtd = numero(item.quantidade ?? item.qtd);
                 grupo.total += qtd;
                 if (normalizar(item.impressao || item.status_impressao || item.status_producao) === 'Impresso') grupo.impresso += qtd;
@@ -603,8 +610,20 @@
         const total = dados.linhas.reduce((s, p) => s + p.total, 0);
         const impresso = dados.linhas.reduce((s, p) => s + p.impresso, 0);
         const n = valor => valor.toLocaleString('pt-BR');
-        resultado.innerHTML = `<div class="dp-resumo"><div>Total previsto<strong>${n(total)}</strong></div><div>Impresso<strong>${n(impresso)}</strong></div><div>Pendente<strong>${n(total - impresso)}</strong></div></div>
-            ${dados.linhas.length ? `<div class="dp-tabela"><table><caption>Quantidades por produto no período selecionado</caption><thead><tr><th>Produto</th><th>Total</th><th>Impresso</th><th>Pendente</th><th>Progresso</th></tr></thead><tbody>${dados.linhas.map(p => `<tr><th scope="row">${escapar(p.nome)}</th><td>${n(p.total)}</td><td>${n(p.impresso)}</td><td>${n(p.total - p.impresso)}</td><td><progress aria-label="Impressão de ${escapar(p.nome)}" max="${p.total || 1}" value="${p.impresso}"></progress> ${p.total ? Math.round(p.impresso / p.total * 100) : 0}%</td></tr>`).join('')}</tbody></table></div>` : '<p>Nenhum produto com prazo neste período.</p>'}
+        const setores = new Map();
+        for (const produto of dados.linhas) {
+            if (!setores.has(produto.setor)) setores.set(produto.setor, []);
+            setores.get(produto.setor).push(produto);
+        }
+        const tabelas = [...setores].sort(([a], [b]) => (a === 'Sem setor') - (b === 'Sem setor') || a.localeCompare(b, 'pt-BR')).map(([setor, linhas]) => {
+            const subtotal = linhas.reduce((s, p) => s + p.total, 0);
+            const impressoSetor = linhas.reduce((s, p) => s + p.impresso, 0);
+            return `<section class="dp-setor"><header class="dp-setor-cabecalho"><div><span class="dp-sobrelinha">SETOR</span><h3>${escapar(setor)}</h3><span class="dp-contagem">${linhas.length} ${linhas.length === 1 ? 'produto' : 'produtos'}</span></div>
+                <dl class="dp-setor-totais"><div><dt>Total</dt><dd>${n(subtotal)}</dd></div><div class="dp-impresso"><dt>Impresso</dt><dd>${n(impressoSetor)}</dd></div><div class="dp-pendente"><dt>Pendente</dt><dd>${n(subtotal - impressoSetor)}</dd></div></dl></header>
+                <div class="dp-tabela"><table><caption>Produtos — ${escapar(setor)}</caption><thead><tr><th>Produto</th><th>Pedidos</th><th>Total</th><th>Impresso</th><th>Pendente</th><th>Progresso</th></tr></thead><tbody>${linhas.map(p => `<tr><th scope="row">${escapar(p.nome)}</th><td>${n(p.pedidos)}</td><td>${n(p.total)}</td><td class="dp-impresso">${n(p.impresso)}</td><td class="dp-pendente">${n(p.total - p.impresso)}</td><td><div class="dp-progresso"><progress aria-label="Impressão de ${escapar(p.nome)}" max="${p.total || 1}" value="${p.impresso}"></progress> ${p.total ? Math.round(p.impresso / p.total * 100) : 0}%</div></td></tr>`).join('')}</tbody></table></div></section>`;
+        }).join('');
+        resultado.innerHTML = `<div class="dp-resumo"><div>Total previsto<strong>${n(total)}</strong></div><div class="dp-impresso">Impresso<strong>${n(impresso)}</strong></div><div class="dp-pendente">Pendente<strong>${n(total - impresso)}</strong></div></div>
+            ${tabelas || '<p>Nenhum produto com prazo neste período.</p>'}
             <p>Base: todos os pedidos carregados, independentemente do status, inclusive expedidos e entregues. Os filtros da fila de produção não alteram este resumo.${dados.semPrazo ? ` ${n(dados.semPrazo)} pedido(s) sem prazo ficam fora do período.` : ''}${dados.semItens ? ` ${n(dados.semItens)} pedido(s) do período estão sem itens disponíveis.` : ''}</p>`;
     }
     global.renderDashboardProducao = renderDashboardProducao;
