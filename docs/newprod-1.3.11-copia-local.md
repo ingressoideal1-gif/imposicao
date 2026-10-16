@@ -19,3 +19,11 @@ O navegador aceitou resumo recebido após 5,5 segundos, manteve os comandos apó
 Esta correção não identifica a causa do MSI 1603 da TEX-01. Sem o log do instalador não se pode afirmar que a nova publicação resolva essa falha de instalação. Não houve reinício forçado, alteração de filas ou impressão física.
 
 A ativação dos manifestos depende da auditoria do MSI e de tamanho/SHA-256 dos dois downloads públicos. Para recuperação depois da adoção, republicar uma fonte revisada com versão superior; não sobrescrever o MSI nem forçar downgrade.
+
+## Publicação confirmada
+
+Os dois downloads públicos completos conferiram por tamanho e SHA-256 antes da ativação. Os três manifestos foram relidos com cache-buster e confirmam 1.3.11, sem restrição por estação.
+
+MSI: 196.685.824 bytes; SHA-256 `d25e56b7e09a00bbbd2d369ce070c056632100b344a291687370dc4cb04cc6b8`. Fonte rastreada na tag `agente-v1.3.11`. [Auditoria do pacote](evidencias/newprod-1311-pacote.json) e [publicação](evidencias/newprod-1311-publicacao.json).
+
+Nenhuma estação foi reiniciada ou instalada à força. A instalação e a verificação real dos pedidos continuam dependentes da atualização de cada estação. O site Cloudflare não foi alterado nesta entrega.
