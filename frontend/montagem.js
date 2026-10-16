@@ -3209,6 +3209,89 @@ function _mtgIndiceDoModelo(c, modelos) {
  * aparecesse seria uma célula sem alcance. As vazias só existem na última
  * folha, que é a única que pode ter sobra.
  */
+function fonteDaAmostraDaCelula(item, face, pos, modo) {
+    if (!item) return null;
+    const verso = face === 'back';
+    const duplicado = modo === 'pdf_duplicate_back';
+    const amostra = verso && !duplicado ? item.verso_amostra_arte_base64 : item.amostra_arte_base64;
+    if (amostra) return { url: amostra, pagina: 1 };
+    const frente = item.arte_url || item.url_arquivo_arte;
+    const atras = item.verso_arte_url || item.url_arquivo_arte_verso;
+    if (duplicado) return { url: frente, pagina: item.modo_pdf ? pos : 1 };
+    if (modo === 'pdf_odd_even' || (item.modo_pdf && modo === 'duplex')) {
+        return { url: frente, pagina: pos * 2 - (verso ? 0 : 1) };
+    }
+    if (verso && atras) return { url: atras, pagina: 1 };
+    return { url: frente, pagina: verso ? 2 : item.modo_pdf ? pos : 1 };
+}
+
+/** Prévia de tela: não altera as artes nem o payload de impressão. */
+async function desenharAmostrasDaFolha(alvo, celulas, modelos, face) {
+    const espacos = Array.from(alvo.querySelectorAll('.mtg-celula-amostra'));
+    let proximo = 0;
+    const desenhar = async () => {
+        while (proximo < espacos.length) {
+            const espaco = espacos[proximo++];
+            if (!espaco.isConnected) continue;
+            const celula = celulas[Number(espaco.dataset.i)];
+            const modelo = modelos.find(m => chaveDoModelo(m) === chaveDoModelo(celula));
+            const item = (state.osItens[celula.osId] || []).find(it => String(it.id) === String(celula.itemId));
+            const fonte = fonteDaAmostraDaCelula(item, face, celula.pos, modelo?.peca?.print_mode);
+            if (!fonte?.url) { espaco.textContent = 'Sem amostra'; continue; }
+            try {
+                const url = String(fonte.url);
+                if (!/^(https?:|data:|blob:)/i.test(url) && !url.startsWith('/')) throw new Error('Endereço da amostra indisponível.');
+                const pdf = /^data:application\/pdf/i.test(url) || /\.pdf(?:[?#]|$)/i.test(url);
+                if (pdf) {
+                    const raster = await rasterDaAmostra(['montagem', url, fonte.pagina], async () => {
+                        const resposta = await aguardarRecursoDaPrevia(window.PilotoSelecao
+                            ? window.PilotoSelecao.lerUrl(url) : fetch(url));
+                        if (!resposta.ok) throw new Error('Não foi possível ler a arte.');
+                        const bytes = await aguardarRecursoDaPrevia(resposta.arrayBuffer());
+                        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                        }
+                        const tarefa = pdfjsLib.getDocument({ data: bytes });
+                        let documento;
+                        try {
+                            documento = await aguardarRecursoDaPrevia(tarefa.promise, () => tarefa.destroy());
+                            const pagina = await aguardarRecursoDaPrevia(documento.getPage(fonte.pagina));
+                            const tamanho = pagina.getViewport({ scale: 1 });
+                            const viewport = pagina.getViewport({ scale: Math.min(2, 1600 / Math.max(tamanho.width, tamanho.height)) });
+                            const canvas = document.createElement('canvas');
+                            canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+                            const render = pagina.render({ canvasContext: canvas.getContext('2d'), viewport });
+                            await aguardarRecursoDaPrevia(render.promise, () => render.cancel());
+                            return canvas;
+                        } finally { await tarefa.destroy(); }
+                    });
+                    if (!espaco.isConnected) continue;
+                    const copia = document.createElement('canvas');
+                    copia.width = raster.width; copia.height = raster.height;
+                    copia.getContext('2d').drawImage(raster, 0, 0);
+                    copia.setAttribute('aria-label', 'Amostra do modelo ' + celula.itemId);
+                    espaco.replaceChildren(copia);
+                } else {
+                    const img = new Image();
+                    img.alt = 'Amostra do modelo ' + celula.itemId;
+                    img.draggable = false;
+                    img.src = url;
+                    await aguardarRecursoDaPrevia(img.decode());
+                    if (!espaco.isConnected) continue;
+                    espaco.replaceChildren(img);
+                }
+                espaco.dataset.estado = 'pronto';
+            } catch (e) {
+                if (!espaco.isConnected) continue;
+                espaco.textContent = 'Amostra indisponível';
+                espaco.title = e.message || 'Não foi possível carregar a amostra.';
+                espaco.dataset.estado = 'erro';
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, espacos.length) }, desenhar));
+}
+
 function _mtgRenderFolha() {
     const alvo = document.getElementById('mtg-folha');
     const numFolha = document.getElementById('mtg-folha-num');
@@ -3344,6 +3427,7 @@ function _mtgRenderFolha() {
                       style="${caixa}${recuo}background:${bg};border-color:${br};color:${fg};"
                       onclick="selecionarCelulaDaMontagem(${i}, event)"
                       title="${escapeHtml(String(m.nome || ''))} — clique para selecionar, arraste para mudar a ordem">
+                   <span class="mtg-celula-amostra" data-i="${i}" title="Amostra do modelo">Carregando amostra…</span>
                    ${numeroHtml}${rotulo}${botoes}
                  </div>`);
         }
@@ -3356,6 +3440,7 @@ function _mtgRenderFolha() {
 
     alvo.innerHTML = (comVerso
         ? '<span class="ped-modelo-verso-aviso">Modelo com Verso</span>' : '') + html.join('');
+    desenharAmostrasDaFolha(alvo, celulas, modelos, state.montagem.face === 'back' ? 'back' : 'front');
 
     if (numFolha) {
         const medida = geo.temPapel

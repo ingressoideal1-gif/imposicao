@@ -21,7 +21,7 @@ const CSS = fs.readFileSync(path.join(RAIZ, 'frontend', 'style.css'), 'utf8');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
 const RESOLVER_FORMATO = ['formatoDoProduto', 'formatoDoModelo', 'nomeBaseDosArquivosDeImpressao',
     'previewDaArteDoPedidoHtml', '_corDaPasta', '_nomeDaPasta', '_mesmaPasta', '_svgDaPasta', '_svgDaPastaSumida',
-    'confirmarImpressaoModelos', 'escHtmlSimples', 'recorteDaCargaDeOrdens'].map(nome => {
+    'confirmarImpressaoModelos', 'escHtmlSimples', 'recorteDaCargaDeOrdens', 'rasterDaAmostra', 'aguardarRecursoDaPrevia'].map(nome => {
     let inicio = SCRIPT.indexOf('\nfunction ' + nome + '(');
     if (inicio < 0) inicio = SCRIPT.indexOf('\nasync function ' + nome + '(');
     return SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
@@ -70,6 +70,7 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const FUNCOES = [
+    'fonteDaAmostraDaCelula', 'desenharAmostrasDaFolha',
     'amostraDoModeloDaMontagem', 'desenharPastasDaMontagem', 'adicionarPastaColadaDaMontagem', 'esquecerPastaDaMontagem',
     'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'encherFormatosDaMontagem', 'encherPedidosDaMontagem', 'pedidosParaMontagem', 'onMontagemFormatoChange', 'buscarPedidoDaMontagem',
@@ -2128,6 +2129,68 @@ const PECAS = [
     ok(abertura.falhaVisivel && abertura.recuperou, 'erro de carga fica visível e reabrir permite tentar novamente', abertura);
     ok(abertura.recorte === 'producao' && abertura.catalogos === 1,
         'Montagem usa o recorte de produção e carrega o catálogo quando ainda está vazio', abertura);
+    const previaFolha = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        state.montagem.zoom = 'peca';
+        const imagem = cor => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="850" height="27"><rect width="850" height="27" fill="${cor}"/><text x="30" y="20" fill="white" font-size="18">AMOSTRA DO MODELO</text></svg>`);
+        state.montagem.modelos.forEach(m => {
+            const it = state.osItens[m.osId].find(i => i.id === m.itemId);
+            it.amostra_arte_base64 = imagem('green'); it.verso_amostra_arte_base64 = imagem('blue');
+            m.peca.print_mode = 'duplex';
+        });
+        state.montagem.face = 'front';
+        renderMontagem();
+        await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'front');
+        const img = document.querySelector('#mtg-folha .mtg-celula-amostra img');
+        const rotulo = document.querySelector('#mtg-folha .mtg-celula-rotulo');
+        const exibiu = img.checkVisibility() && img.naturalWidth === 850 && img.getBoundingClientRect().width > 20;
+        const direita = rotulo.getBoundingClientRect().left >= img.getBoundingClientRect().right;
+        const frente = img.src;
+        state.montagem.face = 'back'; renderMontagem();
+        await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'back');
+        const verso = document.querySelector('#mtg-folha .mtg-celula-amostra img').src !== frente;
+        const original = state.montagem.celulas[0];
+        moverCelulaDaMontagem(0, 1);
+        await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'back');
+        const manteve = state.montagem.celulas[1].itemId === original.itemId;
+        const pdf = {arte_url:'https://sintetico/arte.pdf', modo_pdf:true};
+        const paginas = [fonteDaAmostraDaCelula(pdf, 'front', 3, 'duplex').pagina,
+            fonteDaAmostraDaCelula(pdf, 'back', 3, 'duplex').pagina,
+            fonteDaAmostraDaCelula({...pdf,verso_arte_url:'https://sintetico/verso.pdf'}, 'back', 3, 'duplex_unico').pagina];
+        const area = document.createElement('div'); document.body.appendChild(area);
+        area.innerHTML = '<span class="mtg-celula-amostra" data-i="0"></span><span class="mtg-celula-amostra" data-i="1"></span>';
+        const c = [{osId:'teste',itemId:'pdf',pos:3},{osId:'teste',itemId:'pdf',pos:3}];
+        const m = [{osId:'teste',itemId:'pdf',peca:{print_mode:'front'}}];
+        state.osItens.teste = [{id:'pdf',...pdf}];
+        let downloads = 0, rasterizacoes = 0;
+        window.fetch = async () => { downloads++; return {ok:true,arrayBuffer:async () => new ArrayBuffer(4)}; };
+        window.pdfjsLib = {GlobalWorkerOptions:{},getDocument:() => ({destroy:async () => {},promise:Promise.resolve({
+            getPage:async pagina => ({getViewport:({scale}) => ({width:850*scale,height:27*scale}),render:({canvasContext}) => {
+                rasterizacoes++; canvasContext.fillStyle='red'; canvasContext.fillRect(0,0,100,20);
+                return {promise:Promise.resolve(),cancel:() => {}};
+            }})})})};
+        await desenharAmostrasDaFolha(area,c,m,'front');
+        const pdfDesenhado = area.querySelectorAll('canvas').length === 2 && downloads === 1 && rasterizacoes === 1;
+        state.osItens.teste = [{id:'pdf',arte_url:'https://sintetico/falha.pdf'}];
+        window.fetch = async () => { throw new Error('Falha simulada'); };
+        await desenharAmostrasDaFolha(area,c,m,'front');
+        const falha = area.querySelectorAll('[data-estado="erro"]').length === 2 && !area.querySelector('canvas');
+        let liberar;
+        state.osItens.teste = [{id:'pdf',arte_url:'https://sintetico/lento.pdf'}];
+        window.fetch = () => new Promise(resolve => { liberar = () => resolve({ok:true,arrayBuffer:async () => new ArrayBuffer(4)}); });
+        const antiga = desenharAmostrasDaFolha(area,c,m,'front');
+        await Promise.resolve(); await Promise.resolve();
+        area.innerHTML = '<span>Nova montagem</span>';
+        liberar(); await antiga;
+        const descartou = area.textContent === 'Nova montagem' && !area.querySelector('canvas');
+        area.remove();
+        return {exibiu,direita,verso,manteve,paginas,pdfDesenhado,falha,descartou};
+    }, PECAS);
+    ok(previaFolha.exibiu && previaFolha.direita, 'amostra visível DENTRO da folha com informações à direita', previaFolha);
+    ok(previaFolha.verso && previaFolha.manteve, 'face e movimentação preservam a amostra da célula', previaFolha);
+    ok(previaFolha.paginas.join() === '5,6,1' && previaFolha.pdfDesenhado, 'arte PDF desenha canvas e compartilha a rasterização da página', previaFolha);
+    ok(previaFolha.falha && previaFolha.descartou, 'erro não mantém imagem anterior e resposta antiga não altera a nova folha', previaFolha);
+    if (process.env.MTG_FOTO_FOLHA) await (await aba.$('#mtg-folha')).screenshot({path:process.env.MTG_FOTO_FOLHA});
     await navegador.close();
 
     if (falhas) {
