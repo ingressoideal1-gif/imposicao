@@ -31662,7 +31662,7 @@ function ligarRelogioDaLista() {
 // Arte em PDF nao vira imagem aqui: sai um icone que abre o arquivo.
 // Rasterizar a arte do cliente esta fora de cogitacao neste projeto.
 
-function previewDaArteDoPedidoHtml(os) {
+function previewDaArteDoPedidoHtml(os, modelo = null) {
     /**
      * A imagem que entra quando nenhum modelo do pedido tem arte para mostrar.
      *
@@ -31685,7 +31685,7 @@ function previewDaArteDoPedidoHtml(os) {
     // Preview da arte do modelo de número mais baixo
     const numOsPreview = parseInt(os.numero);
     const modelosGlobaisPreview = (state.modelosGlobais && state.modelosGlobais[numOsPreview]) ? state.modelosGlobais[numOsPreview] : [];
-    const todosCandidatos = [...modelosGlobaisPreview, ...osItensList];
+    const todosCandidatos = modelo ? [modelo] : [...modelosGlobaisPreview, ...osItensList];
     
     const getModeloNumSort = (item) => {
         if (item && typeof item.ordem === 'number' && !isNaN(item.ordem)) return item.ordem;
@@ -31702,7 +31702,8 @@ function previewDaArteDoPedidoHtml(os) {
     let previewSrc = modeloPreviewItem ? (modeloPreviewItem._foto_produto_url || modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
     const previewEhProduto = !!(modeloPreviewItem && modeloPreviewItem._produto_prateleira && modeloPreviewItem._foto_produto_url);
     if (!previewSrc && state.todasArtes && !todosCandidatos.some(m => m && m._produto_prateleira)) {
-        const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(numOsPreview));
+        const arteGlobal = state.todasArtes.find(a => String(a.id_int) === String(numOsPreview)
+            && (!modelo || String(a.id_modelo) === String(modelo.id)));
         if (arteGlobal && (arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64)) {
             previewSrc = arteGlobal.url_arquivo || arteGlobal.url || arteGlobal.amostra_arte_base64;
         }
