@@ -26767,6 +26767,7 @@ async function carregarOrigensAprovacao() {
 }
 
 function recorteDaCargaDeOrdens() {
+    if (typeof document !== 'undefined' && document.getElementById('view-montagem')?.classList?.contains('active')) return 'producao';
     const producao = typeof document !== 'undefined' && document.getElementById('view-lista-impressao');
     const acabamento = typeof document !== 'undefined' && document.getElementById('view-acabamento');
     if (producao?.classList?.contains('active') || acabamento?.classList?.contains('active')) {

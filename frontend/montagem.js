@@ -3837,6 +3837,26 @@ function renderMontagem() {
 async function abrirMontagem() {
     if (state.montagem && state.montagem.gerando) { renderMontagem(); return; }
     if (!state.montagem || !state.montagem.celulas) state.montagem = montagemVazia();
+    // A fila de Arte pode ter carregado somente pedidos em arte. A Montagem
+    // precisa da fila de produção antes de descobrir formatos Aguardando.
+    const abertura = abrirMontagem.abertura = (abrirMontagem.abertura || 0) + 1;
+    const formato = document.getElementById('mtg-formato');
+    if (formato) {
+        formato.disabled = true;
+        formato.innerHTML = '<option value="">Carregando formatos…</option>';
+    }
+    try {
+        if (!(state.formatos || []).length) await loadAll();
+        const carregou = await loadOrdens();
+        if (abertura !== abrirMontagem.abertura) return;
+        if (carregou === false) throw new Error('Não foi possível carregar os pedidos da produção.');
+    } catch (e) {
+        if (abertura !== abrirMontagem.abertura) return;
+        if (formato) formato.innerHTML = '<option value="">Falha ao carregar — reabra a Montagem</option>';
+        toast(e.message || 'Não foi possível carregar os formatos. Reabra a Montagem para tentar novamente.', 'error');
+        return;
+    }
+    if (formato) formato.disabled = false;
     const restaurado = !state.montagem.celulas.length && !state.montagem.modelos.length
         ? restaurarRascunhoDaMontagem() : false;
     encherFormatosDaMontagem();
