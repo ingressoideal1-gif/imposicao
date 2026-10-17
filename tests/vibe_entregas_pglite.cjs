@@ -23,6 +23,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_proposta.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_rotas_proposta.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_gestao_adm.sql'),'utf8'));
+    await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_atribuicao_linha.sql'),'utf8'));
     await db.exec(`INSERT INTO auth.users VALUES('${uuid(91)}'),('${uuid(92)}');
       INSERT INTO vibe_entregas_acessos VALUES('${uuid(91)}','A','Motorista teste',true),('${uuid(92)}','B','Outro motorista',true);
       INSERT INTO propostas(id,id_int,cliente,empresa,frete_escolhido,status_interno) VALUES
@@ -127,8 +128,46 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     await assert.rejects(()=>salvar(412,[8,10],411),/outro entregador/);
     await login(95);const atribuida=(await db.query('SELECT ve_rotas_status() AS dados')).rows[0].dados;assert.equal(atribuida.length,1);assert.equal(atribuida[0].id,uuid(411));
     await login(93);await assert.rejects(()=>db.query('SELECT * FROM vibe_entregas_auditoria'),/permission denied/);
+    // Selecao por linha: cria, acrescenta, transfere e preserva historico atomico.
+    await db.exec(`RESET ROLE; INSERT INTO propostas(id,id_int,cliente,empresa,frete_escolhido,status_interno) VALUES
+      ('${uuid(20)}',1020,'Parada nova','A','MOTOBOY','EXPEDICAO'),('${uuid(21)}',1021,'Parada outra','A','MOTOBOY','EXPEDICAO');`);
+    await login(93);await db.query("SELECT ve_admin_preparar_cadastro($1,'second@example.invalid','Segundo',ARRAY['A'])",[uuid(402)]);
+    await db.exec(`RESET ROLE; INSERT INTO auth.users(id,email,raw_app_meta_data) VALUES('${uuid(96)}','second@example.invalid','{"vibe_operacao":"${uuid(402)}"}');`);
+    await login(93);await db.query('SELECT ve_admin_concluir_cadastro($1)',[uuid(402)]);
+    const atribuir=(pedido,driver,anterior=null)=>db.query('SELECT ve_admin_atribuir_rota($1,$2,$3) AS dados',[uuid(pedido),uuid(driver),anterior?uuid(anterior):null]);
+    const rotas=async()=>(await db.query('SELECT ve_admin_rotas() AS dados')).rows[0].dados;
+    await atribuir(20,95);const primeira=(await rotas()).find(r=>r.usuario===uuid(95));assert.deepEqual(primeira.paradas.map(p=>p.pedido),[1008,1020]);
+    assert.equal((await atribuir(20,95)).rows[0].dados.id,primeira.id);
+    await assert.rejects(()=>atribuir(6,95),/sem acesso/);
+    await assert.rejects(()=>atribuir(20,96),/outra sessao/);
+    await atribuir(20,96,95);
+    let rs=await rotas();assert.deepEqual(rs.find(r=>r.usuario===uuid(95)).paradas.map(p=>p.pedido),[1008]);assert.deepEqual(rs.find(r=>r.usuario===uuid(96)).paradas.map(p=>p.pedido),[1020]);
+    await atribuir(21,96);
+    const ativa=(await rotas()).find(r=>r.usuario===uuid(96));
+    const inicio=(previsoes)=>db.query('SELECT ve_admin_iniciar_deslocamento($1,$2) AS dados',[ativa.id,previsoes]);
+    const eta=new Date(Date.now()+3600000).toISOString(),eta2=new Date(Date.now()+7200000).toISOString();
+    const previsoes={[uuid(20)]:eta,[uuid(21)]:eta2};
+    await assert.rejects(()=>inicio({[uuid(20)]:eta}),/previsao/);
+    await db.exec('RESET ROLE');assert.equal((await db.query('SELECT status_interno FROM propostas WHERE id=$1',[uuid(20)])).rows[0].status_interno,'EXPEDICAO');assert.equal((await db.query('SELECT prevista_em FROM vibe_entregas_registros WHERE proposta=$1',[uuid(20)])).rows[0].prevista_em,null);
+    await login(96);await assert.rejects(()=>inicio(previsoes),/Edicao ADM/);
+    await login(93);await assert.rejects(()=>inicio({[uuid(20)]:eta2,[uuid(21)]:eta}),/ordem/);
+    // Falha do ERP reverte todos os pedidos e previsoes, inclusive os ja processados.
+    await db.exec(`RESET ROLE; CREATE TRIGGER teste_recusa BEFORE UPDATE ON propostas FOR EACH ROW WHEN (NEW.status_interno='EM TRANSITO' AND NEW.id_int=1021) EXECUTE FUNCTION teste_recusa();`);
+    await login(93);await assert.rejects(()=>inicio(previsoes),/falha simulada/);await db.exec('RESET ROLE; DROP TRIGGER teste_recusa ON propostas');
+    await login(93);const iniciada=(await inicio(previsoes)).rows[0].dados;assert.equal(iniciada.confirmado,true);assert.equal((await inicio(previsoes)).rows[0].dados.iniciada_em,iniciada.iniciada_em);
+    const acompanharNovas=(await db.query("SELECT ve_acompanhar('','deslocamento',current_date,current_date,0) AS dados")).rows[0].dados;
+    assert.deepEqual(acompanharNovas.map(p=>p.pedido),[1020,1021]);assert.ok(acompanharNovas.every(p=>p.prevista_em&&p.entregador_id===uuid(96)));
+    await assert.rejects(()=>atribuir(20,95,96),/indisponivel/);
+    await assert.rejects(()=>db.query('SELECT ve_admin_salvar_rota($1,$2,$3,$4,true)',[uuid(450),uuid(96),[uuid(20),uuid(21)],ativa.id]),/deslocamento/);
+    await login(96);const minhas=(await listar('minha'));assert.equal(minhas.length,2);assert.ok(minhas.every(p=>p.status_erp==='EM TRANSITO'&&p.prevista_em));
+    await assert.rejects(()=>db.query('SELECT ve_rota_confirmar($1)',[ativa.id]),/deslocamento/);
+    const caminho=`${uuid(96)}/${uuid(20)}/${uuid(460)}.jpg`;
+    await db.query("INSERT INTO storage.objects VALUES('vibe-entregas-comprovantes',$1,'{\"size\":10,\"mimetype\":\"image/jpeg\"}')",[caminho]);
+    assert.equal((await db.query("SELECT ve_registrar($1,$2,'entregue','Recebedor',$3,'',true) AS dados",[uuid(20),uuid(460),caminho])).rows[0].dados.confirmada,true);
+    await login(93);await assert.rejects(()=>atribuir(20,95,96),/concluida/);
+    const entregue=(await acompanhar('concluida')).find(p=>p.pedido===1020);assert.ok(entregue.concluida_em&&entregue.prevista_em);
     await db.exec(`RESET ROLE; UPDATE imposition_user_permissions SET perm_admin_edit=false WHERE user_id='${uuid(93)}';`);
-    await login(93);assert.equal((await db.query('SELECT ve_admin_contexto() AS dados')).rows[0].dados.editar,false);await assert.rejects(()=>salvar(413,[8],411),/Edicao ADM/);
+    await login(93);assert.equal((await db.query('SELECT ve_admin_contexto() AS dados')).rows[0].dados.editar,false);await assert.rejects(()=>salvar(413,[8],411),/Edicao ADM/);await assert.rejects(()=>atribuir(21,95,96),/Edicao ADM/);await assert.rejects(()=>inicio(previsoes),/Edicao ADM/);
     console.log('PASS: SQL real em memoria; pedido sem expedicao, retirada, foto privada, confirmacao, repeticao, filtro, isolamento e rollback atomico.');
   } finally { await db.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

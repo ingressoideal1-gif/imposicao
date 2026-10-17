@@ -45,7 +45,8 @@
     $('lista').replaceChildren();
     for (const p of rows) {
       const card = text('article', '', 'card');
-      card.append(text('span', p.estado === 'concluida' ? (demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? 'Com você' : 'Pronto para Expedir · Motoboy', 'tag'), text('h2', `Pedido ${p.id}`), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
+      card.append(text('span', p.estado === 'concluida' ? (demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? (p.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : 'Com você') : 'Pronto para Expedir · Motoboy', 'tag'), text('h2', `Pedido ${p.id}`), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
+      if (p.prevista_em) card.append(text('p', 'Previsão de entrega: '+new Date(p.prevista_em).toLocaleString('pt-BR')));
       if (p.registro) card.append(text('p', `${reasons[p.registro.resultado]} · ${p.registro.recebedor || 'Tentativa registrada'} · ${new Date(p.registro.hora).toLocaleString('pt-BR')}`));
       const actions = text('div', '', 'actions');
       const rota = text('a', 'Abrir rota', 'route'); rota.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.endereco); rota.target = '_blank'; rota.rel = 'noopener noreferrer';
