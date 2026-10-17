@@ -20,8 +20,8 @@ window.RotasEntregas = (() => {
   function andamento(){
     $('rota-ativa').hidden=!ativa;if(!ativa)return;
     const entregues=ativa.paradas.filter(p=>p.entregue).length;$('rota-progresso').textContent=`${entregues} de ${ativa.paradas.length} entregas concluídas`;$('rota-andamento').replaceChildren();
-    for(const p of ativa.paradas){const li=document.createElement('li');li.textContent=`Pedido ${p.pedido} · ${p.entregue?'Entregue':p.status_erp==='EXPEDICAO'?'Pendente':'Conferir situação no ERP'}`;$('rota-andamento').append(li);}
-    const proxima=ativa.paradas.find(p=>!p.entregue),destino=proxima?.status_erp==='EXPEDICAO'?proxima.endereco:!proxima&&ativa.retorno?grafica:null;
+    for(const p of ativa.paradas){const li=document.createElement('li');li.textContent=`Pedido ${p.pedido} · ${p.entregue?'Entregue':p.status_erp==='EM TRANSITO'?'Em deslocamento':p.status_erp==='EXPEDICAO'?'Planejado':'Conferir situação no ERP'}`;$('rota-andamento').append(li);}
+    const proxima=ativa.paradas.find(p=>!p.entregue),destino=['EXPEDICAO','EM TRANSITO'].includes(proxima?.status_erp)?proxima.endereco:!proxima&&ativa.retorno?grafica:null;
     $('rota-proxima').hidden=!destino;if(destino){$('rota-proxima').href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(destino);$('rota-proxima').textContent=proxima?'Navegar para próxima entrega':'Retornar à gráfica';}else $('rota-proxima').removeAttribute('href');
   }
   function iniciar(opcoes){fonte=opcoes;

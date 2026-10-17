@@ -4454,9 +4454,16 @@
                       <h4>Ordem das paradas</h4><ol id="ve-rota-sequencia"></ol><label class="ve-check"><input id="ve-rota-retorno-adm" type="checkbox" checked> Retornar à gráfica</label>
                       <p id="ve-rota-msg" role="alert"></p><button type="button" id="ve-rota-salvar" class="btn btn-primary">Salvar rota</button><button type="button" data-ve-fechar="ve-rota-editor" class="btn btn-ghost">Cancelar</button>
                     </dialog>
+                    <dialog id="ve-deslocamento">
+                      <h3>Iniciar deslocamento</h3><p>Informe a previsão de cada parada na ordem da rota. Horário de Brasília (UTC−03). Após iniciar, a rota fica bloqueada para alterações.</p>
+                      <form id="ve-deslocamento-form"><div id="ve-previsoes"></div><p id="ve-deslocamento-msg" role="alert"></p>
+                        <button id="ve-deslocamento-salvar" class="btn btn-primary">Confirmar início do deslocamento</button>
+                        <button type="button" data-ve-fechar="ve-deslocamento" class="btn btn-ghost">Cancelar</button>
+                      </form>
+                    </dialog>
                     <form id="ve-filtros" class="ve-filtros">
                         <label>Pedido<input id="ve-busca" inputmode="numeric" placeholder="Número exato" maxlength="30"></label>
-                        <label>Situação<select id="ve-status"><option value="disponivel">Disponíveis</option><option value="minha">Com entregador</option><option value="concluida">Concluídas</option><option value="tentativa">Tentativas</option></select></label>
+                        <label>Situação<select id="ve-status"><option value="disponivel">Disponíveis</option><option value="minha">Com entregador</option><option value="deslocamento">Em deslocamento</option><option value="concluida">Concluídas</option><option value="tentativa">Tentativas</option></select></label>
                         <label>De<input id="ve-de" type="date" required></label><label>Até<input id="ve-ate" type="date" required></label>
                         <button class="btn btn-primary" type="submit" id="ve-atualizar">Consultar</button>
                         <button class="btn btn-ghost" type="button" id="ve-demo">Ver demonstração</button>
@@ -4464,7 +4471,7 @@
                     <p>O período se aplica às conclusões e tentativas. Pedidos pendentes permanecem visíveis.</p>
                     <p id="ve-mensagem" role="status" aria-live="polite"></p>
                     <details><summary>Rotas dos entregadores</summary><button class="btn btn-ghost" type="button" id="ve-rotas-atualizar">Atualizar rotas</button><p id="ve-rotas-mensagem" role="status"></p><div id="ve-rotas-lista"></div></details>
-                    <div class="ve-tabela"><table><thead><tr><th>Pedido / cliente</th><th>Entregador</th><th>Retirada</th><th>Entrega / recebedor</th><th>Comprovante</th></tr></thead><tbody id="ve-linhas"></tbody></table></div>
+                    <div class="ve-tabela"><table><thead><tr><th>Pedido / cliente</th><th>Entregador</th><th>Atribuído em</th><th>Situação</th><th>Previsão de entrega</th><th>Entrega confirmada em / recebedor</th><th>Comprovante</th></tr></thead><tbody id="ve-linhas"></tbody></table></div>
                     <div class="ve-paginacao"><button class="btn btn-ghost" id="ve-anterior" disabled>Anterior</button><span id="ve-pagina"></span><button class="btn btn-ghost" id="ve-proxima" disabled>Próxima</button></div>
                     <dialog id="ve-detalhe"><h3 id="ve-detalhe-titulo">Detalhes da entrega</h3><p id="ve-detalhe-texto"></p><div id="ve-historico"></div><img id="ve-comprovante" alt="Foto do comprovante de entrega" hidden><p id="ve-foto-erro" role="alert"></p><button class="btn btn-ghost" id="ve-fechar">Fechar</button></dialog>
                 </div>
@@ -4592,7 +4599,7 @@
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
-    <script src="script.js?v=1075"></script>
+    <script src="script.js?v=1076"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=1067"></script>
     <script src="qr-evento-envio.js?v=948"></script>

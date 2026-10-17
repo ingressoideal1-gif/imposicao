@@ -69,6 +69,20 @@ const root = path.resolve(__dirname, '../frontend');
     await page.click('#sair');assert.equal(await page.$eval('#operacao',e=>e.hidden),true);
     assert.equal(await page.$eval('#rota-proxima',e=>e.getAttribute('href')),null);
 
+    // Transporte sintetico: pedidos em deslocamento continuam navegaveis no PWA.
+    await page.evaluate(()=>{
+      const pedido={chave:'p-transito',id:'1099',nome:'Cliente sintetico',endereco:'Rua de teste, 81',estado:'minha',status_erp:'EM TRANSITO',prevista_em:'2026-10-17T19:30:00Z'};
+      window.VibeEntregas.entrar=async()=>({id:'driver'});
+      window.VibeEntregas.listar=async()=>[pedido];
+      window.VibeEntregas.rotasAtivas=async()=>[{minha:true,id:'r-transito',iniciada_em:new Date().toISOString(),paradas:[{chave:pedido.chave,pedido:1099,endereco:pedido.endereco,status_erp:'EM TRANSITO',entregue:false}]}];
+    });
+    await page.type('#email','driver@example.invalid');await page.type('#senha','senha-sintetica');await page.click('#login button');
+    await page.waitForFunction(()=>!document.getElementById('operacao').hidden);await page.click('[data-filtro=minha]');
+    await page.waitForFunction(()=>document.querySelector('.card')?.textContent.includes('Em deslocamento'));
+    assert.match(await page.$eval('.card',e=>e.textContent),/Previsão de entrega/);
+    await page.evaluate(()=>document.getElementById('rotas-painel').open=true);await page.click('#rota-recuperar');
+    await page.waitForFunction(()=>!document.getElementById('rota-proxima').hidden);
+    assert.match(await page.$eval('#rota-andamento',e=>e.textContent),/Em deslocamento/);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
     console.log('PASS: busca, isolamento, retirada, foto, confirmacao, tentativa, revisao, mobile, offline e saida. Zero chamadas ao ERP.');
   } finally {await browser.close();await new Promise(resolve=>server.close(resolve));const target=path.resolve(dir);assert.ok(target.startsWith(path.resolve(os.tmpdir())+path.sep+'vibe-entregas-test-'));fs.rmSync(target,{recursive:true,force:true});}
