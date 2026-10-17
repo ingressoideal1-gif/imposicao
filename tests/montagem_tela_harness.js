@@ -1258,13 +1258,32 @@ const PECAS = [
     ok(nomesRepeticoes.quinze.startsWith('15x_') && nomesRepeticoes.dezesseis.startsWith('16x_') && nomesRepeticoes.vazio.startsWith('1x_'),
         'nome usa repetições da composição atual, arredonda a tiragem e aceita montagem vazia', nomesRepeticoes);
 
+    const identificacaoFrente = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
+        state.montagem.numero.imprimir = true;
+        const contar = () => document.querySelectorAll('#mtg-folha .mtg-celula span[style*="Impact"]').length;
+        _mtgRenderFaces();
+        document.getElementById('mtg-preview-front').click();
+        const frente = contar();
+        document.getElementById('mtg-preview-back').click();
+        const verso = contar();
+        mudarSaidaDaMontagem('rotacionarVerso', true);
+        const versoGirado = contar();
+        mudarVisualizacaoDaMontagem('front');
+        return {frente, verso, versoGirado, voltou:contar(), habilitada:state.montagem.numero.imprimir};
+    }, PECAS);
+    ok(identificacaoFrente.frente > 0 && identificacaoFrente.verso === 0 && identificacaoFrente.versoGirado === 0
+        && identificacaoFrente.voltou === identificacaoFrente.frente && identificacaoFrente.habilitada,
+        'identificação aparece somente na prévia da frente, preservando a escolha ao alternar faces', identificacaoFrente);
+
     const faces = await aba.evaluate(pecas => {
         window.__montar(pecas);
         const semVerso = document.getElementById('mtg-face-back').disabled && document.getElementById('mtg-preview-face').hidden;
         state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
         mudarFaceDaMontagem('both');
         mudarVisualizacaoDaMontagem('back');
-        const independente = state.montagem.face === 'both' && document.getElementById('mtg-preview-face').value === 'back';
+        const independente = state.montagem.face === 'both' && document.getElementById('mtg-preview-back').getAttribute('aria-pressed') === 'true' && document.getElementById('mtg-preview-front').getAttribute('aria-pressed') === 'false';
         mudarSaidaDaMontagem('separados', true);
         const separados = state.montagem.separados && state.montagem.face === 'both';
         mudarFaceDaMontagem('front');
@@ -1320,6 +1339,8 @@ const PECAS = [
 
     const saidaSeparada = await aba.evaluate(async pecas => {
         window.__montar(pecas);
+        state.montagem.modelos.forEach(m => { m.qtd = 15 * state.montagem.celulas.filter(c => chaveDoModelo(c) === chaveDoModelo(m)).length; });
+        state.montagem.celulas.forEach(c => { c.pos = 1; });
         state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
         const doc = await PDFLib.PDFDocument.create();
         for (let i = 0; i < 4; i++) doc.addPage([300 + i, 400]);
@@ -1351,6 +1372,8 @@ const PECAS = [
     ok(saidaSeparada.nomes.length === 2 && saidaSeparada.nomes[0].endsWith('_frente.pdf')
         && saidaSeparada.nomes[1].endsWith('_verso.pdf') && saidaSeparada.paginas[0].join() === '300,302'
         && saidaSeparada.paginas[1].join() === '301,303', 'Separados entrega dois PDFs com páginas e nomes corretos', saidaSeparada);
+    ok(saidaSeparada.nomes.length === 2 && saidaSeparada.gravados.length === 2 && saidaSeparada.nomes.every(n => n.startsWith('15x_')) && saidaSeparada.gravados.every(n => n.startsWith('15x_')),
+        'download e Hot Folder preservam 15x nas duas faces', saidaSeparada);
     ok(saidaSeparada.gravados.length === 2 && saidaSeparada.confirmacoes === 2 && saidaSeparada.chamadas === 2
         && saidaSeparada.recusou, 'Hot Folder recebe ambos; confirma uma vez por geração; PDF inválido não entrega nem confirma', saidaSeparada);
 
@@ -2003,7 +2026,7 @@ const PECAS = [
         });
         document.querySelector('.mtg-hotfolder-config').open = false;
         state.montagem.zoom='folha'; mudarFaceDaMontagem('both');
-        const select=document.getElementById('mtg-preview-face');select.value='back';select.dispatchEvent(new Event('change'));
+        document.getElementById('mtg-preview-back').click();
         await new Promise(r=>setTimeout(r,40));
         const verso=document.querySelector('.mtg-celula-amostra img')?.src===svg('blue');
         document.getElementById('mtg-rotacionarVerso').click();

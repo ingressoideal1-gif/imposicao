@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1073">
+    <link rel="stylesheet" href="/style.css?v=1074">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -3410,9 +3410,10 @@
                                      conferir o conteudo; `Folha` mostra o papel inteiro
                                      na proporcao real, e ai a SOBRA aparece pelo tamanho
                                      e nao so' por um numero; `100%` e' tamanho real. -->
-                                <select id="mtg-preview-face" class="form-control" aria-label="Visualização da folha" title="Visualização da folha" onchange="mudarVisualizacaoDaMontagem(this.value)" hidden>
-                                    <option value="front">Visualizar frente</option><option value="back">Visualizar verso</option>
-                                </select>
+                                <div id="mtg-preview-face" class="mtg-zoom" role="group" aria-label="Visualização da folha" hidden>
+                                    <button type="button" id="mtg-preview-front" class="ativo" aria-pressed="true" title="Visualizar frente" onclick="mudarVisualizacaoDaMontagem('front')">Frente</button>
+                                    <button type="button" id="mtg-preview-back" aria-pressed="false" title="Visualizar verso" onclick="mudarVisualizacaoDaMontagem('back')">Verso</button>
+                                </div>
                                 <div class="mtg-zoom">
                                     <button type="button" id="mtg-zoom-peca" onclick="zoomDaMontagem('peca')" title="As c&eacute;lulas enchem a largura &mdash; amplia, e a&iacute; a janela rola">Pe&ccedil;a</button>
                                     <button type="button" id="mtg-zoom-folha" class="ativo" onclick="zoomDaMontagem('folha')" title="A folha inteira, na propor&ccedil;&atilde;o real &mdash; cabe sem rolar">Folha</button>
@@ -4583,7 +4584,7 @@
     <script src="criador-arte.js?v=964"></script>
     <script src="/pedido.js?v=1060"></script>
     <script src="/producao-por-cor.js?v=1028"></script>
-    <script src="montagem.js?v=1073"></script>
+    <script src="montagem.js?v=1074"></script>
     <script src="acabamento.js?v=996"></script>
     <script src="avisos.js?v=948"></script>
 
