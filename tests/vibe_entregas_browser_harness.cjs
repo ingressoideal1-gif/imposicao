@@ -76,7 +76,7 @@ const root = path.resolve(__dirname, '../frontend');
       window.VibeEntregas.listar=async()=>[pedido];
       window.VibeEntregas.rotasAtivas=async()=>[{minha:true,id:'r-transito',iniciada_em:new Date().toISOString(),paradas:[{chave:pedido.chave,pedido:1099,endereco:pedido.endereco,status_erp:'EM TRANSITO',entregue:false}]}];
     });
-    await page.type('#email','driver@example.invalid');await page.type('#senha','0123');await page.click('#login button');
+    await page.type('#email','driver@example.invalid');await page.type('#senha','senha-sintetica');await page.click('#login button');
     await page.waitForFunction(()=>!document.getElementById('operacao').hidden);await page.click('[data-filtro=minha]');
     await page.waitForFunction(()=>document.querySelector('.card')?.textContent.includes('Em deslocamento'));
     assert.match(await page.$eval('.card',e=>e.textContent),/Previsão de entrega/);

@@ -26,6 +26,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_atribuicao_linha.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_pin.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_acesso_todas_empresas.sql'),'utf8'));
+    await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_login_empresas.sql'),'utf8'));
     await db.exec(`INSERT INTO auth.users VALUES('${uuid(91)}'),('${uuid(92)}');
       INSERT INTO vibe_entregas_acessos VALUES('${uuid(91)}','A','Motorista teste',true),('${uuid(92)}','B','Outro motorista',true);
       INSERT INTO propostas(id,id_int,cliente,empresa,frete_escolhido,status_interno) VALUES
@@ -185,6 +186,8 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     await db.exec("RESET ROLE; UPDATE vibe_entregas_pin_tentativas SET janela=now()-interval '16 minutes' WHERE chave=repeat('a',64); SET ROLE service_role");
     assert.equal((await db.query("SELECT ve_pin_tentar(repeat('a',64)) AS ok")).rows[0].ok,true);
     await db.exec('RESET ROLE; SET ROLE anon');await assert.rejects(()=>db.query("SELECT ve_pin_tentar(repeat('a',64))"),/permission denied/);
+    await login(97);assert.equal((await db.query('SELECT ve_entregador_autorizar() AS ok')).rows[0].ok,true);
+    await login(93);assert.equal((await db.query('SELECT ve_entregador_autorizar() AS ok')).rows[0].ok,false);
     console.log('PASS: SQL real em memoria; pedido sem expedicao, retirada, foto privada, confirmacao, repeticao, filtro, isolamento e rollback atomico.');
   } finally { await db.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

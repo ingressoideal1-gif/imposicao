@@ -1,7 +1,7 @@
 import { atender } from './index.ts';
 const id='00000000-0000-0000-0000-000000000095',op='00000000-0000-0000-0000-000000000400';
-const env=(n:string)=>({SUPABASE_URL:'https://example.invalid',SUPABASE_ANON_KEY:'anon-test',SUPABASE_SERVICE_ROLE_KEY:'server-test',VIBE_ENTREGAS_PIN_SECRET:'synthetic-secret-32-characters-only-test'}[n]);
-const base={acao:'criar',operacao:op,nome:'Pessoa sintetica',email:'driver@example.invalid',senha:'0123'};
+const env=(n:string)=>({SUPABASE_URL:'https://example.invalid',SUPABASE_ANON_KEY:'anon-test',SUPABASE_SERVICE_ROLE_KEY:'server-test'}[n]);
+const base={acao:'criar',operacao:op,nome:'Pessoa sintetica',email:'driver@example.invalid',senha:'Senha-sintetica-123'};
 function assert(v:unknown){if(!v)throw Error('Falha de contrato');}
 function setup(options:{adm?:boolean;reserva?:boolean;existente?:boolean;alvo?:boolean;final?:boolean}={}) {
  const calls:string[]=[];
@@ -11,7 +11,7 @@ function setup(options:{adm?:boolean;reserva?:boolean;existente?:boolean;alvo?:b
   else if(url.endsWith('/ve_admin_preparar_cadastro_geral')){data={usuario:options.existente?id:null};if(options.reserva===false)status=409;}
   else if(url.endsWith('/ve_admin_concluir_cadastro')){data={usuario:id,confirmado:options.final!==false};}
   else if(url.endsWith('/ve_admin_conta_senha')){data={usuario:id,email:'driver@example.invalid'};if(options.alvo===false)status=403;}
-  else if(url.includes('/auth/v1/admin/users')){assert(new Headers(init?.headers).get('Authorization')==='Bearer server-test');const enviado=JSON.parse(String(init?.body));assert(enviado.password!==base.senha&&enviado.password.length===68);data={id};}
+  else if(url.includes('/auth/v1/admin/users')){assert(new Headers(init?.headers).get('Authorization')==='Bearer server-test');const enviado=JSON.parse(String(init?.body));assert(enviado.password===base.senha);data={id};}
   else throw Error('Rede inesperada');return new Response(JSON.stringify(data),{status});}) as typeof fetch;
  const run=(body:unknown=base)=>atender(new Request('https://example.invalid',{method:'POST',headers:{Authorization:'Bearer session-test','Content-Type':'application/json'},body:JSON.stringify(body)}),fetcher,env);
  return{calls,run};
@@ -35,3 +35,5 @@ Deno.test('Origem externa continua sem permissao CORS',async()=>{
  const r=await atender(new Request('https://example.invalid',{method:'OPTIONS',headers:{Origin:'https://example.invalid','Access-Control-Request-Method':'POST'}}),fetch,env);
  assert(!r.headers.has('Access-Control-Allow-Origin'));
 });
+
+Deno.test('Senha tradicional mantida: quatro digitos recusados',async()=>{const s=setup();assert((await s.run({...base,senha:'1234'})).status===400);assert(!s.calls.some(x=>x.includes('/admin/users')));});

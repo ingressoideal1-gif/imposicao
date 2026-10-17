@@ -3,14 +3,14 @@ const source=fs.readFileSync(require('node:path').join(__dirname,'../frontend/en
 assert.match(source,/const ativo = true;/, 'Integracao implantada deve estar ativa');
 function ambiente(ativar=false){
   const calls=[];const state={rpc:{data:{confirmada:true,hora:'2026-10-17T15:00:00Z'},error:null},upload:null,download:new Blob(['foto']),signout:0};
-  const client={functions:{invoke:async()=>({data:{access_token:'synthetic-token',refresh_token:'synthetic-refresh'}})},auth:{getUser:async()=>({data:{user:{id:'usuario'}}}),setSession:async()=>({data:{user:{id:'usuario'}}}),signOut:async()=>{state.signout++;return{error:null};}},rpc:async(n,args)=>{calls.push({n,args});return state.rpc;},storage:{from:()=>({upload:async()=>({error:state.upload}),download:async()=>({data:state.download,error:null})})}};
+  const client={auth:{getUser:async()=>({data:{user:{id:'usuario'}}}),signInWithPassword:async()=>({data:{user:{id:'usuario'}}}),signOut:async()=>{state.signout++;return{error:null};}},rpc:async(n,args)=>{calls.push({n,args});return n==='ve_entregador_autorizar'&&!state.rpc.error?{data:true}:state.rpc;},storage:{from:()=>({upload:async()=>({error:state.upload}),download:async()=>({data:state.download,error:null})})}};
   const ctx={window:{},supabase:{createClient:()=>client},sessionStorage:{},VIBECODE_SUPABASE_URL:'https://example.invalid',VIBECODE_ANON_KEY:'fake',crypto:require('node:crypto').webcrypto,Uint8Array};
   vm.runInNewContext(source.replace(/const ativo = (true|false);/, 'const ativo = '+ativar+';'),ctx);
   return{api:ctx.window.VibeEntregas,calls,state};
 }
 (async()=>{
-  let a=ambiente();assert.equal(a.api.ativo,false);await assert.rejects(()=>a.api.entrar('teste','0123'),/não ativada/);assert.equal(a.calls.length,0);
-  a=ambiente(true);a.state.rpc={data:null,error:{message:'Negado'}};await assert.rejects(()=>a.api.entrar('teste','0123'),/Negado/);assert.equal(a.state.signout,1);
+  let a=ambiente();assert.equal(a.api.ativo,false);await assert.rejects(()=>a.api.entrar('teste','senha'),/não ativada/);assert.equal(a.calls.length,0);
+  a=ambiente(true);a.state.rpc={data:null,error:{message:'Negado'}};await assert.rejects(()=>a.api.entrar('teste','senha'),/Negado/);assert.equal(a.state.signout,1);
   a=ambiente(true);const pedido={chave:'proposta'},registro={resultado:'entregue',operacao:'op',recebedor:'Teste',observacao:'',volumes:true};
   assert.equal((await a.api.registrar(pedido,registro,new Blob(['foto']))).confirmada,true);assert.equal(a.calls[0].args.p_foto,'usuario/proposta/op.jpg');
   a.state.rpc={data:[],error:null};await assert.rejects(()=>a.api.registrar(pedido,registro,new Blob(['foto'])),/não confirmada/);
