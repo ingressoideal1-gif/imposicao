@@ -137,7 +137,7 @@ function montagemVazia() {
         modelosDoSeletor: [],
         buscaModelos: '',
         seletorModelosAberto: false,
-        face: 'both',
+        face: 'both', facePreview: 'front', separados: false, rotacionarVerso: false,
         gerando: false,
         modoTrabalho: 'manual', setores: ['TEXTIL'],
         // Os índices das células selecionadas. Repetir, tirar e mover passam a
@@ -176,7 +176,7 @@ if (typeof state !== 'undefined' && state && (!state.montagem || !state.montagem
  * `imprimir` nasce DESLIGADO, como a caixa equivalente da tela do Pedido.
  */
 function numeroPadraoDaMontagem() {
-    return { tipo: 'modelo', texto: '', imprimir: false, pos: 'esquerda', rot: 90, size: 14, cor: '#000000' };
+    return { tipo: 'pedido', texto: '', imprimir: false, pos: 'esquerda', rot: 90, size: 12, cor: '#008000' };
 }
 
 /** Os quatro valores que o motor aceita em cada campo. */
@@ -1401,31 +1401,50 @@ function mudarFaceDaMontagem(face) {
     if (state.montagem.gerando) return;
     if (!['both', 'front', 'back'].includes(face)) return;
     state.montagem.face = face;
+    if (face !== 'both') state.montagem.separados = false;
+    renderMontagem();
+}
+
+function mudarVisualizacaoDaMontagem(face) {
+    if (state.montagem.gerando || !['front', 'back'].includes(face)) return;
+    if (face === 'back' && !state.montagem.modelos.some(m => modoDaPecaNaMontagem(m.peca) !== 'front')) return;
+    state.montagem.facePreview = face;
+    renderMontagem();
+}
+
+function mudarSaidaDaMontagem(campo, ligado) {
+    if (state.montagem.gerando || !['separados', 'rotacionarVerso'].includes(campo)) return;
+    state.montagem[campo] = !!ligado;
+    if (campo === 'separados' && ligado) state.montagem.face = 'both';
     renderMontagem();
 }
 
 function _mtgRenderFaces() {
     const m = state.montagem;
     const comVerso = m.modelos.some(x => modoDaPecaNaMontagem(x.peca) !== 'front');
-    if (m.modelos.length && !comVerso && !m.gerando) m.face = 'front';
-    const sel = document.getElementById('mtg-face');
-    if (sel) {
-        for (const opt of sel.options) opt.disabled = !comVerso && opt.value !== 'front';
-        sel.value = comVerso ? (m.face || 'both') : 'front';
-        sel.disabled = !m.modelos.length;
+    if (!comVerso && !m.gerando) {
+        if (m.modelos.length) m.face = 'front';
+        m.facePreview = 'front'; m.separados = false; m.rotacionarVerso = false;
     }
-    const aviso = document.getElementById('mtg-face-aviso');
-    if (aviso) {
-        aviso.textContent = !m.modelos.length ? 'Adicione um modelo para escolher as faces.'
-            : comVerso ? 'MODELOS COM VERSO · não combine com modelos só frente.' : 'Modelos só frente · impressão apenas da frente.';
-        aviso.classList.toggle('mtg-com-verso', comVerso);
+    for (const face of ['front', 'back', 'both']) {
+        const el = document.getElementById('mtg-face-' + face);
+        if (!el) continue;
+        el.checked = (comVerso ? m.face : 'front') === face;
+        el.disabled = !m.modelos.length || (!comVerso && face !== 'front') || m.gerando;
     }
+    for (const campo of ['separados', 'rotacionarVerso']) {
+        const el = document.getElementById('mtg-' + campo);
+        if (!el) continue;
+        el.checked = !!m[campo];
+        el.disabled = !comVerso || m.gerando || (campo === 'rotacionarVerso' && m.face === 'front');
+    }
+    const preview = document.getElementById('mtg-preview-face');
+    if (preview) { preview.hidden = !comVerso; preview.value = m.facePreview || 'front'; }
     const escolhido = document.getElementById('mtg-modelo-face');
     const item = _mtgItemEscolhido();
     if (escolhido) {
-        escolhido.hidden = !item;
-        escolhido.textContent = item && modoDoModeloNaMontagem(item) !== 'front' ? 'MODELO COM VERSO' : 'Modelo só frente';
-        escolhido.classList.toggle('mtg-com-verso', !!item && modoDoModeloNaMontagem(item) !== 'front');
+        escolhido.hidden = !item || modoDoModeloNaMontagem(item) === 'front';
+        escolhido.textContent = 'COM VERSO';
     }
 }
 
@@ -1436,7 +1455,7 @@ function _mtgAtualizarGeracao() {
     const btn = document.getElementById('mtg-btn-pdf');
     if (btn) {
         btn.disabled = gerando || !!state.montagem.carregando || !state.montagem.celulas.length;
-        btn.textContent = gerando ? 'Montando…' : 'Gerar o PDF da montagem';
+        btn.textContent = gerando ? 'Montando…' : 'Gerar PDF';
     }
     const aviso = document.getElementById('mtg-geracao-aviso');
     if (aviso) aviso.textContent = gerando ? 'Gerando a montagem. Aguarde para continuar a edição.' : '';
@@ -1445,7 +1464,7 @@ function _mtgAtualizarGeracao() {
 // O motor monta frente/verso em pares, preservando o espelhamento do verso.
 // Filtrar DEPOIS mantém as páginas e os códigos do original, inclusive no
 // duplex clássico com frentes e versos alternados no PDF de entrada.
-async function selecionarFacesDoPdfDaMontagem(blob, face, modo, folhas) {
+async function selecionarFacesDoPdfDaMontagem(blob, face, modo, folhas, rotacionarVerso = false) {
     if (modo === 'front') {
         if (face === 'back') throw new Error('Este modelo não possui verso.');
         return blob;
@@ -1458,7 +1477,21 @@ async function selecionarFacesDoPdfDaMontagem(blob, face, modo, folhas) {
     if (!total || total !== folhas * 2) {
         throw new Error('O PDF retornou uma quantidade inesperada de páginas. As faces não foram entregues; confira a estação.');
     }
-    if (face === 'both') return blob;
+    if (rotacionarVerso && face !== 'front') {
+        // Transforma o conteúdo da folha inteira, sem alterar células, caixas,
+        // rotação existente ou perfil de cor do documento.
+        for (let i = 1; i < total; i += 2) {
+            const pagina = origem.getPage(i);
+            const box = pagina.getMediaBox();
+            pagina.node.normalize();
+            const inicio = origem.context.register(origem.context.flateStream(
+                `q\n-1 0 0 -1 ${2 * box.x + box.width} ${2 * box.y + box.height} cm\n`));
+            const fim = origem.context.register(origem.context.flateStream('Q\n'));
+            pagina.node.wrapContentStreams(inicio, fim);
+        }
+    }
+    if (face === 'both') return rotacionarVerso
+        ? new Blob([await origem.save()], { type: 'application/pdf' }) : blob;
     // Remover no documento original preserva o OutputIntent/ICC e os recursos
     // das páginas. Copiar para outro documento perderia o perfil do catálogo.
     const paridade = face === 'back' ? 1 : 0;
@@ -1483,7 +1516,7 @@ function numeroDaMontagemSaneado(n) {
     const rot = parseInt(n.rot);
 
     return {
-        tipo: ['modelo', 'pedido', 'personalizado'].includes(n.tipo) ? n.tipo : 'modelo',
+        tipo: ['modelo', 'pedido', 'personalizado'].includes(n.tipo) ? n.tipo : p.tipo,
         texto: String(n.texto || '').replace(/[\r\n]/g, ' '),
         imprimir: n.imprimir === true,
         pos: MTG_POSICOES_DO_NUMERO.indexOf(n.pos) >= 0 ? n.pos : p.pos,
@@ -1562,6 +1595,7 @@ function salvarRascunhoDaMontagem() {
             schema: 1, salvoEm: Date.now(), modoTrabalho: m.modoTrabalho,
             celulas: m.celulas.map(c => ({ osId: c.osId, itemId: c.itemId, pos: c.pos })),
             modelos: m.modelos.map(_mtgModeloPersistivel), face: m.face,
+            facePreview: m.facePreview, separados: m.separados, rotacionarVerso: m.rotacionarVerso,
             zoom: m.zoom, folha: m.folha, numero: numeroDaMontagemSaneado(m.numero),
             quantidadeMontagens: m.quantidadeMontagens, minimoRepeticoes: m.minimoRepeticoes,
             planoAplicado: m.planoAplicado,
@@ -1587,6 +1621,9 @@ function restaurarRascunhoDaMontagem() {
         base.celulas = Array.isArray(salvo.celulas) ? salvo.celulas : [];
         base.modelos = Array.isArray(salvo.modelos) ? salvo.modelos : [];
         base.face = ['both', 'front', 'back'].includes(salvo.face) ? salvo.face : 'both';
+        base.facePreview = salvo.facePreview === 'back' ? 'back' : 'front';
+        base.separados = salvo.separados === true && base.face === 'both';
+        base.rotacionarVerso = salvo.rotacionarVerso === true;
         base.zoom = ['peca', 'folha', '100'].includes(salvo.zoom) ? salvo.zoom : 'folha';
         base.folha = parseInt(salvo.folha) || 0;
         base.numero = numeroDaMontagemSaneado(salvo.numero);
@@ -3065,81 +3102,23 @@ function _mtgRenderNumero() {
     const caixa = document.getElementById('mtg-numero');
     if (!caixa) return;
     const n = state.montagem.numero;
-
-    const botao = (campo, valor, rotulo, ligado) =>
-        `<button type="button" class="mtg-num-op${ligado ? ' ativo' : ''}"
-                 onclick="mudarNumeroDaMontagem('${campo}', '${valor}')">${rotulo}</button>`;
-
-    const swatch = hex =>
-        `<button type="button" class="mtg-num-cor${n.cor === hex ? ' ativa' : ''}"
-               aria-label="Usar a cor ${hex}" aria-pressed="${n.cor === hex ? 'true' : 'false'}" title="${hex}"
-               style="background:${hex};" onclick="mudarNumeroDaMontagem('cor', '${hex}')"></button>`;
-
-    const pct = Math.round(((n.size - MTG_TAMANHO_MIN) / (MTG_TAMANHO_MAX - MTG_TAMANHO_MIN)) * 100);
-
-    caixa.innerHTML = `
-      <div class="mtg-num-cabecalho">
-        <h2>Identificação na célula</h2>
-        <label class="mtg-num-liga" title="Sai deitado na borda de cada item">
-          <input type="checkbox" id="mtg-num-imprimir" ${n.imprimir ? 'checked' : ''}
-                 onchange="alternarNumeroDaMontagem()">
-          <span>Imprimir</span>
-        </label>
-      </div>
-      <p class="mtg-dica" style="margin:0 0 12px;">Numa folha que mistura pedidos, é por ele que se separa o material depois de cortar.</p>
-
-      <div class="mtg-identificacao">
-        <label for="mtg-num-tipo">Identificação</label>
-        <select id="mtg-num-tipo" class="form-control" onchange="mudarNumeroDaMontagem('tipo', this.value)">
-          <option value="modelo" ${!n.tipo || n.tipo === 'modelo' ? 'selected' : ''}>Número do modelo</option>
-          <option value="pedido" ${n.tipo === 'pedido' ? 'selected' : ''}>Número do Pedido</option>
-          <option value="personalizado" ${n.tipo === 'personalizado' ? 'selected' : ''}>Personalizado</option>
-        </select>
-        ${n.tipo === 'personalizado' ? `<label for="mtg-num-texto">Texto na célula</label>
-          <input id="mtg-num-texto" class="form-control" type="text" value="${escapeHtml(n.texto || '')}"
-                 oninput="mudarTextoDaMontagem(this.value)">` : ''}
-      </div>
-      <div class="mtg-num-grade${n.imprimir ? '' : ' desligado'}">
-        <div class="mtg-num-campo">
-          <span class="mtg-num-rotulo">Posição</span>
-          <div class="mtg-num-linha">
-            ${botao('pos', 'esquerda', 'Esquerda', n.pos === 'esquerda')}
-            ${botao('pos', 'direita', 'Direita', n.pos === 'direita')}
-            ${botao('pos', 'topo', 'Topo', n.pos === 'topo')}
-            ${botao('pos', 'base', 'Base', n.pos === 'base')}
-          </div>
-        </div>
-
-        <div class="mtg-num-campo">
-          <span class="mtg-num-rotulo">Rotação</span>
-          <div class="mtg-num-linha">
-            ${MTG_ROTACOES_DO_NUMERO.map(g => botao('rot', g, g + '°', n.rot === g)).join('')}
-          </div>
-        </div>
-
-        <div class="mtg-num-campo">
-          <span class="mtg-num-rotulo">Tamanho <strong>${n.size} pt</strong></span>
-          <div class="mtg-num-faixa">
-            <input type="range" id="mtg-num-size" min="${MTG_TAMANHO_MIN}" max="${MTG_TAMANHO_MAX}" step="1"
-                   value="${n.size}" oninput="mudarNumeroDaMontagem('size', this.value)"
-                   style="--pct:${pct}%;">
-          </div>
-        </div>
-
-        <div class="mtg-num-campo">
-          <span class="mtg-num-rotulo">Cor</span>
-          <div class="mtg-num-linha" style="gap:7px;">
-            ${['#000000', '#ffffff', '#ef4444', '#3b82f6', '#22c55e'].map(swatch).join('')}
-            <input type="color" id="mtg-num-cor" value="${n.cor}"
-                   onchange="mudarNumeroDaMontagem('cor', this.value)" title="Outra cor">
-          </div>
-        </div>
-      </div>
-
-      <p class="mtg-dica" style="margin:11px 0 0;">${n.imprimir
-        ? 'A folha ao lado mostra como sai, na posição e no corpo que vão para o papel.'
-        : 'Desligado: o papel sai sem o número, como em toda tiragem normal.'}</p>`;
+    const drop = (campo, titulo, opcoes) => `<select id="mtg-num-${campo}" class="form-control"
+        aria-label="${titulo}" title="${titulo}" onchange="mudarNumeroDaMontagem('${campo}', this.value)">
+        ${opcoes.map(([v, label]) => `<option value="${v}" ${String(n[campo]) === String(v) ? 'selected' : ''}>${label}</option>`).join('')}</select>`;
+    const cores = [['#008000', 'Verde'], ['#000000', 'Preto'], ['#ffffff', 'Branco'], ['#ff0000', 'Vermelho'], ['#0000ff', 'Azul']];
+    if (!cores.some(([v]) => v === n.cor)) cores.push([n.cor, n.cor]);
+    caixa.innerHTML = `<span class="mtg-identificacao-titulo">Identificação na célula</span>
+        <label><input type="checkbox" id="mtg-num-imprimir" ${n.imprimir ? 'checked' : ''}
+            onchange="alternarNumeroDaMontagem()"> Imprimir</label>`
+        + drop('tipo', 'Identificação', [['pedido', 'N. Pedido'], ['modelo', 'N. Modelo'], ['personalizado', 'Personalizado']])
+        + (n.tipo === 'personalizado' ? `<input id="mtg-num-texto" class="form-control" aria-label="Texto da identificação"
+            value="${escapeHtml(n.texto || '')}" oninput="mudarTextoDaMontagem(this.value)">` : '')
+        + drop('pos', 'Posição', [['esquerda', 'Esquerda'], ['direita', 'Direita'], ['topo', 'Topo'], ['base', 'Base']])
+        + drop('rot', 'Rotação da identificação', MTG_ROTACOES_DO_NUMERO.map(r => [r, r + '°']))
+        + drop('size', 'Tamanho da identificação', Array.from({length: MTG_TAMANHO_MAX - MTG_TAMANHO_MIN + 1}, (_, i) => [i + MTG_TAMANHO_MIN, (i + MTG_TAMANHO_MIN) + ' pt']))
+        + drop('cor', 'Cor da identificação', cores);
 }
+
 
 /* ── A folha ─────────────────────────────────────────────────────────────── */
 
@@ -3272,6 +3251,7 @@ function _mtgRenderFolha() {
     // A compatibilidade da Montagem garante que todos tenham a mesma regra de
     // frente/verso. A janela repete o indicador do painel de produção.
     const comVerso = modelos.some(m => modoDaPecaNaMontagem(m.peca) !== 'front');
+    const versoGirado = comVerso && state.montagem.facePreview === 'back' && state.montagem.rotacionarVerso;
     alvo.className = 'mtg-folha' + (comVerso ? ' ped-modelo-com-verso' : '');
 
     if (!geo) {
@@ -3279,7 +3259,7 @@ function _mtgRenderFolha() {
         // simples do que um papel inventado — e o operador precisa saber.
         alvo.className = 'mtg-folha sem-medida';
         alvo.innerHTML = '<p class="mtg-dica" style="padding:14px;">'
-            + 'Não sei as medidas deste formato, então não desenho a folha. As células estão na lista ao lado, na ordem em que vão sair.</p>';
+            + 'Confira as medidas do formato para visualizar a folha.</p>';
         if (numFolha) numFolha.textContent = `${total} célula(s)`;
         _mtgSoltarAlturaDaJanela(alvo);
         _mtgRenderSeletorDeFolha(0, 0);
@@ -3352,10 +3332,8 @@ function _mtgRenderFolha() {
                 chaveDoModelo(o) === chaveDoModelo(c) && o.pos === c.pos) !== i;
             const marcada = selecao.indexOf(i) >= 0;
 
-            const rotulo = cabeRotulo
-                ? `<span class="mtg-celula-rotulo">${escapeHtml(String(m.pedidoNumero || c.osId))} · ${escapeHtml(String(c.itemId))} · #${c.pos}`
-                  + (repetida ? ' <em>repetida</em>' : '') + '</span>'
-                : '';
+            const rotulo = `<span class="mtg-celula-rotulo">${escapeHtml(String(m.pedidoNumero || c.osId))} · ${escapeHtml(String(c.itemId))} · #${c.pos}`
+                  + (repetida ? ' <em>repetida</em>' : '') + '</span>';
             const botoes = cabemBotoes ? `
                 <button type="button" class="mtg-celula-btn" title="Repetir esta célula na próxima, empurrando as outras"
                         onclick="event.stopPropagation(); duplicarCelulaDaMontagem(${i})">&#10697;</button>
@@ -3366,7 +3344,7 @@ function _mtgRenderFolha() {
                 ? `<span style="${_mtgEstiloDoNumero(numero, escala, textoNum)}">${escapeHtml(textoNum)}</span>`
                 : '';
             controles.push(`<div class="mtg-celula-controles${marcada ? ' marcada' : ''}" data-i="${i}"
-                style="left:${lugar.coluna * 220}px;top:${px(y).toFixed(1)}px;width:220px;height:${alturaCelulaPx.toFixed(1)}px;color:${fg};background:${bg};"
+                style="left:${(versoGirado ? geo.cols - 1 - lugar.coluna : lugar.coluna) * 220}px;top:${px(versoGirado ? alturaDesenho - y - geo.itemH : y).toFixed(1)}px;width:220px;height:${alturaCelulaPx.toFixed(1)}px;font-size:${Math.max(6, Math.min(10, alturaCelulaPx - 2)).toFixed(1)}px;line-height:1;color:${fg};background:${bg};"
                 onclick="selecionarCelulaDaMontagem(${i}, event)"
                 title="${escapeHtml(String(m.nome || ''))}">${rotulo}${botoes}</div>`);
 
@@ -3389,9 +3367,10 @@ function _mtgRenderFolha() {
             + controles.join('') + '</div></div>');
     }
 
-    alvo.innerHTML = (comVerso
-        ? '<span class="ped-modelo-verso-aviso">Modelo com Verso</span>' : '') + html.join('');
-    desenharAmostrasDaFolha(alvo, celulas, modelos, state.montagem.face === 'back' ? 'back' : 'front');
+    alvo.innerHTML = html.join('');
+    const papel = alvo.querySelector('.mtg-papel');
+    if (papel && versoGirado) papel.style.transform = 'rotate(180deg)';
+    desenharAmostrasDaFolha(alvo, celulas, modelos, state.montagem.facePreview === 'back' ? 'back' : 'front');
 
     if (numFolha) {
         const medida = geo.temPapel
@@ -3656,7 +3635,6 @@ function amostraDoModeloDaMontagem(modelo) {
 /** Desenha a lista, o selo, a trava, a folha e o painel do número. */
 function renderMontagem() {
     const { celulas, modelos, selecao } = state.montagem;
-    const lista = document.getElementById('mtg-lista');
     const selo = document.getElementById('mtg-selo');
     const trava = document.getElementById('mtg-trava');
     const resumo = document.getElementById('mtg-resumo');
@@ -3664,7 +3642,6 @@ function renderMontagem() {
     const btnLimpar = document.getElementById('mtg-btn-limpar');
     const badge = document.getElementById('badge-montagem');
     const confirmacao = document.getElementById('mtg-confirmacao');
-    if (!lista) return;
 
     const total = totalDeCelulasDaMontagem(celulas);
     const porFolha = _mtgCelulasPorFolha(modelos);
@@ -3736,7 +3713,7 @@ function renderMontagem() {
                 <span class="mtg-chip">${escapeHtml(String((sai && sai.nome) || ('saída ' + p.saida_id)))}</span>
                 <span class="mtg-chip">Bloco ${parseInt(p.bloco) || '—'}</span>
                 <span class="mtg-chip ${modoDaPecaNaMontagem(p) !== 'front' ? 'mtg-com-verso' : ''}">${face}</span>
-                <span style="margin-left:auto;font-size:0.75rem;color:var(--text-faint);">definido pela primeira célula</span>`;
+                `;
             trava.style.display = 'flex';
         }
     }
@@ -3748,82 +3725,8 @@ function renderMontagem() {
     }
 
     if (confirmacao) {
-        if (!modelos.length) {
-            confirmacao.className = 'mtg-confirmacao';
-            confirmacao.innerHTML = '<strong>Conferência para gerar</strong><span>Monte a folha para ver o resumo físico.</span>';
-        } else {
-            const p = modelos[0].peca || {};
-            const saida = _mtgSaidaDaFolha(modelos);
-            const pedidos = new Set(modelos.map(m => String(m.pedidoNumero || m.osId)));
-            const faceEfetiva = modoDaFolhaDaMontagem(modelos) === 'front' ? 'front' : state.montagem.face;
-            const face = faceEfetiva === 'front' ? 'apenas frente'
-                : faceEfetiva === 'back' ? 'apenas verso' : 'frente e verso';
-            confirmacao.className = 'mtg-confirmacao ' + (validacaoAtual.ok ? 'pronta' : 'impedida');
-            confirmacao.innerHTML = `
-              <div><strong>Conferência para gerar</strong><b>${validacaoAtual.ok ? 'Pronto' : 'Impedido'}</b></div>
-              <p>${pedidos.size} pedido(s) · ${modelos.length} modelo(s) · ${total} célula(s)</p>
-              <p>${escapeHtml(String(p.formato_nome || p.formato_id || 'formato não confirmado'))}
-                 · ${escapeHtml(String(p.cor || p.padrao || 'material não confirmado'))}
-                 · ${escapeHtml(String((saida && saida.nome) || p.saida_id || 'saída não confirmada'))}
-                 · bloco ${parseInt(p.bloco) || '—'} · ${face}</p>
-              ${validacaoAtual.ok ? '' : `<em>${escapeHtml(validacaoAtual.erros[0] || 'Revise a montagem.')}</em>`}`;
-        }
-    }
-
-    // ── A lista, por modelo ────────────────────────────────────────────────
-    if (!modelos.length) {
-        lista.innerHTML = `
-            <div class="mtg-vazio">
-              <svg viewBox="0 0 48 48" width="46" height="46" aria-hidden="true">
-                <rect x="6" y="9"  width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2"/>
-                <rect x="6" y="19" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2"/>
-                <rect x="6" y="29" width="36" height="6" rx="1.5" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
-                <rect x="6" y="39" width="36" height="6" rx="1.5" fill="none" stroke="#334a6b" stroke-width="2" stroke-dasharray="3 3"/>
-              </svg>
-              <h3>Nenhuma célula na montagem ainda</h3>
-              <p>Escolha o formato, um pedido em produção e um modelo aguardando. Digite as posições que precisam sair. Repita para quantos pedidos quiser: <strong>a folha aceita células de produtos e pedidos diferentes</strong>, desde que formato, material/cor, saída física, bloco e paginação sejam compatíveis.</p>
-              <div class="mtg-garantia">
-                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" style="flex-shrink:0;"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3zm-1.3 13.6-3.2-3.2 1.4-1.4 1.8 1.8 4.6-4.6 1.4 1.4-6 6z"/></svg>
-                <span>O código do ingresso refeito é <strong>o mesmo do original</strong> — a célula substitui, não duplica.</span>
-              </div>
-            </div>`;
-    } else {
-        lista.innerHTML = `
-            <div class="mtg-modelos-carregados">
-              ${modelos.map((m, j) => {
-                  const vezes = {};
-                  const ordem = [];
-                  for (const p of celulasDoModelo(celulas, m)) {
-                      if (!vezes[p]) { vezes[p] = 0; ordem.push(p); }
-                      vezes[p]++;
-                  }
-                  const [bg] = _MTG_TONS[j % _MTG_TONS.length].split('|');
-                  const chips = ordem.map(p =>
-                      `<span class="mtg-pos${vezes[p] > 1 ? ' repetida' : ''}">#${p}${vezes[p] > 1 ? ' ×' + vezes[p] : ''}</span>`).join('');
-                  const quantas = celulasDoModelo(celulas, m).length;
-                  return `
-                <div class="mtg-linha${_mtgLinhaAtiva(m) ? ' mtg-linha-ativa' : ''}" tabindex="0" role="button"
-                    onclick="retomarDaMontagem(${j})"
-                    onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();retomarDaMontagem(${j});}"
-                    title="Voltar a este modelo para acrescentar posições">
-                    <div class="mtg-amostra-modelo">
-                      <div class="mtg-amostra">${amostraDoModeloDaMontagem(m)}</div>
-                      <span class="mtg-tom" style="background:${bg};"></span>
-                      <div style="min-width:0;">
-                        <div style="color:var(--text);font-weight:600;">${escapeHtml(String(m.pedidoNumero || m.osId))} · ${escapeHtml(String(m.itemId))}</div>
-                        <div style="font-size:0.75rem;">${escapeHtml(String(m.nome).slice(0, 40))}</div>
-                        <span class="mtg-face-modelo ${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'mtg-com-verso' : ''}">${modoDaPecaNaMontagem(m.peca) !== 'front' ? 'MODELO COM VERSO' : 'Só frente'}</span>
-                        <div class="mtg-tiragem" title="Quantos itens este modelo imprime ao todo — é contra este número que a posição vale.">Tiragem: <strong>${(m.qtd || 0).toLocaleString('pt-BR')}</strong></div>
-                        <div>Na folha: <span class="mtg-posicoes">${chips}</span> <span style="color:var(--text-faint);font-size:0.74rem;">(${quantas})</span></div>
-                      </div>
-                    </div>
-                  <button type="button" class="mtg-tirar" aria-label="Tirar o modelo ${escapeHtml(String(m.itemId))} da montagem" title="Tirar este modelo da montagem, com todas as células dele" onclick="event.stopPropagation(); removerDaMontagem(${j})">&times;</button>
-                </div>`;
-              }).join('')}
-            </div>
-            <p class="mtg-dica" style="margin-top:10px;">
-              Clique numa linha para <strong>voltar àquele modelo</strong> e acrescentar posições.
-            </p>`;
+        confirmacao.textContent = modelos.length && !validacaoAtual.ok ? validacaoAtual.erros[0] : '';
+        confirmacao.hidden = !confirmacao.textContent;
     }
 
     // ── O selo ─────────────────────────────────────────────────────────────
@@ -3857,8 +3760,8 @@ function renderMontagem() {
     _mtgRenderSugestao();
     _mtgRenderSeletorDeModelos();
     _mtgRenderNumero();
-    _mtgRenderFolha();
     _mtgRenderFaces();
+    _mtgRenderFolha();
     _mtgAtualizarGeracao();
     salvarRascunhoDaMontagem();
 }
@@ -4495,7 +4398,10 @@ async function gerarPdfDaMontagem() {
     const pasta = pastaDaMontagem();
     const abrir = abrirNaTelaDaMontagem();
     const face = state.montagem.face || 'both';
-    let nome = nomeDoArquivoDaMontagem();
+    const separados = state.montagem.separados && face === 'both';
+    const rotacionarVerso = !!state.montagem.rotacionarVerso;
+    const nomeBase = nomeDoArquivoDaMontagem();
+    let nome = nomeBase;
 
     try {
         const modo = modoDaFolhaDaMontagem(modelos);
@@ -4548,32 +4454,31 @@ async function gerarPdfDaMontagem() {
         }
 
         const folhas = contaDaMontagem(celulas, _mtgCelulasPorFolha(modelos)).folhas;
-        const blob = await selecionarFacesDoPdfDaMontagem(await resp.blob(), faceEfetiva, modo, folhas);
-        const total = totalDeCelulasDaMontagem(celulas);
-
-        let onde = '';
-        if (pasta) {
-            try {
-                onde = await gravarPdfNaEstacao(base, pasta, blob, nome);
-            } catch (e) {
-                console.error('[montagem] a estação não gravou na pasta:', e);
-                if (typeof toast === 'function') {
-                    toast('Não deu para gravar em ' + pasta + ': ' + (e.message || e)
-                        + '. O PDF está descendo pelos downloads do navegador.', 'warning');
+        const original = await resp.blob();
+        const faces = separados && modo !== 'front' ? ['front', 'back'] : [faceEfetiva];
+        // Prepara todos os arquivos antes de entregar qualquer um.
+        const arquivos = [];
+        for (const faceArquivo of faces) {
+            arquivos.push({
+                blob: await selecionarFacesDoPdfDaMontagem(original, faceArquivo, modo, folhas, rotacionarVerso),
+                nome: nomeBase.replace(/\.pdf$/i, '_' + ({both:'frente-e-verso',front:'frente',back:'verso'}[faceArquivo]) + '.pdf'),
+            });
+        }
+        const destinosGravados = [];
+        for (const arquivo of arquivos) {
+            if (pasta) {
+                try { destinosGravados.push(await gravarPdfNaEstacao(base, pasta, arquivo.blob, arquivo.nome)); }
+                catch (e) {
+                    if (typeof toast === 'function') toast('Falha no Hot Folder: ' + (e.message || e)
+                        + '. Baixando ' + arquivo.nome + ' pelo navegador.', 'warning');
+                    baixarPdfDaMontagem(arquivo.blob, arquivo.nome);
                 }
-                baixarPdfDaMontagem(blob, nome);
-            }
-        } else {
-            baixarPdfDaMontagem(blob, nome);
+            } else baixarPdfDaMontagem(arquivo.blob, arquivo.nome);
         }
-
-        if (abrir) abrirPdfDaMontagemNaTela(blob, nome);
-
-        if (typeof toast === 'function') {
-            toast(onde
-                ? `${rotuloFace}: montagem gerada (${total} célula(s)) e gravada em ${onde}`
-                : `${rotuloFace}: montagem gerada com ${total} célula(s). O PDF desceu pelos downloads.`, 'success');
-        }
+        if (abrir) abrirPdfDaMontagemNaTela(arquivos[0].blob, arquivos[0].nome);
+        if (typeof toast === 'function') toast((arquivos.length === 2
+            ? 'PDFs de frente e verso gerados separadamente.' : 'PDF da montagem gerado.')
+            + (destinosGravados.length ? ' Gravado em ' + destinosGravados.join(', ') : ''), 'success');
         await confirmarImpressaoModelos(selecaoMontagem, { origem: 'pdf' });
     } catch (e) {
         console.error('[montagem]', e);

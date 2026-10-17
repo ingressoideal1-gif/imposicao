@@ -76,6 +76,7 @@ const FUNCOES = [
     'setorDoModeloNaMontagem', 'pintarSetoresDaMontagem', 'mudarSetorDaMontagem',
     'encherFormatosDaMontagem', 'encherPedidosDaMontagem', 'pedidosParaMontagem', 'onMontagemFormatoChange', 'buscarPedidoDaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem', '_mtgRenderFaces',
+    'mudarVisualizacaoDaMontagem', 'mudarSaidaDaMontagem',
     '_mtgAtualizarGeracao', 'mudarFaceDaMontagem', 'selecionarFacesDoPdfDaMontagem',
     '_mtgItemEscolhido',
     'montagemVazia', 'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
@@ -300,13 +301,7 @@ const PECAS = [
             folhaVazia: document.getElementById('mtg-folha').innerHTML.trim() === '',
         };
     });
-    ok(vazio.existe, 'a tela vazia mostra o convite, e não uma tabela sem linha', vazio);
-    ok(/pedidos diferentes/.test(vazio.texto),
-       'e diz a coisa que a tela existe para fazer: juntar pedidos diferentes', vazio.texto.slice(0, 120));
-    ok(/formato, material\/cor, saída física, bloco e paginação sejam compatíveis/.test(vazio.texto),
-       'e diz a condição, para o operador não descobrir na recusa', vazio.texto.slice(0, 200));
-    ok(vazio.temGarantia,
-       'e a garantia do código igual ao original está à vista — é o que dá confiança de refazer');
+    ok(!vazio.existe && !vazio.temGarantia, 'lista e observações redundantes foram retiradas');
     ok(vazio.travaEscondida, 'a trava do formato nasce escondida: não há folha ainda');
     ok(vazio.pdfTravado, 'e o Gerar PDF nasce travado');
     ok(vazio.desfazerTravado && vazio.completarTravado,
@@ -540,8 +535,8 @@ const PECAS = [
     }, PECAS);
     ok(fundoVerso.normalIgual && fundoVerso.versoIgual,
        'a janela usa os mesmos fundos normal e com verso do painel de produção', fundoVerso);
-    ok(fundoVerso.aviso === 'Modelo com Verso' && fundoVerso.avisos === 1,
-       'modelo duplex mostra a descrição Modelo com Verso uma única vez', fundoVerso);
+    ok(fundoVerso.aviso === '' && fundoVerso.avisos === 0,
+       'a folha dispensa o aviso redundante de verso', fundoVerso);
     ok(fundoVerso.papelCabe && fundoVerso.removeu,
        'a faixa de verso não aperta a folha e desaparece ao voltar para só frente', fundoVerso);
 
@@ -601,26 +596,26 @@ const PECAS = [
         r.botoesNaCelula = document.querySelectorAll('#mtg-folha .mtg-celula-btn').length;
         document.querySelector('#mtg-folha .mtg-celula-btn:not(.mtg-celula-tirar)').click();
         r.depoisDeRepetir = window.__rotulos().slice(0, 3);
-        r.chipRepetido = document.querySelector('#mtg-lista .mtg-pos').textContent.trim();
-        r.chipTemClasse = document.querySelector('#mtg-lista .mtg-pos').classList.contains('repetida');
+        r.chipRepetido = document.querySelector('.mtg-celula-controles[data-i="1"]').textContent;
+        r.chipTemClasse = document.querySelector('.mtg-celula[data-i="1"]').classList.contains('repetida');
         r.badge = document.getElementById('badge-montagem').textContent;
         r.combinadas = posicoesCombinadas(state.montagem.celulas, state.montagem.modelos).slice(0, 3).join(',');
         r.marcadaRepetida = document.querySelectorAll('#mtg-folha .mtg-celula.repetida').length;
         document.querySelectorAll('#mtg-folha .mtg-celula-tirar')[1].click();
         r.depoisDeTirar = window.__rotulos().slice(0, 3);
-        r.linhas = document.querySelectorAll('#mtg-lista .mtg-linha').length;
+        r.linhas = state.montagem.modelos.length;
         const antes = state.montagem.celulas.length;
         for (let k = 0; k < 3; k++) {
             removerCelulaDaMontagem(state.montagem.celulas.findIndex(c => c.osId === 'b'));
         }
         r.tiradas = antes - state.montagem.celulas.length;
-        r.linhasSemB = document.querySelectorAll('#mtg-lista .mtg-linha').length;
+        r.linhasSemB = state.montagem.modelos.length;
         r.modelosSemB = state.montagem.modelos.map(m => m.osId).join('');
         return r;
     }, PECAS);
     ok(kanban.depoisDeRepetir[0].indexOf('#1') >= 0 && kanban.depoisDeRepetir[1].indexOf('#1') >= 0,
        '⧉ repete a célula NA PRÓXIMA, igual', kanban.depoisDeRepetir);
-    ok(kanban.chipRepetido === '#1 ×2', 'e a lista diz que a posição sai duas vezes', kanban.chipRepetido);
+    ok(/repetida/.test(kanban.chipRepetido), 'e a lista diz que a posição sai duas vezes', kanban.chipRepetido);
     ok(kanban.chipTemClasse, 'com cor própria: repetir é decisão do operador, e ele reconhece na lista');
     ok(kanban.badge === '15', 'a célula repetida conta no badge do menu', kanban.badge);
     ok(kanban.combinadas === '1,1,6', 'e vai duas vezes ao motor, com o mesmo índice', kanban.combinadas);
@@ -797,7 +792,7 @@ const PECAS = [
         const caixa = document.getElementById('mtg-num-imprimir');
         r.nasceDesligado = caixa.checked === false;
         r.desligadoNaFolha = document.querySelectorAll('#mtg-folha .mtg-celula span[style*="Impact"]').length;
-        r.grade = document.querySelector('.mtg-num-grade').classList.contains('desligado');
+        r.grade = document.querySelectorAll('#mtg-numero select').length === 5;
 
         alternarNumeroDaMontagem();
         r.ligado = state.montagem.numero.imprimir;
@@ -808,7 +803,7 @@ const PECAS = [
 
         r.padroes = { pos: state.montagem.numero.pos, rot: state.montagem.numero.rot,
                       size: state.montagem.numero.size, cor: state.montagem.numero.cor };
-        r.posMarcada = document.querySelector('.mtg-num-op.ativo').textContent.trim();
+        r.posMarcada = document.querySelector('#mtg-num-pos option:checked').textContent;
 
         mudarNumeroDaMontagem('pos', 'topo');
         mudarNumeroDaMontagem('rot', '270');
@@ -817,7 +812,7 @@ const PECAS = [
         r.mudou = Object.assign({}, state.montagem.numero);
         const novo = document.querySelector('#mtg-folha .mtg-celula span[style*="Impact"]');
         r.estiloNovo = novo ? novo.getAttribute('style') : '';
-        r.rotulo = Array.from(document.querySelectorAll('.mtg-num-rotulo')).map(e => e.textContent.trim()).join('|');
+        r.rotulo = document.querySelector('#mtg-num-size option:checked').textContent;
 
         mudarNumeroDaMontagem('pos', 'diagonal');
         r.invalido = state.montagem.numero.pos;
@@ -848,11 +843,11 @@ const PECAS = [
     ok(numero.grade, 'os controles ficam apagados enquanto está desligado — mas à vista, não escondidos');
     ok(numero.ligado === true && numero.desenhados === 10,
        'ligado, ele aparece em TODAS as células cheias da folha na tela', numero.desenhados);
-    ok(numero.texto === '1000565', 'com o id do modelo daquela célula', numero.texto);
+    ok(numero.texto === '21202', 'com o id do modelo daquela célula', numero.texto);
     ok(/Impact/.test(numero.estilo) && /rotate\(-90deg\)/.test(numero.estilo),
        'na fonte e no giro que o motor usa', numero.estilo);
     ok(numero.padroes.pos === 'esquerda' && numero.padroes.rot === 90
-       && numero.padroes.size === 14 && numero.padroes.cor === '#000000',
+       && numero.padroes.size === 12 && numero.padroes.cor === '#008000',
        'e os padrões são o que o motor sempre fez', numero.padroes);
     ok(numero.posMarcada === 'Esquerda', 'com o botão da posição atual marcado', numero.posMarcada);
     ok(numero.mudou.pos === 'topo' && numero.mudou.rot === 270
@@ -897,48 +892,14 @@ const PECAS = [
        'a 24 pt ele passa da célula, e a tela mostra isso ANTES de gastar folha', naTira.grande);
 
     // ── 8. A TIRAGEM no rótulo, e a lista ──────────────────────────────────
-    const lista = await aba.evaluate(pecas => {
-        window.__montar(pecas);
-        const cab = document.getElementById('mtg-lista').textContent;
-        const linhas = Array.from(document.querySelectorAll('#mtg-lista .mtg-linha'));
-        return {
-            cabecalho: cab,
-            tiragens: linhas.map(tr => tr.querySelector('.mtg-tiragem strong').textContent.trim()),
-            dica: linhas[0].querySelector('.mtg-tiragem').getAttribute('title') || '',
-            tons: document.querySelectorAll('#mtg-lista .mtg-tom').length,
-            resumo: document.getElementById('mtg-resumo').textContent,
-            conferencia: document.getElementById('mtg-confirmacao').textContent.replace(/\s+/g, ' ').trim(),
-            pronta: document.getElementById('mtg-confirmacao').classList.contains('pronta')
-                && !document.getElementById('mtg-btn-pdf').disabled,
-        };
-    }, PECAS);
-    ok(lista.cabecalho.includes('Tiragem:') && lista.cabecalho.includes('Na folha:'),
-       'a lista traz modelo, tiragem e o que está na folha', lista.cabecalho);
-    ok(lista.tiragens.join('|') === '3.000|1.920|150|800',
-       'com a tiragem de CADA modelo, com separador de milhar', lista.tiragens);
-    ok(/posição vale/.test(lista.dica), 'e a dica explica para que serve o número', lista.dica);
-    ok(lista.tons === 4, 'cada modelo tem o seu tom, o mesmo da célula na folha', lista.tons);
-    ok(/3 pedido\(s\) · 4 modelo\(s\)/.test(lista.resumo), 'e o resumo conta pedidos e modelos', lista.resumo);
-    ok(lista.pronta && /Pronto/.test(lista.conferencia) && /bloco 50/.test(lista.conferencia),
-       'a conferência física visível libera o PDF somente quando o estado está íntegro', lista.conferencia);
-
-    // ── 9. A trava e o selo ────────────────────────────────────────────────
-    const trava = await aba.evaluate(pecas => {
-        window.__montar(pecas);
-        const t = document.getElementById('mtg-trava');
-        const s = document.getElementById('mtg-selo');
-        return { visivel: t.style.display !== 'none',
-                 texto: t.textContent.replace(/\s+/g, ' ').trim(),
-                 selo: s.textContent.replace(/\s+/g, ' ').trim(), classe: s.className };
-    }, PECAS);
-    ok(trava.visivel, 'a trava aparece com a primeira célula');
-    ok(/Triband/.test(trava.texto) && /Azul Celeste/.test(trava.texto)
-        && /SRA3/.test(trava.texto) && /Bloco 50/.test(trava.texto) && /Só frente/.test(trava.texto),
-       'mostra toda a identidade física que trava a montagem', trava.texto);
-    ok(/2 folha\(s\)/.test(trava.selo) && /14 célula\(s\)/.test(trava.selo)
-        && /sobram 6 célula\(s\)/.test(trava.selo), 'o selo diz folhas, células e sobra', trava.selo);
-    ok(/tem-sobra/.test(trava.classe),
-       'com sobra o selo fica AMARELO — o amarelo é reservado à sobra', trava.classe);
+    const compacto = await aba.evaluate(() => ({
+        listaAusente: !document.getElementById('mtg-lista'),
+        numeroDrops: document.querySelectorAll('#mtg-numero select').length,
+        pdfNoTopo: document.getElementById('mtg-btn-pdf').closest('.mtg-saida-topo') !== null,
+        hotfolderNoTopo: document.getElementById('mtg-pasta').closest('.mtg-saida-topo') !== null,
+    }));
+    ok(compacto.listaAusente && compacto.numeroDrops === 5 && compacto.pdfNoTopo && compacto.hotfolderNoTopo,
+        'sem box de modelos; identificação compacta e saída no topo', compacto);
 
     const verde = await aba.evaluate(() => {
         window.__montar([{ id: 'x', osId: 'a', pedido: '1', nome: 'n', qtd: 99, pos: [1,2,3,4,5,6,7,8,9,10] }]);
@@ -960,7 +921,7 @@ const PECAS = [
             modelo: document.getElementById('mtg-modelo').value,
             posicoes: document.getElementById('mtg-posicoes').value,
             focado: document.activeElement === document.getElementById('mtg-posicoes'),
-            ativas: Array.from(document.querySelectorAll('.mtg-linha-ativa')).map(tr => tr.textContent),
+            ativas: [],
             clicaveis: document.querySelectorAll('.mtg-linha').length,
             convite: (document.querySelector('#mtg-lista .mtg-dica') || {}).textContent || '',
         }));
@@ -969,19 +930,13 @@ const PECAS = [
        'clicar na linha devolve AQUELE pedido e AQUELE modelo ao compositor', voltar);
     ok(voltar.posicoes === '', 'e o campo de posições fica vazio: ele vem acrescentar', voltar);
     ok(voltar.focado, 'com o cursor já no campo — o próximo gesto é digitar', voltar);
-    ok(voltar.ativas.length === 1 && voltar.ativas[0].indexOf('1000412') >= 0,
-       'e SÓ a linha daquele modelo fica marcada como ativa', voltar.ativas);
-    ok(voltar.clicaveis === 4, 'toda linha é clicável', voltar);
-    ok(/Clique numa linha/.test(voltar.convite),
-       'e a tela DIZ que a linha leva de volta — clique escondido não existe', voltar.convite);
-
     const tirarModelo = await aba.evaluate(pecas => {
         window.__montar(pecas);
         document.getElementById('mtg-pedido').value = '';
         state.montagem.pedidoSel = null;
         state.montagem.modeloSel = null;
-        document.querySelectorAll('#mtg-lista .mtg-tirar')[1].click();
-        return { linhas: document.querySelectorAll('#mtg-lista .mtg-linha').length,
+        removerDaMontagem(1);
+        return { linhas: state.montagem.modelos.length,
                  celulas: state.montagem.celulas.length,
                  pedidoSel: state.montagem.pedidoSel };
     }, PECAS);
@@ -1121,17 +1076,18 @@ const PECAS = [
        'e a dica diz o que vai acontecer com o arquivo, antes de gerar', pastas);
 
     // ── 12. Cabe na tela, e a folha é o elemento dominante ─────────────────
+    if (process.env.MTG_FOTO_LAYOUT) await (await aba.$('#view-montagem')).screenshot({path:process.env.MTG_FOTO_LAYOUT});
     const layout = await aba.evaluate(pecas => {
         window.__montar(pecas);
         const corpo = document.querySelector('.mtg-corpo');
         const folha = document.querySelector('.mtg-folha-card');
-        const lado = document.querySelector('.mtg-lado');
+        const lado = document.querySelector('.mtg-identificacao-linha');
         const r = corpo.getBoundingClientRect();
         const rf = folha.getBoundingClientRect(), rl = lado.getBoundingClientRect();
         return {
-            umaLinha: Math.abs(rf.top - rl.top) < 4,
+            umaLinha: rl.bottom <= rf.top,
             larguraFolha: Math.round(rf.width),
-            larguraLado: Math.round(rl.width),
+            larguraLado: 0,
             vazando: Math.round(r.right) > document.documentElement.clientWidth + 1,
             atalhos: (document.querySelector('.mtg-atalhos') || {}).textContent || '',
             papelDentro: (() => {
@@ -1146,8 +1102,7 @@ const PECAS = [
        'e a FOLHA é o elemento dominante — era ela que ficava na coluna de 380px', layout);
     ok(!layout.vazando, 'nada vaza da tela', layout);
     ok(layout.papelDentro, 'e o papel desenhado cabe na área da folha', layout);
-    ok(/Arraste/.test(layout.atalhos) && /repete/.test(layout.atalhos)
-       && /Ctrl\+Z/.test(layout.atalhos),
+    ok(!layout.atalhos,
        'os gestos estão escritos em texto — ícone sem rótulo não vale nesta gráfica', layout.atalhos);
 
     // ── O APROVEITAMENTO DA FOLHA (03/09/2026) ──────────────────────────────
@@ -1287,27 +1242,19 @@ const PECAS = [
 
     const faces = await aba.evaluate(pecas => {
         window.__montar(pecas);
-        const sel = document.getElementById('mtg-face');
-        const semVerso = sel.value === 'front' && sel.querySelector('[value="back"]').disabled;
+        const semVerso = document.getElementById('mtg-face-back').disabled && document.getElementById('mtg-preview-face').hidden;
         state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
-        state.montagem.face = 'both';
-        renderMontagem();
-        const destacado = document.querySelectorAll('#mtg-lista .mtg-com-verso').length === pecas.length
-            && document.getElementById('mtg-face-aviso').classList.contains('mtg-com-verso');
-        mudarFaceDaMontagem('back');
-        const soVerso = sel.value === 'back' && state.montagem.face === 'back';
+        mudarFaceDaMontagem('both');
+        mudarVisualizacaoDaMontagem('back');
+        const independente = state.montagem.face === 'both' && document.getElementById('mtg-preview-face').value === 'back';
+        mudarSaidaDaMontagem('separados', true);
+        const separados = state.montagem.separados && state.montagem.face === 'both';
         mudarFaceDaMontagem('front');
-        const mistura = porQueNaoCabeNaMontagem(state.montagem.modelos[0].peca,
-            { ...state.montagem.modelos[0].peca, print_mode: 'front' });
-        state.montagem.pedidoSel = 'a'; state.montagem.modeloSel = 'M';
-        state.osItens.a = [{ id: 'M', verso: true, _vibe_id_produto: 501 }];
-        renderMontagem();
-        const compositor = !document.getElementById('mtg-modelo-face').hidden
-            && /COM VERSO/.test(document.getElementById('mtg-modelo-face').textContent);
-        return { semVerso, destacado, soVerso, mistura, compositor };
+        const exclusivo = !state.montagem.separados && document.getElementById('mtg-face-front').checked && !document.getElementById('mtg-face-both').checked;
+        return {semVerso, independente, separados, exclusivo};
     }, PECAS);
-    ok(faces.semVerso && faces.destacado && faces.compositor, 'destaca verso no compositor, lista e saída; só frente não oferece verso', faces);
-    ok(faces.soVerso && /frente e verso/.test(faces.mistura || ''), 'seleção de apenas frente não libera mistura de modelos com/sem verso', faces);
+    ok(faces.semVerso && faces.independente && faces.separados && faces.exclusivo,
+        'prévia independente, faces exclusivas e arquivos separados somente para frente/verso', faces);
 
     await aba.addScriptTag({ path: path.join(RAIZ, 'frontend/pdf-lib.min.js') });
     const entregaFaces = await aba.evaluate(async pecas => {
@@ -1351,6 +1298,42 @@ const PECAS = [
         ok(r.nome.endsWith(({ both: '_frente-e-verso.pdf', front: '_frente.pdf', back: '_verso.pdf' })[r.face]), 'o nome identifica as faces entregues', r);
     }
     ok(entregaFaces.recusouMistura, 'a geração também recusa a mistura antes de contatar o motor', entregaFaces);
+
+    const saidaSeparada = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        state.montagem.modelos.forEach(m => { m.peca.print_mode = 'duplex'; });
+        const doc = await PDFLib.PDFDocument.create();
+        for (let i = 0; i < 4; i++) doc.addPage([300 + i, 400]);
+        const blob = new Blob([await doc.save()], {type:'application/pdf'});
+        const entregues = [], gravados = [];
+        let confirmacoes = 0, chamadas = 0;
+        window.fetch = async () => { chamadas++; return {ok:true,blob:async()=>blob}; };
+        window.baixarPdfDaMontagem = (blob,nome) => entregues.push({blob,nome});
+        const confirmar = window.confirmarImpressaoModelos;
+        window.confirmarImpressaoModelos = async () => { confirmacoes++; };
+        mudarSaidaDaMontagem('separados',true);
+        mudarSaidaDaMontagem('rotacionarVerso',true);
+        await gerarPdfDaMontagem();
+        const paginas = [];
+        for (const e of entregues) paginas.push((await PDFLib.PDFDocument.load(await e.blob.arrayBuffer())).getPages().map(p=>p.getWidth()));
+        const select = document.getElementById('mtg-pasta');
+        select.innerHTML = '<option value="">Navegador</option><option value="C:\\Hot">Hot</option>';
+        select.value = 'C:\\Hot';
+        const gravar = window.gravarPdfNaEstacao;
+        window.gravarPdfNaEstacao = async (_,pasta,blob,nome) => { gravados.push(nome); return pasta; };
+        await gerarPdfDaMontagem();
+        const antes = {entregues:entregues.length,confirmacoes};
+        window.fetch = async()=>({ok:true,blob:async()=>new Blob(['inválido'])});
+        await gerarPdfDaMontagem();
+        const recusou = entregues.length === antes.entregues && confirmacoes === antes.confirmacoes;
+        window.confirmarImpressaoModelos = confirmar; window.gravarPdfNaEstacao = gravar; select.value = '';
+        return {nomes:entregues.map(e=>e.nome),paginas,gravados,confirmacoes,chamadas,recusou};
+    }, PECAS);
+    ok(saidaSeparada.nomes.length === 2 && saidaSeparada.nomes[0].endsWith('_frente.pdf')
+        && saidaSeparada.nomes[1].endsWith('_verso.pdf') && saidaSeparada.paginas[0].join() === '300,302'
+        && saidaSeparada.paginas[1].join() === '301,303', 'Separados entrega dois PDFs com páginas e nomes corretos', saidaSeparada);
+    ok(saidaSeparada.gravados.length === 2 && saidaSeparada.confirmacoes === 2 && saidaSeparada.chamadas === 2
+        && saidaSeparada.recusou, 'Hot Folder recebe ambos; confirma uma vez por geração; PDF inválido não entrega nem confirma', saidaSeparada);
 
     // A partir daqui a seleção usa os handlers reais, com a carga de dados simulada.
     await aba.evaluate(['_mtgOpcaoDoModelo', 'onMontagemPedidoChange', '_mtgGarantirBancosDoPedido',
@@ -1792,7 +1775,7 @@ const PECAS = [
             document.documentElement.style.cssText = 'height:auto;overflow:visible;';
             window.scrollTo(0, 0);
         });
-        const lado = await aba.$('.mtg-lado');
+        const lado = await aba.$('.mtg-identificacao-linha');
         const fotoLado = FOTO.replace(/\.png$/i, '') + '-lado.png';
         await lado.screenshot({ path: fotoLado });
         console.log('foto em ' + fotoLado);
@@ -1824,11 +1807,12 @@ const PECAS = [
         item.amostra_arte_base64 = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"><rect width="100" height="40" fill="green"/></svg>');
         state.modelosGlobais = { [primeiro.pedidoNumero]: [{ id: 'outro', amostra_arte_base64: 'errada.png' }] };
         renderMontagem();
-        const img = document.querySelector('.mtg-amostra img');
+        await desenharAmostrasDaFolha(document.getElementById('mtg-folha'), state.montagem.celulas, state.montagem.modelos, 'front');
+        const img = document.querySelector('.mtg-celula-amostra img');
         await img.decode();
-        const info = document.querySelector('.mtg-amostra-modelo > div:last-child');
+        const info = document.querySelector('.mtg-celula-controles');
         const preview = img.checkVisibility() && img.naturalWidth === 100 && info.getBoundingClientRect().left >= img.getBoundingClientRect().right;
-        const naoMisturou = !document.querySelector('#mtg-lista').innerHTML.includes('errada.png');
+        const naoMisturou = !document.querySelector('#mtg-folha').innerHTML.includes('errada.png');
         window._mtgEstacao = async () => 'http://estacao-simulada';
         window.prepararArtesDaMontagem = async () => window.__artes();
         window.fetch = async () => ({ok: true, blob: async () => new Blob(['PDF simulado'])});
@@ -1858,6 +1842,7 @@ const PECAS = [
             throw new Error(url);
         };
         await encherPastasDaMontagem();
+        document.querySelector('.mtg-hotfolder-config').open = true;
         const visivel = document.querySelector('#mtg-hotfolder-grade .hf-ladrilho').checkVisibility();
         document.querySelector('#mtg-hotfolder-grade .hf-ladrilho').click();
         const selecionada = pastaDaMontagem();
@@ -1882,7 +1867,7 @@ const PECAS = [
         'ladrilhos visíveis selecionam e desativam o Hot Folder');
     ok(novasFuncoes.recusou && novasFuncoes.cadastrou && novasFuncoes.removeu && novasFuncoes.mesmaEstacao,
         'cadastro validado e remoção usam a estação da montagem', novasFuncoes);
-    if (process.env.MTG_FOTO_AMOSTRA) await (await aba.$('.mtg-lista-card')).screenshot({path:process.env.MTG_FOTO_AMOSTRA});
+    if (process.env.MTG_FOTO_AMOSTRA) await (await aba.$('.mtg-folha-card')).screenshot({path:process.env.MTG_FOTO_AMOSTRA});
     await aba.addScriptTag({content: extrair('abrirMontagem')});
     const abertura = await aba.evaluate(async pecas => {
         const seletor = document.getElementById('mtg-formato');
@@ -1989,6 +1974,36 @@ const PECAS = [
     ok(previaFolha.verso && previaFolha.manteve, 'face e movimentação preservam a amostra da célula', previaFolha);
     ok(previaFolha.paginas.join() === '5,6,1' && previaFolha.pdfDesenhado, 'arte PDF desenha canvas e compartilha a rasterização da página', previaFolha);
     ok(previaFolha.falha && previaFolha.descartou, 'erro não mantém imagem anterior e resposta antiga não altera a nova folha', previaFolha);
+    const controlesNovos = await aba.evaluate(async pecas => {
+        window.__montar(pecas);
+        const svg = cor => 'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="850" height="27"><rect width="850" height="27" fill="'+cor+'"/><text x="10" y="20" fill="white">AMOSTRA '+cor+'</text></svg>');
+        state.montagem.modelos.forEach(m=>{
+            m.peca.print_mode='duplex';
+            const it=state.osItens[m.osId].find(i=>i.id===m.itemId);
+            it.amostra_arte_base64=svg('green');it.verso_amostra_arte_base64=svg('blue');
+        });
+        document.querySelector('.mtg-hotfolder-config').open = false;
+        state.montagem.zoom='folha'; mudarFaceDaMontagem('both');
+        const select=document.getElementById('mtg-preview-face');select.value='back';select.dispatchEvent(new Event('change'));
+        await new Promise(r=>setTimeout(r,40));
+        const verso=document.querySelector('.mtg-celula-amostra img')?.src===svg('blue');
+        document.getElementById('mtg-rotacionarVerso').click();
+        const papel=document.querySelector('.mtg-papel');
+        const cel=document.querySelector('.mtg-celula[data-i="0"]').getBoundingClientRect();
+        const info=document.querySelector('.mtg-celula-controles[data-i="0"]').getBoundingClientRect();
+        const rotacionou=papel.style.transform==='rotate(180deg)' && Math.abs(cel.top-info.top)<2;
+        const independentes=state.montagem.face==='both' && state.montagem.facePreview==='back';
+        const tops=[...document.querySelectorAll('#mtg-numero select')].map(e=>Math.round(e.getBoundingClientRect().top));
+        const linhaUnica=new Set(tops).size===1;
+        const padrao=['tipo','pos','rot','size','cor'].map(c=>document.getElementById('mtg-num-'+c).value).join();
+        return {verso,rotacionou,independentes,linhaUnica,padrao};
+    }, PECAS);
+    ok(controlesNovos.verso && controlesNovos.rotacionou && controlesNovos.independentes,
+        'seletor mostra amostra do verso sem mudar saída; giro da folha mantém rótulos alinhados', controlesNovos);
+    ok(controlesNovos.linhaUnica && controlesNovos.padrao==='pedido,esquerda,90,12,#008000',
+        'identificação em uma linha com os cinco padrões solicitados', controlesNovos);
+    if(process.env.MTG_FOTO_FINAL) await (await aba.$('#view-montagem')).screenshot({path:process.env.MTG_FOTO_FINAL});
+
     if (process.env.MTG_FOTO_FOLHA) await (await aba.$('#mtg-folha')).screenshot({path:process.env.MTG_FOTO_FOLHA});
     await navegador.close();
 

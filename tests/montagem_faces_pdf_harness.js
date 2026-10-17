@@ -118,12 +118,14 @@ async function testar() {
 
 // Usado pelo teste de integração: recebe exclusivamente PDFs sintéticos do tmp_path.
 if (process.argv[2]) {
-    const [entrada, frente, verso, modo, folhas] = process.argv.slice(2);
+    const [entrada, frente, verso, modo, folhas, girar] = process.argv.slice(2);
     (async () => {
         const blob = new Blob([fs.readFileSync(entrada)], { type: 'application/pdf' });
         for (const [face, arquivo] of [['front', frente], ['back', verso]]) {
-            const resultado = await contexto.selecionarFacesDoPdfDaMontagem(blob, face, modo, Number(folhas));
+            const resultado = await contexto.selecionarFacesDoPdfDaMontagem(blob, face, modo, Number(folhas), girar === 'true');
             fs.writeFileSync(arquivo, Buffer.from(await resultado.arrayBuffer()));
         }
+        const ambas = await contexto.selecionarFacesDoPdfDaMontagem(blob, 'both', modo, Number(folhas), girar === 'true');
+        fs.writeFileSync(frente + '.both.pdf', Buffer.from(await ambas.arrayBuffer()));
     })().catch(e => { console.error(e); process.exitCode = 1; });
 } else testar().catch(e => { console.error(e); process.exitCode = 1; });
