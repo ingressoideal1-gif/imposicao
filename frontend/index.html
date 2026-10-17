@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1071">
+    <link rel="stylesheet" href="/style.css?v=1072">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -3222,7 +3222,7 @@
                 <div class="page-header">
                     <div class="page-header-text">
                         <h1>&#129513; Montagem</h1>
-                        <p>Monte c&eacute;lulas de modelos aguardando, em pedidos em produ&ccedil;&atilde;o. Filtre pelo formato para encontrar os modelos.</p>
+
                     </div>
                     <!-- DESFAZER E REFAZER (03/09/2026). Era a falta mais grave:
                          um x no lugar errado apagava a celula sem volta, e repor
@@ -3246,18 +3246,50 @@
                     </div>
                 </div>
 
-                <div class="mtg-modos" role="group" aria-label="Modo de trabalho">
-                    <button type="button" id="mtg-modo-manual" class="ativo"
-                            onclick="mudarModoTrabalhoDaMontagem('manual')" aria-pressed="true">
-                        <strong>1. Reposição manual</strong>
-                        <span>Informe exatamente as células que precisam ser refeitas.</span>
+                <div class="card mtg-saida-topo">
+                    <div class="mtg-saida-linha">
+                        <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>Gerar PDF</button>
+                        <div class="mtg-faces-opcoes" role="group" aria-label="Faces do PDF">
+                            <label><input type="checkbox" id="mtg-face-front" onchange="mudarFaceDaMontagem('front')"> Frente</label>
+                            <label><input type="checkbox" id="mtg-face-back" onchange="mudarFaceDaMontagem('back')"> Verso</label>
+                            <label><input type="checkbox" id="mtg-face-both" checked onchange="mudarFaceDaMontagem('both')"> Frente×Verso</label>
+                            <label><input type="checkbox" id="mtg-separados" onchange="mudarSaidaDaMontagem('separados',this.checked)"> Separados</label>
+                            <label><input type="checkbox" id="mtg-rotacionarVerso" onchange="mudarSaidaDaMontagem('rotacionarVerso',this.checked)"> Rotacionar Verso</label>
+                        </div>
+                        <label class="mtg-abrir-opcao"><input type="checkbox" id="mtg-abrir" checked> Visualizar PDF</label>
+                    </div>
+                    <div class="mtg-hotfolder-topo">
+                        <label for="mtg-pasta">Hot Folder</label>
+                        <select id="mtg-pasta" class="form-control" onchange="onMontagemPastaChange()"><option value="">Baixar pelo navegador</option></select>
+                        <details class="mtg-hotfolder-config" ontoggle="_mtgRenderFolha()"><summary>Configurar pastas</summary>
+                            <div id="mtg-hotfolder-grade" class="hf-grade"></div>
+                            <button type="button" class="mtg-escolher-pasta" id="mtg-btn-pasta" onclick="escolherPastaDaMontagem()">Escolher pasta</button>
+                            <input type="text" id="mtg-hotfolder-colar" class="form-control" aria-label="Caminho da pasta de Hot Folder" placeholder="Cole o caminho da pasta" onchange="adicionarPastaColadaDaMontagem()">
+                        </details>
+                        <span id="mtg-destino-dica" hidden></span>
+                    </div>
+                    <div id="mtg-confirmacao" role="status" aria-live="polite" hidden></div>
+                </div>
+
+                <div class="prod-sectors-grid" id="mtg-setores" role="group" aria-label="Setores da Montagem">
+                    <button type="button" class="prod-btn-dark filter-btn-pill" data-setor="FLEXO"
+                            onclick="mudarSetorDaMontagem('FLEXO')" aria-pressed="false">
+                        <i class="fa-solid fa-layer-group"></i> Flexo
                     </button>
-                    <button type="button" id="mtg-modo-planejamento"
-                            onclick="mudarModoTrabalhoDaMontagem('planejamento')" aria-pressed="false">
-                        <strong>2. Planejamento recomendado</strong>
-                        <span>Combine tiragens e calcule composições para aproveitar a folha.</span>
+                    <button type="button" class="prod-btn-dark filter-btn-pill" data-setor="PVC"
+                            onclick="mudarSetorDaMontagem('PVC')" aria-pressed="false">
+                        <i class="fa-solid fa-id-card"></i> PVC
+                    </button>
+                    <button type="button" class="prod-btn-dark filter-btn-pill active" data-setor="TEXTIL"
+                            onclick="mudarSetorDaMontagem('TEXTIL')" aria-pressed="true">
+                        <i class="fa-solid fa-shirt"></i> Têxtil
+                    </button>
+                    <button type="button" class="prod-btn-dark filter-btn-pill" data-setor="LASER"
+                            onclick="mudarSetorDaMontagem('LASER')" aria-pressed="false">
+                        <i class="fa-solid fa-sun"></i> Laser
                     </button>
                 </div>
+
 
                 <!-- O compositor -->
                 <div class="card mtg-card-compositor">
@@ -3334,9 +3366,7 @@
                         </button>
                     </div>
 
-                    <p class="mtg-dica" id="mtg-dica">
-                        A posi&ccedil;&atilde;o &eacute; a do item <strong>dentro do modelo</strong> &mdash; o 1&ordm;, o 6&ordm;, o 22&ordm; da tiragem, onde quer que ele tenha ca&iacute;do na folha. Faixas valem: <code>1-4</code>.
-                    </p>
+
 
                     <!-- A trava: nasce escondida e aparece com a primeira celula. -->
                     <div id="mtg-trava" class="mtg-trava" style="display:none;"></div>
@@ -3344,6 +3374,8 @@
                     <!-- A recusa, quando o modelo escolhido nao cabe. -->
                     <div id="mtg-recusa" class="mtg-recusa" style="display:none;"></div>
                 </div>
+
+                <div class="card mtg-identificacao-linha" id="mtg-numero"></div>
 
                 <div class="mtg-corpo">
                     <!-- A FOLHA, no lugar nobre. Ela era uma coluna de 380px na
@@ -3377,6 +3409,9 @@
                                      conferir o conteudo; `Folha` mostra o papel inteiro
                                      na proporcao real, e ai a SOBRA aparece pelo tamanho
                                      e nao so' por um numero; `100%` e' tamanho real. -->
+                                <select id="mtg-preview-face" class="form-control" aria-label="Visualização da folha" title="Visualização da folha" onchange="mudarVisualizacaoDaMontagem(this.value)" hidden>
+                                    <option value="front">Visualizar frente</option><option value="back">Visualizar verso</option>
+                                </select>
                                 <div class="mtg-zoom">
                                     <button type="button" id="mtg-zoom-peca" onclick="zoomDaMontagem('peca')" title="As c&eacute;lulas enchem a largura &mdash; amplia, e a&iacute; a janela rola">Pe&ccedil;a</button>
                                     <button type="button" id="mtg-zoom-folha" class="ativo" onclick="zoomDaMontagem('folha')" title="A folha inteira, na propor&ccedil;&atilde;o real &mdash; cabe sem rolar">Folha</button>
@@ -3412,82 +3447,12 @@
 
                         <div id="mtg-selo" class="selo-sobra" style="margin-top:12px;"></div>
 
-                        <p class="mtg-dica mtg-atalhos">
-                            <strong>Arraste</strong> uma c&eacute;lula para mudar a ordem. <strong>&#10697;</strong> repete a c&eacute;lula na pr&oacute;xima, empurrando as outras; <strong>&times;</strong> tira s&oacute; ela.
-                            Clique para selecionar (<code>Shift</code> pega um intervalo, <code>Ctrl</code> avulsas) e o gesto vale para todas.
-                            No teclado: <code>setas</code> movem, <code>Del</code> tira, <code>Ctrl+D</code> repete, <code>Ctrl+Z</code> desfaz.
-                            Com mais de uma folha, a janela mostra <strong>uma por vez</strong>: use <strong>Folha &lsaquo; &rsaquo;</strong> na barra, ou solte a c&eacute;lula sobre a seta para mand&aacute;-la para a folha vizinha.
-                        </p>
+
                     </div>
 
                     <div class="card mtg-sugestao" id="mtg-sugestao" style="display:none;"></div>
                     </div>
 
-                    <!-- A coluna de apoio: quem sao os modelos, como o numero sai
-                         no papel, e para onde vai o arquivo. -->
-                    <div class="mtg-lado">
-                        <div class="card mtg-lista-card">
-                            <div class="card-header" style="margin-bottom: 12px;">
-                                <h2 style="font-size:0.98rem; font-weight:700; margin:0;">Modelos na montagem</h2>
-                                <span id="mtg-resumo" style="font-size:0.76rem; color:var(--text-faint);"></span>
-                            </div>
-                            <div id="mtg-lista"></div>
-                        </div>
-
-                        <!-- O NUMERO DO MODELO NO PAPEL (03/09/2026). O motor imprime
-                             o `nome` da arte na borda de cada item; ate esta versao so'
-                             a COR passava pelo payload, e tamanho, posicao e rotacao
-                             eram constantes no engine.py. O painel inteiro e' desenhado
-                             pelo montagem.js -- ver _mtgRenderNumero(). -->
-                        <div class="card mtg-numero-card" id="mtg-numero"></div>
-
-                        <div class="card mtg-saida-card">
-                            <div class="mtg-confirmacao" id="mtg-confirmacao" role="status" aria-live="polite"></div>
-                            <div class="mtg-faces">
-                                <label for="mtg-face">Faces da impressão</label>
-                                <p id="mtg-face-aviso" role="status">Adicione um modelo para escolher as faces.</p>
-                                <select id="mtg-face" class="form-control" onchange="mudarFaceDaMontagem(this.value)" disabled>
-                                    <option value="both">Frente e verso</option>
-                                    <option value="front">Apenas frente</option>
-                                    <option value="back">Apenas verso</option>
-                                </select>
-                                <em>A escolha vale para o PDF gerado. O verso mantém o posicionamento para o registro com a frente.</em>
-                            </div>
-                            <!-- ONDE O ARQUIVO VAI PARAR. Quem abre o seletor de pastas e
-                                 quem escreve no disco e' a ESTACAO, nao o navegador: e por
-                                 isso que funciona em qualquer navegador da grafica, sem
-                                 permissao e sem configuracao. E a mesma lista de pastas
-                                 autorizadas que a tela do Pedido usa para o hot folder. -->
-                            <div class="mtg-destino">
-                                <label for="mtg-pasta">Hot Folder — onde gravar o PDF</label>
-                                <div id="mtg-hotfolder-grade" class="hf-grade"></div>
-                                <select id="mtg-pasta" class="form-control" onchange="onMontagemPastaChange()">
-                                    <option value="">Baixar pelo navegador</option>
-                                </select>
-                                <button type="button" class="mtg-escolher-pasta" id="mtg-btn-pasta"
-                                        onclick="escolherPastaDaMontagem()">
-                                    &#128193; Escolher uma pasta desta esta&ccedil;&atilde;o&hellip;
-                                </button>
-                                <em id="mtg-destino-dica"></em>
-                                <input type="text" id="mtg-hotfolder-colar" class="form-control"
-                                       aria-label="Caminho da pasta de Hot Folder" placeholder="Ou cole o caminho da pasta…"
-                                       onchange="adicionarPastaColadaDaMontagem()">
-                                <em>Bandeja, papel, frente/verso, cor e cópias vêm do preset da pasta no RIP.</em>
-                            </div>
-
-                            <label class="mtg-opcao">
-                                <input type="checkbox" id="mtg-abrir" checked>
-                                <span>
-                                    Abrir o PDF na tela ao terminar
-                                    <em>Abre aqui mesmo, sobre o painel &mdash; sem janela nova, que o navegador bloqueia.</em>
-                                </span>
-                            </label>
-
-                            <button type="button" class="btn btn-primary" id="mtg-btn-pdf" onclick="gerarPdfDaMontagem()" disabled>
-                                &#128196; Gerar o PDF da montagem
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </fieldset>
             </section>
@@ -4089,6 +4054,7 @@
                         margin-bottom: -2px; border-radius: 6px 6px 0 0;
                         transition: all .2s;
                     ">📢 Avisos</button>
+                    <button id="adm-fretes-botao" class="adm-tab-btn" data-adm-tab="fretes" onclick="switchAdmTab('fretes')" style="display:none; background:none; border:none; padding:12px 20px; color:var(--text-dim); cursor:pointer;">Fretes</button>
                     <button class="adm-tab-btn" data-adm-tab="fundo" onclick="switchAdmTab('fundo')" style="
                         background: none; border: none; cursor: pointer;
                         padding: 10px 22px; font-size: 0.92rem; font-weight: 600;
@@ -4169,6 +4135,50 @@
 
                      A PORTARIA não recebe este fundo: ali a câmera trabalha a
                      cada quadro e a tela inteira já é significado. -->
+                <div id="adm-tab-fretes" class="adm-tab-content" style="display:none;">
+                    <h2>Cidades e tarifas de frete</h2>
+                    <p>Consulte e edite as tarifas por cidade. Valores em reais. O adicional é cobrado por quilo iniciado acima de 1 kg.</p>
+                    <form id="fretes-filtros" class="fretes-toolbar">
+                        <label>Cidade<input id="fretes-busca" type="search" maxlength="120" placeholder="Pesquisar cidade"></label>
+                        <label>UF<input id="fretes-uf" maxlength="2" size="4" placeholder="Todas"></label>
+                        <button class="btn btn-primary" type="submit">Consultar</button>
+                    </form>
+                    <p id="fretes-status" role="status" aria-live="polite"></p>
+                    <div class="fretes-tabela">
+                        <table aria-label="Tarifas por cidade e transportadora">
+                            <thead><tr><th scope="col">Cidade</th><th scope="col">UF</th><th scope="col">SM · até 1 kg</th><th scope="col">SM · kg extra</th><th scope="col">UN · até 1 kg</th><th scope="col">UN · kg extra</th><th scope="col">MB · até 1 kg</th><th scope="col">MB · kg extra</th><th scope="col">Ações</th></tr></thead>
+                            <tbody id="fretes-linhas"></tbody>
+                        </table>
+                    </div>
+                    <div class="fretes-toolbar">
+                        <button id="fretes-anterior" type="button" class="btn btn-secondary" disabled>Anterior</button>
+                        <span id="fretes-pagina">Página 1</span>
+                        <button id="fretes-proxima" type="button" class="btn btn-secondary" disabled>Próxima</button>
+                    </div>
+                    <div id="fretes-editor" class="card" hidden>
+                        <h3 id="fretes-titulo-editor">Editar tarifas</h3>
+                        <p>Tarifa até 1 kg vazia ou zero indica que a transportadora não atende a cidade. As mudanças só são gravadas ao salvar e afetam as próximas cotações.</p>
+                        <form id="fretes-form">
+                            <fieldset id="fretes-campos"><legend class="sr-only">Dados da cidade e tarifas</legend>
+                                <div class="fretes-grade">
+                                    <label>Cidade<input name="cidade" maxlength="120" required></label>
+                                    <label>UF<input name="uf" maxlength="2" pattern="[A-Za-z]{2}" required></label>
+                                    <label>SM · até 1 kg (R$)<input name="1kg_SM" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                    <label>SM · kg adicional (R$)<input name="extra_SM" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                    <label>UN · até 1 kg (R$)<input name="1kg_UN" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                    <label>UN · kg adicional (R$)<input name="extra_UN" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                    <label>MB · até 1 kg (R$)<input name="1kg_MB" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                    <label>MB · kg adicional (R$)<input name="extra_MB" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                </div>
+                                <div class="fretes-toolbar">
+                                    <button type="submit" class="btn btn-primary">Salvar alterações</button>
+                                    <button id="fretes-cancelar" type="button" class="btn btn-secondary">Cancelar</button>
+                                </div>
+                            </fieldset>
+                        </form>
+                    </div>
+                </div>
+
                 <div id="adm-tab-fundo" class="adm-tab-content" style="display:none;">
 
                     <div style="display:grid; grid-template-columns: minmax(0,1fr) 340px; gap:20px; align-items:start;">
@@ -4545,7 +4555,7 @@
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
-    <script src="script.js?v=1069"></script>
+    <script src="script.js?v=1072"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=1067"></script>
     <script src="qr-evento-envio.js?v=948"></script>
@@ -4553,7 +4563,7 @@
     <script src="criador-arte.js?v=964"></script>
     <script src="/pedido.js?v=1060"></script>
     <script src="/producao-por-cor.js?v=1028"></script>
-    <script src="montagem.js?v=1071"></script>
+    <script src="montagem.js?v=1072"></script>
     <script src="acabamento.js?v=996"></script>
     <script src="avisos.js?v=948"></script>
 

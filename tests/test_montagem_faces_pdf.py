@@ -15,10 +15,11 @@ def test_regras_e_filtro_de_faces():
     assert "OK:" in r.stdout
 
 
+@pytest.mark.parametrize("girar", [False, True])
 @pytest.mark.parametrize("identificacao", ["VIP", "21869"])
 @pytest.mark.parametrize("modo", ["duplex", "duplex_unico"])
 @pytest.mark.parametrize("posicoes", [[2], [3, 1, 3, 5, 2]])
-def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, posicoes, identificacao):
+def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, posicoes, identificacao, girar):
     # Importar o motor não deve consultar credenciais, banco ou serviços.
     # A pasta de perfis criada pelo módulo também fica no diretório do teste.
     monkeypatch.chdir(tmp_path)
@@ -50,7 +51,7 @@ def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, po
     ImpositionEngine(cfg).process()
     folhas = (len(posicoes) + 3) // 4
     r = subprocess.run(["node", str(RAIZ / "tests/montagem_faces_pdf_harness.js"),
-                        str(entrada), str(frente), str(verso), modo, str(folhas)],
+                        str(entrada), str(frente), str(verso), modo, str(folhas), str(girar).lower()],
                        cwd=RAIZ, capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert r.returncode == 0, r.stdout + r.stderr
     with fitz.open(entrada) as original:
@@ -68,4 +69,19 @@ def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, po
                     assert pagina.get_text() == origem.get_text()
                     assert pagina.rect == origem.rect
                     assert pagina.rotation == origem.rotation
+                    if girar and paridade == 1:
+                        # Referência visual independente: rodar a folha original,
+                        # não cada célula. O resultado mantém /Rotate original.
+                        origem.set_rotation((origem.rotation + 180) % 360)
                     assert pagina.get_pixmap().samples == origem.get_pixmap().samples
+
+    with fitz.open(entrada) as original, fitz.open(str(frente) + '.both.pdf') as ambas:
+        assert len(ambas) == folhas * 2
+        assert ambas.xref_get_key(ambas.pdf_catalog(), "OutputIntents")[0] != "null"
+        for i, pagina in enumerate(ambas):
+            origem = original[i]
+            assert pagina.rotation == origem.rotation
+            assert pagina.get_text() == origem.get_text()
+            if girar and i % 2:
+                origem.set_rotation((origem.rotation + 180) % 360)
+            assert pagina.get_pixmap().samples == origem.get_pixmap().samples
