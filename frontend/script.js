@@ -23198,6 +23198,7 @@ function applyPermissions(perms) {
     perms.perm_ideal_control_view =
         PAPEIS_DO_IDEAL_CONTROL.includes(String(perms.role || '').toLowerCase());
     window._currentPerms = perms;
+    window.FretesAdm?.atualizarAcesso();
 
     for (const [permKey, navIds] of Object.entries(PERM_NAV_MAP)) {
         const allowed = perms[permKey] === true;
@@ -47846,6 +47847,7 @@ let _admImages = []; // cache de imagens carregadas
 
 // ── Troca de aba horizontal ────────────────────────────────────────────────
 window.switchAdmTab = function(tabId) {
+    if (tabId === 'fretes' && papelAtual() !== 'admin') return;
     // Esconder todos os conteúdos de aba
     document.querySelectorAll('.adm-tab-content').forEach(el => el.style.display = 'none');
     // Desativar todos os botões
@@ -47863,6 +47865,7 @@ window.switchAdmTab = function(tabId) {
         btn.style.borderBottom = '2.5px solid var(--blue)';
     }
     // Carregar dados se necessário
+    if (tabId === 'fretes') window.FretesAdm?.abrir();
     if (tabId === 'imagens') loadAdmImages();
     if (tabId === 'aproveitamento' && typeof renderAdmAproveitamento === 'function') renderAdmAproveitamento();
     if (tabId === 'fundo' && typeof carregarFundoAtual === 'function') carregarFundoAtual();
@@ -47873,6 +47876,7 @@ const _origShowViewForAdm = window.showView;
 window.showView = function(viewId) {
     if (_origShowViewForAdm) _origShowViewForAdm(viewId);
     if (viewId === 'view-adm') {
+        window.FretesAdm?.atualizarAcesso();
         // Garantir que a aba imagens esteja ativa
         document.querySelectorAll('.adm-tab-content').forEach(el => el.style.display = 'none');
         const tabImg = document.getElementById('adm-tab-imagens');
@@ -48817,3 +48821,202 @@ async function carregarFundoAtual() {
 }
 
 window.carregarFundoAtual = carregarFundoAtual;
+
+// INICIO ADM FRETES
+/* Edição do cadastro existente. Cálculos e APIs continuam sob responsabilidade do ERP.
+ * A restrição ADM abaixo é da interface; não substitui as políticas do banco. */
+(function () {
+    'use strict';
+    const tarifas = ['1kg_SM', 'extra_SM', '1kg_UN', 'extra_UN', '1kg_MB', 'extra_MB'];
+    const campos = ['cidade', 'uf', ...tarifas];
+    const colunas = ['id', ...campos].join(',');
+    const ufs = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ');
+    let linhas = [], original = null, pagina = 0, sequencia = 0, ocupado = false;
+    const el = id => document.getElementById(id);
+    const adm = () => window.papelAtual?.() === 'admin';
+    const texto = valor => String(valor ?? '');
+    const dinheiro = valor => valor === null ? 'Não informado' : Number(valor).toLocaleString('pt-BR', {
+        style: 'currency', currency: 'BRL', maximumFractionDigits: 20
+    });
+
+    function aviso(mensagem, erro = false) {
+        el('fretes-status').textContent = mensagem;
+        el('fretes-status').style.color = erro ? 'var(--red, #ef4444)' : '';
+    }
+    function exigirAdm() {
+        if (!adm()) throw new Error('Fretes está disponível somente para ADM.');
+    }
+    async function requisitar(acao, corpo) {
+        exigirAdm();
+        const cliente = typeof supabaseClient !== 'undefined' ? supabaseClient : null;
+        const sessao = cliente ? await cliente.auth.getSession() : null;
+        if (sessao?.error) throw new Error('Não foi possível validar a sessão. Entre novamente.');
+        const token = sessao?.data?.session?.access_token;
+        if (!token) throw new Error('Entre com sua conta ADM do Vibe para gerenciar fretes.');
+        exigirAdm();
+        // ilike aceita curingas: a busca e a conferência de duplicatas usam texto literal.
+        const literal = valor => valor.replace(/[\\%_*]/g, caractere => '\\' + caractere);
+        if (acao === 'consultar') {
+            if (corpo.uf && !ufs.includes(corpo.uf)) throw new Error('Informe uma UF válida ou deixe em branco.');
+            let consulta = cliente.from('transportadoras').select(colunas)
+                .order('cidade').order('uf').order('id');
+            if (corpo.cidade) consulta = consulta.ilike('cidade', '%' + literal(corpo.cidade) + '%');
+            if (corpo.uf) consulta = consulta.ilike('uf', corpo.uf);
+            const { data, error } = await consulta.range(corpo.offset, corpo.offset + 50);
+            exigirAdm();
+            if (error) throw new Error('Não foi possível consultar os fretes. Tente novamente.');
+            if (!Array.isArray(data)) throw new Error('Resposta inválida ao consultar fretes.');
+            return { linhas: data.slice(0, 50), temMais: data.length > 50 };
+        }
+        if (acao !== 'salvar' || !Number.isSafeInteger(corpo.id) || corpo.id <= 0) {
+            throw new Error('Registro inválido. Consulte novamente.');
+        }
+        const alteracoes = Object.fromEntries(Object.entries(corpo.alteracoes).filter(([campo]) => campos.includes(campo)));
+        if ('cidade' in alteracoes || 'uf' in alteracoes) {
+            const cidade = alteracoes.cidade ?? corpo.original.cidade;
+            const uf = alteracoes.uf ?? corpo.original.uf;
+            const { data, error } = await cliente.from('transportadoras').select('id')
+                .ilike('cidade', literal(cidade)).ilike('uf', uf).neq('id', corpo.id).limit(1);
+            if (error || !Array.isArray(data)) throw new Error('Não foi possível conferir a cidade. Tente novamente.');
+            if (data.length) throw new Error('Essa cidade/UF já está cadastrada. Edite o registro existente.');
+        }
+        exigirAdm();
+        // Comparação atômica dos valores vistos ao abrir: não sobrescrever edição concorrente.
+        let atualizacao = cliente.from('transportadoras').update(alteracoes).eq('id', corpo.id);
+        campos.forEach(campo => {
+            atualizacao = corpo.original[campo] === null
+                ? atualizacao.is(campo, null) : atualizacao.eq(campo, corpo.original[campo]);
+        });
+        const { data, error } = await atualizacao.select(colunas);
+        exigirAdm();
+        if (error) throw new Error('Não foi possível confirmar a gravação. Consulte novamente antes de tentar salvar.');
+        if (!Array.isArray(data) || data.length !== 1) {
+            throw new Error('A gravação não foi confirmada: o registro pode ter sido alterado, removido ou o acesso recusado. Consulte novamente.');
+        }
+        return { linha: data[0] };
+    }
+    function cancelar() {
+        original = null;
+        el('fretes-editor').hidden = true;
+        el('fretes-form').reset();
+    }
+    function render() {
+        const corpo = el('fretes-linhas');
+        corpo.replaceChildren();
+        linhas.forEach(linha => {
+            const tr = document.createElement('tr');
+            campos.forEach(campo => {
+                const td = document.createElement('td');
+                td.textContent = tarifas.includes(campo) ? dinheiro(linha[campo]) : texto(linha[campo]);
+                tr.append(td);
+            });
+            const td = document.createElement('td');
+            const botao = document.createElement('button');
+            botao.type = 'button'; botao.className = 'btn btn-sm btn-secondary'; botao.textContent = 'Editar';
+            botao.disabled = ocupado;
+            botao.setAttribute('aria-label', `Editar frete de ${texto(linha.cidade)} / ${texto(linha.uf)}`);
+            botao.addEventListener('click', () => editar(linha));
+            td.append(botao); tr.append(td); corpo.append(tr);
+        });
+    }
+    async function carregar(novaPagina = 0) {
+        if (ocupado) return;
+        let minhaSequencia;
+        try {
+            exigirAdm();
+            if (original && !window.confirm('Descartar as alterações deste formulário?')) return;
+            cancelar();
+            minhaSequencia = ++sequencia;
+            el('fretes-anterior').disabled = true;
+            el('fretes-proxima').disabled = true;
+            linhas = []; render(); aviso('Consultando cidades…');
+            const dados = await requisitar('consultar', {
+                cidade: el('fretes-busca').value.trim(), uf: el('fretes-uf').value.trim().toUpperCase(),
+                offset: novaPagina * 50
+            });
+            if (minhaSequencia !== sequencia) return;
+            if (!Array.isArray(dados?.linhas)) throw new Error('Resposta inválida ao consultar fretes.');
+            linhas = dados.linhas; pagina = novaPagina; render();
+            el('fretes-anterior').disabled = pagina === 0;
+            el('fretes-proxima').disabled = dados.temMais !== true;
+            el('fretes-pagina').textContent = `Página ${pagina + 1}`;
+            aviso(linhas.length ? `${linhas.length} cidades nesta página.` : 'Nenhuma cidade encontrada.');
+        } catch (erro) { if (minhaSequencia === undefined || minhaSequencia === sequencia) aviso(erro.message, true); }
+    }
+    function editar(linha) {
+        if (!adm() || ocupado) return;
+        if (original && !window.confirm('Descartar as alterações deste formulário?')) return;
+        original = { ...linha };
+        campos.forEach(campo => {
+            el('fretes-form').elements.namedItem(campo).value = texto(linha[campo]);
+        });
+        el('fretes-editor').hidden = false;
+        el('fretes-titulo-editor').textContent = `Editar ${texto(linha.cidade)} / ${texto(linha.uf)}`;
+        el('fretes-form').elements.namedItem('cidade').focus();
+        aviso('Revise os campos e clique em Salvar alterações para gravar.');
+    }
+    function lerAlteracoes() {
+        const alteracoes = {};
+        for (const campo of campos) {
+            const valor = el('fretes-form').elements.namedItem(campo).value.trim();
+            // Campos intocados mantêm inclusive NULL, caixa e precisão do cadastro.
+            if (valor === texto(original[campo])) continue;
+            let novo;
+            if (tarifas.includes(campo)) {
+                if (valor && !/^\d+(?:[.,]\d+)?$/.test(valor)) throw new Error('Informe valores positivos ou zero, sem separador de milhares.');
+                novo = valor === '' ? null : Number(valor.replace(',', '.'));
+                if (novo !== null && (!Number.isFinite(novo) || novo < 0)) throw new Error('Tarifa inválida.');
+            } else {
+                novo = campo === 'uf' ? valor.toUpperCase() : valor;
+                if (!novo || (campo === 'uf' && !ufs.includes(novo))) throw new Error('Preencha cidade e uma UF válida.');
+            }
+            if (novo !== original[campo]) alteracoes[campo] = novo;
+        }
+        return alteracoes;
+    }
+    async function salvar(evento) {
+        evento.preventDefault();
+        if (ocupado || !original) return;
+        try {
+            exigirAdm();
+            const alteracoes = lerAlteracoes();
+            if (!Object.keys(alteracoes).length) { aviso('Nenhuma alteração para salvar.'); return; }
+            ocupado = true;
+            ++sequencia;
+            const registro = original;
+            el('fretes-campos').disabled = true;
+            render(); aviso('Salvando alterações…');
+            const dados = await requisitar('salvar', { id: registro.id, original: registro, alteracoes });
+            if (!dados?.linha || dados.linha.id !== registro.id ||
+                Object.entries(alteracoes).some(([campo, valor]) => dados.linha[campo] !== valor)) {
+                throw new Error('O serviço não confirmou os valores gravados. Consulte novamente antes de tentar salvar.');
+            }
+            linhas = linhas.map(linha => linha.id === dados.linha.id ? dados.linha : linha);
+            cancelar(); aviso('Alterações salvas.');
+        } catch (erro) { aviso(erro.message, true); }
+        finally { ocupado = false; el('fretes-campos').disabled = false; render(); }
+    }
+    function atualizarAcesso() {
+        const permitido = adm();
+        const botao = el('adm-fretes-botao');
+        if (botao) botao.style.display = permitido ? '' : 'none';
+        if (!permitido && el('adm-tab-fretes')) {
+            ++sequencia; linhas = []; cancelar(); render();
+            el('adm-tab-fretes').style.display = 'none';
+        }
+    }
+    function iniciar() {
+        if (!el('adm-tab-fretes')) return;
+        el('fretes-filtros').addEventListener('submit', evento => { evento.preventDefault(); carregar(0); });
+        el('fretes-form').addEventListener('submit', salvar);
+        el('fretes-cancelar').addEventListener('click', cancelar);
+        el('fretes-anterior').addEventListener('click', () => carregar(pagina - 1));
+        el('fretes-proxima').addEventListener('click', () => carregar(pagina + 1));
+        atualizarAcesso();
+    }
+    window.FretesAdm = { abrir: () => carregar(0), atualizarAcesso };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
+    else iniciar();
+})();
+
+// FIM ADM FRETES

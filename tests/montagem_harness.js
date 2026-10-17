@@ -64,7 +64,7 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const NOMES = [
-    'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'setorDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem',
     'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
     'porQueNaoCabeNaMontagem', 'validarMontagemParaGerar', 'chaveDoModelo', 'modeloDaMontagem',
@@ -109,7 +109,7 @@ function novoState() {
             { id_produto: 503, id_formato: 999 },   // aponta para formato que nao existe
         ],
         osItens: {},
-        montagem: { celulas: [], modelos: [], pedidoSel: null, modeloSel: null,
+        montagem: { setores: [], celulas: [], modelos: [], pedidoSel: null, modeloSel: null,
                     selecao: [], zoom: 'peca', numero: null, historia: [], futuro: [] },
     };
 }
@@ -123,7 +123,7 @@ const GLOBAIS = [
     'pedidosComBancoDesconhecido', 'bancoVazioNoPayload', 'recadoDeBancoVazio',
     'arteParaImpor', 'numeracaoIdDoItem', 'numeracaoSemElementosDeLayout', 'loadOSItens', 'numeroDoPedidoDoItem',
 ];
-const fabrica = new Function(...GLOBAIS, RESOLVER_FORMATO + '\n' +
+const fabrica = new Function(...GLOBAIS, RESOLVER_FORMATO + "\n" +
     FONTE.slice(FONTE.indexOf('const MontagemDominio ='), FONTE.indexOf('\n/**\n * As posições digitadas')).trim() + '\n'
     + CONSTANTES.map(extrairConst).join('\n') + '\n'
     + NOMES.map(extrair).join('\n') + '\nreturn {' + NOMES.join(',') + '};');
@@ -731,7 +731,7 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
 {
     const p = api.numeroPadraoDaMontagem();
     ok(p.imprimir === false, 'o número nasce DESLIGADO — novidade que muda o papel entra desligada');
-    ok(p.pos === 'esquerda' && p.rot === 90 && p.size === 14 && p.cor === '#000000',
+    ok(p.pos === 'esquerda' && p.rot === 90 && p.size === 12 && p.cor === '#008000',
        'e os quatro valores reproduzem o que o motor sempre fez', p);
 
     const san = api.numeroDaMontagemSaneado;
@@ -740,13 +740,13 @@ const cel = (osId, itemId, pos) => ({ osId, itemId, pos });
     ok(san({ pos: 'diagonal' }).pos === 'esquerda', 'posição desconhecida cai no padrão');
     ok(san({ rot: 45 }).rot === 90, 'rotação fora dos quatro ângulos cai no padrão');
     ok(san({ rot: '180' }).rot === 180, 'rotação em texto é aceita — vem de um atributo HTML');
-    ok(san({ size: 999 }).size === 14, 'tamanho fora da faixa cai no padrão');
-    ok(san({ size: 2 }).size === 14, 'e abaixo do mínimo também');
-    ok(san({ size: 'abc' }).size === 14, 'tamanho não numérico cai no padrão');
+    ok(san({ size: 999 }).size === 12, 'tamanho fora da faixa cai no padrão');
+    ok(san({ size: 2 }).size === 12, 'e abaixo do mínimo também');
+    ok(san({ size: 'abc' }).size === 12, 'tamanho não numérico cai no padrão');
     ok(san({ size: '18' }).size === 18, 'tamanho em texto é aceito — vem de um input range');
-    ok(san({ cor: 'vermelho' }).cor === '#000000', 'cor que não é hex de 6 casas cai no padrão');
+    ok(san({ cor: 'vermelho' }).cor === '#008000', 'cor que não é hex de 6 casas cai no padrão');
     ok(san({ cor: '#ABCDEF' }).cor === '#ABCDEF', 'hex maiúsculo é aceito');
-    ok(san(null).size === 14, 'sem nada, o padrão inteiro');
+    ok(san(null).size === 12, 'sem nada, o padrão inteiro');
     ok(san({ imprimir: 'sim' }).imprimir === false, 'só o booleano true liga a impressão');
 
     // O texto: o motor faz `zfill(6)` — preenche ATÉ seis, e deixa passar o
@@ -812,7 +812,7 @@ async function testarPreparo() {
     ok(artes.map(a => a.modelo).join(',') === '1,9,2',
        'as artes saem NA ORDEM DOS MODELOS, e não na ordem dos pedidos — é a ordem do multi_artes', artes.map(a => a.modelo));
     ok(artes.every(a => a._multi === true), 'cada arte passa por arteParaOMotor como folha combinada');
-    ok(artes.every(a => a.nome === String(a.modelo).padStart(6, '0')),
+    ok(artes.map(a => a.nome).join(',') === '21202,21188,21202' && artes.every(a => a.nome_literal),
        'com o número ligado, ele vai em cada arte — a escolha da montagem, não a salva no modelo');
     ok(artes.map(a => a._tiragem).join(',') === '100,50,30',
        'cada arte diz quantos itens têm como sair certo', artes.map(a => a._tiragem));
@@ -839,7 +839,7 @@ async function testarPreparo() {
     stRuim.state.montagem.numero = { imprimir: true, pos: 'diagonal', rot: 45, size: 999, cor: 'azul' };
     const artesRuins = await montarApi(stRuim).prepararArtesDaMontagem(modelos);
     ok(artesRuins.every(a => a.nome_pos === 'esquerda' && a.nome_rot === 90
-                          && a.nome_size === 14 && a.nome_color === '#000000'),
+                          && a.nome_size === 12 && a.nome_color === '#008000'),
        'valor inválido é saneado ANTES de ir ao motor, e cai no padrão de hoje', artesRuins[0]);
 
     let erro = null;
