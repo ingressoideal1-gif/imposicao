@@ -3,7 +3,7 @@ const source=fs.readFileSync(require('node:path').join(__dirname,'../frontend/en
 assert.match(source,/const ativo = true;/, 'Integracao implantada deve estar ativa');
 function ambiente(ativar=false){
   const calls=[];const state={rpc:{data:{confirmada:true,hora:'2026-10-17T15:00:00Z'},error:null},upload:null,download:new Blob(['foto']),signout:0};
-  const client={auth:{getUser:async()=>({data:{user:{id:'usuario'}}}),signInWithPassword:async()=>({data:{user:{id:'usuario'}}}),signOut:async()=>{state.signout++;return{error:null};}},rpc:async(n,args)=>{calls.push({n,args});return state.rpc;},storage:{from:()=>({upload:async()=>({error:state.upload}),download:async()=>({data:state.download,error:null})})}};
+  const client={auth:{getUser:async()=>({data:{user:{id:'usuario'}}}),signInWithPassword:async()=>({data:{user:{id:'usuario'}}}),signOut:async()=>{state.signout++;return{error:null};}},rpc:async(n,args)=>{calls.push({n,args});return n==='ve_entregador_autorizar'&&!state.rpc.error?{data:true}:state.rpc;},storage:{from:()=>({upload:async()=>({error:state.upload}),download:async()=>({data:state.download,error:null})})}};
   const ctx={window:{},supabase:{createClient:()=>client},sessionStorage:{},VIBECODE_SUPABASE_URL:'https://example.invalid',VIBECODE_ANON_KEY:'fake',crypto:require('node:crypto').webcrypto,Uint8Array};
   vm.runInNewContext(source.replace(/const ativo = (true|false);/, 'const ativo = '+ativar+';'),ctx);
   return{api:ctx.window.VibeEntregas,calls,state};

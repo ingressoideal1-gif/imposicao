@@ -4,7 +4,7 @@ import { comCors, origemPermitida, respostaDePreflight } from '../_compartilhado
 export async function atender(req: Request, fetcher: typeof fetch = fetch, env=(n:string)=>Deno.env.get(n)) {
   const origem=origemPermitida(req.headers.get('origin'));
   const resposta=(body:unknown,status=200)=>comCors(new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}}),origem);
-  if(req.method==='OPTIONS')return respostaDePreflight(origem,'POST, OPTIONS','authorization,content-type,apikey');
+  if(req.method==='OPTIONS')return respostaDePreflight(origem,'POST, OPTIONS','authorization,content-type,apikey,x-client-info');
   if(req.headers.has('origin')&&!origem)return resposta({erro:'Origem não permitida.'},403);
   if(req.method!=='POST')return resposta({erro:'Método não permitido.'},405);
   const url=env('SUPABASE_URL'),anon=env('SUPABASE_ANON_KEY'),service=env('SUPABASE_SERVICE_ROLE_KEY');
@@ -23,10 +23,10 @@ export async function atender(req: Request, fetcher: typeof fetch = fetch, env=(
     if(!body || typeof body.senha!=='string'||body.senha.length<12||body.senha.length>128)return resposta({erro:'Use uma senha de 12 a 128 caracteres.'},400);
     const admin=async(path:string,method:string,dados:unknown)=>fetcher(url+'/auth/v1/admin/users'+path,{method,headers:{Authorization:'Bearer '+service,apikey:service,'Content-Type':'application/json'},body:JSON.stringify(dados),signal:AbortSignal.timeout(15000)});
     if(body.acao==='criar') {
-      if(!uuid.test(body.operacao)||typeof body.nome!=='string'||body.nome.trim().length<2||body.nome.trim().length>120||typeof body.email!=='string'||body.email.length>254||!Array.isArray(body.empresas)||!body.empresas.length||body.empresas.length>30||body.empresas.some((e:unknown)=>typeof e!=='string'))return resposta({erro:'Confira nome, e-mail e empresas.'},400);
+      if(!uuid.test(body.operacao)||typeof body.nome!=='string'||body.nome.trim().length<2||body.nome.trim().length>120||typeof body.email!=='string'||body.email.length>254)return resposta({erro:'Confira nome e e-mail.'},400);
       const email=body.email.trim().toLowerCase();
-      const reserva=await rpc('ve_admin_preparar_cadastro',{p_operacao:body.operacao,p_email:email,p_nome:body.nome.trim(),p_empresas:body.empresas});
-      if(!reserva.ok)return resposta({erro:'Cadastro recusado. Confira as empresas e se o e-mail já pertence a outra conta. Para retomar, mantenha os mesmos dados.'},409);
+      const reserva=await rpc('ve_admin_preparar_cadastro_geral',{p_operacao:body.operacao,p_email:email,p_nome:body.nome.trim()});
+      if(!reserva.ok)return resposta({erro:'Cadastro recusado. Confira se o e-mail já pertence a outra conta. Para retomar, mantenha os mesmos dados.'},409);
       const pendente=await reserva.json();
       if(!pendente.usuario) {
         const criado=await admin('','POST',{email,password:body.senha,email_confirm:true,app_metadata:{vibe_operacao:body.operacao},user_metadata:{name:body.nome.trim()}});
@@ -40,7 +40,8 @@ export async function atender(req: Request, fetcher: typeof fetch = fetch, env=(
     }
     if(body.acao==='senha'&&uuid.test(body.usuario)) {
       const alvo=await rpc('ve_admin_conta_senha',{p_usuario:body.usuario});
-      if(!alvo.ok||(await alvo.json()).usuario!==body.usuario)return resposta({erro:'Conta não gerenciada pelo Vibe Entregas.'},403);
+      const contaAlvo=alvo.ok?await alvo.json():null;
+      if(contaAlvo?.usuario!==body.usuario||typeof contaAlvo.email!=='string')return resposta({erro:'Conta não gerenciada pelo Vibe Entregas.'},403);
       const alterado=await admin('/'+body.usuario,'PUT',{password:body.senha});
       if(!alterado.ok||(await alterado.json()).id!==body.usuario)return resposta({erro:'Nova senha não confirmada. Confira a política de senha.'},409);
       return resposta({confirmado:true});

@@ -18,7 +18,7 @@ window.VibeEntregas = (() => {
     async entrar(email, password) {
       const { data, error } = await conectar().auth.signInWithPassword({ email, password });
       if (error || !data.user) throw new Error('Não foi possível entrar. Confira sua conta e senha.');
-      try { await rpc('ve_listar', { p_busca: '', p_offset: 0 }); }
+      try { if(await rpc('ve_entregador_autorizar',{})!==true)throw new Error('Entregador sem acesso ativo.'); await rpc('ve_listar', { p_busca: '', p_offset: 0 }); }
       catch (e) { await conectar().auth.signOut({ scope: 'local' }); throw e; }
       return data.user;
     },
