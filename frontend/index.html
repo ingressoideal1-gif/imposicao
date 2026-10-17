@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1072">
+    <link rel="stylesheet" href="/style.css?v=1073">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -197,6 +197,7 @@
                     <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 17v-1.6a3.2 3.2 0 0 0-3.2-3.2H5.7a3.2 3.2 0 0 0-3.2 3.2V17"/><circle cx="7.9" cy="6.4" r="3"/><path d="M17.5 17v-1.6a3.2 3.2 0 0 0-2.4-3.1M12.9 3.6a3.2 3.2 0 0 1 0 5.6"/></svg>
                     Usuários
                 </button>
+                <button class="nav-btn admin-only" data-view="view-entregas" id="nav-entregas" style="display:none;">Entregas</button>
                 <button class="nav-btn admin-only" data-view="view-adm" id="nav-adm" style="display:none;">
                     <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.2h8.2M15.3 6.2h1.7M3 13.8h1.7M8.8 13.8H17"/><circle cx="13.2" cy="6.2" r="1.9"/><circle cx="6.7" cy="13.8" r="1.9"/></svg>
                     ADM
@@ -3253,8 +3254,8 @@
                             <label><input type="checkbox" id="mtg-face-front" onchange="mudarFaceDaMontagem('front')"> Frente</label>
                             <label><input type="checkbox" id="mtg-face-back" onchange="mudarFaceDaMontagem('back')"> Verso</label>
                             <label><input type="checkbox" id="mtg-face-both" checked onchange="mudarFaceDaMontagem('both')"> Frente×Verso</label>
-                            <label><input type="checkbox" id="mtg-separados" onchange="mudarSaidaDaMontagem('separados',this.checked)"> Separados</label>
-                            <label><input type="checkbox" id="mtg-rotacionarVerso" onchange="mudarSaidaDaMontagem('rotacionarVerso',this.checked)"> Rotacionar Verso</label>
+                            <label><input type="checkbox" id="mtg-separados" checked onchange="mudarSaidaDaMontagem('separados',this.checked)"> Separados</label>
+                            <label><input type="checkbox" id="mtg-rotacionarVerso" checked onchange="mudarSaidaDaMontagem('rotacionarVerso',this.checked)"> Rotacionar Verso</label>
                         </div>
                         <label class="mtg-abrir-opcao"><input type="checkbox" id="mtg-abrir" checked> Visualizar PDF</label>
                     </div>
@@ -4433,6 +4434,25 @@
 
             </section>
             <!-- fim view-adm -->
+            <section id="view-entregas" class="view-section">
+                <div class="ve-painel">
+                    <h2>Entregas</h2><p>Acompanhe a retirada, as tentativas e os comprovantes do Vibe Entregas.</p>
+                    <form id="ve-filtros" class="ve-filtros">
+                        <label>Pedido<input id="ve-busca" inputmode="numeric" placeholder="Número exato" maxlength="30"></label>
+                        <label>Situação<select id="ve-status"><option value="disponivel">Disponíveis</option><option value="minha">Com entregador</option><option value="concluida">Concluídas</option><option value="tentativa">Tentativas</option></select></label>
+                        <label>De<input id="ve-de" type="date" required></label><label>Até<input id="ve-ate" type="date" required></label>
+                        <button class="btn btn-primary" type="submit" id="ve-atualizar">Consultar</button>
+                        <button class="btn btn-ghost" type="button" id="ve-demo">Ver demonstração</button>
+                    </form>
+                    <p>O período se aplica às conclusões e tentativas. Pedidos pendentes permanecem visíveis.</p>
+                    <p id="ve-mensagem" role="status" aria-live="polite"></p>
+                    <details><summary>Rotas dos entregadores</summary><button class="btn btn-ghost" type="button" id="ve-rotas-atualizar">Atualizar rotas</button><p id="ve-rotas-mensagem" role="status"></p><div id="ve-rotas-lista"></div></details>
+                    <div class="ve-tabela"><table><thead><tr><th>Pedido / cliente</th><th>Entregador</th><th>Retirada</th><th>Entrega / recebedor</th><th>Comprovante</th></tr></thead><tbody id="ve-linhas"></tbody></table></div>
+                    <div class="ve-paginacao"><button class="btn btn-ghost" id="ve-anterior" disabled>Anterior</button><span id="ve-pagina"></span><button class="btn btn-ghost" id="ve-proxima" disabled>Próxima</button></div>
+                    <dialog id="ve-detalhe"><h3 id="ve-detalhe-titulo">Detalhes da entrega</h3><p id="ve-detalhe-texto"></p><div id="ve-historico"></div><img id="ve-comprovante" alt="Foto do comprovante de entrega" hidden><p id="ve-foto-erro" role="alert"></p><button class="btn btn-ghost" id="ve-fechar">Fechar</button></dialog>
+                </div>
+            </section>
+
 
 
             <!-- MODAL GERENCIAMENTO DE ARTES -->
@@ -4555,7 +4575,7 @@
     <script src="/briefing-editor.js?v=948"></script>
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
-    <script src="script.js?v=1072"></script>
+    <script src="script.js?v=1073"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=1067"></script>
     <script src="qr-evento-envio.js?v=948"></script>
@@ -4563,7 +4583,7 @@
     <script src="criador-arte.js?v=964"></script>
     <script src="/pedido.js?v=1060"></script>
     <script src="/producao-por-cor.js?v=1028"></script>
-    <script src="montagem.js?v=1072"></script>
+    <script src="montagem.js?v=1073"></script>
     <script src="acabamento.js?v=996"></script>
     <script src="avisos.js?v=948"></script>
 

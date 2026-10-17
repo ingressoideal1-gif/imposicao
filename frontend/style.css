@@ -6422,3 +6422,6 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 #adm-tab-fretes .fretes-grade { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; }
 #fretes-editor { margin-top:20px; padding:20px; }
 #fretes-status { min-height:1.5em; }
+
+/* Acompanhamento Vibe Entregas */
+.ve-painel{max-width:1400px;margin:auto;padding:24px}.ve-filtros{display:flex;flex-wrap:wrap;gap:12px;align-items:end}.ve-filtros label{display:grid;gap:6px;font-size:13px}.ve-filtros input,.ve-filtros select{padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:inherit}.ve-tabela{overflow:auto}.ve-tabela table{width:100%;border-collapse:collapse}.ve-tabela td,.ve-tabela th{text-align:left;padding:14px;border-bottom:1px solid var(--border);vertical-align:top}.ve-tabela small{display:block;opacity:.75;margin-top:6px}.ve-paginacao{display:flex;gap:16px;align-items:center;margin-top:16px}#ve-detalhe{max-width:650px;width:calc(100% - 32px);max-height:90vh;border:1px solid var(--border);border-radius:12px;padding:24px;background:var(--bg-card,#fff);color:var(--text-main,#222)}#ve-detalhe::backdrop{background:#0008}#ve-comprovante{max-width:100%;max-height:60vh;object-fit:contain}.ve-painel [hidden]{display:none!important}
