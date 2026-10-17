@@ -27487,7 +27487,13 @@ async function conferirColunasQrIdealDosPedidos() {
             'error'
         );
     }
-    if (inconclusivos.length) {
+    // A Montagem carrega uma lista global, mas o catálogo local contém apenas
+    // os pedidos preparados. A ausência de uma numeração dessa lista não é um
+    // aviso do trabalho montado; a geração mantém sua conferência por snapshot.
+    // Verificar a tela após os awaits também evita avisos de cargas anteriores.
+    const montagemAtiva = typeof document !== 'undefined'
+        && document.getElementById('view-montagem')?.classList?.contains('active');
+    if (inconclusivos.length && !montagemAtiva) {
         console.warn('[QR Ideal] conferencia inconclusiva:', inconclusivos);
         toast(
             `⚠️ QR Ideal — não foi possível verificar a numeração de ${inconclusivos.join('; ')}. ` +

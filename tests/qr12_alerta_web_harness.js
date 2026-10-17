@@ -59,6 +59,29 @@ function ambiente(nuvem = true) {
         await a.c.conferirColunasQrIdealDosPedidos();
         ok(a.avisos.length===0 && a.pedidos.length===consultas,'QR comum nao consulta contrato Ideal');
     }
+    for (const nuvem of [true, false]) {
+        const local = ambiente(nuvem);
+        let montagem = true;
+        local.c.document = {getElementById: id => id === 'view-montagem'
+            ? {classList:{contains: nome => nome === 'active' && montagem}} : null};
+        local.c.state.numeracoes = [];
+        await local.c.conferirColunasQrIdealDosPedidos();
+        ok(local.avisos.length === 0, 'Montagem não avisa sobre catálogo global incompleto');
+        montagem = false;
+        await local.c.conferirColunasQrIdealDosPedidos();
+        ok(local.avisos.length === 1 && /verificar a numeração/.test(local.avisos[0].mensagem),
+            'aviso de catálogo permanece nas outras telas');
+        local.avisos.length = 0; montagem = true;
+        local.c.state.numeracoes = [{id:'qr',elements:[{type:'QR_IDEAL'}]}];
+        local.c.contratos.forEach(c => c.versao = 1);
+        await local.c.conferirColunasQrIdealDosPedidos();
+        ok(local.avisos.length === 1 && local.avisos[0].tipo === 'error',
+            'Montagem mantém colisão legada confirmada');
+        local.avisos.length = 0; local.c.falhar = true;
+        await local.c.conferirColunasQrIdealDosPedidos();
+        ok(local.avisos.length === 1 && /confirmar os contratos/.test(local.avisos[0].mensagem),
+            'Montagem mantém aviso de contrato não confirmado');
+    }
     const a=ambiente(); let terminar;
     a.c.aguardar=new Promise(r=>{terminar=r;}); a.c.falhar=true;
     const antiga=a.c.conferirColunasQrIdealDosPedidos();

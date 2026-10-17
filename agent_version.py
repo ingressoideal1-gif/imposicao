@@ -7,7 +7,7 @@ aplica, e o auto-update compara este valor com o do manifesto.
 """
 
 from canais_newprod import PILOTO, OFICIAL
-AGENT_VERSION = "1.3.12"
+AGENT_VERSION = "1.3.13"
 if PILOTO and not OFICIAL:
     AGENT_VERSION += "-piloto-local.30"
 
