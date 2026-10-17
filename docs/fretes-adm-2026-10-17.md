@@ -1,6 +1,6 @@
 # Consulta e edição de fretes no ADM
 
-## Entrega local
+## Implementacao e validacao local
 
 `ADM → Fretes` consulta e edita o cadastro existente `transportadoras`, usando
 o cliente Supabase já incluído no Imposition. Busca por cidade/UF, páginas de
@@ -11,6 +11,8 @@ no banco durante o desenvolvimento.
 Os cálculos e as APIs continuam sendo responsabilidade do ERP parceiro. Não
 foram criadas rotas, funções ou regras de cálculo. O módulo não chama a RPC de
 cálculo de frete. SM, UN e MB permanecem com as siglas existentes no cadastro.
+
+A publicacao posterior esta registrada em [Entrega NewProd e web](newprod-1.3.15-fretes-montagem.md).
 
 ## Consulta e gravação
 

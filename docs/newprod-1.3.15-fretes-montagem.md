@@ -31,8 +31,7 @@ Conferir que os manifestos não mudaram por outra sessão antes da ativação.
 
 Não executar instalação, reinício ou impressão física nas estações. A liberação
 universal permite ao atualizador existente oferecer a atualização; não comprova
-adoção por estação. Evidências de build, testes e publicação serão registradas
-após a execução.
+adoção por estação. Evidencias de build, testes e publicacao foram registradas abaixo.
 
 ## Validação concluída antes do build
 
@@ -40,3 +39,46 @@ Produção, Piloto e oficial: 1.063 testes Python aprovados por perfil, dois
 pulados e dois subtestes aprovados. Todos os harnesses previstos passaram
 (63 etapas no total). Fretes e as 222 verificações da tela da Montagem passaram
 na base do agente. O aviso Starlette/httpx vem das dependências existentes.
+
+## Web publicada
+
+PR [155](https://github.com/ingressoideal1-gif/imposicao/pull/155), com os seis
+checks aprovados e merge `62b8fb6ee73b92a3806b7b75801af67a97211baf`.
+Tag `v1072`; deployment Cloudflare `77d5c905-9105-4cca-97b1-95faffbc716f`.
+Os seis arquivos alterados foram comparados por hash normalizado nos dois
+dominios publicos: 12 de 12 correspondencias. Acesse o Imposition, entre
+com perfil ADM e abra ADM > Fretes. Os controles de faces ficam em Montagem.
+
+## Pacote auditado
+
+Tag `agente-v1.3.15`, fonte `dae9eff7202fa817dfc6805f1eca8badd8004300`.
+MSI ProductVersion `1.3.15`, 196.689.920 bytes, SHA-256:
+`dfd65c14f1813646284a26d9a3ad6c27049a47d88e87da70a416d57ccfe0ef34`.
+Os 375 arquivos frontend embutidos no executavel correspondem exatamente
+as fontes. As auditorias do executavel, preservador e MSI passaram sem
+arquivos privados ou modulo de segredo.
+
+## Recuperacao e limites
+
+Preservadas as pastas operacionais e as duas sessoes de origem. Os manifestos
+anteriores foram registrados antes da ativacao. Para retirar a oferta a novas
+estacoes, pode-se republicar o manifesto anterior apos autorizacao e conferencia
+de concorrencia; isso nao reverte uma instalacao feita. Correcao de agente ja
+instalado exige uma versao superior. Para web, preparar reversao por PR e nova
+publicacao, preservando mudancas posteriores de outras sessoes.
+
+Nenhuma instalacao ou reinicio foi executado nas estacoes. Geracao real com
+pedidos e impressao fisica permanecem sem validacao. Nenhum dado de frete,
+schema, politica, calculo ou API do ERP foi alterado nesta entrega.
+
+## Publicacao concluida
+
+Os instaladores Oficial e Teste v1.3.15 foram baixados integralmente pelas
+URLs publicas: ambos conferem com os 196.689.920 bytes e SHA-256 acima.
+Os tres manifestos (`latest.json`, `newprod-piloto-oficial.json` e
+`newprod-piloto-teste.json`) foram ativados e relidos, todos na versao 1.3.15.
+Antes de escrever, cada manifesto foi comparado com o snapshot anterior,
+sem alteracoes concorrentes detectadas. A oferta de atualizacao esta ativa.
+
+[Baixar instalador oficial](https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.15.msi).
+[Evidencias completas](evidencias/entrega-fretes-montagem-2026-10-17.json).

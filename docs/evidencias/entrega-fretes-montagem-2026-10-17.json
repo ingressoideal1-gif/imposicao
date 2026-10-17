@@ -1,0 +1,551 @@
+{
+  "data": "2026-10-17",
+  "web": {
+    "version": "v1072",
+    "commit": "62b8fb6ee73b92a3806b7b75801af67a97211baf",
+    "pr": 155,
+    "deployment": "77d5c905-9105-4cca-97b1-95faffbc716f",
+    "arquivos": [
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "index.html",
+        "sha256_local": "396ca98fd8628d4fd371c9da56c852f04b8a3d21443aa86b44a89df1c03b2cf5",
+        "sha256_publico": "396ca98fd8628d4fd371c9da56c852f04b8a3d21443aa86b44a89df1c03b2cf5",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "cliente.html",
+        "sha256_local": "45cec900383d9720f970e76d4e1360cf814386e9ebdd094cf3cbd720bdad89e8",
+        "sha256_publico": "45cec900383d9720f970e76d4e1360cf814386e9ebdd094cf3cbd720bdad89e8",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "producao.html",
+        "sha256_local": "1d9e0fbe535172e2fb28f714c76ad23468d13db25c15a76d2cd0a2ccdb0b88b0",
+        "sha256_publico": "1d9e0fbe535172e2fb28f714c76ad23468d13db25c15a76d2cd0a2ccdb0b88b0",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "script.js",
+        "sha256_local": "c46e4866667a0886a884c3a668a5ebb88c771f2f6d93a0aea839ff8bba914673",
+        "sha256_publico": "c46e4866667a0886a884c3a668a5ebb88c771f2f6d93a0aea839ff8bba914673",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "montagem.js",
+        "sha256_local": "1399dd2cb3730395a0cad696c8889f6e4df4d536df0d4c767db1965f4b0d2c80",
+        "sha256_publico": "1399dd2cb3730395a0cad696c8889f6e4df4d536df0d4c767db1965f4b0d2c80",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "style.css",
+        "sha256_local": "27d16e00c9132b09e3d9320c83582d0bc0f8f2e6ece43713c1f12dfd3776d254",
+        "sha256_publico": "27d16e00c9132b09e3d9320c83582d0bc0f8f2e6ece43713c1f12dfd3776d254",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "index.html",
+        "sha256_local": "396ca98fd8628d4fd371c9da56c852f04b8a3d21443aa86b44a89df1c03b2cf5",
+        "sha256_publico": "396ca98fd8628d4fd371c9da56c852f04b8a3d21443aa86b44a89df1c03b2cf5",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "cliente.html",
+        "sha256_local": "45cec900383d9720f970e76d4e1360cf814386e9ebdd094cf3cbd720bdad89e8",
+        "sha256_publico": "45cec900383d9720f970e76d4e1360cf814386e9ebdd094cf3cbd720bdad89e8",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "producao.html",
+        "sha256_local": "1d9e0fbe535172e2fb28f714c76ad23468d13db25c15a76d2cd0a2ccdb0b88b0",
+        "sha256_publico": "1d9e0fbe535172e2fb28f714c76ad23468d13db25c15a76d2cd0a2ccdb0b88b0",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "script.js",
+        "sha256_local": "c46e4866667a0886a884c3a668a5ebb88c771f2f6d93a0aea839ff8bba914673",
+        "sha256_publico": "c46e4866667a0886a884c3a668a5ebb88c771f2f6d93a0aea839ff8bba914673",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "montagem.js",
+        "sha256_local": "1399dd2cb3730395a0cad696c8889f6e4df4d536df0d4c767db1965f4b0d2c80",
+        "sha256_publico": "1399dd2cb3730395a0cad696c8889f6e4df4d536df0d4c767db1965f4b0d2c80",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "style.css",
+        "sha256_local": "27d16e00c9132b09e3d9320c83582d0bc0f8f2e6ece43713c1f12dfd3776d254",
+        "sha256_publico": "27d16e00c9132b09e3d9320c83582d0bc0f8f2e6ece43713c1f12dfd3776d254",
+        "confere": true
+      }
+    ]
+  },
+  "web_integracao": {
+    "pr": 155,
+    "sha": "62b8fb6ee73b92a3806b7b75801af67a97211baf",
+    "merged": true,
+    "message": "Pull Request successfully merged",
+    "checks": [
+      {
+        "name": "Windows - seguranca e recuperacao",
+        "conclusion": "success"
+      },
+      {
+        "name": "Cloudflare Pages",
+        "conclusion": "success"
+      },
+      {
+        "name": "NewProd e Piloto - producao",
+        "conclusion": "success"
+      },
+      {
+        "name": "NewProd e Piloto - piloto",
+        "conclusion": "success"
+      },
+      {
+        "name": "NewProd e Piloto - oficial",
+        "conclusion": "success"
+      },
+      {
+        "name": "Piloto - consulta autenticada sem escrita",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "exe": {
+    "version": "1.3.15",
+    "source_commit": "dae9eff7202fa817dfc6805f1eca8badd8004300",
+    "frontend_arquivos_conferidos": 375,
+    "exe_sha256": "142d8420d7bda1bca26e3ea1bfb97d57706fb13de30aee90051c5cc0b8033249",
+    "instalacao_estacoes_verificada": false
+  },
+  "msi": {
+    "version": "1.3.15",
+    "bytes": 196689920,
+    "sha256": "dfd65c14f1813646284a26d9a3ad6c27049a47d88e87da70a416d57ccfe0ef34"
+  },
+  "downloads": {
+    "oficial": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.15",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.15.msi",
+      "sha256": "dfd65c14f1813646284a26d9a3ad6c27049a47d88e87da70a416d57ccfe0ef34",
+      "bytes": 196689920,
+      "size": 196689920,
+      "notes": "NewProd: versao unica disponivel para todas as estacoes.",
+      "download_conferido": true,
+      "ativado": true,
+      "bootstrap_legado": false
+    },
+    "teste": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.3.15",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.15.msi",
+      "sha256": "dfd65c14f1813646284a26d9a3ad6c27049a47d88e87da70a416d57ccfe0ef34",
+      "bytes": 196689920,
+      "size": 196689920,
+      "notes": "NewProd: versao unica disponivel para todas as estacoes.",
+      "download_conferido": true,
+      "ativado": true,
+      "bootstrap_legado": false
+    }
+  },
+  "manifestos_antes": {
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.14",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.14.msi",
+      "sha256": "a6d8018b98675fe06e52960a201880278142a71219b77bd1cb182a9bcce84530",
+      "bytes": 196685824,
+      "size": 196685824,
+      "notes": "NewProd unico: Montagem com filtros por setor, Textil padrao e sugestao de uma folha com composicao e repeticoes. Disponivel para todas as estacoes."
+    },
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.14",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.14.msi",
+      "sha256": "a6d8018b98675fe06e52960a201880278142a71219b77bd1cb182a9bcce84530",
+      "bytes": 196685824,
+      "size": 196685824,
+      "notes": "NewProd unico: Montagem com filtros por setor, Textil padrao e sugestao de uma folha com composicao e repeticoes. Disponivel para todas as estacoes."
+    },
+    "newprod-piloto-teste.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.3.14",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.14.msi",
+      "sha256": "a6d8018b98675fe06e52960a201880278142a71219b77bd1cb182a9bcce84530",
+      "bytes": 196685824,
+      "size": 196685824,
+      "notes": "NewProd unico: Montagem com filtros por setor, Textil padrao e sugestao de uma folha com composicao e repeticoes. Disponivel para todas as estacoes."
+    }
+  },
+  "manifestos_publicados": {
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.15",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.15.msi",
+      "sha256": "dfd65c14f1813646284a26d9a3ad6c27049a47d88e87da70a416d57ccfe0ef34",
+      "bytes": 196689920,
+      "size": 196689920,
+      "notes": "NewProd unico: Fretes ADM e controles de frente/verso da Montagem. Preserva filtros por setor e sugestao de uma folha. Disponivel para todas as estacoes."
+    },
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.3.15",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.3.15.msi",
+      "sha256": "dfd65c14f1813646284a26d9a3ad6c27049a47d88e87da70a416d57ccfe0ef34",
+      "bytes": 196689920,
+      "size": 196689920,
+      "notes": "NewProd unico: Fretes ADM e controles de frente/verso da Montagem. Preserva filtros por setor e sugestao de uma folha. Disponivel para todas as estacoes."
+    },
+    "newprod-piloto-teste.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.3.15",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.15.msi",
+      "sha256": "dfd65c14f1813646284a26d9a3ad6c27049a47d88e87da70a416d57ccfe0ef34",
+      "bytes": 196689920,
+      "size": 196689920,
+      "notes": "NewProd unico: Fretes ADM e controles de frente/verso da Montagem. Preserva filtros por setor e sugestao de uma folha. Disponivel para todas as estacoes."
+    }
+  },
+  "validacoes_canais": [
+    {
+      "etapa": "producao/pytest",
+      "segundos": 89.363,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/estatisticas_piloto_harness.js",
+      "segundos": 7.619,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/montagem_harness.js",
+      "segundos": 0.199,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/montagem_local_harness.cjs",
+      "segundos": 0.126,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/montagem_estacao_harness.cjs",
+      "segundos": 0.07,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/historico_impressao_harness.js",
+      "segundos": 0.085,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/gestao_estacoes_harness.js",
+      "segundos": 15.934,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/modelos_pedido_carregamento_harness.js",
+      "segundos": 0.102,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/fidelidade_numeracao_harness.js",
+      "segundos": 0.089,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/foto_piloto_harness.js",
+      "segundos": 0.059,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/foto_lib_harness.js",
+      "segundos": 0.158,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/selecao_piloto_harness.js",
+      "segundos": 0.118,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/integridade_impressao_harness.js",
+      "segundos": 0.163,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/token_estacao_harness.js",
+      "segundos": 0.101,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/ticket_condicoes_harness.js",
+      "segundos": 1.535,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/ticket_previas_harness.js",
+      "segundos": 0.064,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/numeracao_compatibilidade_harness.js",
+      "segundos": 1.352,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/mapas_teatro_harness.js",
+      "segundos": 0.702,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/mapas_teatro_browser_harness.js",
+      "segundos": 11.186,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/teatro_snapshot_harness.js",
+      "segundos": 0.092,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/teatro_vertical_modelo_harness.js",
+      "segundos": 0.114,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/pytest",
+      "segundos": 89.68,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/estatisticas_piloto_harness.js",
+      "segundos": 7.418,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/montagem_harness.js",
+      "segundos": 0.172,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/montagem_local_harness.cjs",
+      "segundos": 0.117,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/montagem_estacao_harness.cjs",
+      "segundos": 0.055,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/historico_impressao_harness.js",
+      "segundos": 0.079,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/gestao_estacoes_harness.js",
+      "segundos": 15.9,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/modelos_pedido_carregamento_harness.js",
+      "segundos": 0.085,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/fidelidade_numeracao_harness.js",
+      "segundos": 0.083,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/foto_piloto_harness.js",
+      "segundos": 0.047,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/foto_lib_harness.js",
+      "segundos": 0.134,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/selecao_piloto_harness.js",
+      "segundos": 0.105,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/integridade_impressao_harness.js",
+      "segundos": 0.145,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/token_estacao_harness.js",
+      "segundos": 0.096,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/ticket_condicoes_harness.js",
+      "segundos": 1.507,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/ticket_previas_harness.js",
+      "segundos": 0.057,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/numeracao_compatibilidade_harness.js",
+      "segundos": 1.349,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/mapas_teatro_harness.js",
+      "segundos": 0.657,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/mapas_teatro_browser_harness.js",
+      "segundos": 11.539,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/teatro_snapshot_harness.js",
+      "segundos": 0.089,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/teatro_vertical_modelo_harness.js",
+      "segundos": 0.108,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/pytest",
+      "segundos": 94.039,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/estatisticas_piloto_harness.js",
+      "segundos": 7.412,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/montagem_harness.js",
+      "segundos": 0.178,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/montagem_local_harness.cjs",
+      "segundos": 0.111,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/montagem_estacao_harness.cjs",
+      "segundos": 0.052,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/historico_impressao_harness.js",
+      "segundos": 0.083,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/gestao_estacoes_harness.js",
+      "segundos": 15.837,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/modelos_pedido_carregamento_harness.js",
+      "segundos": 0.085,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/fidelidade_numeracao_harness.js",
+      "segundos": 0.095,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/foto_piloto_harness.js",
+      "segundos": 0.054,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/foto_lib_harness.js",
+      "segundos": 0.15,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/selecao_piloto_harness.js",
+      "segundos": 0.107,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/integridade_impressao_harness.js",
+      "segundos": 0.144,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/token_estacao_harness.js",
+      "segundos": 0.096,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/ticket_condicoes_harness.js",
+      "segundos": 1.34,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/ticket_previas_harness.js",
+      "segundos": 0.064,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/numeracao_compatibilidade_harness.js",
+      "segundos": 1.345,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/mapas_teatro_harness.js",
+      "segundos": 0.663,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/mapas_teatro_browser_harness.js",
+      "segundos": 11.009,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/teatro_snapshot_harness.js",
+      "segundos": 0.091,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/teatro_vertical_modelo_harness.js",
+      "segundos": 0.11,
+      "sucesso": true
+    }
+  ],
+  "instalacao_estacoes_verificada": false,
+  "impressao_fisica_verificada": false,
+  "escrita_dados_frete": false
+}
