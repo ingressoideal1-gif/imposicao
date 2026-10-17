@@ -543,3 +543,7 @@ verify_jwt = true
 [functions.piloto-local]
 # Funcao separada, somente leitura: segredo do agente ou Auth valida a sessao.
 verify_jwt = false
+
+# Otimizacao de rotas: JWT e validado novamente no servidor. Desativada por flag.
+[functions.vibe-entregas-rotas]
+verify_jwt = true
