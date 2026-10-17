@@ -16,8 +16,17 @@ window.VibeEntregas = (() => {
   return {
     ativo,
     async entrar(email, password) {
-      const { data, error } = await conectar().auth.signInWithPassword({ email, password });
-      if (error || !data.user) throw new Error('Não foi possível entrar. Confira sua conta e senha.');
+      const c = conectar();
+      if (!/^[0-9]{4}$/.test(password)) throw new Error('Informe o PIN de 4 dígitos.');
+      const {data: tokens,error:erroLogin} = await c.functions.invoke('vibe-entregas-login',{body:{email,pin:password}});
+      if (erroLogin) {
+        let mensagem='Não foi possível entrar. Confira o e-mail e o PIN.';
+        try {const body=await erroLogin.context.json();if(body.erro)mensagem=body.erro;} catch {}
+        throw new Error(mensagem);
+      }
+      if(!tokens?.access_token || !tokens?.refresh_token) throw new Error('Login não confirmado.');
+      const {data,error} = await c.auth.setSession(tokens);
+      if(error || !data.user) throw new Error('Sessão não confirmada. Entre novamente.');
       try { await rpc('ve_listar', { p_busca: '', p_offset: 0 }); }
       catch (e) { await conectar().auth.signOut({ scope: 'local' }); throw e; }
       return data.user;

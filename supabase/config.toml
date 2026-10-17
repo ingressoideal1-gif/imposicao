@@ -550,3 +550,7 @@ verify_jwt = true
 
 [functions.vibe-entregas-admin]
 verify_jwt = true
+
+# Login por PIN: valida no Auth e limita tentativas no servidor antes de emitir sessao.
+[functions.vibe-entregas-login]
+verify_jwt = false
