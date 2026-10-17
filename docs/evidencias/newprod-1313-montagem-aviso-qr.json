@@ -1,0 +1,38 @@
+{
+  "pacote": {
+    "version": "1.3.13",
+    "bytes": 196685824,
+    "sha256": "2bea86bb40504da4b988251598a6ba982efb539463830525f7db4746c3c5a7f8"
+  },
+  "publicacao": [
+    {
+      "manifesto": "latest.json",
+      "versao": "1.3.13",
+      "universal": true
+    },
+    {
+      "manifesto": "newprod-piloto-oficial.json",
+      "versao": "1.3.13",
+      "universal": true
+    },
+    {
+      "manifesto": "newprod-piloto-teste.json",
+      "versao": "1.3.13",
+      "universal": true
+    }
+  ],
+  "instalacao_local": {
+    "versao": "1.3.13",
+    "http_conferido": [
+      "script.js",
+      "montagem.js",
+      "style.css"
+    ],
+    "html_imports": true
+  },
+  "auditoria": {
+    "arquivos_painel": 375,
+    "exe_sha256": "53589d74f896483d7cc5e2c7b8afd1577f44d034517ae96743ab66264d36da65"
+  },
+  "impressao_real": false
+}
