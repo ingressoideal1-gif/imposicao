@@ -139,7 +139,7 @@ function montagemVazia() {
         seletorModelosAberto: false,
         face: 'both',
         gerando: false,
-        modoTrabalho: 'manual',
+        modoTrabalho: 'manual', setores: ['TEXTIL'],
         // Os índices das células selecionadas. Repetir, tirar e mover passam a
         // valer para todas de uma vez — repor doze células custava doze cliques.
         selecao: [],
@@ -1583,7 +1583,7 @@ function restaurarRascunhoDaMontagem() {
             return false;
         }
         const base = montagemVazia();
-        base.modoTrabalho = salvo.modoTrabalho === 'planejamento' ? 'planejamento' : 'manual';
+        base.modoTrabalho = 'manual';
         base.celulas = Array.isArray(salvo.celulas) ? salvo.celulas : [];
         base.modelos = Array.isArray(salvo.modelos) ? salvo.modelos : [];
         base.face = ['both', 'front', 'back'].includes(salvo.face) ? salvo.face : 'both';
@@ -1779,7 +1779,38 @@ function pedidoDisponivelNaMontagem(os, formatoId = state.montagem.formatoSel) {
     return modelosDoPedidoNaMontagem(os).some(it => modeloDisponivelNaMontagem(os.id, it, formatoId));
 }
 
-function modeloDisponivelNaMontagem(osId, item, formatoId = state.montagem.formatoSel) {
+function setorDoModeloNaMontagem(item, osId) {
+    const id = produtoDoModeloNaMontagem(item, osId);
+    const produtos = window.PilotoSelecao?.snapshotPedido?.(osId)?.produtos;
+    const produto = (produtos || []).find(p => String(p.id_produto) === id)
+        || (state.produtosGlobais || []).find(p => String(p.id_produto) === id);
+    return String(produto?.setor_pcp || '').normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+}
+
+function pintarSetoresDaMontagem() {
+    const setores = state.montagem.setores || ['TEXTIL'];
+    document.querySelectorAll('#mtg-setores [data-setor]').forEach(botao => {
+        const ativo = setores.includes(botao.dataset.setor);
+        botao.classList.toggle('active', ativo);
+        botao.setAttribute('aria-pressed', String(ativo));
+        botao.disabled = !!state.montagem.gerando;
+    });
+}
+
+function mudarSetorDaMontagem(setor) {
+    if (state.montagem.gerando || !['FLEXO', 'PVC', 'TEXTIL', 'LASER'].includes(setor)) return;
+    const setores = state.montagem.setores || ['TEXTIL'];
+    state.montagem.setores = setores.includes(setor)
+        ? setores.filter(s => s !== setor) : [...setores, setor];
+    state.montagem.formatoSel = null;
+    encherFormatosDaMontagem();
+    const carga = onMontagemFormatoChange();
+    pintarSetoresDaMontagem();
+    return carga;
+}
+
+function modeloDisponivelNaMontagem(osId, item, formatoId = state.montagem.formatoSel, filtrarSetor = true) {
     const os = (state.ordens || []).find(o => String(o.id) === String(osId));
     if (!pedidoEmProducaoNaMontagem(os) || !item) return false;
     // Mesma fonte da coluna Status do Pedido: null/vazio significa Aguardando.
@@ -1791,7 +1822,9 @@ function modeloDisponivelNaMontagem(osId, item, formatoId = state.montagem.forma
         ? normalizarStatusImpressao(bruto)
         : ((!bruto || ['AGUARD.', 'AGUARDANDO', 'PARCIAL', 'ERRO', 'REVISAO', 'REVISÃO']
             .includes(String(bruto).trim().toUpperCase())) ? 'Aguardando' : bruto);
-    return status === 'Aguardando' && (!formatoId || formatoDoModeloNaMontagem(item, osId) === String(formatoId));
+    const setores = state.montagem.setores || ['TEXTIL'];
+    return status === 'Aguardando' && (!filtrarSetor || !setores.length || setores.includes(setorDoModeloNaMontagem(item, osId)))
+        && (!formatoId || formatoDoModeloNaMontagem(item, osId) === String(formatoId));
 }
 
 function pedidosParaMontagem() {
@@ -1799,7 +1832,7 @@ function pedidosParaMontagem() {
         .slice().sort((a, b) => String(b.numero || b.id).localeCompare(String(a.numero || a.id), 'pt-BR', { numeric: true }));
 }
 
-function encherFormatosDaMontagem(incluirCatalogo = false) {
+function encherFormatosDaMontagem() {
     const sel = document.getElementById('mtg-formato');
     if (!sel) return;
     const aguardando = new Set();
@@ -1812,7 +1845,7 @@ function encherFormatosDaMontagem(incluirCatalogo = false) {
             }
         }
     }
-    const formatos = new Map((state.formatos || []).filter(f => incluirCatalogo || aguardando.has(String(f.id))).map(f => {
+    const formatos = new Map((state.formatos || []).filter(f => aguardando.has(String(f.id))).map(f => {
         const nome = f.name || f.nome || 'Formato sem nome';
         const tamanho = Number(f.width_mm) > 0 && Number(f.height_mm) > 0
             ? ` (${f.width_mm} × ${f.height_mm} mm)` : '';
@@ -2169,7 +2202,7 @@ function _mtgRenderSeletorDeModelos() {
     carregar.textContent = 'Fechar';
 
     if (m.modoTrabalho !== 'planejamento') {
-        recs.innerHTML = '<p class="mtg-dica">No modo Reposição manual, selecione o modelo e informe as posições exatas. Troque para Planejamento recomendado para comparar combinações de tiragens.</p>';
+        recs.innerHTML = '<p class="mtg-dica">Selecione o modelo e informe as posições exatas.</p>';
         return;
     }
     const livres = candidatos.filter(c => !carregados.has(_mtgChaveDoCandidato(c))
@@ -2705,14 +2738,10 @@ function alternarMenuOrdenacaoDaMontagem(aberto) {
     botao.setAttribute('aria-expanded', proximo ? 'true' : 'false');
 }
 
-async function mudarModoTrabalhoDaMontagem(modo) {
-    if (state.montagem.gerando || !['manual', 'planejamento'].includes(modo)) return;
-    if (state.montagem.modoTrabalho === modo) return;
-    state.montagem.modoTrabalho = modo;
+async function mudarModoTrabalhoDaMontagem() {
+    if (state.montagem.gerando) return;
+    state.montagem.modoTrabalho = 'manual';
     renderMontagem();
-    if (modo === 'planejamento' && state.montagem.modelos.length) {
-        await aplicarSugestaoDaMontagem('auto');
-    }
 }
 
 /* ── O aproveitamento da folha, na tela ──────────────────────────────────── */
@@ -2721,11 +2750,17 @@ async function mudarModoTrabalhoDaMontagem(modo) {
 function _mtgSugestaoAtual() {
     const m = state.montagem;
     const porFolha = _mtgCelulasPorFolha(m.modelos);
-    const chave = [porFolha, m.quantidadeMontagens || 1, m.minimoRepeticoes || 1]
+    const chave = [porFolha, 'unica']
         .concat(m.modelos.map(x => [chaveDoModelo(x), x.qtd, x.variavel ? 1 : 0].join(':'))).join('|');
     if (_mtgCacheDeSugestoes.has(chave)) return _mtgCacheDeSugestoes.get(chave);
-    const sugestao = sugestaoDeMultiplasMontagens(m.modelos, porFolha,
-        m.quantidadeMontagens || 1, m.minimoRepeticoes || 1);
+    const base = sugestaoDeAproveitamento(m.modelos, porFolha);
+    const plano = base.viavel ? {
+        quantidade: 1, layouts: [base.itens.map(it => it.celulas)],
+        repeticoes: [base.impressoes], impressoes: base.impressoes,
+        sobras: base.itens.map(it => it.sobra), itens: base.itens,
+    } : null;
+    const sugestao = { ...base, configuracao: { numero: 1, minimo: 1 },
+        planoSolicitado: plano, planoSugerido: null };
     if (_mtgCacheDeSugestoes.size >= 50) _mtgCacheDeSugestoes.delete(_mtgCacheDeSugestoes.keys().next().value);
     _mtgCacheDeSugestoes.set(chave, sugestao);
     return sugestao;
@@ -2765,11 +2800,9 @@ async function mudarConfiguracaoDeMontagens(campo, valor) {
 /**
  * Aplica a mistura sugerida à folha.
  *
- * `modo` é `auto` (o plano com menos impressões), `solicitada` (a quantidade
- * configurada), `unica` (compatibilidade com o caminho antigo) ou `distribuir`.
- * oferecidos na tela, por decisão do usuário em 03/09/2026 — mas o caminho que
- * repete a folha com dado variável passa por uma confirmação que diz, em texto,
- * que os códigos vão sair repetidos.
+ * Recomenda apenas uma folha; as repetições projetam a tiragem dos modelos.
+ * Dados variáveis continuam exigindo confirmação: repetir uma folha repete
+ * também seus códigos.
  *
  * SUBSTITUI as células da folha: é uma montagem sugerida, e não um acréscimo. O
  * que havia antes fica no desfazer.
@@ -2783,23 +2816,7 @@ async function aplicarSugestaoDaMontagem(modo) {
         return;
     }
 
-    const escolhido = (!modo || modo === 'auto') ? modoSugeridoDaMontagem(sug) : modo;
-    const plano = escolhido === 'multiplas'
-        ? (sug.planoSugerido || sug.planoSolicitado)
-        : escolhido === 'solicitada' ? sug.planoSolicitado
-        : escolhido === 'unica' ? _mtgPlanoComQuantidade(sug.itens.map(it => it.qtd),
-            sug.porFolha, 1, sug.configuracao.minimo, null) : null;
-
-    // A folha distribuída desenha uma célula por peça. Tiragem inteira não é
-    // trabalho desta tela, e a saída está na frase.
-    if (escolhido === 'distribuir' && !sug.podeDistribuir) {
-        if (typeof toast === 'function') {
-            toast('São ' + sug.total + ' peças ao todo, e distribuir desenharia uma célula para '
-                + 'cada uma. Tiragem desse tamanho é trabalho da tela do Pedido. Aqui, use '
-                + '"Uma folha, ' + sug.impressoes + ' impressões".', 'error');
-        }
-        return;
-    }
+    const plano = sug.planoSolicitado;
 
     if (plano && sug.temDadoVariavel) {
         const quais = sug.itens.filter(it => it.variavel).map(it => it.itemId).join(', ');
@@ -2810,8 +2827,7 @@ async function aplicarSugestaoDaMontagem(modo) {
                 + 'diferente da anterior. Repetir estas montagens ' + totalImpressoes + ' vezes '
                 + 'imprime novamente as <strong>mesmas peças</strong>, com '
                 + 'os mesmos códigos.',
-            detalhe: 'Se o que você quer são peças diferentes, cancele e use "Distribuir em '
-                + sug.folhas + ' folhas": a mesma mistura em cada folha, e cada célula um item.',
+            detalhe: 'Para imprimir peças com códigos diferentes, cancele e use a impressão do Pedido.',
             textoOk: 'Montar assim mesmo',
             textoCancelar: 'Cancelar',
         }) : true;
@@ -2900,7 +2916,7 @@ function _mtgPlanoHtml(sug, plano, titulo) {
         + `<td class="num">${it.qtd}</td><td class="num">${it.produz}</td>`
         + `<td class="num ${it.sobra > 0 ? 'sobra' : ''}">${it.sobra > 0 ? '+' + it.sobra : '—'}</td></tr>`).join('');
     return `<div class="mtg-plano"><h4>${escapeHtml(titulo)}</h4><div class="mtg-plano-grade">${cartoes}</div>`
-        + `<p><strong>${plano.impressoes} ${plano.impressoes === 1 ? 'impressão' : 'impressões'}</strong> no total. Todas as montagens usam as ${sug.porFolha} células.</p>`
+        + `<p><strong>${plano.impressoes} ${plano.impressoes === 1 ? 'impressão' : 'impressões'}</strong> no total. A composição usa as ${sug.porFolha} células da folha.</p>`
         + `<table class="mtg-sug-tabela"><thead><tr><th>Modelo</th><th class="num">Tiragem</th>`
         + `<th class="num">Produz</th><th class="num">Sobra</th></tr></thead><tbody>${linhas}</tbody></table></div>`;
 }
@@ -2909,117 +2925,24 @@ function _mtgPlanoHtml(sug, plano, titulo) {
 function _mtgRenderSugestao() {
     const caixa = document.getElementById('mtg-sugestao');
     if (!caixa) return;
-
-    const modelos = state.montagem.modelos;
-    if (!modelos.length || state.montagem.modoTrabalho !== 'planejamento') {
+    if (!state.montagem.modelos.length) {
         caixa.style.display = 'none'; caixa.innerHTML = ''; return;
     }
     caixa.style.display = '';
-
-    const porFolha = _mtgCelulasPorFolha(modelos);
     const sug = _mtgSugestaoAtual();
-    const aplicado = state.montagem.planoAplicado;
-    const repeticoesAplicadas = aplicado
-        && aplicado.assinatura === _mtgAssinaturaDasCelulas(state.montagem.celulas)
-        ? aplicado.repeticoes : null;
-    const atual = resumoAtualDaMontagem(modelos, state.montagem.celulas, porFolha, repeticoesAplicadas);
-    const instrucaoAtual = atual.repeticoesPorFolha
-        ? `Para atender às tiragens: <strong>${atual.totalImpressoes} impressões</strong> no total. `
-          + atual.repeticoesPorFolha.map((r, i) => `Montagem ${i + 1}: ${r} vez(es)`).join(' · ') + '.'
-        : atual.repeticoes == null ? 'Informe as tiragens e inclua células de todos os modelos para calcular as repetições.'
-        : `Para atender às tiragens com esta distribuição: <strong>${atual.repeticoes} repetição(ões)</strong> da montagem inteira, totalizando ${atual.totalImpressoes} folhas impressas.`;
-    const cfgAtual = configuracaoDeMontagens(state.montagem.quantidadeMontagens || 1,
-        state.montagem.minimoRepeticoes || 1);
-    const controles = `<div class="mtg-sug-config">
-        <label><span>Número de montagens</span><select id="mtg-numero-montagens"
-          onchange="mudarConfiguracaoDeMontagens('numero', this.value)">
-          ${Array.from({ length: MTG_MAX_MONTAGENS_SUGERIDAS }, (_, i) => i + 1)
-              .map(n => `<option value="${n}"${n === cfgAtual.numero ? ' selected' : ''}>${n}</option>`).join('')}
-        </select></label>
-        <label><span>Mínimo de repetições</span><input id="mtg-minimo-repeticoes" type="number" min="1" max="1000000" step="1"
-          value="${cfgAtual.minimo}" oninput="agendarConfiguracaoDeMontagens('minimo', this.value)"
-          onchange="mudarConfiguracaoDeMontagens('minimo', this.value)"></label>
-      </div>`;
-    const recomendado = sug.viavel ? modoSugeridoDaMontagem(sug) : null;
-    const solicitado = sug.viavel ? sug.planoSolicitado : null;
-    const sugerido = sug.viavel ? sug.planoSugerido : null;
-    const planoRecomendado = sugerido || solicitado;
-    const semDistribuir = sug.viavel && !sug.podeDistribuir;
-    const recTravado = sug.viavel && semDistribuir && recomendado === 'distribuir';
-    const motivoTravado = sug.viavel ? 'São ' + sug.total + ' peças: distribuir desenharia uma célula '
-        + 'para cada uma, e a tela não dá conta. Tiragem desse tamanho se imprime pela tela '
-        + 'do Pedido.' : '';
-    const nomeSolicitado = solicitado && (solicitado.quantidade === 1
-        ? '1 montagem configurada' : solicitado.quantidade + ' montagens configuradas');
-    const nomeRecomendado = planoRecomendado && (planoRecomendado.quantidade === 1
-        ? '1 montagem' : planoRecomendado.quantidade + ' montagens');
-    const botaoRecomendado = sug.viavel ? `<button type="button" class="btn-primary mtg-sug-rec mtg-sug-rec-topo"
-            ${recTravado ? 'disabled' : ''} title="${recTravado ? escapeHtml(motivoTravado) : ''}"
-            onclick="aplicarSugestaoDaMontagem('auto')">
-          ${recomendado === 'distribuir'
-            ? 'Aplicar o recomendado &mdash; distribuir em ' + sug.folhas + ' folhas'
-            : `Aplicar o recomendado &mdash; ${nomeRecomendado}, ${planoRecomendado.impressoes} impress&otilde;es`}
-        </button>` : '';
-    const cab = '<div class="mtg-num-cabecalho"><h2>Aproveitamento da folha</h2></div>'
-        + botaoRecomendado + `<details class="mtg-ajustes"><summary>Ajustar montagens e repetições</summary>${controles}</details>` + `
-      <div class="mtg-sug-atual" id="mtg-aproveitamento-atual" aria-live="polite">
-        <p><strong>Montagem atual:</strong> ${atual.usadas} células em ${atual.folhas} folha(s),
-          ${atual.vagas} vagas · ${atual.ocupacao.toFixed(1)}% de ocupação.</p>
-        <details class="mtg-ajustes"><summary>Conferir produção por modelo</summary><table class="mtg-sug-tabela"><thead><tr><th>Pedido</th><th>Modelo / nome</th>
-          <th class="num">Tiragem</th><th class="num">Células</th><th class="num">Repetições</th>
-          <th class="num">Produz</th><th class="num">Sobra</th></tr></thead><tbody>
-          ${atual.itens.map(m => `<tr><td>${escapeHtml(String(m.pedidoNumero || m.osId))}</td>
-            <td>${escapeHtml(String(m.itemId))} · ${escapeHtml(String(m.nome || ''))}</td>
-            <td class="num">${m.qtd || '—'}</td><td class="num">${m.celulas}</td>
-            <td class="num">${escapeHtml(m.repeticoesTexto || '—')}</td><td class="num">${m.produz == null ? '—' : m.produz}</td>
-            <td class="num">${m.sobra == null ? '—' : m.sobra}</td></tr>`).join('')}
-        </tbody></table></details>
-        <p>${instrucaoAtual}</p>
-        <p class="mtg-dica">Repetições mostram quantas vezes imprimir cada montagem em que o modelo aparece. Reimprimir repete as mesmas posições e códigos; a projeção de tiragem não gera novos dados.</p>
-      </div>`;
+    const cab = '<div class="mtg-num-cabecalho"><h2>Sugestão para uma folha</h2></div>';
     if (!sug.viavel) {
-        caixa.innerHTML = cab + '<p class="mtg-dica" style="margin:0;">'
-            + escapeHtml(sug.motivo) + '</p>';
+        caixa.innerHTML = cab + '<p class="mtg-dica">' + escapeHtml(sug.motivo) + '</p>';
         return;
     }
-
-    // Distribuir desenha uma célula por peça: acima do teto a tela não dá conta,
-    // e o botão nasce travado dizendo por quê e para onde ir. Quando é o
-    // recomendado que está travado, a montagem inteira é tiragem de produção — e
-    // o lugar dela é a tela do Pedido, não esta.
-    const economia = sugerido ? solicitado.impressoes - sugerido.impressoes : 0;
-
-    caixa.innerHTML = cab + `
-      <section class="mtg-recomendacao" aria-labelledby="mtg-recomendacao-titulo"><h3 id="mtg-recomendacao-titulo">Recomendação automática</h3>
-      <p class="mtg-dica" style="margin:0 0 10px;">A folha tem <strong>${sug.porFolha}</strong>
-        célula(s) e as tiragens somam <strong>${sug.total}</strong> peça(s). Cada montagem sai cheia
-        e deve ser repetida ao menos <strong>${sug.configuracao.minimo}</strong> vez(es). Entre soluções
-        com o mesmo total de impressões, a preferência é distribuir as sobras entre os modelos.</p>
-      ${sugerido ? `<p class="mtg-sug-melhoria"><strong>Melhor resultado encontrado:</strong> usar ${sugerido.quantidade} montagens reduz de ${solicitado.impressoes} para ${sugerido.impressoes} impressões, economizando ${economia}.</p>`
-        : `<p class="mtg-dica">A busca determinística não encontrou quantidade maior, até ${MTG_MAX_MONTAGENS_SUGERIDAS}, que reduza o total de impressões respeitando o mínimo informado.</p>`}
-      ${recomendado !== 'distribuir' ? _mtgPlanoHtml(sug, planoRecomendado, 'Plano recomendado') : ''}
-      <details class="mtg-ajustes"><summary>Outras opções de distribuição</summary>
-      ${sugerido || recomendado === 'distribuir' ? _mtgPlanoHtml(sug, solicitado, nomeSolicitado) : ''}
-
-      <div class="mtg-sug-botoes">
-        <button type="button" class="btn-secondary"
-                onclick="aplicarSugestaoDaMontagem('solicitada')">Aplicar ${nomeSolicitado}</button>
-        <button type="button" class="btn-secondary" ${semDistribuir ? 'disabled' : ''}
-                title="${semDistribuir ? escapeHtml(motivoTravado) : ''}"
-                onclick="aplicarSugestaoDaMontagem('distribuir')">Distribuir em ${sug.folhas} folhas</button>
-      </div></details>
-
-      <p class="mtg-dica" style="margin:10px 0 0;">${recTravado
-        ? '<strong>' + escapeHtml(motivoTravado) + '</strong> Aqui a folha repetida também não '
-          + 'serve: há modelo com dado variável, e repetir a folha repetiria o código.'
-        : sug.temDadoVariavel
-        ? 'Há modelo com dado variável na folha: <strong>repetir a mesma folha repetiria o '
-          + 'código</strong>. Por isso o recomendado é distribuir — mesma mistura em cada folha, '
-          + 'cada célula um item diferente.'
-        : 'O PDF terá uma página para cada montagem. Use a quantidade de repetições indicada em cada uma.'}</p>
-
-      <p class="mtg-dica" style="margin:6px 0 0;">Aplicar <strong>substitui</strong> as células
-        que estão na folha. <code>Ctrl+Z</code> devolve.</p></section>`;
+    const atual = resumoAtualDaMontagem(state.montagem.modelos, state.montagem.celulas, sug.porFolha);
+    caixa.innerHTML = cab + `<p id="mtg-aproveitamento-atual" class="mtg-dica">Montagem atual: ${atual.usadas} células em ${atual.folhas} folha(s).</p>`
+        + _mtgPlanoHtml(sug, sug.planoSolicitado, 'Composição e repetições')
+        + `<button type="button" class="btn-primary mtg-sug-rec"
+            ${state.montagem.gerando ? 'disabled' : ''}
+            onclick="aplicarSugestaoDaMontagem('unica')">Aplicar composição de uma folha</button>`
+        + '<p class="mtg-dica">Aplicar substitui as células atuais. Ctrl+Z desfaz.</p>'
+        + (sug.temDadoVariavel ? '<p class="mtg-dica"><strong>Há dados variáveis: repetir esta folha repete os mesmos códigos.</strong> Para códigos diferentes, use a impressão do Pedido.</p>' : '');
 }
 
 /* ── O número do modelo no papel ─────────────────────────────────────────── */
@@ -3754,13 +3677,7 @@ function renderMontagem() {
         badge.textContent = String(total);
         badge.style.display = total ? '' : 'none';
     }
-    for (const modo of ['manual', 'planejamento']) {
-        const botao = document.getElementById('mtg-modo-' + modo);
-        if (!botao) continue;
-        const ativo = (state.montagem.modoTrabalho || 'manual') === modo;
-        botao.classList.toggle('ativo', ativo);
-        botao.setAttribute('aria-pressed', ativo ? 'true' : 'false');
-    }
+    pintarSetoresDaMontagem();
 
     // ── As ações que dependem do que há na folha ───────────────────────────
     const ligar = (id, ativo, titulo) => {
@@ -3950,10 +3867,12 @@ function renderMontagem() {
 async function abrirMontagem() {
     if (state.montagem && state.montagem.gerando) { renderMontagem(); return; }
     if (!state.montagem || !state.montagem.celulas) state.montagem = montagemVazia();
-    // O catálogo pode ser escolhido enquanto a consulta de pedidos está em voo.
-    // Não trocar os formatos por um campo desabilitado durante falhas de rede.
+    state.montagem.setores = ['TEXTIL'];
+    state.montagem.modoTrabalho = 'manual';
+    pintarSetoresDaMontagem();
+    // Exibe imediatamente os formatos dos modelos aguardando já conhecidos.
     const abertura = state.montagem.abertura = (state.montagem.abertura || 0) + 1;
-    encherFormatosDaMontagem(true);
+    encherFormatosDaMontagem();
     encherPedidosDaMontagem();
     const listaPedidos = document.getElementById('mtg-pedido');
     if (listaPedidos && listaPedidos.disabled) {
@@ -3961,17 +3880,17 @@ async function abrirMontagem() {
     }
     try {
         if (!(state.formatos || []).length) await loadAll();
-        if (typeof loadOrdens === 'function' && await loadOrdens({ completa: true }) === false) {
+        if (typeof loadOrdens === 'function' && await loadOrdens() === false) {
             throw new Error('Carga de pedidos incompleta');
         }
     } catch (erro) {
         if (state.montagem.abertura !== abertura) return;
-        encherFormatosDaMontagem(true);
+        encherFormatosDaMontagem();
         encherPedidosDaMontagem();
         if (listaPedidos && listaPedidos.disabled) {
             listaPedidos.innerHTML = '<option value="">Falha ao carregar pedidos. Abra a Montagem novamente.</option>';
         }
-        if (typeof toast === 'function') toast('Não foi possível atualizar os pedidos. Os formatos continuam disponíveis. Abra a Montagem novamente para tentar.', 'error');
+        if (typeof toast === 'function') toast('Não foi possível atualizar os pedidos. Os formatos já carregados continuam disponíveis. Abra a Montagem novamente para tentar.', 'error');
         return;
     }
     if (state.montagem.abertura !== abertura) return;
@@ -4407,9 +4326,9 @@ async function prepararArtesDaMontagem(modelos) {
                     + ' não está mais no pedido. Tire-o da montagem e gere de novo.');
             }
 
-            // O filtro de formato organiza a escolha, sem apagar a folha pronta.
+            // Os filtros de formato e setor organizam a escolha, sem invalidar a folha pronta.
             // Os status, entretanto, precisam continuar válidos para gerar.
-            if (!modeloDisponivelNaMontagem(m.osId, it, null)) {
+            if (!modeloDisponivelNaMontagem(m.osId, it, null, false)) {
                 throw new Error('O pedido ' + _mtgNumeroDoPedido(m.osId) + ' precisa estar Em produção e o modelo ' + m.itemId + ' Aguardando. Confira os status antes de gerar.');
             }
 

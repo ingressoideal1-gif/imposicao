@@ -64,7 +64,7 @@ const CONSTANTES = ['MTG_POSICOES_DO_NUMERO', 'MTG_ROTACOES_DO_NUMERO',
                     'MTG_MAX_RECOMENDACOES_MODELOS', 'MTG_ORCAMENTO_COMBINACOES', '_mtgCacheCombinacoes'];
 
 const NOMES = [
-    'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
+    'modelosDoPedidoNaMontagem', 'pedidoEmProducaoNaMontagem', 'produtoDoModeloNaMontagem', 'setorDoModeloNaMontagem', 'formatoDoModeloNaMontagem', 'pedidoDisponivelNaMontagem', 'modeloDisponivelNaMontagem',
     'modoDoModeloNaMontagem', 'modoDaPecaNaMontagem',
     'numeroPadraoDaMontagem', 'posicoesDaMontagem', 'totalDeItensDoModelo',
     'porQueNaoCabeNaMontagem', 'validarMontagemParaGerar', 'chaveDoModelo', 'modeloDaMontagem',
@@ -109,7 +109,7 @@ function novoState() {
             { id_produto: 503, id_formato: 999 },   // aponta para formato que nao existe
         ],
         osItens: {},
-        montagem: { celulas: [], modelos: [], pedidoSel: null, modeloSel: null,
+        montagem: { setores: [], celulas: [], modelos: [], pedidoSel: null, modeloSel: null,
                     selecao: [], zoom: 'peca', numero: null, historia: [], futuro: [] },
     };
 }

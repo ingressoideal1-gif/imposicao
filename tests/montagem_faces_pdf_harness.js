@@ -69,6 +69,7 @@ async function testar() {
     assert.equal(contexto.modoDoModeloNaMontagem({ verso: true }), 'duplex');
 
     // Uma face que mudou no catálogo precisa ser recusada antes do construtor.
+    contexto.state.montagem.setores = ['LASER']; // Filtro de busca não invalida modelos já montados.
     const item = { id: 'M', formato_id: 'F1', saida_id: 'S1', cor: 'azul', numeracao_id: 'V', qtd: 10 };
     contexto.state.formatos = [{ id: 'F1', cols: 1, rows: 10 }];
     contexto.state.osItens = { A: [item] };
@@ -93,6 +94,7 @@ async function testar() {
 
     // Não iniciar geração com carregamentos pendentes, nem exibir uma resposta antiga.
     contexto.state.montagem = contexto.montagemVazia();
+    contexto.state.montagem.setores = []; // Cenário de concorrência sem filtro de setor.
     contexto.state.osItens = { A: [{ id: 'MA' }], B: [{ id: 'MB' }] };
     const pedido = { value: 'A' }, modelo = {}, pendentes = {}, avisos = [];
     contexto.document.getElementById = id => ({ 'mtg-pedido': pedido, 'mtg-modelo': modelo }[id] || null);
