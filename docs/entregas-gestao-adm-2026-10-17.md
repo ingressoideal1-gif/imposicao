@@ -1,6 +1,6 @@
-# Entregas: gestão administrativa (web v1074)
+# Entregas: gestão administrativa (web v1075)
 
-Base d1535c7c. Worktree isolada feat/entregas-gestao-adm-20261017.
+Base d1535c7c; integrada Montagem a2fa3962 antes da publicação. Worktree isolada feat/entregas-gestao-adm-20261017.
 
 ## Interface
 
