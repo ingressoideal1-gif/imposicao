@@ -1,4 +1,7 @@
 # HTML e rotas de entrada sempre conferem a versao publicada.
+/entregas/*
+  Cache-Control: no-cache
+
 /
   Cache-Control: no-cache, no-store, must-revalidate
 

@@ -1015,7 +1015,7 @@ const PECAS = [
 
     ok(destino.nasceMarcada,
        'a caixa "abrir na tela" nasce MARCADA: é ela que devolve o PDF que sumia', destino);
-    ok(destino.semPasta.some(l => /^baixou 21202_05_set_CAMAROTE_PRESIDENTE_/.test(l))
+    ok(destino.semPasta.some(l => /^baixou \d+x_21202_05_set_CAMAROTE_PRESIDENTE_/.test(l))
        && !destino.semPasta.some(l => /gravou/.test(l)),
        'sem pasta escolhida, o PDF desce pelo navegador', destino.semPasta);
     ok(!destino.semPasta.some(l => /^abriu /.test(l)),
@@ -1023,16 +1023,16 @@ const PECAS = [
     ok(destino.comPasta.some(l => l === 'gravou em D:\\Hot')
        && !destino.comPasta.some(l => /^baixou/.test(l)),
        'com pasta escolhida, quem grava é a estação — e o navegador não baixa nada', destino.comPasta);
-    ok(destino.comPasta.some(l => /^abriu 21202_05_set_CAMAROTE_PRESIDENTE_/.test(l)),
+    ok(destino.comPasta.some(l => /^abriu \d+x_21202_05_set_CAMAROTE_PRESIDENTE_/.test(l)),
        'e marcada a caixa, o PDF abre na tela do painel', destino.comPasta);
     ok(destino.comPasta.some(l => /success: .*D:\\Hot/.test(l)),
        'o aviso diz ONDE o arquivo ficou — pasta não se procura no escuro', destino.comPasta);
-    ok(destino.pastaQuebrada.some(l => /^baixou 21202_05_set_CAMAROTE_PRESIDENTE_/.test(l)),
+    ok(destino.pastaQuebrada.some(l => /^baixou \d+x_21202_05_set_CAMAROTE_PRESIDENTE_/.test(l)),
        'pasta que falha na hora de gravar NÃO perde o trabalho: o PDF desce pelo navegador',
        destino.pastaQuebrada);
     ok(destino.pastaQuebrada.some(l => /warning: .*a pasta sumiu/.test(l)),
        'e o operador fica sabendo o que falhou, com o motivo do disco', destino.pastaQuebrada);
-    ok(destino.nome === '21202_05_set_CAMAROTE_PRESIDENTE_21202_11_set_CAMAROTE_PATROCINADORES_21188_STAFF_PALCO_20990_PULSEIRA_CAMAROTE_OURO.pdf',
+    ok(destino.nome.replace(/^\d+x_/, '') === '21202_05_set_CAMAROTE_PRESIDENTE_21202_11_set_CAMAROTE_PATROCINADORES_21188_STAFF_PALCO_20990_PULSEIRA_CAMAROTE_OURO.pdf',
        'o nome identifica os pedidos e nomes descritivos dos modelos', destino.nome);
 
     const pl = destino.payload;
@@ -1240,6 +1240,24 @@ const PECAS = [
     ok(!concorrencia.fim.disabled && !concorrencia.fim.gerando && !/Montando/.test(concorrencia.fim.texto), 'restaura botão e rótulo depois do sucesso', concorrencia);
     ok(concorrencia.recuperouErro, 'libera a edição depois de erro na estação', concorrencia);
 
+    const padroes = await aba.evaluate(() => {
+        state.montagem = montagemVazia();
+        _mtgRenderFaces();
+        return ['front','back','both','separados','rotacionarVerso'].map(id => document.getElementById('mtg-face-' + id)?.checked ?? document.getElementById('mtg-' + id).checked);
+    });
+    ok(JSON.stringify(padroes) === '[false,false,true,true,true]', 'montagem vazia mantém os padrões de saída da imagem', padroes);
+    const nomesRepeticoes = await aba.evaluate(pecas => {
+        window.__montar(pecas);
+        state.montagem.modelos.forEach(m => { m.qtd = 15 * state.montagem.celulas.filter(c => chaveDoModelo(c) === chaveDoModelo(m)).length; });
+        const quinze = nomeDoArquivoDaMontagem();
+        state.montagem.modelos[0].qtd += 1;
+        const dezesseis = nomeDoArquivoDaMontagem();
+        state.montagem = montagemVazia();
+        return { quinze, dezesseis, vazio: nomeDoArquivoDaMontagem(new Date(2026,9,17,10,0)) };
+    }, PECAS);
+    ok(nomesRepeticoes.quinze.startsWith('15x_') && nomesRepeticoes.dezesseis.startsWith('16x_') && nomesRepeticoes.vazio.startsWith('1x_'),
+        'nome usa repetições da composição atual, arredonda a tiragem e aceita montagem vazia', nomesRepeticoes);
+
     const faces = await aba.evaluate(pecas => {
         window.__montar(pecas);
         const semVerso = document.getElementById('mtg-face-back').disabled && document.getElementById('mtg-preview-face').hidden;
@@ -1277,6 +1295,7 @@ const PECAS = [
             state.montagem.modelos.forEach(m => { m.peca.print_mode = modo; });
             for (const face of ['both', 'front', 'back']) {
                 mudarFaceDaMontagem(face);
+                mudarSaidaDaMontagem('separados', false);
                 entregue = null;
                 await gerarPdfDaMontagem();
                 if (!entregue) throw new Error('PDF não entregue: ' + modo + '/' + face);

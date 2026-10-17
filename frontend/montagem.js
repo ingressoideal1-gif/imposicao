@@ -137,7 +137,7 @@ function montagemVazia() {
         modelosDoSeletor: [],
         buscaModelos: '',
         seletorModelosAberto: false,
-        face: 'both', facePreview: 'front', separados: false, rotacionarVerso: false,
+        face: 'both', facePreview: 'front', separados: true, rotacionarVerso: true,
         gerando: false,
         modoTrabalho: 'manual', setores: ['TEXTIL'],
         // Os índices das células selecionadas. Repetir, tirar e mover passam a
@@ -1422,14 +1422,14 @@ function mudarSaidaDaMontagem(campo, ligado) {
 function _mtgRenderFaces() {
     const m = state.montagem;
     const comVerso = m.modelos.some(x => modoDaPecaNaMontagem(x.peca) !== 'front');
-    if (!comVerso && !m.gerando) {
+    if (m.modelos.length && !comVerso && !m.gerando) {
         if (m.modelos.length) m.face = 'front';
         m.facePreview = 'front'; m.separados = false; m.rotacionarVerso = false;
     }
     for (const face of ['front', 'back', 'both']) {
         const el = document.getElementById('mtg-face-' + face);
         if (!el) continue;
-        el.checked = (comVerso ? m.face : 'front') === face;
+        el.checked = m.face === face;
         el.disabled = !m.modelos.length || (!comVerso && face !== 'front') || m.gerando;
     }
     for (const campo of ['separados', 'rotacionarVerso']) {
@@ -1622,8 +1622,8 @@ function restaurarRascunhoDaMontagem() {
         base.modelos = Array.isArray(salvo.modelos) ? salvo.modelos : [];
         base.face = ['both', 'front', 'back'].includes(salvo.face) ? salvo.face : 'both';
         base.facePreview = salvo.facePreview === 'back' ? 'back' : 'front';
-        base.separados = salvo.separados === true && base.face === 'both';
-        base.rotacionarVerso = salvo.rotacionarVerso === true;
+        base.separados = salvo.separados !== false && base.face === 'both';
+        base.rotacionarVerso = salvo.rotacionarVerso !== false;
         base.zoom = ['peca', 'folha', '100'].includes(salvo.zoom) ? salvo.zoom : 'folha';
         base.folha = parseInt(salvo.folha) || 0;
         base.numero = numeroDaMontagemSaneado(salvo.numero);
@@ -3877,10 +3877,14 @@ function abrirNaTelaDaMontagem() {
 function nomeDoArquivoDaMontagem(quando) {
     const modelos = (state.montagem && state.montagem.modelos) || [];
     const base = nomeBaseDosArquivosDeImpressao(modelos);
-    if (base) return base + '.pdf';
+    const celulas = state.montagem?.celulas || [];
+    const resumo = resumoAtualDaMontagem(modelos, celulas, Math.max(1, celulas.length));
+    const repeticoes = Number.isFinite(resumo.repeticoes) && resumo.repeticoes > 0 ? resumo.repeticoes : 1;
+    const prefixo = repeticoes + 'x_';
+    if (base) return prefixo + base + '.pdf';
     const d = quando || new Date();
     const p = n => String(n).padStart(2, '0');
-    return 'montagem_' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    return prefixo + 'montagem_' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
         + '_' + p(d.getHours()) + p(d.getMinutes()) + '.pdf';
 }
 
