@@ -34,3 +34,13 @@ O MSI será publicado como artefato imutável. Os aliases históricos recebem os
 A verificação ampliada detectou que o novo filtro de setor estava sendo aplicado também à revalidação de modelos já carregados para o PDF. Corrigido: setor e formato restringem a busca; a geração continua validando status e compatibilidade dos modelos já montados, independentemente do filtro visual atual. O harness de faces exercita essa regressão com outro setor selecionado.
 
 A primeira execução simultânea dos perfis oficial e produção também disputou o arquivo temporário `test_duplex_input.pdf`. Os dez testes de faces/duplex passaram após o ajuste; a validação final dos canais é executada em sequência para evitar essa disputa. Não houve alteração do motor PDF.
+
+### Publicação confirmada
+
+- Fonte: commit `7338fbf1`, tag `agente-v1.3.14`, branch enviada ao repositório.
+- Perfis produção, piloto e oficial: 1055 testes Python aprovados por perfil, 2 ignorados e 2 subtestes aprovados; 63 etapas de validação aprovadas no total, incluindo os harnesses JavaScript. A tela passou nas 234 verificações específicas.
+- MSI `NewProdPiloto_Oficial_v1.3.14.msi`: 196685824 bytes; SHA-256 `a6d8018b98675fe06e52960a201880278142a71219b77bd1cb182a9bcce84530`.
+- Os 375 arquivos do frontend extraídos do executável correspondem à fonte. Auditoria de pacote público aprovada.
+- Downloads completos do pacote oficial e alias legado conferidos antes da ativação. Leitura pública independente confirmou 1.3.14, tamanho e hash nos três manifestos, sem restrição de estações.
+- Evidências: `docs/evidencias/newprod-1314-montagem-setores.json`.
+- Não foi executada instalação manual ou reinício de estações nesta entrega. A disponibilidade universal não comprova adoção por cada estação nem impressão física. Cloudflare permanece inalterado.
