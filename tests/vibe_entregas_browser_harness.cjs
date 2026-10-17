@@ -26,7 +26,7 @@ const root = path.resolve(__dirname, '../frontend');
     await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
     await page.goto(base+'/entregas/',{waitUntil:'networkidle0'});
     assert.equal(await page.title(),'Vibe Entregas');
-    assert.equal(await page.$eval('#login',e=>e.hidden),true);
+    assert.equal(await page.$eval('#login',e=>e.hidden),false);
     await page.click('#demonstrar');assert.equal(await page.$$eval('.card',els=>els.length),3);
     await page.type('#busca','1002');assert.equal(await page.$$eval('.card',els=>els.length),1);
     const route=await page.$eval('.card .route',e=>e.href);assert.ok(route.startsWith('https://www.google.com/maps/dir/'));

@@ -1,7 +1,7 @@
-/* Ativar somente apos revisao/aplicacao do contrato SQL e homologacao. */
+/* Contrato Vibe implantado; acesso por cadastro explicito no servidor. */
 window.VibeEntregas = (() => {
   let client;
-  const ativo = false;
+  const ativo = true;
   function conectar() {
     if (!ativo) throw new Error('Integração ainda não ativada. Utilize a demonstração.');
     if (!client) client = supabase.createClient(VIBECODE_SUPABASE_URL, VIBECODE_ANON_KEY, { auth: { storageKey: 'vibe-entregas-auth', storage: sessionStorage, persistSession: true } });
