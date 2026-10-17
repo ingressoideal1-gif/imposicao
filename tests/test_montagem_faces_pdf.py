@@ -15,11 +15,13 @@ def test_regras_e_filtro_de_faces():
     assert "OK:" in r.stdout
 
 
+@pytest.mark.parametrize("estrito", [False, True])
+@pytest.mark.parametrize("apenas_frente", [False, True])
 @pytest.mark.parametrize("girar", [False, True])
 @pytest.mark.parametrize("identificacao", ["VIP", "21869"])
 @pytest.mark.parametrize("modo", ["duplex", "duplex_unico"])
 @pytest.mark.parametrize("posicoes", [[2], [3, 1, 3, 5, 2]])
-def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, posicoes, identificacao, girar):
+def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, posicoes, identificacao, girar, apenas_frente, estrito):
     # Importar o motor não deve consultar credenciais, banco ou serviços.
     # A pasta de perfis criada pelo módulo também fica no diretório do teste.
     monkeypatch.chdir(tmp_path)
@@ -43,12 +45,17 @@ def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, po
     cfg = ImpositionConfig(
         base_file="", out_pdf=str(entrada), formato=formato,
         saida=dict(width_mm=180, height_mm=120), numeracao=None,
-        layout_schema="multi_artes", print_mode=modo, rotate_page=90,
+        layout_schema="cut_stack" if estrito else "multi_artes",
+        cut_stack_mode="strict_assembly" if estrito else "independent",
+        print_mode=modo, rotate_page=90,
         multi_artes=[dict(qtd=10, modelo="M1", pedido="A", start=101,
-                          numeracao=numeracao, pdf_url=None, local_path=str(base), nome=identificacao, nome_literal=True)],
+                          numeracao=numeracao, pdf_url=None, local_path=str(base), nome=identificacao, nome_literal=True,
+                          **({"nome_apenas_frente": True} if apenas_frente else {}))],
         refazer_celulas=posicoes, refazer_repetir=True,
     )
     ImpositionEngine(cfg).process()
+    if estrito:
+        entrada = tmp_path / "completo_02_miolo.pdf"
     folhas = (len(posicoes) + 3) // 4
     r = subprocess.run(["node", str(RAIZ / "tests/montagem_faces_pdf_harness.js"),
                         str(entrada), str(frente), str(verso), modo, str(folhas), str(girar).lower()],
@@ -60,6 +67,8 @@ def test_separar_faces_preserva_paginas_do_motor(tmp_path, monkeypatch, modo, po
         assert identificacao in original[0].get_text()
         assert identificacao.zfill(6) not in original[0].get_text()
         assert "VERSO-" in original[1].get_text()
+        for i, pagina in enumerate(original):
+            assert (identificacao in pagina.get_text()) == (i % 2 == 0 or (estrito and not apenas_frente))
         for paridade, arquivo in enumerate([frente, verso]):
             with fitz.open(arquivo) as filtrado:
                 assert len(filtrado) == folhas

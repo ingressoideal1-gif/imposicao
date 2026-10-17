@@ -3370,6 +3370,7 @@ class ImpositionEngine:
                         "verso_page_idx": art_verso_page_idx,
                         "nome": art.get("nome", ""),
                         "nome_literal": art.get("nome_literal") is True,
+                        "nome_apenas_frente": art.get("nome_apenas_frente") is True,
                         "nome_color": art.get("nome_color", "#000000"),
                         # Corpo, borda e giro do numero do modelo (03/09/2026).
                         # Vao crus, como vieram do payload: quem confere faixa e
@@ -4623,7 +4624,8 @@ class ImpositionEngine:
                 self._injetar_qr_ideal(rotated_el, current_val, item_data=item_data)
                 self._render_element(temp_page, rotated_el, _fx, _fy, current_val, csv_row)
 
-            _desenhar_numero_do_modelo(temp_page, item_data, _fx, _fy, cfg)
+            if item_data.get("nome_apenas_frente") is not True:
+                _desenhar_numero_do_modelo(temp_page, item_data, _fx, _fy, cfg)
 
             _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
             temp_doc.close()

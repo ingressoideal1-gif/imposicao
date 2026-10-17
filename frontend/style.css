@@ -6402,7 +6402,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .mtg-identificacao-titulo { font-size: .82rem; font-weight: 700; }
 .mtg-identificacao-linha select { width: auto; min-width: 90px; flex: 0 1 auto; }
 .mtg-identificacao-linha #mtg-num-texto { width: 180px; }
-#mtg-preview-face { width: 160px; font-size: .8rem; }
+#mtg-preview-face { flex-shrink: 0; }
 #mtg-preview-face[hidden] { display: none; }
 #mtg-confirmacao:not([hidden]) { margin-top: 10px; color: #fbbf24; }
 @media (max-width: 700px) {
