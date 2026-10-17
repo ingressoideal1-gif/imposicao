@@ -1439,7 +1439,15 @@ function _mtgRenderFaces() {
         el.disabled = !comVerso || m.gerando || (campo === 'rotacionarVerso' && m.face === 'front');
     }
     const preview = document.getElementById('mtg-preview-face');
-    if (preview) { preview.hidden = !comVerso; preview.value = m.facePreview || 'front'; }
+    if (preview) preview.hidden = !comVerso;
+    for (const face of ['front', 'back']) {
+        const botao = document.getElementById('mtg-preview-' + face);
+        if (!botao) continue;
+        const ativo = (m.facePreview || 'front') === face;
+        botao.classList.toggle('ativo', ativo);
+        botao.setAttribute('aria-pressed', String(ativo));
+        botao.disabled = !!m.gerando;
+    }
     const escolhido = document.getElementById('mtg-modelo-face');
     const item = _mtgItemEscolhido();
     if (escolhido) {
@@ -3340,7 +3348,7 @@ function _mtgRenderFolha() {
                 <button type="button" class="mtg-celula-btn mtg-celula-tirar" title="Tirar só esta célula da folha"
                         onclick="event.stopPropagation(); removerCelulaDaMontagem(${i})">&times;</button>` : '';
             const textoNum = textoDeIdentificacaoDaMontagem(c.itemId, c.osId, m.pedidoNumero, numero);
-            const numeroHtml = numero.imprimir
+            const numeroHtml = numero.imprimir && state.montagem.facePreview !== 'back'
                 ? `<span style="${_mtgEstiloDoNumero(numero, escala, textoNum)}">${escapeHtml(textoNum)}</span>`
                 : '';
             controles.push(`<div class="mtg-celula-controles${marcada ? ' marcada' : ''}" data-i="${i}"
@@ -4261,6 +4269,7 @@ async function prepararArtesDaMontagem(modelos) {
             // imprime como sempre — que é exatamente o padrão desta tela.
             pronta.nome = numero.imprimir ? textoDeIdentificacaoDaMontagem(m.itemId, m.osId, m.pedidoNumero, numero) : '';
             pronta.nome_literal = numero.tipo !== 'modelo';
+            pronta.nome_apenas_frente = true;
             pronta.nome_color = numero.cor;
             pronta.nome_size = numero.size;
             pronta.nome_pos = numero.pos;

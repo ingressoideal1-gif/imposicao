@@ -811,6 +811,7 @@ async function testarPreparo() {
        'pedido a pedido: carrega os bancos de A, monta as artes de A; depois B', log);
     ok(artes.map(a => a.modelo).join(',') === '1,9,2',
        'as artes saem NA ORDEM DOS MODELOS, e não na ordem dos pedidos — é a ordem do multi_artes', artes.map(a => a.modelo));
+    ok(artes.every(a => a.nome_apenas_frente === true), 'identificação da Montagem solicita somente frente ao motor');
     ok(artes.every(a => a._multi === true), 'cada arte passa por arteParaOMotor como folha combinada');
     ok(artes.map(a => a.nome).join(',') === '21202,21188,21202' && artes.every(a => a.nome_literal),
        'com o número ligado, ele vai em cada arte — a escolha da montagem, não a salva no modelo');
