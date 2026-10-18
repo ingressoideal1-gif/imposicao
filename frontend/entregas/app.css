@@ -3,3 +3,5 @@
 header{flex-wrap:wrap}header>div{flex:1;min-width:140px}header #instalar{font-size:13px;padding:10px 12px;margin-left:auto}
 
 #rotas-painel{background:#fff;border:1px solid #cbd8d4;border-radius:14px;padding:16px;margin:20px 0}#rotas-painel summary{font-weight:700;cursor:pointer;min-height:36px}#rotas-painel li{margin:12px 0;line-height:1.5}#rota-proxima{display:block;margin:16px 0}#rota-erro{color:#a52c2c}
+
+.proxima-entrega{border:2px solid #14684f}.aguardando{background:#eceeed;color:#59635f}.actions{flex-wrap:wrap}.actions>*{flex:1 1 140px}.intro{padding:8px 0}.intro h1{font-size:28px}#rota-ativa{padding:4px 16px;background:#e9f5ed;border-radius:12px;margin-bottom:16px}
