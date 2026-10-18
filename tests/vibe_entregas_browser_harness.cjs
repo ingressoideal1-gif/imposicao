@@ -57,7 +57,7 @@ const root = path.resolve(__dirname, '../frontend');
     await page.click('.actions button');await page.click('[data-filtro=disponivel]');await page.click('.actions button');
     await page.click('#rotas-painel summary');
     await page.$$eval('#rota-selecao input',els=>els.forEach(e=>{e.checked=true;e.dispatchEvent(new Event('change'));}));
-    await page.click('#rota-retorno');await page.select('#rota-ultima','DEMO-1001');
+    assert.equal(await page.$eval('#rota-retorno',e=>e.checked),false);await page.select('#rota-ultima','DEMO-1001');
     await page.click('#rota-calcular');await page.waitForFunction(()=>!document.getElementById('rota-revisao').hidden);
     assert.match(await page.$eval('#rota-estimativa',e=>e.textContent),/sem cálculo do Google/);
     assert.match(await page.$eval('#rota-ordem li:last-child',e=>e.textContent),/DEMO-1001/);
