@@ -49032,7 +49032,7 @@ window.carregarFundoAtual = carregarFundoAtual;
     const data = valor => valor ? new Date(valor).toLocaleString('pt-BR') : '—';
     function texto(tag, valor) { const node = document.createElement(tag); node.textContent = valor ?? '—'; return node; }
     function limparFoto() { fotoGeracao++; el('ve-comprovante').hidden = true; el('ve-comprovante').removeAttribute('src'); }
-    function limparDados() { window.EntregasGestao?.limpar(); geracao++; el('ve-rotas-lista').replaceChildren(); el('ve-rotas-mensagem').textContent=''; el('ve-linhas').replaceChildren(); limparFoto(); el('ve-detalhe').close(); el('ve-detalhe-texto').textContent = ''; el('ve-historico').replaceChildren(); el('ve-detalhe-titulo').textContent = 'Detalhes da entrega'; }
+    function limparDados() { window.EntregasMapa?.limpar(); window.EntregasGestao?.limpar(); geracao++; el('ve-rotas-lista').replaceChildren(); el('ve-rotas-mensagem').textContent=''; el('ve-linhas').replaceChildren(); limparFoto(); el('ve-detalhe').close(); el('ve-detalhe-texto').textContent = ''; el('ve-historico').replaceChildren(); el('ve-detalhe-titulo').textContent = 'Detalhes da entrega'; }
     function atualizarAcesso() {
         if (!el('nav-entregas')) return;
         el('nav-entregas').style.display = permitido() ? '' : 'none';
@@ -49100,7 +49100,7 @@ window.carregarFundoAtual = carregarFundoAtual;
         const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
         el('ve-de').value = hoje; el('ve-ate').value = hoje;
         el('ve-filtros').onsubmit = e => { e.preventDefault(); demonstracao = false; carregar(0); };
-        el('ve-demo').onclick = () => { demonstracao = true; carregar(0); };
+        el('ve-demo').onclick = () => { demonstracao = true; window.EntregasMapa?.limpar(); carregar(0); };
         el('ve-rotas-atualizar').onclick = async () => {
             if(!permitido())return; const turno=geracao;
             el('ve-rotas-lista').replaceChildren();el('ve-rotas-mensagem').textContent='Consultando rotas…';
@@ -49126,10 +49126,10 @@ window.carregarFundoAtual = carregarFundoAtual;
         el('ve-fechar').onclick = () => el('ve-detalhe').close(); el('ve-detalhe').addEventListener('close',limparFoto);
         cliente()?.auth?.onAuthStateChange?.(evento => { if(evento === 'SIGNED_OUT') { limparDados(); el('ve-mensagem').textContent = 'Sessão encerrada. Entre novamente para consultar.'; } });
         const anterior = window.showView;
-        window.showView = function(id) { if (id === 'view-entregas' && !permitido()) { atualizarAcesso(); return; } if(anterior) anterior.apply(this,arguments); if(id === 'view-entregas') { demonstracao = false; carregar(0); } };
+        window.showView = function(id) { if (id === 'view-entregas' && !permitido()) { atualizarAcesso(); return; } if(anterior) anterior.apply(this,arguments); if(id === 'view-entregas') { demonstracao = false; carregar(0); window.EntregasMapa?.atualizar(); el('ve-rotas-atualizar').click(); } };
         atualizarAcesso();
     }
-    window.EntregasPainel = { abrir: () => carregar(0), recarregar: () => carregar(pagina), atualizarAcesso };
+    window.EntregasPainel = { abrir: () => { window.EntregasMapa?.atualizar(); return carregar(0); }, recarregar: () => { window.EntregasMapa?.atualizar(); return carregar(pagina); }, atualizarAcesso };
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
 })();
 // FIM PAINEL ENTREGAS
