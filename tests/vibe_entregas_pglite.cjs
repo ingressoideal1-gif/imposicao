@@ -30,6 +30,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_mapa.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_mapa_atribuicao.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_mapa_todas.sql'),'utf8'));
+    await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_mapa_fila_operacional.sql'),'utf8'));
     await db.exec(`INSERT INTO auth.users VALUES('${uuid(91)}'),('${uuid(92)}');
       INSERT INTO vibe_entregas_acessos VALUES('${uuid(91)}','A','Motorista teste',true),('${uuid(92)}','B','Outro motorista',true);
       INSERT INTO propostas(id,id_int,cliente,empresa,frete_escolhido,status_interno) VALUES
@@ -200,7 +201,13 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     await assert.rejects(()=>db.query('SELECT * FROM vibe_entregas_mapa_config'),/permission denied/);
     await login(93);
     await db.exec(`RESET ROLE; INSERT INTO propostas(id,id_int,cliente,empresa,frete_escolhido,status_interno) VALUES('${uuid(999)}',1999,'Producao teste','A','MOTOBOY','EM PRODUCAO')`);await login(93);
+    await db.exec(`RESET ROLE; INSERT INTO propostas(id,id_int,cliente,empresa,frete_escolhido,status_interno) VALUES
+      ('${uuid(1000)}',2000,'Novo fora da fila','A','MOTOBOY','NOVO'),
+      ('${uuid(1001)}',2001,'Aguardando fora da fila','A','MOTOBOY','AGUARDANDO'),
+      ('${uuid(1002)}',2002,'Despacho legado sem registro Vibe','A','MOTOBOY','EM TRANSITO')`);await login(93);
     const mapa=(await db.query('SELECT ve_admin_mapa() AS dados')).rows[0].dados;
+    assert.ok(!mapa.some(p=>[2000,2001,2002].includes(p.pedido)));
+    assert.ok(mapa.some(p=>p.pedido===1021&&p.status_erp==='EM TRANSITO'&&p.iniciada_em));
     assert.ok(mapa.some(p=>p.pedido===1021&&p.entregador_id===uuid(96)&&p.rota_id&&p.ordem===2&&p.iniciada_em));
     assert.ok(!mapa.some(p=>[1003,1004,1005,1020].includes(p.pedido)));
     assert.ok(mapa.some(p=>!p.endereco_completo));assert.ok(mapa.every(p=>p.empresa));assert.ok(mapa.some(p=>p.pedido===1999&&p.status_erp==='EM PRODUCAO'));
