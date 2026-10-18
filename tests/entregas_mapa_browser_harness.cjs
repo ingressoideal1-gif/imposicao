@@ -20,6 +20,7 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
     { chave: '04', pedido: 1004, cliente: 'Disponível', endereco: 'Rua Teste, 40', endereco_completo: true },
     { chave: '05', pedido: 1005, cliente: 'Sem endereço', endereco: '', endereco_completo: false }
    ];
+   rows.forEach((r,i)=>r.status_erp=i===4?'EM PRODUCAO':'EXPEDICAO');
    window.vibeClient = { rpc: async (name, args) => { calls.push({ name, args }); if(name==='ve_admin_mapa_config') return {data:{}}; if (pending) await new Promise(r => window.resolvePending = r); return { data: args.p_apos ? rows.filter(r => r.chave > args.p_apos).slice(0, 201) : rows.slice(0, 201) }; } };
    window.installMaps = () => {
     class Bounds { constructor() { this.points = []; } extend(p) { this.points.push(p); } isEmpty() { return !this.points.length; } }
@@ -39,7 +40,10 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   await p.click('[data-entregador="ana"]'); // sem API ativa nao gera excecao
   await p.evaluate(() => { installMaps(); return EntregasMapa.atualizar(); });
   assert.equal(await p.$eval('#ve-total-rotas', e => e.textContent), '2');
-  assert.equal(await p.$eval('#ve-sem-entregador', e => e.textContent), '2');
+  assert.equal(await p.$eval('#ve-sem-entregador', e => e.textContent), '4');
+  assert.equal(await p.$$eval('.ve-mapa-item',e=>e.length),5);
+  assert.match(await p.$eval('[data-entregador=""]',e=>e.textContent),/Todas as entregas/);
+  assert.equal(await p.evaluate(()=>markers.find(m=>m.title?.includes('1004')).content.style.background),'rgb(37, 99, 235)');
   const result = await p.evaluate(() => ({ colors: lines.map(l => l.strokeColor), order: routeCalls[0].intermediates.map(p => p.location.lat), ret: routeCalls[0].origin.lat === routeCalls[0].destination.lat, n: markers.length }));
   assert.notEqual(result.colors[0], result.colors[1]); assert.deepEqual(result.order, [-30.02, -30.01]); assert.equal(result.ret, true); assert.equal(result.n, 5);
   assert.match(await p.$eval('#ve-mapa-erros', e => e.textContent), /1005/);
@@ -48,6 +52,38 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   await p.evaluate(() => markers.find(m => m.title?.includes('1001')).click());
   assert.equal(await p.evaluate(() => popup.querySelectorAll('img').length), 0);
   await p.evaluate(() => EntregasMapa.atualizar()); assert.equal(await p.evaluate(() => routeCalls.length), 2, 'cache evita recalculo pago sem mudanca');
+  // Integra o popup ao seletor real, com sucesso, conflito e permissao somente leitura.
+  const gestao = fs.readFileSync(path.join(root,'frontend/script.js'),'utf8');
+  await p.addScriptTag({content:gestao.slice(gestao.indexOf('// INICIO GESTAO ENTREGAS'))});
+  await p.evaluate(()=>{
+    rows.forEach(r=>{r.empresa='A';r.status_erp='EXPEDICAO';});window.failAssign=true;window.canEdit=true;
+    const previous=vibeClient.rpc;
+    vibeClient.rpc=async(n,a)=>{
+      if(n==='ve_admin_contexto')return {data:{editar:canEdit,entregadores:[{usuario:'paulo',nome:'Paulo',ativo:true,empresas:['A']},{usuario:'ana',nome:'Ana',ativo:true,empresas:['A']}]}};
+      if(n==='ve_admin_atribuir_rota'){
+        if(failAssign)return {error:{message:'Conflito simulado'}};
+        const row=rows.find(r=>r.chave===a.p_proposta);row.entregador_id=a.p_usuario;row.entregador='Ana';row.rota_id='r2';return {data:{confirmado:true,usuario:a.p_usuario,id:'r2'}};
+      }
+      return previous(n,a);
+    };
+    window.EntregasPainel={recarregar:()=>EntregasMapa.atualizar()};
+  });
+  await p.evaluate(()=>markers.filter(m=>m.map&&m.title?.includes('1001')).at(-1).click());
+  assert.equal(await p.evaluate(()=>popup.querySelector('select').value),'paulo');
+  await p.evaluate(async()=>{document.body.append(popup);const select=popup.querySelector('select');select.value='ana';await select.onchange();});
+  assert.match(await p.evaluate(()=>popup.querySelector('[role=status]').textContent),/Conflito simulado/);
+  assert.equal(await p.evaluate(()=>popup.querySelector('select').value),'paulo');
+  await p.evaluate(async()=>{failAssign=false;const select=popup.querySelector('select');select.value='ana';await select.onchange();});
+  assert.equal(await p.evaluate(()=>rows[0].entregador_id),'ana');
+  assert.match(await p.$eval('#ve-mensagem',e=>e.textContent),/atribuído/);
+  await p.evaluate(()=>{canEdit=false;return markers.filter(m=>m.map&&m.title?.includes('1001')).at(-1).click();});
+  assert.equal(await p.evaluate(()=>popup.querySelector('select').disabled),true);
+  await p.evaluate(()=>{canEdit=true;rows[0].status_erp='EM TRANSITO';return markers.filter(m=>m.map&&m.title?.includes('1001')).at(-1).click();});
+  assert.equal(await p.evaluate(()=>popup.querySelector('select').disabled),true);
+  await p.evaluate(()=>{rows[3].status_erp='EM PRODUCAO';return EntregasMapa.atualizar();});
+  assert.equal(await p.evaluate(()=>markers.filter(m=>m.map&&m.title?.includes('1004')).at(-1).content.style.background),'rgb(100, 116, 139)');
+  await p.evaluate(()=>markers.filter(m=>m.map&&m.title?.includes('1004')).at(-1).click());
+  assert.equal(await p.evaluate(()=>popup.querySelector('select').disabled),true);
   // Todas as paginas, sem limite silencioso de 50 pedidos e sem geocodificar endereco ausente.
   await p.evaluate(() => { rows = Array.from({ length: 202 }, (_, i) => ({ chave: String(i).padStart(4, '0'), pedido: i, endereco_completo: false })); return EntregasMapa.atualizar(); });
   assert.equal(await p.$eval('#ve-total', e => e.textContent), '202');

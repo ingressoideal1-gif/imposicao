@@ -5,15 +5,18 @@
     const origem = 'Rua Felizardo de Farias, 81, Medianeira, Porto Alegre, RS, 90660-130, Brasil';
     const permitido = () => typeof papelAtual === 'function' && papelAtual() === 'admin' && window._currentPerms?.perm_admin_view === true;
     const node = (tag, value, cls) => { const n = document.createElement(tag); n.textContent = value; if (cls) n.className = cls; return n; };
-    let geracao = 0, mapa, api, loader, info, bounds, config = {}, marcadores = [], linhas = [], selecionado = null;
+    let geracao = 0, popupGeracao = 0, mapa, api, loader, info, bounds, config = {}, marcadores = [], linhas = [], selecionado = null;
     const cores = new Map(), locais = new Map(), caminhos = new Map();
-    const palette = ['#2563eb', '#e8590c', '#8b3fd6', '#00856a', '#ce3067', '#b18200', '#007eaa', '#783f23'];
+    const palette = ['#8b3fd6', '#e8590c', '#00856a', '#ce3067', '#b18200', '#007eaa', '#783f23'];
+    const situacao = row => row.entregador_id ? row.entregador || 'Atribuído' : row.status_erp === 'EXPEDICAO' ? 'Pronto para expedir' : row.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : row.status_erp === 'EM PRODUCAO' ? 'Em produção' : 'Em preparação';
+    const corPedido = row => row.entregador_id ? cor(row.entregador_id) : ['EXPEDICAO', 'EM TRANSITO'].includes(row.status_erp) ? '#2563eb' : '#64748b';
     function cor(id) {
         if (!id) return '#64748b';
         if (!cores.has(id)) cores.set(id, palette[cores.size] || `hsl(${(cores.size * 137.508) % 360} 65% 40%)`);
         return cores.get(id);
     }
     function apagarDesenho() {
+        popupGeracao++;
         marcadores.forEach(m => { m.marker.map = null; }); linhas.forEach(l => l.line.setMap(null));
         marcadores = []; linhas = []; info?.close(); bounds = null; selecionado = null;
     }
@@ -73,29 +76,56 @@
     }
     function marcar(pos, row, label, color) {
         const badge = node('span', label, 've-map-pin'); badge.style.background = color;
-        const marker = new api.AdvancedMarkerElement({ map: mapa, position: pos, content: badge, title: row ? `Pedido ${row.pedido} · ${row.entregador || 'Sem entregador'}` : 'Ideal · saída das rotas' });
-        if (row) marker.addListener('click', () => {
+        const marker = new api.AdvancedMarkerElement({ map: mapa, position: pos, content: badge, title: row ? `Pedido ${row.pedido} · ${situacao(row)}` : 'Ideal · saída das rotas' });
+        const abrir = async () => {
+            if (!row || !permitido()) return;
+            const turno = geracao, popupAtual = ++popupGeracao;
             const box = node('div', '', 've-map-popup');
-            box.append(node('strong', `Pedido ${row.pedido}`), node('p', row.cliente || ''), node('p', row.endereco), node('p', row.entregador || 'Disponível · sem entregador'));
+            box.append(node('strong', `Pedido ${row.pedido}`), node('p', row.cliente || ''), node('p', row.endereco), node('p', situacao(row)));
             if (row.prevista_em) box.append(node('p', 'Previsão: ' + new Date(row.prevista_em).toLocaleString('pt-BR')));
-            const b = node('button', 'Ver pedido na lista', 'btn btn-primary'); b.type = 'button';
+            const b = node('button', 'Ver pedido na lista', 'btn btn-primary'); b.type = 'button'; b.hidden = !row.entregador_id && !['EXPEDICAO','EM TRANSITO'].includes(row.status_erp);
             b.onclick = () => { $('ve-busca').value = String(row.pedido); $('ve-status').value = row.entregador_id ? 'minha' : 'disponivel'; $('ve-filtros').requestSubmit(); $('ve-filtros').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-            box.append(b); info.setContent(box); info.open({ map: mapa, anchor: marker });
-        });
-        marcadores.push({ marker, pos, id: row?.entregador_id || '', origem: !row }); bounds.extend(pos);
+            const atribuicao = node('div', '', 've-map-atribuicao');
+            const mensagem = node('p', 'Carregando entregadores…'); mensagem.setAttribute('role', 'status');
+            atribuicao.append(mensagem); box.append(atribuicao, b); info.setContent(box); info.open({ map: mapa, anchor: marker });
+            try {
+                const ctx = await window.EntregasGestao?.contextoLinhas();
+                if (turno !== geracao || popupAtual !== popupGeracao || !permitido()) return;
+                const select = window.EntregasGestao?.seletor(row, ctx, texto => { mensagem.textContent = texto; });
+                if (!select) throw new Error('Seleção de entregador indisponível. Consulte a lista de pedidos.');
+                const label = node('label', 'Atribuir entregador'); label.append(select); atribuicao.prepend(label);
+                mensagem.textContent = select.disabled ? select.title : 'Ao selecionar, o pedido entra na rota do entregador.';
+                if (!ctx.editar) mensagem.textContent = 'Seu acesso permite somente consultar.';
+            } catch { if (turno === geracao && popupAtual === popupGeracao && permitido()) mensagem.textContent = 'Não foi possível consultar os entregadores. Feche e abra o pedido para tentar novamente.'; }
+        };
+        if (row) marker.addListener('click', abrir);
+        marcadores.push({ marker, pos, abrir, chave: row?.chave, id: row?.entregador_id || '', origem: !row }); bounds.extend(pos);
     }
     function legenda(rows) {
-        const grupos = new Map();
-        for (const row of rows) { const id = row.entregador_id || ''; if (!grupos.has(id)) grupos.set(id, []); grupos.get(id).push(row); }
+        const grupos = new Map([['', rows]]);
+        for (const row of rows) { const id = row.entregador_id; if (!id) continue; if (!grupos.has(id)) grupos.set(id, []); grupos.get(id).push(row); }
         $('ve-mapa-legenda').replaceChildren();
         const todos = node('button', 'Mostrar todas as entregas', 've-mapa-todos'); todos.type = 'button'; todos.onclick = () => { selecionado = null; enquadrar(null); }; $('ve-mapa-legenda').append(todos);
         for (const [id, paradas] of grupos) {
             const card = node('article', '', 've-mapa-entregador'), b = node('button', '', 've-mapa-grupo'); b.type = 'button'; b.dataset.entregador = id; b.setAttribute('aria-pressed', 'false');
             const ponto = node('span', '', 've-cor-rota'); ponto.style.background = cor(id);
-            const txt = node('span', ''); txt.append(node('strong', id ? paradas[0].entregador || 'Entregador' : 'Sem entregador'), node('small', `${paradas.length} entrega(s) · ${paradas.some(p => p.iniciada_em) ? 'Em deslocamento' : id ? 'Planejado' : 'Disponíveis'}`));
-            b.append(ponto, txt); b.onclick = () => enquadrar(id); card.append(b);
+            const txt = node('span', ''); txt.append(node('strong', id ? paradas[0].entregador || 'Entregador' : 'Todas as entregas'), node('small', `${paradas.length} entrega(s) · ${!id ? 'Todos os pedidos pendentes' : paradas.some(p => p.iniciada_em) ? 'Em deslocamento' : id ? 'Planejado' : 'Disponíveis'}`));
+            b.append(ponto, txt); b.onclick = () => { if (!id) selecionado = null; enquadrar(id || null); }; card.append(b);
             const pedidos = node('p', paradas.slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0)).map(p => '#' + p.pedido).join(' · '), 've-mapa-pedidos'); card.append(pedidos);
-            const rota = paradas.find(p => p.rota_id);
+            if (!id) {
+                pedidos.remove();
+                const lista = node('div', '', 've-mapa-todas-lista');
+                for (const row of paradas) {
+                    const pedido = node('button', '', 've-mapa-item'); pedido.type = 'button';
+                    const pontoPedido = node('span', '', 've-cor-rota'); pontoPedido.style.background = corPedido(row);
+                    const descricao = node('span', ''); descricao.append(node('strong', '#' + row.pedido), node('small', situacao(row)));
+                    pedido.append(pontoPedido, descricao);
+                    pedido.onclick = () => { const m = marcadores.find(m => m.chave === row.chave); if (m) { selecionado = null; enquadrar(null); mapa?.panTo?.(m.pos); m.abrir(); } else $('ve-mapa-status').textContent = `Pedido ${row.pedido}: localização ainda indisponível. Confira as pendências de endereço.`; };
+                    lista.append(pedido);
+                }
+                card.append(lista);
+            }
+            const rota = id ? paradas.find(p => p.rota_id) : null;
             if (rota && !rota.iniciada_em) { const editar = node('button', 'Editar sequência', 'btn btn-ghost'); editar.type = 'button'; editar.onclick = () => window.EntregasGestao?.editarRota(rota.rota_id); card.append(editar); }
             $('ve-mapa-legenda').append(card);
         }
@@ -118,7 +148,7 @@
                 for (const row of data.slice(0, 200)) { if (!row.chave || ids.has(row.chave)) throw new Error('A lista mudou durante a consulta. Atualize o mapa.'); ids.add(row.chave); rows.push(row); }
                 cursor = data.length > 200 ? data[199].chave : null;
             } while (cursor);
-            $('ve-total').textContent = rows.length; $('ve-sem-entregador').textContent = rows.filter(p => !p.entregador_id).length;
+            $('ve-total').textContent = rows.length; $('ve-sem-entregador').textContent = rows.filter(p => p.status_erp === 'EXPEDICAO').length;
             $('ve-total-rotas').textContent = '0'; legenda(rows);
             const { data: configuracao, error: erroConfig } = await c.rpc('ve_admin_mapa_config');
             if (!atual()) return;
@@ -136,7 +166,7 @@
                 try {
                     if (!row.endereco_completo) throw new Error('Endereço incompleto');
                     const pos = await localizar(row.endereco, turno); if (!atual()) return;
-                    posicoes.set(row.chave, pos); marcar(pos, row, row.rota_id ? String(row.ordem) : '#' + row.pedido, cor(row.entregador_id));
+                    posicoes.set(row.chave, pos); marcar(pos, row, row.rota_id ? String(row.ordem) : '#' + row.pedido, corPedido(row));
                 } catch { if (!atual()) return; erros.push(`Pedido ${row.pedido}: confira o endereço no ERP (${row.endereco || 'não informado'}).`); }
             }
             const rotas = new Map();

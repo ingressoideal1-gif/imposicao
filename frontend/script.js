@@ -49151,7 +49151,8 @@ window.carregarFundoAtual = carregarFundoAtual;
     function limpar(){geracao++;consulta++;contexto=null;cadastro=null;operacao=null;sequencia=[];rotaId=null;rotaAnterior=null;el('ve-senha').value='';for(const id of ['ve-cadastros','ve-cadastro','ve-rota-editor','ve-deslocamento'])el(id).close();for(const id of ['ve-cadastros-lista','ve-rota-disponiveis','ve-rota-sequencia','ve-rota-entregador','ve-previsoes'])el(id).replaceChildren();el('ve-nome').value='';el('ve-email').value='';}
     async function carregarContexto(){const turno=geracao;const c=await rpc('ve_admin_contexto');if(turno!==geracao||!permitido())return false;contexto=c;return true;}
     let atribuindo = false;
-    function seletor(row, ctx) {
+    function seletor(row, ctx, informar) {
+        const aviso = mensagem => { el('ve-mensagem').textContent = mensagem; if (informar) informar(mensagem); };
         if (!ctx || !row.chave) return null;
         const select = document.createElement('select');
         select.className = 'form-control'; select.dataset.veEntregador = row.chave;
@@ -49164,15 +49165,15 @@ window.carregarFundoAtual = carregarFundoAtual;
             const atual = texto('option', row.entregador || 'Entregador atual'); atual.value = row.entregador_id; atual.disabled = true; select.append(atual);
         }
         select.value = row.entregador_id || '';
-        select.disabled = !ctx.editar || !!row.concluida_em || row.status_erp==='EM TRANSITO' || atribuindo;
-        select.title = row.concluida_em ? 'Entrega concluída: entregador preservado.' : row.status_erp==='EM TRANSITO' ? 'Rota em deslocamento: entregador preservado.' : 'Ao selecionar, o pedido entra no fim da rota do entregador.';
+        select.disabled = !ctx.editar || !!row.concluida_em || row.status_erp!=='EXPEDICAO' || atribuindo;
+        select.title = row.concluida_em ? 'Entrega concluída: entregador preservado.' : row.status_erp==='EM TRANSITO' ? 'Rota em deslocamento: entregador preservado.' : row.status_erp!=='EXPEDICAO' ? 'Atribuição disponível quando o pedido estiver pronto para expedir.' : 'Ao selecionar, o pedido entra no fim da rota do entregador.';
         select.onchange = async () => {
             const usuario = select.value, anterior = row.entregador_id || null, turno = geracao;
-            if (atribuindo || !permitido() || !ctx.editar || row.concluida_em) { select.value = anterior || ''; return; }
+            if (atribuindo || !permitido() || !ctx.editar || row.concluida_em || row.status_erp!=='EXPEDICAO') { select.value = anterior || ''; return; }
             atribuindo = true;
             const controles = [...document.querySelectorAll('[data-ve-entregador]')].map(n=>[n,n.disabled]);
             controles.forEach(([n])=>{n.disabled=true;});
-            el('ve-mensagem').textContent = 'Atribuindo pedido e atualizando a rota…';
+            aviso('Atribuindo pedido e atualizando a rota…');
             try {
                 const r = await rpc('ve_admin_atribuir_rota', {p_proposta:row.chave,p_usuario:usuario,p_anterior:anterior});
                 if (r.confirmado !== true || r.usuario !== usuario || !r.id) throw new Error('Atribuição não confirmada. Atualize a lista antes de tentar novamente.');
@@ -49182,10 +49183,10 @@ window.carregarFundoAtual = carregarFundoAtual;
                 if (turno !== geracao || !permitido()) return;
                 el('ve-rotas-atualizar').click();
                 el('ve-rotas-lista').closest('details').open = true;
-                el('ve-mensagem').textContent = `Pedido ${row.pedido} atribuído. Rota atualizada; use Alterar rota para ajustar a ordem.`;
+                aviso(`Pedido ${row.pedido} atribuído. Rota atualizada; use Alterar rota para ajustar a ordem.`);
             } catch(e) {
                 select.value = anterior || '';
-                if (turno === geracao && permitido()) el('ve-mensagem').textContent = e.message + ' Atualize a consulta para conferir o estado atual.';
+                if (turno === geracao && permitido()) aviso(e.message + ' Atualize a consulta para conferir o estado atual.');
             } finally {
                 atribuindo = false;
                 controles.forEach(([n,disabled])=>{if(n.isConnected)n.disabled=disabled;});
@@ -49197,7 +49198,7 @@ window.carregarFundoAtual = carregarFundoAtual;
     async function listarCadastros(){if(!permitido())return;geracao++;el('ve-cadastros-msg').textContent='Consultando…';el('ve-cadastros-lista').replaceChildren();if(!el('ve-cadastros').open)el('ve-cadastros').showModal();const turno=geracao;try{if(!await carregarContexto())return;el('ve-novo-entregador').disabled=!contexto.editar;for(const d of contexto.entregadores){const box=document.createElement('article');box.append(texto('strong',d.nome),texto('p',d.email+' · '+(d.ativo?'Ativo':'Inativo')));const b=botao('Editar / nova senha',()=>editarCadastro(d));b.disabled=!contexto.editar;box.append(b);el('ve-cadastros-lista').append(box);}el('ve-cadastros-msg').textContent=contexto.entregadores.length?'':'Nenhum entregador cadastrado.';}catch(e){if(turno===geracao)el('ve-cadastros-msg').textContent=e.message;}}
     function desenharSequencia(){el('ve-rota-sequencia').replaceChildren();sequencia.forEach((p,i)=>{const li=texto('li',`Pedido ${p.pedido} · ${p.entregue?'Entregue':p.cliente||'Pendente'} `);for(const [label,delta] of [['↑',-1],['↓',1]]){const b=botao(label,()=>{const j=i+delta;if(j<0||j>=sequencia.length)return;[sequencia[i],sequencia[j]]=[sequencia[j],sequencia[i]];rotaId=crypto.randomUUID();desenharSequencia();});b.setAttribute('aria-label',label==='↑'?'Mover pedido para cima':'Mover pedido para baixo');b.disabled=i+delta<0||i+delta>=sequencia.length;li.append(b);}const remover=botao('Remover',()=>{sequencia.splice(i,1);rotaId=crypto.randomUUID();desenharSequencia();});remover.disabled=!!p.entregue;li.append(remover);el('ve-rota-sequencia').append(li);});}
     async function buscarPedidos(mais=false){const usuario=el('ve-rota-entregador').value;if(!usuario)return;const turno=geracao,q=++consulta;if(!mais){offset=0;el('ve-rota-disponiveis').replaceChildren();}el('ve-rota-msg').textContent='Consultando pedidos…';try{const rows=await rpc('ve_admin_pedidos_rota',{p_usuario:usuario,p_busca:el('ve-rota-busca').value.trim(),p_offset:offset});if(turno!==geracao||q!==consulta)return;for(const p of rows.slice(0,50)){const b=botao(`Adicionar #${p.pedido} · ${p.cliente}`,()=>{if(sequencia.some(x=>x.chave===p.chave))return;if(sequencia.length>=20){el('ve-rota-msg').textContent='Limite de 20 paradas.';return;}sequencia.push(p);rotaId=crypto.randomUUID();desenharSequencia();});el('ve-rota-disponiveis').append(b);}el('ve-rota-mais').hidden=rows.length<=50;offset+=50;el('ve-rota-msg').textContent=rows.length?'Selecione os pedidos e confira a ordem.':'Nenhum pedido disponível para este entregador.';}catch(e){if(turno===geracao&&q===consulta)el('ve-rota-msg').textContent=e.message;}}
-    async function abrirRota(id=null){if(!permitido())return;const turno=++geracao;try{if(!await carregarContexto())return;if(!contexto.editar)throw new Error('Seu perfil ADM não permite editar.');const rotas=await rpc('ve_admin_rotas');if(turno!==geracao)return;const r=id?rotas.find(x=>x.id===id):null;if(id&&!r)throw new Error('Rota alterada. Atualize a lista.');if(r?.iniciada_em)throw new Error('Rota em deslocamento não pode ser alterada.');el('ve-rota-entregador').replaceChildren();for(const d of contexto.entregadores.filter(x=>x.ativo)){const o=texto('option',d.nome);o.value=d.usuario;el('ve-rota-entregador').append(o);}if(r)el('ve-rota-entregador').value=r.usuario;el('ve-rota-entregador').disabled=!!r;rotaAnterior=r?.id||null;rotaId=crypto.randomUUID();sequencia=r?(r.paradas||[]).map(p=>({...p})):[];el('ve-rota-retorno-adm').checked=r?.retorno??true;el('ve-rota-busca').value='';el('ve-rota-titulo').textContent=r?'Alterar rota':'Criar rota';el('ve-rota-disponiveis').replaceChildren();el('ve-rota-msg').textContent='';desenharSequencia();el('ve-rota-editor').showModal();if(!el('ve-rota-entregador').value){el('ve-rota-msg').textContent='Cadastre um entregador ativo primeiro.';return;}await buscarPedidos();}catch(e){if(turno===geracao)el('ve-mensagem').textContent=e.message;}}
+    async function abrirRota(id=null){if(!permitido())return;const turno=++geracao;try{if(!await carregarContexto())return;if(!contexto.editar)throw new Error('Seu perfil ADM não permite editar.');const rotas=await rpc('ve_admin_rotas');if(turno!==geracao)return;const r=id?rotas.find(x=>x.id===id):null;if(id&&!r)throw new Error('Rota alterada. Atualize a lista.');if(r?.iniciada_em)throw new Error('Rota em deslocamento não pode ser alterada.');el('ve-rota-entregador').replaceChildren();for(const d of contexto.entregadores.filter(x=>x.ativo)){const o=texto('option',d.nome);o.value=d.usuario;el('ve-rota-entregador').append(o);}if(r)el('ve-rota-entregador').value=r.usuario;el('ve-rota-entregador').disabled=!!r;rotaAnterior=r?.id||null;rotaId=crypto.randomUUID();sequencia=r?(r.paradas||[]).map(p=>({...p})):[];el('ve-rota-retorno-adm').checked=r?.retorno??false;el('ve-rota-busca').value='';el('ve-rota-titulo').textContent=r?'Alterar rota':'Criar rota';el('ve-rota-disponiveis').replaceChildren();el('ve-rota-msg').textContent='';desenharSequencia();el('ve-rota-editor').showModal();if(!el('ve-rota-entregador').value){el('ve-rota-msg').textContent='Cadastre um entregador ativo primeiro.';return;}await buscarPedidos();}catch(e){if(turno===geracao)el('ve-mensagem').textContent=e.message;}}
     let rotaDeslocamento = null;
     async function iniciarDeslocamento(id) {
         const turno = ++geracao;
