@@ -166,7 +166,7 @@
                 try {
                     if (!row.endereco_completo) throw new Error('Endereço incompleto');
                     const pos = await localizar(row.endereco, turno); if (!atual()) return;
-                    posicoes.set(row.chave, pos); marcar(pos, row, row.rota_id ? String(row.ordem) : '#' + row.pedido, corPedido(row));
+                    posicoes.set(row.chave, pos); marcar(pos, row, '#' + row.pedido, corPedido(row));
                 } catch { if (!atual()) return; erros.push(`Pedido ${row.pedido}: confira o endereço no ERP (${row.endereco || 'não informado'}).`); }
             }
             const rotas = new Map();

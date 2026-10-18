@@ -45,6 +45,8 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   assert.match(await p.$eval('[data-entregador=""]',e=>e.textContent),/Todas as entregas/);
   assert.equal(await p.evaluate(()=>markers.find(m=>m.title?.includes('1004')).content.style.background),'rgb(37, 99, 235)');
   const result = await p.evaluate(() => ({ colors: lines.map(l => l.strokeColor), order: routeCalls[0].intermediates.map(p => p.location.lat), ret: routeCalls[0].origin.lat === routeCalls[0].destination.lat, n: markers.length }));
+  assert.equal(await p.evaluate(()=>markers.find(m=>m.title?.includes('1001')).content.textContent),'#1001');
+  assert.equal(await p.evaluate(()=>markers.find(m=>m.title?.includes('1003')).content.textContent),'#1003');
   assert.notEqual(result.colors[0], result.colors[1]); assert.deepEqual(result.order, [-30.02, -30.01]); assert.equal(result.ret, true); assert.equal(result.n, 5);
   assert.match(await p.$eval('#ve-mapa-erros', e => e.textContent), /1005/);
   await p.click('[data-entregador="ana"]');

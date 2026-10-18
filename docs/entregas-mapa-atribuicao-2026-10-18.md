@@ -6,6 +6,7 @@
   popup, confirmacao de persistencia, recarga do mapa e bloqueio em producao/transito.
 - Todas as entregas lista pedidos Motoboy pendentes, inclusive NOVO, AGUARDANDO e
   EM PRODUCAO. Concluidos e cancelados continuam fora do planejamento.
+- Marcadores sempre exibem o numero do pedido, inclusive quando atribuidos.
 - Cinza antes da expedicao; azul pronto/sem entregador; cor propria quando atribuido.
 - Novas consultas incluem empresa para aplicar o mesmo isolamento do seletor.
 
