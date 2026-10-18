@@ -215,6 +215,18 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     const cursorMapa=mapa[0].chave;
     assert.deepEqual((await db.query('SELECT ve_admin_mapa($1) AS dados',[cursorMapa])).rows[0].dados.map(p=>p.chave),mapa.slice(1).map(p=>p.chave));
     console.log('PASS: mapa ADM, cursor, enderecos, sequencia, transito e exclusao de concluidos/duplicados.');
+    await db.exec('RESET ROLE');
+    await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_pwa_execucao.sql'),'utf8'));
+    await db.exec(`INSERT INTO vibe_entregas_registros(proposta,entregador,entregador_nome) VALUES('${uuid(999)}','${uuid(97)}','Teste')`);
+    await login(97);assert.deepEqual(await listar('disponivel'),[]);
+    assert.ok((await listar('minha')).some(p=>p.id==='1999'&&p.status_erp==='EM PRODUCAO'));
+    await assert.rejects(()=>assumir(999),/permission denied/);
+    await assert.rejects(()=>db.query('SELECT ve_rota_confirmar($1)',[uuid(999)]),/permission denied/);
+    await assert.rejects(()=>db.query("SELECT ve_registrar($1,$2,'ausente','','','',false)",[uuid(999),uuid(1999)]),/liberacao/);
+    await login(96);assert.ok(!(await listar('minha')).some(p=>p.id==='1999'));
+    assert.ok((await listar('minha')).some(p=>p.id==='1021'));
+    assert.equal((await db.query("SELECT ve_registrar($1,$2,'ausente','','','',false) AS r",[uuid(21),uuid(2021)])).rows[0].r.confirmada,true);
+    console.log('PASS: PWA somente atribuidos, producao visivel, isolamento, atribuicao/planejamento negados e tentativa somente em rota liberada.');
     console.log('PASS: SQL real em memoria; pedido sem expedicao, retirada, foto privada, confirmacao, repeticao, filtro, isolamento e rollback atomico.');
   } finally { await db.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

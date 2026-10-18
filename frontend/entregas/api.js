@@ -18,20 +18,16 @@ window.VibeEntregas = (() => {
     async entrar(email, password) {
       const { data, error } = await conectar().auth.signInWithPassword({ email, password });
       if (error || !data.user) throw new Error('Não foi possível entrar. Confira sua conta e senha.');
-      try { if(await rpc('ve_entregador_autorizar',{})!==true)throw new Error('Entregador sem acesso ativo.'); await rpc('ve_listar', { p_busca: '', p_offset: 0 }); }
+      try { if(await rpc('ve_entregador_autorizar',{})!==true)throw new Error('Entregador sem acesso ativo.'); await rpc('ve_listar', { p_busca: '', p_offset: 0, p_filtro: 'minha' }); }
       catch (e) { await conectar().auth.signOut({ scope: 'local' }); throw e; }
       return data.user;
     },
     async sair() { if (client) { const {error} = await client.auth.signOut({scope:'local'}); if(error) throw new Error('Não foi possível encerrar a sessão.'); } },
     listar(busca, offset, filtro) { return rpc('ve_listar', { p_busca: busca, p_offset: offset, p_filtro: filtro }); },
-    assumir(p) { return rpc('ve_assumir', { p_proposta: p.chave }); },
-    async calcularRota(entrada) {
-      const c=conectar(); const {data,error}=await c.auth.getSession();
-      if(error||!data?.session)throw new Error('Entre novamente para calcular a rota.');
-      const r=await fetch(VIBECODE_SUPABASE_URL+'/functions/v1/vibe-entregas-rotas',{method:'POST',headers:{Authorization:'Bearer '+data.session.access_token,apikey:VIBECODE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify(entrada)});
-      const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.erro||'Não foi possível calcular a rota.');return body;
+    async minhas(busca) {
+      const rows=[]; let offset=0;
+      while(true){const pagina=await rpc('ve_listar',{p_busca:busca,p_offset:offset,p_filtro:'minha'});rows.push(...pagina.slice(0,50));if(pagina.length<=50)return rows;offset+=50;}
     },
-    async confirmarRota(id) { const r=await rpc('ve_rota_confirmar',{p_id:id});if(r!==true)throw new Error('Rota não confirmada.'); },
     rotasAtivas() { return rpc('ve_rotas_status',{}); },
     async registrar(p, registro, foto) {
       const c = conectar(); const { data: { user }, error } = await c.auth.getUser();

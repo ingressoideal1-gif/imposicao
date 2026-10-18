@@ -8,23 +8,16 @@
 <body>
   <header><img src="../logo-ideal-2026.png" alt="Ingresso Ideal"><div><strong>Vibe Entregas</strong><span>Do pacote ao destino.</span></div><button id="instalar" hidden>Instalar</button></header>
   <main>
-    <section id="inicio" class="intro"><p class="eyebrow">BOM TRABALHO, BOA ENTREGA</p><h1>Sua próxima entrega<br>começa aqui.</h1><p>Pedidos, endereço e comprovante em um só lugar.</p><div class="notice">Acesso exclusivo para entregadores cadastrados. Entre com sua conta para consultar e registrar entregas. A demonstração usa pedidos fictícios.</div><button id="demonstrar" class="primary">Experimentar demonstração</button></section>
+    <section id="inicio" class="intro"><h1>Vamos às entregas?</h1><p>Entre para acompanhar sua rota e registrar as entregas.</p></section>
     <form id="login" hidden><h2>Entrar com sua conta</h2><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required><label for="senha">Senha</label><input id="senha" type="password" autocomplete="current-password" required><button class="primary">Entrar</button><p id="login-erro" role="alert"></p></form>
     <section id="operacao" hidden>
       <div class="identity"><span id="identidade">Entregador demonstração</span><button id="sair">Sair</button></div>
       <div class="notice" id="aviso-demo">Demonstração · nenhum registro é enviado ao ERP</div>
       <p id="conexao" role="status"></p>
       <label for="busca">Buscar pedido</label><input id="busca" type="search" inputmode="numeric" placeholder="Digite o número do pedido" autocomplete="off">
-      <nav aria-label="Filtrar entregas"><button data-filtro="disponivel" aria-pressed="true">Disponíveis</button><button data-filtro="minha" aria-pressed="false">Minhas entregas</button><button data-filtro="concluida" aria-pressed="false">Concluídas</button></nav>
-      <details id="rotas-painel"><summary>Organizar rota de entrega</summary><p>Selecione até 20 pedidos que estão com você.</p><div id="rota-selecao"></div>
-      <label for="rota-origem">Saída</label><select id="rota-origem"><option value="grafica">Gráfica · Felizardo de Farias, 81</option><option value="atual">Minha localização atual</option></select>
-      <label for="rota-modo">Veículo</label><select id="rota-modo"><option value="TWO_WHEELER">Moto</option><option value="DRIVE">Carro</option></select>
-      <label class="check"><input type="checkbox" id="rota-retorno"> Retornar à gráfica</label><label for="rota-ultima" id="rota-ultima-label" hidden>Última entrega</label><select id="rota-ultima" hidden></select>
-      <button id="rota-calcular" class="primary" type="button">Calcular sequência</button><p id="rota-erro" role="alert"></p>
-      <section id="rota-revisao" hidden><h2>Revisar percurso</h2><p id="rota-estimativa"></p><p id="rota-avisos"></p><ol id="rota-ordem"></ol><button id="rota-iniciar" class="primary" type="button">Usar esta sequência</button></section>
-      <section id="rota-ativa" hidden><h2>Sua rota</h2><p id="rota-progresso"></p><ol id="rota-andamento"></ol><a id="rota-proxima" class="route" target="_blank" rel="noopener noreferrer" hidden>Navegar para próxima entrega</a></section>
-      <button id="rota-recuperar" type="button">Atualizar rota ativa</button></details>
-      <div class="list-heading"><h1 id="titulo">Disponíveis</h1><span id="contador"></span></div><div id="lista"></div><div id="paginacao" hidden><button id="anterior">Anterior</button><button id="proxima">Próxima página</button></div>
+      <nav aria-label="Filtrar entregas"><button data-filtro="minha" aria-pressed="true">Minha rota</button><button data-filtro="concluida" aria-pressed="false">Concluídas hoje</button><button id="atualizar" type="button">Atualizar</button></nav>
+      <section id="rota-ativa"><p id="rota-progresso" role="status"></p></section>
+      <div class="list-heading"><h1 id="titulo">Minha rota</h1><span id="contador"></span></div><div id="lista"></div><div id="paginacao" hidden><button id="anterior">Anterior</button><button id="proxima">Próxima página</button></div>
     </section>
     <p id="mensagem" role="status" aria-live="polite"></p>
   </main>
@@ -39,5 +32,5 @@
     <p id="erro" role="alert"></p><button class="primary" type="submit">Revisar registro</button>
   </form></dialog>
   <dialog id="confirmacao" aria-labelledby="confirmar-titulo"><h2 id="confirmar-titulo">Confirmar entrega?</h2><p id="confirmar-resumo"></p><p class="notice" id="confirmar-aviso">Simulação: este registro não altera o ERP.</p><p id="envio-erro" role="alert"></p><button id="confirmar" class="primary">Confirmar simulação</button><button id="voltar">Voltar e revisar</button></dialog>
-  <script src="../supabase-js.min.js" defer></script><script src="public-config.js" defer></script><script src="api.js" defer></script><script src="rotas.js" defer></script><script src="app.js" defer></script>
+  <script src="../supabase-js.min.js" defer></script><script src="public-config.js" defer></script><script src="api.js" defer></script><script src="rotas.js" defer></script><script src="rascunhos.js" defer></script><script src="app.js" defer></script>
 </body></html>
