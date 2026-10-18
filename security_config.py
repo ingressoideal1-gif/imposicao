@@ -134,6 +134,7 @@ PAINEL_ARQUIVOS = [
     "ideal-control.woff2",
     "ideal-control.js",
     "script.js",
+    "entregas-mapa.js",
     "pedido.js",
     "producao-por-cor.css",
     "producao-por-cor.js",
