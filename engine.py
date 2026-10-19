@@ -5,6 +5,7 @@ import os
 import io
 import tempfile
 import newprod_temp as temp_manager
+from pdf_camadas import mostrar_pagina, inserir_paginas
 import fitz       # PyMuPDF
 import qrcode
 from PIL import Image
@@ -606,7 +607,7 @@ def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade, mesclar=F
     `show_pdf_page` de sempre, e a pagina nao ganha ExtGState nem grupo.
     """
     if opacidade >= 1.0 and not mesclar:
-        page.show_pdf_page(
+        mostrar_pagina(page,
             rect, doc_origem, 0,
             keep_proportion=True, rotate=py_rotate, clip=doc_origem[0].rect,
         )
@@ -616,7 +617,7 @@ def _colar_arte_pdf(doc, page, rect, doc_origem, py_rotate, opacidade, mesclar=F
         return  # invisivel: nada a colar
 
     antes = set(page.get_contents())
-    xref_form = page.show_pdf_page(
+    xref_form = mostrar_pagina(page,
         rect, doc_origem, 0,
         keep_proportion=True, rotate=py_rotate, clip=doc_origem[0].rect,
     )
@@ -1886,7 +1887,7 @@ class ImpositionEngine:
                     # O índice é o total de páginas da frente ANTES do anexo: é
                     # exatamente onde o insert_pdf vai colar a página.
                     self.cfg.verso_page_idx = len(doc)
-                    doc.insert_pdf(verso_doc, from_page=0, to_page=0)
+                    inserir_paginas(doc, verso_doc, from_page=0, to_page=0)
                 else:
                     raise ValueError("Arquivo de arte do verso vazio")
             except Exception as ex:
@@ -2764,7 +2765,7 @@ class ImpositionEngine:
                         rotate=py_rotate, keep_proportion=False,
                     )
                 else:
-                    page.show_pdf_page(
+                    mostrar_pagina(page,
                         rect, jan, 0,
                         keep_proportion=True,
                         rotate=py_rotate,
@@ -3327,9 +3328,9 @@ class ImpositionEngine:
                                                 print(f"[engine] FxVersoUnico: o arquivo de verso "
                                                       f"tem {len(verso_doc)} paginas; so a primeira "
                                                       f"sera usada.")
-                                            composto.insert_pdf(verso_doc, from_page=0, to_page=0)
+                                            inserir_paginas(composto, verso_doc, from_page=0, to_page=0)
                                         else:
-                                            composto.insert_pdf(verso_doc)
+                                            inserir_paginas(composto, verso_doc)
                                     except Exception:
                                         composto.close()
                                         raise
@@ -3851,7 +3852,7 @@ class ImpositionEngine:
                             _rect_arte, _clip_arte = _arte_na_celula(
                                 cfg, cell_x0, cell_y0, base_w, base_h, page_base.rect, _sx, _sy)
                             if _rect_arte is not None:
-                                out_page_front.show_pdf_page(
+                                mostrar_pagina(out_page_front,
                                     _rect_arte, current_doc_base, page_idx_front,
                                     keep_proportion=False, clip=_clip_arte
                                 )
@@ -3904,7 +3905,7 @@ class ImpositionEngine:
                             _rect_arte, _clip_arte = _arte_na_celula(
                                 cfg, _fx, _fy, base_w, base_h, page_base.rect, _sx, _sy)
                             if _rect_arte is not None:
-                                temp_page.show_pdf_page(_rect_arte, current_doc_base, page_idx_front,
+                                mostrar_pagina(temp_page, _rect_arte, current_doc_base, page_idx_front,
                                                         keep_proportion=False, clip=_clip_arte)
 
                         csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
@@ -3941,7 +3942,7 @@ class ImpositionEngine:
                         _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
                         temp_doc.close()
                         _temp_doc_m = fitz.open("pdf", _temp_bytes)
-                        out_page_front.show_pdf_page(
+                        mostrar_pagina(out_page_front,
                             fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                             _temp_doc_m,
                             0,
@@ -4071,7 +4072,7 @@ class ImpositionEngine:
 
                             # Inserir arte na página temporária
                             if rect_art_temp is not None:
-                                temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back,
+                                mostrar_pagina(temp_page, rect_art_temp, current_doc_base, page_idx_back,
                                                         keep_proportion=False, clip=_clip_arte)
 
                         csv_row = _linha_do_banco(arte_data, item_index, cfg.csv_data)
@@ -4133,7 +4134,7 @@ class ImpositionEngine:
                         _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
                         temp_doc.close()
                         _temp_doc_m = fitz.open("pdf", _temp_bytes)
-                        out_page_back.show_pdf_page(
+                        mostrar_pagina(out_page_back,
                             fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                             _temp_doc_m,
                             0,
@@ -4302,7 +4303,7 @@ class ImpositionEngine:
                     cx = cell_x0 + (cfg.item_w - new_w) / 2 + off_x
                     cy = cell_y0 + (cfg.item_h - new_h) / 2 - off_y
                     
-                    p.show_pdf_page(
+                    mostrar_pagina(p,
                         fitz.Rect(cx, cy, cx + new_w, cy + new_h),
                         current_doc_base, 0, keep_proportion=False, clip=page_base.rect
                     )
@@ -4389,7 +4390,7 @@ class ImpositionEngine:
                     cfg, cell_x0, cell_y0, base_w_frente, base_h_frente,
                     page_base_f.rect, _sx, _sy)
                 if _rect_arte is not None:
-                    out_page_front.show_pdf_page(
+                    mostrar_pagina(out_page_front,
                         _rect_arte, current_doc_base, page_idx_front,
                         keep_proportion=False, clip=_clip_arte
                     )
@@ -4437,7 +4438,7 @@ class ImpositionEngine:
                     cfg, _fx, _fy, base_w_frente, base_h_frente,
                     page_base_f.rect, _sx, _sy)
                 if rect_art_temp is not None:
-                    temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_front,
+                    mostrar_pagina(temp_page, rect_art_temp, current_doc_base, page_idx_front,
                                             keep_proportion=False, clip=_clip_arte)
 
             for el in _elementos_na_ordem_de_composicao(current_elements):
@@ -4478,7 +4479,7 @@ class ImpositionEngine:
             _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
             temp_doc.close()
             _temp_doc_m = fitz.open("pdf", _temp_bytes)
-            out_page_front.show_pdf_page(
+            mostrar_pagina(out_page_front,
                 fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                 _temp_doc_m,
                 0,
@@ -4539,7 +4540,7 @@ class ImpositionEngine:
                     cfg, cell_x0, cell_y0, base_w_verso, base_h_verso,
                     page_base_v.rect, _sx, _sy)
                 if _rect_arte is not None:
-                    out_page_back.show_pdf_page(
+                    mostrar_pagina(out_page_back,
                         _rect_arte, current_doc_base, page_idx_back,
                         keep_proportion=False, clip=_clip_arte
                     )
@@ -4587,7 +4588,7 @@ class ImpositionEngine:
                     cfg, _fx, _fy, base_w_verso, base_h_verso,
                     page_base_v.rect, _sx, _sy)
                 if rect_art_temp is not None:
-                    temp_page.show_pdf_page(rect_art_temp, current_doc_base, page_idx_back,
+                    mostrar_pagina(temp_page, rect_art_temp, current_doc_base, page_idx_back,
                                             keep_proportion=False, clip=_clip_arte)
 
             for el in _elementos_na_ordem_de_composicao(current_elements):
@@ -4628,7 +4629,7 @@ class ImpositionEngine:
             _temp_bytes = temp_doc.tobytes(garbage=0, deflate=True)
             temp_doc.close()
             _temp_doc_m = fitz.open("pdf", _temp_bytes)
-            out_page_back.show_pdf_page(
+            mostrar_pagina(out_page_back,
                 fitz.Rect(cell_x0 - _fx, cell_y0 - _fy, cell_x1 + _fx, cell_y1 + _fy),
                 _temp_doc_m,
                 0,
@@ -4698,7 +4699,7 @@ class ImpositionEngine:
             cx = cell_x0 + (cfg.item_w - new_w) / 2 + off_x
             cy = cell_y0 + (cfg.item_h - new_h) / 2 - off_y
 
-            p.show_pdf_page(
+            mostrar_pagina(p,
                 fitz.Rect(cx, cy, cx + new_w, cy + new_h),
                 current_doc_base, 0, keep_proportion=False, clip=page_base.rect
             )

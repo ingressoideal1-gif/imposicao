@@ -27,6 +27,7 @@ TESTES = [
     'test_diario_local.py','test_pacotes_api.py','test_selecao_piloto.py','test_revisao_pedido_piloto.py',
     'test_abertura_persistida.py','test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
 TESTES += ['test_pdf_duplex.py', 'test_pdf_duplex_unico.py', 'test_engine_entrega_por_bloco.py', 'test_engine_refazer_strict_assembly.py', 'test_engine_recorte_celula.py', 'test_multi_artes.py', 'test_multi_artes_capa.py', 'test_verso_individual.py', 'test_montagem_faces_pdf.py', 'test_print_service_escala.py', 'test_print_service_cores.py', 'test_gdi_sem_win32ui.py', 'test_o_javascript_do_frontend_compila.py']
+TESTES += ['test_pdf_camadas.py']
 HARNESSES = ['montagem_harness.js', 'montagem_local_harness.cjs', 'montagem_estacao_harness.cjs', 'historico_impressao_harness.js','gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
              'foto_piloto_harness.js','foto_lib_harness.js',
              'selecao_piloto_harness.js','integridade_impressao_harness.js',
