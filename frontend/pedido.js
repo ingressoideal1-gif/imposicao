@@ -3049,6 +3049,10 @@ function atualizarFacesDeImpressaoDoPedido() {
     const box = document.getElementById('ped-print-faces');
     if (!box) return;
     const chave = JSON.stringify([state.activeOSItem, state.selectedOSItems, state.printMode]);
+    if (box.dataset.selecao !== chave) {
+        const rotacao = document.getElementById('ped-print-rotate-even');
+        if (rotacao) rotacao.checked = false;
+    }
     const comVerso = temVerso(state.printMode);
     for (const face of ['front', 'back']) {
         const campo = document.getElementById('ped-print-first-' + face);
@@ -3106,7 +3110,21 @@ function faceDeImpressaoDoPedido() {
     return 'both';
 }
 
-async function selecionarFacesDoPdfDoPedido(blob, face, modo, arquivo = {}) {
+async function rotacionarPaginasParesDoPedido(blob, ativado) {
+    if (!ativado) return blob;
+    if (!window.PDFLib?.PDFDocument) throw new Error('Não foi possível carregar o leitor de PDF. Recarregue o painel.');
+    const pdf = await window.PDFLib.PDFDocument.load(await blob.arrayBuffer());
+    // Páginas 2, 4, 6... de cada arquivo original, antes de separar as faces.
+    // Editar o documento original preserva catálogo, OutputIntent e perfil ICC.
+    for (let i = 1; i < pdf.getPageCount(); i += 2) {
+        const pagina = pdf.getPage(i);
+        pagina.setRotation(window.PDFLib.degrees((pagina.getRotation().angle + 180) % 360));
+    }
+    return new Blob([await pdf.save()], { type: 'application/pdf' });
+}
+
+async function selecionarFacesDoPdfDoPedido(blob, face, modo, arquivo = {}, rotacionarPares = false) {
+    blob = await rotacionarPaginasParesDoPedido(blob, rotacionarPares);
     if (face === 'both') return blob;
     // Capas de identificação são arquivos auxiliares de uma face, fora do miolo.
     if (['capa', 'contracapa'].includes(arquivo.file_type)
@@ -6466,6 +6484,7 @@ async function executarPedImposition(mode, isRefazer) {
     // tiragem inteira — e o motor deriva daqui também os nomes `_setN_02_miolo`.
     const baseFilename = modeloNum ? modeloNum : `VDP_${formato.name.replace(/\s+/g, '_')}_${suffix}`;
     const faceDoTrabalho = folha1 ? folha1.face : faceDeImpressaoDoPedido();
+    const rotacionarPares = document.getElementById('ped-print-rotate-even')?.checked === true;
     const opcoesDeFace = { apenasUmaFace: faceDoTrabalho !== 'both',
         historicoContexto: mode === 'print' ? contextoHistoricoImpressao(isRefazer || folha1 ? [state.activeOSItem].filter(Boolean) : alvosDoTrabalho, isRefazer) : null };
     const sufixoFace = faceDoTrabalho === 'both' ? '' : faceDoTrabalho === 'front' ? '_frente' : '_verso';
@@ -7119,7 +7138,7 @@ async function executarPedImposition(mode, isRefazer) {
                                 const bytes = new Uint8Array(binStr.length);
                                 for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
                                 await conferencia.arquivo(fileObj, bytes);
-                                const fBlob = await selecionarFacesDoPdfDoPedido(new Blob([bytes], {type: "application/pdf"}), faceDoTrabalho, payload.print_mode, fileObj);
+                                const fBlob = await selecionarFacesDoPdfDoPedido(new Blob([bytes], {type: "application/pdf"}), faceDoTrabalho, payload.print_mode, fileObj, rotacionarPares);
                                 arquivosRecebidos++;
 
                                 // ATE ONDE JA SAIU PAPEL (27/08/2026).
@@ -7268,7 +7287,7 @@ async function executarPedImposition(mode, isRefazer) {
                     const binStr = atob(f.data);
                     const bytes = new Uint8Array(binStr.length);
                     for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                    return { name: f.name, blob: await selecionarFacesDoPdfDoPedido(new Blob([bytes], {type: "application/pdf"}), faceDoTrabalho, payload.print_mode, f) };
+                    return { name: f.name, blob: await selecionarFacesDoPdfDoPedido(new Blob([bytes], {type: "application/pdf"}), faceDoTrabalho, payload.print_mode, f, rotacionarPares) };
                 }));
 
                 if (mode === 'print') {
@@ -7317,7 +7336,7 @@ async function executarPedImposition(mode, isRefazer) {
             }
         }
 
-        const blob = await selecionarFacesDoPdfDoPedido(await res.blob(), faceDoTrabalho, payload.print_mode);
+        const blob = await selecionarFacesDoPdfDoPedido(await res.blob(), faceDoTrabalho, payload.print_mode, {}, rotacionarPares);
 
         // Modo impressão direta: usar painel lateral sem abrir modal
         if (mode === 'print') {
