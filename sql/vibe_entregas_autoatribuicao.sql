@@ -77,5 +77,3 @@ END $$;
 REVOKE ALL ON FUNCTION public.ve_assumir(uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.ve_assumir(uuid) TO authenticated;
 COMMIT;
-
-
