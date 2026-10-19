@@ -30,6 +30,24 @@ Deno.test('pedido: revisao igual devolve apenas recibo; sem linhas de modelos/ba
  assert.equal(r.sem_mudanca,true);assert.ok(!('itens' in r));assert.ok(!('snapshot' in r));
  assert.equal(a.consultas.length,1);
 });
+
+Deno.test('pedido: credencial composta sem arte_url entra no pacote com todos os PDFs',async()=>{
+ const a=ambiente();
+ const frente=a.modelo.arte_url, verso=frente.replace('a.pdf','verso.pdf');
+ a.modelo.arte_url='';
+ Object.assign(a.numero,{pdf_content:frente,elements:[
+   {type:'PDF',face:'both',pdf_content:frente},
+   {type:'PDF',face:'both',pdf_content:verso},
+   {type:'FOTO',face:'both',id:'foto'}, {type:'TEXT',face:'both',id:'nome'}]});
+ const r:any=await a.chamar();
+ assert.equal(r.itens.length,1);
+ assert.equal(r.itens[0].fontes.frente,frente);
+ assert.ok(Object.values(r.itens[0].fontes).includes(verso));
+ assert.equal(r.itens[0].observacao.digest,await digestPiloto([a.modelo,[a.numero]]));
+ assert.equal(a.modelo.arte_url,'');
+ a.modelo.status_arte='AGUARDANDO_CLIENTE';
+ assert.equal((await a.chamar() as any).itens.length,0);
+});
 Deno.test('pedido: permissoes e entrada recusadas antes de consultar',async()=>{
  const a=ambiente();await assert.rejects(a.chamar(undefined,{}),{status:403});
  for(const pedido of ['0','20&x=y','2147483648']) await assert.rejects(a.chamar({empresa:'teste',pedido,revisao:''}),{status:422});
