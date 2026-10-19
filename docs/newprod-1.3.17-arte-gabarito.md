@@ -36,9 +36,11 @@ aprovação, empresa, digest e integridade continuam ativas.
   375 arquivos de painel idênticos às fontes e DLLs GDI presentes.
 - Auditoria do executável, migrador e MSI sem arquivos privados.
 
-A publicação usa um único MSI e aliases históricos Oficial/Teste com bytes
-idênticos. Os três manifestos devem apontar para 1.3.17 sem `estacoes`, somente
-depois de conferir os dois downloads públicos completos. Recibos ficam em
+A publicação foi confirmada com um único MSI e aliases históricos Oficial/Teste
+com bytes idênticos. Os dois downloads públicos completos conferiram em tamanho
+e SHA-256 antes da ativação. `latest.json`, `newprod-piloto-oficial.json` e
+`newprod-piloto-teste.json` foram relidos com cache-buster: 1.3.17, mesmo hash,
+sem `estacoes`. Recibos ficam em
 `dist/publicacao-unica-1.3.17-*` no worktree de release.
 
 Não houve instalação ou reinício remoto de estações. Disponibilidade do MSI
@@ -47,3 +49,7 @@ validação na estação após atualizar e reabrir o pedido.
 
 PR da correção na branch principal:
 https://github.com/ingressoideal1-gif/imposicao/pull/166
+
+PR #166 integrado após todos os checks, incluindo segurança/recuperação no
+Windows, passarem. Commit em main: `0d6212915f07f0bc877402249b84a0460990eb48`.
+Fonte do MSI: commit `41c86c48`, tag pública `agente-v1.3.17`.
