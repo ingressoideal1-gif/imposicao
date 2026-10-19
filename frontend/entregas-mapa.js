@@ -3,7 +3,7 @@
     'use strict';
     const $ = id => document.getElementById(id);
     const origem = 'Rua Felizardo de Farias, 81, Medianeira, Porto Alegre, RS, 90660-130, Brasil';
-    const permitido = () => typeof papelAtual === 'function' && papelAtual() === 'admin' && window._currentPerms?.perm_admin_view === true;
+    const permitido = () => window.EntregasAcesso?.consultar===true;
     const node = (tag, value, cls) => { const n = document.createElement(tag); n.textContent = value; if (cls) n.className = cls; return n; };
     let geracao = 0, popupGeracao = 0, mapa, api, loader, info, bounds, config = {}, marcadores = [], linhas = [], selecionado = null;
     const cores = new Map(), locais = new Map(), caminhos = new Map();
