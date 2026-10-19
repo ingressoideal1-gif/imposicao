@@ -13,6 +13,7 @@ function extract(source, name) {
 }
 const fields = {
     'ped-print-faces': {dataset: {}, hidden: true},
+    'ped-print-rotate-even': {checked: false},
     'ped-print-only-front': {checked: false},
     'ped-print-only-back': {checked: false},
     'ped-print-first-front': {checked: false},
@@ -22,7 +23,7 @@ const context = {window: {PDFLib}, Blob, console,
     state: {printMode: 'duplex', activeOSItem: {itemId: 1}, selectedOSItems: [1]},
     document: {getElementById: id => fields[id] || null}};
 vm.createContext(context);
-for (const name of ['temVerso', 'atualizarFacesDeImpressaoDoPedido', 'selecionarFaceDeImpressaoDoPedido', 'faceDeImpressaoDoPedido', 'selecionarFacesDoPdfDoPedido', 'folha1DoPedido', 'selecionarFolha1DoPedido']) {
+for (const name of ['temVerso', 'atualizarFacesDeImpressaoDoPedido', 'selecionarFaceDeImpressaoDoPedido', 'faceDeImpressaoDoPedido', 'rotacionarPaginasParesDoPedido', 'selecionarFacesDoPdfDoPedido', 'folha1DoPedido', 'selecionarFolha1DoPedido']) {
     vm.runInContext(extract(pedido, name), context);
 }
 async function testarTelasReais() {
@@ -66,6 +67,7 @@ async function testarTelasReais() {
             for (const id of ['ped-print-faces', 'ped-print-only-front', 'ped-print-only-back']) {
                 assert.equal(await page.$$eval('#' + id, nodes => nodes.length), 1, file + ': ' + id);
             }
+            assert.equal(await page.$eval('#ped-print-rotate-even', el => el.checked), false);
             // A numeração vinculada determina o modo usado ao abrir o modelo.
             for (const mode of ['duplex', 'duplex_unico', 'pdf_odd_even', 'pdf_duplicate_back']) {
                 const result = await page.evaluate(mode => {
@@ -92,7 +94,10 @@ async function testarTelasReais() {
                 await page.click('#ped-print-only-back');
                 assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'both');
                 await page.click('#ped-print-only-front');
+                await page.click('#ped-print-rotate-even');
+                assert.equal(await page.$eval('#ped-print-rotate-even', el => el.checked), true);
                 await page.evaluate(() => {state.activeOSItem.itemId++; updatePedSummary();});
+                assert.equal(await page.$eval('#ped-print-rotate-even', el => el.checked), false);
                 assert.equal(await page.evaluate(() => faceDeImpressaoDoPedido()), 'both');
             }
             await page.click('#ped-print-only-back');
@@ -189,6 +194,42 @@ async function main() {
             assert.deepEqual(Array.from(icc.getContents()), [1,2,3,4]);
         }
     }
+    // Rotação relativa, paridade original e preservação de ICC/metadados.
+    for (const face of ['both', 'front', 'back']) {
+        const result = await context.selecionarFacesDoPdfDoPedido(blob, face, 'duplex', {}, true);
+        const read = await PDFDocument.load(await result.arrayBuffer());
+        assert.deepEqual(read.getPages().map(p => p.getRotation().angle),
+            Array(face === 'both' ? 6 : 3).fill(0)); // Versos já em 180 passam a 0.
+        assert.equal(read.getTitle(), 'Faces sintéticas');
+        const icc = read.catalog.lookup(PDFName.of('OutputIntents')).lookup(0).lookup(PDFName.of('DestOutputProfile'));
+        assert.deepEqual(Array.from(icc.getContents()), [1,2,3,4]);
+    }
+    const oddPages = await PDFDocument.create();
+    for (const angle of [90, 90, 270, 0, 180]) {
+        const page = oddPages.addPage([200,300]);
+        page.setRotation(PDFLib.degrees(angle));
+    }
+    const oddBlob = new Blob([await oddPages.save()]);
+    const rotated = await context.selecionarFacesDoPdfDoPedido(oddBlob, 'both', 'front', {}, true);
+    const readRotated = await PDFDocument.load(await rotated.arrayBuffer());
+    assert.deepEqual(readRotated.getPages().map(p => p.getRotation().angle), [90,270,270,180,180]);
+    // PDF-lib valida Array por realm; executar a composição no mesmo realm da biblioteca.
+    const processQueue = new Function('window', extract(script, 'processPrintQueueOptions')
+        + '; return processPrintQueueOptions;')({PDFLib});
+    for (const reversa of [false, true]) for (const separar of [false, true]) {
+        const queue = await processQueue([{name: 'teste.pdf', blob: rotated}],
+            {impressao_reversa: reversa, folha_a_folha: separar});
+        const angles = [];
+        for (const item of queue) {
+            const read = await PDFDocument.load(await item.blob.arrayBuffer());
+            angles.push(...read.getPages().map(p => p.getRotation().angle));
+        }
+        const expected = [90,270,270,180,180];
+        assert.deepEqual(angles, reversa ? expected.reverse() : expected);
+        assert.equal(queue.length, separar ? 5 : 1);
+    }
+    assert.equal(await context.rotacionarPaginasParesDoPedido(oddBlob, false), oddBlob);
+    await assert.rejects(context.rotacionarPaginasParesDoPedido(new Blob(['invalid']), true));
     const single = await PDFDocument.create(); single.addPage();
     const odd = new Blob([await single.save()]);
     assert.equal(await context.selecionarFacesDoPdfDoPedido(odd, 'front', 'front'), odd);
@@ -198,6 +239,7 @@ async function main() {
     assert.equal(await context.selecionarFacesDoPdfDoPedido(odd, 'back', 'duplex', {file_type: 'capa'}), odd);
     assert.equal(await context.selecionarFacesDoPdfDoPedido(odd, 'back', 'duplex', {name: 'modelo_set1_01_03_contracapa.pdf'}), odd);
     context.window.PDFLib = null;
+    await assert.rejects(context.rotacionarPaginasParesDoPedido(blob, true), /leitor de PDF/);
     await assert.rejects(context.selecionarFacesDoPdfDoPedido(blob, 'front', 'duplex'), /leitor de PDF/);
 
     // Exercita a entrega real com destinos simulados, sem rede nem impressora.
@@ -213,10 +255,10 @@ async function main() {
         assert.equal(options.hot_folder_path, hot);
     }
     // Contratos dos três formatos de resposta: filtrar antes de qualquer destino.
-    assert.match(pedido, /const fBlob = await selecionarFacesDoPdfDoPedido\([\s\S]*?payload.print_mode, fileObj\)/);
+    assert.match(pedido, /const fBlob = await selecionarFacesDoPdfDoPedido\([\s\S]*?payload.print_mode, fileObj, rotacionarPares\)/);
     assert.match(pedido, /const multiBlobs = await Promise.all\(data.files.map\(async f =>/);
-    assert.match(pedido, /blob: await selecionarFacesDoPdfDoPedido\([\s\S]*?payload.print_mode, f\)/);
-    assert.match(pedido, /const blob = await selecionarFacesDoPdfDoPedido\(await res.blob\(\), faceDoTrabalho, payload.print_mode\)/);
+    assert.match(pedido, /blob: await selecionarFacesDoPdfDoPedido\([\s\S]*?payload.print_mode, f, rotacionarPares\)/);
+    assert.match(pedido, /const blob = await selecionarFacesDoPdfDoPedido\(await res.blob\(\), faceDoTrabalho, payload.print_mode, \{\}, rotacionarPares\)/);
     for (const queue of ['printBlobQueue', 'multiBlobs', 'queue']) assert(pedido.includes('sendPrintJobDirect(' + queue + ', opcoesDeFace)'));
     assert(pedido.includes('criarEntregaDeImpressao(opcoesDeFace)'));
     console.log('OK: HTMLs reais, modos vinculados, faces, troca de modelo, PDFs reais, ICC, erros e destinos.');
