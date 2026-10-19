@@ -49206,25 +49206,39 @@ window.carregarFundoAtual = carregarFundoAtual;
     async function buscarPedidos(mais=false){const usuario=el('ve-rota-entregador').value;if(!usuario)return;const turno=geracao,q=++consulta;if(!mais){offset=0;el('ve-rota-disponiveis').replaceChildren();}el('ve-rota-msg').textContent='Consultando pedidos…';try{const rows=await rpc('ve_admin_pedidos_rota',{p_usuario:usuario,p_busca:el('ve-rota-busca').value.trim(),p_offset:offset});if(turno!==geracao||q!==consulta)return;for(const p of rows.slice(0,50)){const b=botao(`Adicionar #${p.pedido} · ${p.cliente}`,()=>{if(sequencia.some(x=>x.chave===p.chave))return;if(sequencia.length>=20){el('ve-rota-msg').textContent='Limite de 20 paradas.';return;}sequencia.push(p);rotaId=crypto.randomUUID();desenharSequencia();});el('ve-rota-disponiveis').append(b);}el('ve-rota-mais').hidden=rows.length<=50;offset+=50;el('ve-rota-msg').textContent=rows.length?'Selecione os pedidos e confira a ordem.':'Nenhum pedido disponível para este entregador.';}catch(e){if(turno===geracao&&q===consulta)el('ve-rota-msg').textContent=e.message;}}
     async function abrirRota(id=null){if(!permitido())return;const turno=++geracao;try{if(!await carregarContexto())return;if(!contexto.editar)throw new Error('Seu perfil ADM não permite editar.');const rotas=await rpc('ve_admin_rotas');if(turno!==geracao)return;const r=id?rotas.find(x=>x.id===id):null;if(id&&!r)throw new Error('Rota alterada. Atualize a lista.');if(r?.iniciada_em)throw new Error('Rota em deslocamento não pode ser alterada.');el('ve-rota-entregador').replaceChildren();for(const d of contexto.entregadores.filter(x=>x.ativo)){const o=texto('option',d.nome);o.value=d.usuario;el('ve-rota-entregador').append(o);}if(r)el('ve-rota-entregador').value=r.usuario;el('ve-rota-entregador').disabled=!!r;rotaAnterior=r?.id||null;rotaId=crypto.randomUUID();sequencia=r?(r.paradas||[]).map(p=>({...p})):[];el('ve-rota-retorno-adm').checked=r?.retorno??false;el('ve-rota-busca').value='';el('ve-rota-titulo').textContent=r?'Alterar rota':'Criar rota';el('ve-rota-disponiveis').replaceChildren();el('ve-rota-msg').textContent='';desenharSequencia();el('ve-rota-editor').showModal();if(!el('ve-rota-entregador').value){el('ve-rota-msg').textContent='Cadastre um entregador ativo primeiro.';return;}await buscarPedidos();}catch(e){if(turno===geracao)el('ve-mensagem').textContent=e.message;}}
     let rotaDeslocamento = null;
+    let paradasPrevisao = [], previsaoPronta = false, calculandoPrevisao = null;
+    async function pedirPrevisoes(acao) {
+        const {data,error}=await cliente().functions.invoke('vibe-entregas-previsoes',{body:{id:rotaDeslocamento,acao}});
+        if(error){let mensagem='Não foi possível calcular os prazos. Tente novamente.';try{const body=await error.context.json();if(body.erro)mensagem=body.erro;}catch{}throw new Error(mensagem);}
+        if(data?.confirmado!==true || !data.previsoes)throw new Error(data?.erro || 'Previsões não confirmadas.');
+        return data;
+    }
+    function mostrarPrevisoes(previsoes) {
+        el('ve-previsoes').replaceChildren();
+        for(const p of paradasPrevisao){
+            const valor=previsoes[p.chave];if(!valor || !Number.isFinite(Date.parse(valor)))throw new Error('Previsão incompleta. Recalcule a rota.');
+            el('ve-previsoes').append(texto('p',`Pedido ${p.pedido} · chegada prevista: ${new Date(valor).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}`));
+        }
+    }
+    async function atualizarPrevisoes() {
+        if(calculandoPrevisao===geracao || salvando || !permitido())return;
+        const turno=geracao;calculandoPrevisao=turno;previsaoPronta=false;
+        el('ve-deslocamento-salvar').disabled=true;el('ve-previsoes-atualizar').disabled=true;el('ve-previsoes').replaceChildren();
+        el('ve-deslocamento-msg').textContent='Calculando os prazos pelo trajeto e trânsito…';
+        try{const r=await pedirPrevisoes('prever');if(turno!==geracao||!permitido())return;mostrarPrevisoes(r.previsoes);previsaoPronta=true;el('ve-deslocamento-msg').textContent='Estimativas do Google Maps. Os prazos serão atualizados ao confirmar a saída.';}
+        catch(e){if(turno===geracao)el('ve-deslocamento-msg').textContent=e.message;}
+        finally{if(calculandoPrevisao===turno)calculandoPrevisao=null;if(turno===geracao){el('ve-deslocamento-salvar').disabled=!previsaoPronta;el('ve-previsoes-atualizar').disabled=false;}}
+    }
     async function iniciarDeslocamento(id) {
-        const turno = ++geracao;
-        try {
-            if (!await carregarContexto()) return;
-            if (!contexto.editar) throw new Error('Seu perfil ADM não permite editar.');
-            const rotas = await rpc('ve_admin_rotas');
-            if (turno !== geracao) return;
-            const r = rotas.find(x=>x.id===id);
-            if (!r || r.iniciada_em) throw new Error('Rota alterada ou já em deslocamento. Atualize a consulta.');
-            const pendentes = r.paradas.filter(p=>!p.entregue);
-            if (!pendentes.length) throw new Error('Não há pedidos pendentes nesta rota.');
-            rotaDeslocamento = id; el('ve-previsoes').replaceChildren();
-            for (const p of pendentes) {
-                const label = texto('label', `Pedido ${p.pedido} · previsão de entrega`), input = document.createElement('input');
-                input.type = 'datetime-local'; input.required = true; input.dataset.proposta = p.chave;
-                label.append(input); el('ve-previsoes').append(label);
-            }
-            el('ve-deslocamento-msg').textContent = ''; el('ve-deslocamento').showModal();
-        } catch(e) { if(turno===geracao) el('ve-mensagem').textContent=e.message; }
+        const turno=++geracao;
+        try{
+            if(!await carregarContexto())return;
+            if(!contexto.editar)throw new Error('Seu perfil ADM não permite editar.');
+            const rotas=await rpc('ve_admin_rotas');if(turno!==geracao)return;
+            const r=rotas.find(x=>x.id===id);if(!r||r.iniciada_em)throw new Error('Rota alterada ou já em deslocamento. Atualize a consulta.');
+            paradasPrevisao=r.paradas.filter(p=>!p.entregue);if(!paradasPrevisao.length)throw new Error('Não há pedidos pendentes nesta rota.');
+            rotaDeslocamento=id;previsaoPronta=false;el('ve-deslocamento').showModal();await atualizarPrevisoes();
+        }catch(e){if(turno===geracao)el('ve-mensagem').textContent=e.message;}
     }
     function iniciar(){if(!el('ve-entregadores'))return;
         el('ve-entregadores').onclick=listarCadastros;el('ve-novo-entregador').onclick=()=>editarCadastro();el('ve-nova-rota').onclick=()=>abrirRota();
@@ -49234,14 +49248,15 @@ window.carregarFundoAtual = carregarFundoAtual;
         for(const id of ['ve-cadastro','ve-rota-editor','ve-deslocamento'])el(id).addEventListener('cancel',e=>{if(salvando)e.preventDefault();});
         el('ve-cadastro-form').onsubmit=async e=>{e.preventDefault();if(salvando||!contexto?.editar||!permitido())return;const turno=geracao,senha=el('ve-senha').value,d=cadastro;el('ve-senha').value='';salvando=true;el('ve-cadastro-salvar').disabled=true;el('ve-cadastro-msg').textContent='Salvando…';let perfilSalvo=false;
             try{if(d){if(await rpc('ve_admin_editar_entregador_geral',{p_usuario:d.usuario,p_nome:el('ve-nome').value.trim(),p_ativo:el('ve-ativo').checked})!==true)throw new Error('Cadastro não confirmado.');perfilSalvo=true;if(senha)await auth({acao:'senha',usuario:d.usuario,senha});}else await auth({acao:'criar',operacao,nome:el('ve-nome').value.trim(),email:el('ve-email').value.trim(),senha});if(turno!==geracao)return;el('ve-cadastro').close();await listarCadastros();el('ve-cadastros-msg').textContent='Cadastro confirmado.';}catch(err){if(turno===geracao)el('ve-cadastro-msg').textContent=(perfilSalvo?'Dados do entregador salvos. Senha não confirmada: ':'')+err.message;}finally{salvando=false;el('ve-cadastro-salvar').disabled=false;}};
+        el('ve-previsoes-atualizar').onclick=atualizarPrevisoes;
         el('ve-deslocamento-form').onsubmit = async e => {
             e.preventDefault(); if(salvando || !permitido() || !rotaDeslocamento) return;
-            const turno=geracao, previsoes={};
-            for(const input of el('ve-previsoes').querySelectorAll('input')) previsoes[input.dataset.proposta]=input.value+':00-03:00';
+            if(!previsaoPronta || calculandoPrevisao===geracao)return;
+            const turno=geracao;
             salvando=true; el('ve-deslocamento-salvar').disabled=true;
             el('ve-deslocamento-msg').textContent='Confirmando deslocamento…';
             try {
-                const r=await rpc('ve_admin_iniciar_deslocamento',{p_id:rotaDeslocamento,p_previsoes:previsoes});
+                const r=await pedirPrevisoes('iniciar');
                 if(r.confirmado!==true || !r.iniciada_em) throw new Error('Início do deslocamento não confirmado.');
                 if(turno!==geracao || !permitido()) return;
                 el('ve-deslocamento').close();

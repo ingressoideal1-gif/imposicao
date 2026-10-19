@@ -46,7 +46,7 @@
       const liberada = !!rotaAtiva?.iniciada_em && ordem.has(p.chave) && p.status_erp === 'EM TRANSITO';
       if (p.estado === 'minha' && p === rows.find(x=>ordem.has(x.chave) && x.status_erp === 'EM TRANSITO') && liberada) { card.classList.add('proxima-entrega'); card.append(text('p', 'PRÓXIMA ENTREGA', 'eyebrow')); }
       if (p.status_erp === 'EM PRODUCAO') { card.classList.add('aguardando'); card.append(text('p','Aguardando produção')); }
-      card.append(text('span', p.estado === 'concluida' ? (demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? (p.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : 'Aguardando liberação') : 'Pronto para Expedir · Motoboy', 'tag'), text('h2', `Pedido ${p.id}`), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
+      card.append(text('span', p.estado === 'concluida' ? (demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? (p.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : 'Aguardando início da rota') : 'Pronto para Expedir · Motoboy', 'tag'), text('h2', `Pedido ${p.id}`), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
       if (p.prevista_em) card.append(text('p', 'Previsão de entrega: '+new Date(p.prevista_em).toLocaleString('pt-BR')));
       if (p.registro) card.append(text('p', `${reasons[p.registro.resultado]} · ${p.registro.recebedor || 'Tentativa registrada'} · ${new Date(p.registro.hora).toLocaleString('pt-BR')}`));
       const actions = text('div', '', 'actions');
@@ -54,10 +54,27 @@
       if (p.endereco && p.endereco.trim() && (liberada || p.estado === 'concluida')) actions.append(rota);
       else if(!p.endereco?.trim()) card.append(text('p', 'Endereço não informado. Confira com a expedição.'));
       if (p.estado === 'minha' && liberada) { actions.append(botao('Informar entrega', () => abrir(p))); actions.append(botao('Não consegui entregar', () => abrir(p, 'ausente'))); }
+      if(p.estado==='disponivel' && !demo){const b=botao('Assumir entrega',()=>assumir(p,b));b.disabled=enviando;actions.append(b);}
       card.append(actions); $('lista').append(card);
     }
     if (!rows.length) $('lista').append(text('p', busca ? 'Nenhum pedido encontrado para esse número.' : 'Nenhum pedido nesta lista.', 'empty'));
   }
+  async function assumir(p, b) {
+    if(enviando || demo)return;
+    if(!confirm(`Assumir a entrega do pedido ${p.id}? O pedido será incluído na sua rota.`))return;
+    enviando=true;b.disabled=true;const dono=usuario?.id;
+    try{await VibeEntregas.assumir(p.chave);if(usuario?.id!==dono)return;filtro='minha';offset=0;await carregar();aviso('Entrega atribuída a você. Confira sua rota antes de iniciar.');}
+    catch(e){if(usuario?.id===dono){await carregar();aviso(e.message);}}
+    finally{enviando=false;b.disabled=false;if(usuario?.id===dono)render();}
+  }
+  $('iniciar-rota').onclick=async()=>{
+    const rota=RotasEntregas.atual();if(enviando||demo||!rota||rota.iniciada_em)return;
+    if(!confirm('Iniciar sua rota? Os horários serão calculados automaticamente e os pedidos passarão para em deslocamento.'))return;
+    enviando=true;$('iniciar-rota').disabled=true;const dono=usuario?.id;aviso('Calculando previsões e iniciando a rota…');
+    try{await VibeEntregas.iniciarRota(rota.id);if(usuario?.id!==dono)return;await carregar();aviso('Rota iniciada. Siga para a próxima entrega.');}
+    catch(e){if(usuario?.id===dono)aviso(e.message);}
+    finally{enviando=false;$('iniciar-rota').disabled=false;}
+  };
   function limparFoto() { fotoLeitura++; carregandoFoto = false; if (fotoURL) URL.revokeObjectURL(fotoURL); fotoURL = ''; foto = null; $('preview').hidden = true; $('preview').removeAttribute('src'); }
   async function abrir(p, motivo = 'entregue') { atual = p; operacao = crypto.randomUUID(); $('registro').reset(); limparFoto(); $('erro').textContent = ''; $('resumo').textContent = `${p.id} · ${p.volumes == null ? 'Volumes não informados' : p.volumes + ' volume(s)'} · ${p.nome}`; $('resultado').value = motivo;
     try { const r = await RascunhosEntregas.ler(usuario.id, p.chave); if(r) { operacao=r.operacao; for(const id of ['resultado','recebedor','observacao']) $(id).value=r[id]; $('volumes').checked=r.volumes; foto=r.foto; if(foto){fotoURL=URL.createObjectURL(foto);$('preview').src=fotoURL;$('preview').hidden=false;} $('erro').textContent='Rascunho recuperado. Confira antes de confirmar.'; } } catch { $('erro').textContent='Não foi possível recuperar o rascunho neste aparelho.'; }

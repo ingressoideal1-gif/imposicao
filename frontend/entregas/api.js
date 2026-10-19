@@ -13,6 +13,10 @@ window.VibeEntregas = (() => {
     if (data == null) throw new Error('O servidor não confirmou a operação.');
     return data;
   }
+  async function recalcular(id) {
+    const {data,error}=await conectar().functions.invoke('vibe-entregas-previsoes',{body:{id,acao:'atualizar'}});
+    if(error || data?.confirmado!==true)throw new Error('Previsões aguardando atualização.');
+  }
   return {
     ativo,
     async entrar(email, password) {
@@ -23,12 +27,14 @@ window.VibeEntregas = (() => {
       return data.user;
     },
     async sair() { if (client) { const {error} = await client.auth.signOut({scope:'local'}); if(error) throw new Error('Não foi possível encerrar a sessão.'); } },
+    async iniciarRota(id) { const {data,error}=await conectar().functions.invoke('vibe-entregas-previsoes',{body:{id,acao:'iniciar'}});if(error||data?.confirmado!==true||!data.iniciada_em)throw new Error(data?.erro || 'Não foi possível calcular os prazos e iniciar a rota. Tente novamente.');return data; },
+    async assumir(chave) { const r=await rpc('ve_assumir',{p_proposta:chave});if(r?.confirmado!==true)throw new Error('Atribuição não confirmada. Atualize a lista.');return r; },
     listar(busca, offset, filtro) { return rpc('ve_listar', { p_busca: busca, p_offset: offset, p_filtro: filtro }); },
     async minhas(busca) {
       const rows=[]; let offset=0;
       while(true){const pagina=await rpc('ve_listar',{p_busca:busca,p_offset:offset,p_filtro:'minha'});rows.push(...pagina.slice(0,50));if(pagina.length<=50)return rows;offset+=50;}
     },
-    rotasAtivas() { return rpc('ve_rotas_status',{}); },
+    async rotasAtivas() { let rows=await rpc('ve_rotas_status',{});const r=rows.find(r=>r.minha&&r.previsao_pendente);if(r){try{await recalcular(r.id);rows=await rpc('ve_rotas_status',{});}catch{/* Flag persistida no servidor; próxima atualização tenta novamente. */}}return rows; },
     async registrar(p, registro, foto) {
       const c = conectar(); const { data: { user }, error } = await c.auth.getUser();
       if (error || !user) throw new Error('Sua sessão expirou. Entre novamente.');
@@ -48,6 +54,10 @@ window.VibeEntregas = (() => {
       }
       const data = await rpc('ve_registrar', { p_proposta: p.chave, p_operacao: registro.operacao, p_resultado: registro.resultado, p_recebedor: registro.recebedor, p_foto: caminho, p_observacao: registro.observacao, p_volumes: registro.volumes });
       if (data.confirmada !== true) throw new Error('Entrega não confirmada pelo servidor.');
+      if(registro.resultado==='entregue') {
+        try{const rows=await rpc('ve_rotas_status',{});const rota=rows.find(r=>r.minha&&r.previsao_pendente);if(rota)await recalcular(rota.id);}
+        catch{data.previsoes_pendentes=true;}
+      }
       return data;
     }
   };

@@ -4455,8 +4455,8 @@
                       <p id="ve-rota-msg" role="alert"></p><button type="button" id="ve-rota-salvar" class="btn btn-primary">Salvar rota</button><button type="button" data-ve-fechar="ve-rota-editor" class="btn btn-ghost">Cancelar</button>
                     </dialog>
                     <dialog id="ve-deslocamento">
-                      <h3>Iniciar deslocamento</h3><p>Informe a previsão de cada parada na ordem da rota. Horário de Brasília (UTC−03). Após iniciar, a rota fica bloqueada para alterações.</p>
-                      <form id="ve-deslocamento-form"><div id="ve-previsoes"></div><p id="ve-deslocamento-msg" role="alert"></p>
+                      <h3>Iniciar deslocamento</h3><p>Previsões calculadas pelo Google Maps, saindo da Ideal e seguindo a ordem planejada. Incluem 5 minutos entre paradas para atendimento. Horário de Brasília. Após cada entrega, os prazos restantes serão recalculados a partir do último local confirmado.</p>
+                      <form id="ve-deslocamento-form"><button id="ve-previsoes-atualizar" type="button" class="btn btn-ghost">Recalcular previsões</button><div id="ve-previsoes"></div><p id="ve-deslocamento-msg" role="alert"></p>
                         <button id="ve-deslocamento-salvar" class="btn btn-primary">Confirmar início do deslocamento</button>
                         <button type="button" data-ve-fechar="ve-deslocamento" class="btn btn-ghost">Cancelar</button>
                       </form>
@@ -4614,7 +4614,7 @@
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
     <script src="/entregas-mapa.js?v=2"></script>
-    <script src="script.js?v=1080"></script>
+    <script src="script.js?v=1082"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=1067"></script>
     <script src="qr-evento-envio.js?v=948"></script>
