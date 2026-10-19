@@ -49164,26 +49164,32 @@ window.carregarFundoAtual = carregarFundoAtual;
         if (row.entregador_id && ![...select.options].some(o=>o.value===row.entregador_id)) {
             const atual = texto('option', row.entregador || 'Entregador atual'); atual.value = row.entregador_id; atual.disabled = true; select.append(atual);
         }
+        if(row.entregador_id && !row.concluida_em){const retirar=texto('option','Retirar entregador — voltar à lista');retirar.value='__retirar__';select.append(retirar);}
+        if(row.status_erp==='EM TRANSITO') [...select.options].forEach(o=>{if(o.value!=='__retirar__')o.disabled=true;});
         select.value = row.entregador_id || '';
-        select.disabled = !ctx.editar || !!row.concluida_em || row.status_erp!=='EXPEDICAO' || atribuindo;
-        select.title = row.concluida_em ? 'Entrega concluída: entregador preservado.' : row.status_erp==='EM TRANSITO' ? 'Rota em deslocamento: entregador preservado.' : row.status_erp!=='EXPEDICAO' ? 'Atribuição disponível quando o pedido estiver pronto para expedir.' : 'Ao selecionar, o pedido entra no fim da rota do entregador.';
+        select.disabled = !ctx.editar || !!row.concluida_em || !['EXPEDICAO','EM TRANSITO'].includes(row.status_erp) || atribuindo;
+        select.title = row.concluida_em ? 'Entrega concluída: entregador preservado.' : row.status_erp==='EM TRANSITO' ? 'Você pode retirar o pedido e devolvê-lo à lista de disponíveis.' : row.status_erp!=='EXPEDICAO' ? 'Atribuição disponível quando o pedido estiver pronto para expedir.' : 'Ao selecionar, o pedido entra no fim da rota do entregador.';
         select.onchange = async () => {
             const usuario = select.value, anterior = row.entregador_id || null, turno = geracao;
-            if (atribuindo || !permitido() || !ctx.editar || row.concluida_em || row.status_erp!=='EXPEDICAO') { select.value = anterior || ''; return; }
+            if (atribuindo || !permitido() || !ctx.editar || row.concluida_em || !['EXPEDICAO','EM TRANSITO'].includes(row.status_erp)) { select.value = anterior || ''; return; }
+            const retirar=usuario==='__retirar__';
+            if(!retirar && row.status_erp!=='EXPEDICAO'){select.value=anterior||'';return;}
+            if(retirar && (!anterior || !window.confirm(`Retirar o pedido ${row.pedido} de ${row.entregador || 'seu entregador'} e voltar à lista de disponíveis?${row.status_erp==='EM TRANSITO' ? ' Confirme que o pacote está disponível para nova saída. O status voltará para Pronto para Expedir.' : ''}`))){select.value=anterior||'';return;}
             atribuindo = true;
             const controles = [...document.querySelectorAll('[data-ve-entregador]')].map(n=>[n,n.disabled]);
             controles.forEach(([n])=>{n.disabled=true;});
-            aviso('Atribuindo pedido e atualizando a rota…');
+            aviso(retirar ? 'Retirando entregador e atualizando a rota…' : 'Atribuindo pedido e atualizando a rota…');
             try {
-                const r = await rpc('ve_admin_atribuir_rota', {p_proposta:row.chave,p_usuario:usuario,p_anterior:anterior});
-                if (r.confirmado !== true || r.usuario !== usuario || !r.id) throw new Error('Atribuição não confirmada. Atualize a lista antes de tentar novamente.');
+                const r = retirar ? await rpc('ve_admin_retirar_entregador',{p_proposta:row.chave,p_anterior:anterior}) : await rpc('ve_admin_atribuir_rota', {p_proposta:row.chave,p_usuario:usuario,p_anterior:anterior});
+                if (r.confirmado !== true || (retirar ? r.proposta !== row.chave || r.retirada !== true : r.usuario !== usuario || !r.id)) throw new Error('Atribuição não confirmada. Atualize a lista antes de tentar novamente.');
                 if (turno !== geracao || !permitido()) return;
                 atribuindo = false;
+                if(retirar) el('ve-status').value='disponivel';
                 await window.EntregasPainel?.recarregar();
                 if (turno !== geracao || !permitido()) return;
                 el('ve-rotas-atualizar').click();
                 el('ve-rotas-lista').closest('details').open = true;
-                aviso(`Pedido ${row.pedido} atribuído. Rota atualizada; use Alterar rota para ajustar a ordem.`);
+                aviso(retirar ? `Pedido ${row.pedido} sem entregador e disponível para nova atribuição. Rota atualizada.` : `Pedido ${row.pedido} atribuído. Rota atualizada; use Alterar rota para ajustar a ordem.`);
             } catch(e) {
                 select.value = anterior || '';
                 if (turno === geracao && permitido()) aviso(e.message + ' Atualize a consulta para conferir o estado atual.');

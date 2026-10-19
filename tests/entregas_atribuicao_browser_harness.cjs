@@ -11,6 +11,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
    calls.push({n,a});
    if(n==='ve_acompanhar')return{data:structuredClone(rows)};
    if(n==='ve_admin_contexto')return{data:{editar:edit,empresas:['A','B'],entregadores:[{usuario:'d1',nome:'Motorista A',ativo:true,empresas:['A']},{usuario:'d2',nome:'Motorista B',ativo:true,empresas:['B']},{usuario:'d3',nome:'Inativo',ativo:false,empresas:['A']}]}};
+   if(n==='ve_admin_retirar_entregador'){if(fail)return{error:{message:'Conflito de retirada'}};rows[0].entregador_id=null;rows[0].entregador=null;rows[0].status_erp='EXPEDICAO';route=null;return{data:{confirmado:true,retirada:true,proposta:a.p_proposta}};}
    if(n==='ve_admin_atribuir_rota'){
     if(fail)return{error:{message:'Conflito de atribuição'}};
     rows[0].entregador_id=a.p_usuario;rows[0].entregador='Motorista A';rows[0].assumida_em=new Date().toISOString();route={id:'r1',usuario:'d1',paradas:[{chave:'p1',pedido:1001,entregue:false,entregador:'Motorista A'}]};
@@ -43,12 +44,15 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await p.waitForFunction(()=>document.querySelector('#ve-deslocamento-msg').textContent==='Previsão inválida');assert.equal(await p.$eval('#ve-deslocamento',e=>e.open),true);
  await p.evaluate(()=>fail=false);await p.click('#ve-deslocamento-salvar');
  await p.waitForFunction(()=>document.querySelector('#ve-mensagem').textContent.includes('Deslocamento confirmado'));
- assert.equal(await p.$eval('#ve-linhas tr:first-child select',e=>e.disabled),true);
+ assert.equal(await p.$eval('#ve-linhas tr:first-child select',e=>e.disabled),false);
  assert.match(await p.$eval('#ve-linhas tr:first-child',e=>e.textContent),/Em deslocamento/);
  assert.equal(await p.evaluate(()=>calls.filter(c=>c.n==='ve_admin_iniciar_deslocamento').at(-1).a.p_previsoes.p1),'2026-10-17T18:30:00-03:00');
  assert.notEqual(await p.$eval('#ve-linhas tr:first-child td:nth-child(5)',e=>e.textContent),'—');
  assert.notEqual(await p.$eval('#ve-linhas tr:nth-child(2) td:nth-child(6)',e=>e.textContent),'—');
  assert.equal(await p.$$eval('#ve-rotas-lista button',e=>e.length),0);
+ await p.evaluate(()=>window.confirm=()=>false);await p.select('#ve-linhas tr:first-child select','__retirar__');assert.equal(await p.$eval('#ve-linhas tr:first-child select',e=>e.value),'d1');
+ await p.evaluate(()=>{window.confirm=()=>true;fail=true;});await p.select('#ve-linhas tr:first-child select','__retirar__');await p.waitForFunction(()=>document.querySelector('#ve-mensagem').textContent.includes('Conflito de retirada'));assert.equal(await p.$eval('#ve-linhas tr:first-child select',e=>e.value),'d1');
+ await p.evaluate(()=>fail=false);await p.select('#ve-linhas tr:first-child select','__retirar__');await p.waitForFunction(()=>document.querySelector('#ve-mensagem').textContent.includes('disponível para nova atribuição'));assert.equal(await p.$eval('#ve-status',e=>e.value),'disponivel');assert.equal(await p.$eval('#ve-linhas tr:first-child select',e=>e.value),'');
  await p.evaluate(()=>{edit=false;rows[0].status_erp='EXPEDICAO';return EntregasPainel.recarregar()});assert.equal(await p.$eval('#ve-linhas tr:first-child select',e=>e.disabled),true);
  await p.evaluate(()=>{role='operador';EntregasPainel.atualizarAcesso()});assert.equal(await p.$$eval('#ve-linhas tr',e=>e.length),0);assert.deepEqual(errors,[]);
  console.log('PASS: seletor por empresa, atribuicao automatica, conflito, concluidas bloqueadas, previsoes manuais, deslocamento, horario real e ADM leitura.');

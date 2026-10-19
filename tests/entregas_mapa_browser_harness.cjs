@@ -81,7 +81,8 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   await p.evaluate(()=>{canEdit=false;return markers.filter(m=>m.map&&m.title?.includes('1001')).at(-1).click();});
   assert.equal(await p.evaluate(()=>popup.querySelector('select').disabled),true);
   await p.evaluate(()=>{canEdit=true;rows[0].status_erp='EM TRANSITO';return markers.filter(m=>m.map&&m.title?.includes('1001')).at(-1).click();});
-  assert.equal(await p.evaluate(()=>popup.querySelector('select').disabled),true);
+  assert.equal(await p.evaluate(()=>popup.querySelector('select').disabled),false);
+  assert.deepEqual(await p.evaluate(()=>[...popup.querySelector('select').options].filter(o=>!o.disabled).map(o=>o.value)),['__retirar__']);
   await p.evaluate(()=>{rows[3].status_erp='EM PRODUCAO';return EntregasMapa.atualizar();});
   assert.equal(await p.evaluate(()=>markers.filter(m=>m.map&&m.title?.includes('1004')).at(-1).content.style.background),'rgb(100, 116, 139)');
   await p.evaluate(()=>markers.filter(m=>m.map&&m.title?.includes('1004')).at(-1).click());
