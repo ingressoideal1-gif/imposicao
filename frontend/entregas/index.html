@@ -15,8 +15,8 @@
       <div class="notice" id="aviso-demo">Demonstração · nenhum registro é enviado ao ERP</div>
       <p id="conexao" role="status"></p>
       <label for="busca">Buscar pedido</label><input id="busca" type="search" inputmode="numeric" placeholder="Digite o número do pedido" autocomplete="off">
-      <nav aria-label="Filtrar entregas"><button data-filtro="minha" aria-pressed="true">Minha rota</button><button data-filtro="concluida" aria-pressed="false">Concluídas hoje</button><button id="atualizar" type="button">Atualizar</button></nav>
-      <section id="rota-ativa"><p id="rota-progresso" role="status"></p></section>
+      <nav aria-label="Filtrar entregas"><button data-filtro="disponivel" aria-pressed="false">Disponíveis</button><button data-filtro="minha" aria-pressed="true">Minha rota</button><button data-filtro="concluida" aria-pressed="false">Concluídas hoje</button><button id="atualizar" type="button">Atualizar</button></nav>
+      <section id="rota-ativa"><p id="rota-progresso" role="status"></p><button id="iniciar-rota" type="button" hidden>Iniciar minha rota</button></section>
       <div class="list-heading"><h1 id="titulo">Minha rota</h1><span id="contador"></span></div><div id="lista"></div><div id="paginacao" hidden><button id="anterior">Anterior</button><button id="proxima">Próxima página</button></div>
     </section>
     <p id="mensagem" role="status" aria-live="polite"></p>
