@@ -49091,7 +49091,7 @@ window.carregarFundoAtual = carregarFundoAtual;
             }
             const contextoLinhas = !demonstracao && rows.some(r=>r.chave) ? await window.EntregasGestao?.contextoLinhas() : null;
             if (turno !== geracao || !permitido()) return;
-            desenhar(rows, contextoLinhas); el('ve-mensagem').textContent = demonstracao ? 'DEMONSTRAÇÃO · dados fictícios, sem acesso ao ERP.' : `${Math.min(rows.length,50)} registro(s) nesta página. Atualize para acompanhar novas entregas.`;
+            desenhar(rows, contextoLinhas); el('ve-rotas-atualizar').click(); el('ve-mensagem').textContent = demonstracao ? 'DEMONSTRAÇÃO · dados fictícios, sem acesso ao ERP.' : `${Math.min(rows.length,50)} registro(s) nesta página. Atualize para acompanhar novas entregas.`;
         } catch (e) { if (turno === geracao) el('ve-mensagem').textContent = e.message; }
         finally { if (turno === geracao) ocupado = false; }
     }
@@ -49103,15 +49103,19 @@ window.carregarFundoAtual = carregarFundoAtual;
         el('ve-demo').onclick = () => { demonstracao = true; window.EntregasMapa?.limpar(); carregar(0); };
         el('ve-rotas-atualizar').onclick = async () => {
             if(!permitido())return; const turno=geracao;
-            el('ve-rotas-lista').replaceChildren();el('ve-rotas-mensagem').textContent='Consultando rotas…';
+            el('ve-rotas-mensagem').textContent='Consultando rotas…';
             try {
                 let rows;
                 if(demonstracao)rows=[{confirmada_em:new Date().toISOString(),paradas:[{pedido:'DEMO-1001',entregador:'Entregador demonstração',entregue:false}]}];
                 else { const c=cliente();const {data,error}=await c.rpc('ve_rotas_status',{});if(error||!Array.isArray(data))throw new Error('Consulta de rotas indisponível. Confira a implantação e sua autorização.');rows=data; }
                 if(turno!==geracao||!permitido())return;
+                el('ve-rotas-lista').replaceChildren();
                 for(const r of rows){const box=document.createElement('article'),paradas=r.paradas||[];
                     box.append(texto('h3',paradas[0]?.entregador||'Entregador'),texto('p',`${data(r.confirmada_em)} · ${paradas.filter(p=>p.entregue).length}/${paradas.length} concluídas`));
-                    const ol=document.createElement('ol');for(const p of paradas)ol.append(texto('li',`Pedido ${p.pedido} · ${p.entregue?'Entregue':'Pendente'}`));box.append(ol); box.append(texto('p',r.iniciada_em?'Em deslocamento desde '+data(r.iniciada_em):'Rota planejada'));
+                    const lista=document.createElement('div');lista.className='ve-tabela';const tabela=document.createElement('table'),cabecalho=document.createElement('thead'),titulos=document.createElement('tr'),corpo=document.createElement('tbody');
+                    for(const titulo of ['Ordem','Pedido','Situação','Previsão de entrega']){const th=texto('th',titulo);th.scope='col';titulos.append(th);}cabecalho.append(titulos);
+                    paradas.forEach((p,i)=>{const linha=document.createElement('tr');linha.append(texto('td',i+1),texto('td',`Pedido ${p.pedido}`),texto('td',p.entregue?'Entregue':r.iniciada_em?'Em deslocamento':'Planejado'),texto('td',p.prevista_em?data(p.prevista_em):r.iniciada_em&&!p.entregue?'Aguardando atualização':'—'));corpo.append(linha);});
+                    tabela.append(cabecalho,corpo);lista.append(tabela);box.append(lista);box.append(texto('p',r.iniciada_em?'Em deslocamento desde '+data(r.iniciada_em):'Rota planejada'));
                     if(!demonstracao&&r.id&&!r.iniciada_em){const editar=texto('button','Alterar rota');editar.type='button';editar.className='btn btn-ghost';editar.onclick=()=>window.EntregasGestao?.editarRota(r.id);box.append(editar);
                         if(paradas.some(p=>!p.entregue)){const iniciar=texto('button','Iniciar deslocamento');iniciar.type='button';iniciar.className='btn btn-primary';iniciar.onclick=()=>window.EntregasGestao?.iniciarDeslocamento(r.id);box.append(iniciar);}}
                     if(r.iniciada_em&&paradas.length&&paradas.every(p=>p.entregue))box.append(texto('p','Todas as entregas concluídas'));el('ve-rotas-lista').append(box);
@@ -49188,7 +49192,7 @@ window.carregarFundoAtual = carregarFundoAtual;
                 await window.EntregasPainel?.recarregar();
                 if (turno !== geracao || !permitido()) return;
                 el('ve-rotas-atualizar').click();
-                el('ve-rotas-lista').closest('details').open = true;
+
                 aviso(retirar ? `Pedido ${row.pedido} sem entregador e disponível para nova atribuição. Rota atualizada.` : `Pedido ${row.pedido} atribuído. Rota atualizada; use Alterar rota para ajustar a ordem.`);
             } catch(e) {
                 select.value = anterior || '';
