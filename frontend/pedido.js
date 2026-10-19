@@ -168,16 +168,21 @@ function populatePedNumeracoes() {
         }
     }
 
-    // Filtra numerações cujo formato_ids inclui o formato selecionado e respeita o Cli_Num
+    const item = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    const vinculadaId = typeof numeracaoIdDoItem === 'function' ? numeracaoIdDoItem(item) : null;
+
+    // O cliente de faturamento pode diferir do dono do gabarito ja vinculado.
+    // Preserve somente esse vinculo, sem dispensar a compatibilidade de formato.
     let filteredNums = state.numeracoes.filter(n => {
+        const vinculada = vinculadaId != null && String(n.id) === String(vinculadaId);
         // Filtro de customizada por cliente / item
-        if (n.is_custom) {
+        if (!vinculada && n.is_custom) {
             if (n.Cli_Num) {
                 if (String(n.Cli_Num) !== String(currentClientId)) return false;
             } else {
                 if (String(n.os_item_id) !== String(currentItemId)) return false;
             }
-        } else {
+        } else if (!vinculada) {
             // Se tiver Cli_Num, restringe ao cliente atual
             if (n.Cli_Num && String(n.Cli_Num) !== String(currentClientId)) return false;
         }
