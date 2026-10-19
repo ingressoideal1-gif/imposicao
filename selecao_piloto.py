@@ -135,6 +135,11 @@ class SelecaoPiloto:
             raise ConferenciaIndisponivel('Outro pedido esta sendo preparado. Aguarde e reabra.')
         try:
             anterior = self._cache.obter(pedido)
+            # A mesma revisao comercial podia omitir modelos com PDF no gabarito.
+            # Renovar uma vez pela nuvem, sem apagar arquivos nem aceitar recibo
+            # compacto que preservaria a antiga classificacao "sem arte".
+            if anterior and anterior.get('fontes_gabarito') != 1:
+                anterior = None
             persistida = solicitados is None
             if persistida and (not anterior or anterior.get('protocolo') != 2):
                 anterior = None

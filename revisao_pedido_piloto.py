@@ -49,7 +49,8 @@ class CacheRevisaoPedido:
             con.close()
 
     def salvar(self, pedido, revisao, itens, pacotes, snapshot=None):
-        registro = {'empresa':self.servico.empresa,'pedido':pedido,'revisao':revisao,'itens':itens,'pacotes':pacotes}
+        registro = {'empresa':self.servico.empresa,'pedido':pedido,'revisao':revisao,'itens':itens,'pacotes':pacotes,
+                    'fontes_gabarito': 1}
         if snapshot is not None:
             registro.update(protocolo=2, snapshot=snapshot)
         con = self.servico._db()

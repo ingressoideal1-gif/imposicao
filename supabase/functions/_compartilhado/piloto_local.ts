@@ -6,7 +6,13 @@ const aprovados = new Set(['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA
 const normal = (v: unknown) => String(v ?? '').trim().toUpperCase();
 export function fontesPiloto(m: any, nums: any[]) {
   const fontes: Record<string, string> = {}, extras = new Set<string>();
-  const frente = m.arte_url || m.url_arquivo_arte || m.url_arquivo;
+  // A arte pode ser composta no gabarito, sem arte_url no modelo. Apenas
+  // um PDF visivel na frente concede essa entrada; fotos/fontes/verso nao.
+  // Os demais PDFs continuam nos recursos e a composicao permanece intacta.
+  const pdfGabarito = nums.flatMap(n => Array.isArray(n?.elements) ? n.elements : [])
+    .find(el => el?.type === 'PDF' && (!el.face || el.face === 'front' || el.face === 'both')
+      && typeof el.pdf_content === 'string' && el.pdf_content.startsWith('https://'))?.pdf_content;
+  const frente = m.arte_url || m.url_arquivo_arte || m.url_arquivo || pdfGabarito;
   const verso = m.verso_arte_url || m.url_arquivo_arte_verso || m.verso_url_arquivo;
   if (typeof frente === 'string' && frente.startsWith('https://')) fontes.frente = frente;
   if (typeof verso === 'string' && verso.startsWith('https://')) fontes.verso = verso;
