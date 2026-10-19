@@ -53,3 +53,11 @@ Solicitados e autorizados pelo usuário após o pedido de publicação. Implemen
 - Testes PGlite cobrem disponibilidade, produção/PAC excluídos, conflito entre entregadores, reenvio, retorno após retirada, rota em trânsito bloqueada e início pelo dono. Chromium cobre aba, confirmação, falha/reenvio de atribuição e início, mantendo os fluxos de foto/rascunho anteriores.
 
 A ativação do conjunto continua bloqueada pela ausência dos segredos Google no servidor; não foi publicado.
+
+## Atualização de implantação — 19/10/2026
+
+Após confirmação do usuário, a consulta de metadados confirmou os dois segredos cadastrados. O backend foi publicado no projeto e-deal: Edge Function vibe-entregas-previsoes e as duas migrações, em transação conjunta. Conferência posterior: três colunas novas presentes, 16 rotas históricas com revisões iniciais e nenhuma rota ativa. Nenhum status de pedido foi alterado pela implantação.
+
+Os quatro contratos anteriores foram salvos em dist/entrega/previsoes-funcoes-antes.json; recuperação das funções em dist/entrega/previsoes-recuperar-funcoes.sql. A recuperação exige também voltar a interface; as colunas adicionais podem permanecer, evitando destruição de histórico. Os artefatos locais não são versionados.
+
+PR #170, cache web v1082 e PWA v8. No momento deste registro a interface aguarda os checks obrigatórios e integração. A presença dos segredos não comprova a validade da chave ou cobrança Google; o primeiro cálculo autenticado real continua sendo a verificação operacional. Não foram registradas entregas fictícias em produção.
