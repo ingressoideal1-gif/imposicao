@@ -96,3 +96,30 @@ def test_cache_antigo_renova_modelo_omitido_sem_mudar_revisao_comercial(tmp_path
     consultas = e['consultas']
     SelecaoPiloto(s).abrir_pedido({'pedido': '99'})
     assert e['consultas'] == consultas + 1
+
+
+def test_renova_lista_de_recursos_antiga_uma_vez_sem_apagar_copia(tmp_path):
+    import json
+    s,e,_,_=ambiente_v2(tmp_path)
+    p=SelecaoPiloto(s)
+    p.abrir_pedido({'pedido':'99'})
+    antigo=p._cache.obter('99')
+    antigo.pop('recursos_fotos')
+    con=s._db()
+    try:
+        con.execute('UPDATE revisoes_pedidos_piloto SET conteudo=? WHERE pedido=?',
+                    (json.dumps(antigo),'99'));con.commit()
+    finally: con.close()
+    revisoes=[]
+    original=s.coleta_autonoma.cliente.abrir_pedido
+    def abrir(pedido,revisao):
+        revisoes.append(revisao)
+        return original(pedido,revisao)
+    s.coleta_autonoma.cliente.abrir_pedido=abrir
+    p.abrir_pedido({'pedido':'99'})
+    assert revisoes[0]==''
+    assert p._cache.obter('99')['recursos_fotos']==1
+    assert s.local.consultar('teste','10',antigo['pacotes'][0]['revisao'])['estado']=='local_validado'
+    revisoes.clear()
+    r=SelecaoPiloto(s).abrir_pedido({'pedido':'99'})
+    assert revisoes==['a'*64] and r['reutilizados']==2

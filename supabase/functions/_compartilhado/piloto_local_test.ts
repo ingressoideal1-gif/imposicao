@@ -31,12 +31,14 @@ Deno.test('piloto: conteudo QR/texto nao e arquivo; fontes, PDF e fotos continua
   assert.equal(JSON.stringify(dados),antes);
   // A mesma coluna usada por foto nao pode perder suas dependencias.
   dados.elements.push({type:'FOTO',source:'database',csv_column:'URL'});
-  assert.throws(()=>fontesPiloto({},[dados]),{status:422});
+  assert.equal(Object.keys(fontesPiloto({},[dados])).length,303);
 });
-Deno.test('piloto: mantem limites de arquivos reais e volume de dados',()=>{
-  assert.throws(()=>fontesPiloto({},[{csv_data:Array.from({length:257},(_,i)=>({foto:`https://foto.invalid/${i}`}))}]),{status:422});
-  assert.throws(()=>fontesPiloto({},[{elements:[{type:'QR',source:'database',csv_column:'URL'}],
-    csv_data:[{URL:Array(100001).fill('https://conteudo.invalid/')}]}]),{status:422});
+Deno.test('piloto: banco acima de 100000 campos e 256 arquivos sem limite fixo',()=>{
+ const banco={csv_data:Array.from({length:100001},(_,i)=>({foto:`https://foto.invalid/${i}`}))};
+ const consumidores=new Map([[banco,[{type:'FOTO',source:'database',csv_column:'foto'}]]]);
+ const fontes=fontesPiloto({},[banco],consumidores);
+ assert.equal(Object.keys(fontes).length,100001);
+ assert.ok(Object.values(fontes).includes('https://foto.invalid/100000'));
 });
 function ambiente() {
   const modelo: any = { id: 10, id_int: 20, amostra_num_id: 5, status_arte: 'APROVADO',
@@ -129,4 +131,29 @@ Deno.test('piloto: foto, fonte, verso isolado e PDF inline nao viram arquivo de 
     {elements:[{type:'PDF',face:'back',pdf_content:'https://storage.invalid/verso.pdf'}]},
     {elements:[{type:'PDF',face:'front',pdf_content:'data:application/pdf;base64,JVBERg=='}]},
   ]) assert.equal(fontesPiloto({}, [num]).frente, undefined);
+});
+
+Deno.test('piloto: foto compartilhada com QR e fonte do texto continuam recursos',()=>{
+ const url='https://test.invalid/compartilhado';
+ const banco={csv_data:[{qr:url,auxiliar:'https://test.invalid/ignorado'}]};
+ const elementos=[{type:'QR',source:'database',csv_column:'qr'},
+  {type:'FOTO',source:'database',csv_column:'qr'}];
+ const num={elements:[{type:'TEXT',fixed_value:'https://test.invalid/texto',font_url:'https://test.invalid/fonte.ttf'}]};
+ const fontes=Object.values(fontesPiloto({},[banco,num],new Map([[banco,elementos]])));
+ assert.deepEqual(fontes.sort(),[url,'https://test.invalid/fonte.ttf'].sort());
+ // Sem vinculo resolvido, preservar arquivos potencialmente necessarios.
+ assert.ok(Object.values(fontesPiloto({},[banco])).includes(banco.csv_data[0].auxiliar));
+});
+
+Deno.test('piloto: fotos do Gerenciador entram mesmo com nomes nas celulas e QR auxiliar',()=>{
+ const banco={csv_data:Array.from({length:13},(_,i)=>({FOTO:'imagem.jpg',url_qr:`https://qr.invalid/${i}`,
+  conteudo_qr:`https://qr.invalid/${i}`,__fotos:{FOTO:{url:`https://foto.invalid/${i}.jpg`,crop:{x:0.5}},
+  OUTRA:{url:`https://ignorada.invalid/${i}.jpg`}}}))};
+ const antes=JSON.stringify(banco);
+ const els=[{type:'FOTO',source:'database',csv_column:'FOTO'},
+  {type:'QR',source:'database',csv_column:'conteudo_qr'}];
+ const urls=Object.values(fontesPiloto({},[banco],new Map([[banco,els]])));
+ assert.equal(urls.length,13);
+ for(let i=0;i<13;i++)assert.ok(urls.includes(`https://foto.invalid/${i}.jpg`));
+ assert.equal(JSON.stringify(banco),antes);
 });

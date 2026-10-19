@@ -23,9 +23,11 @@ Deno.test('pedido v2: 300 links de QR preservados sem virar downloads, com mapa 
   snapshot.modelos.push({...a.modelo,id:11,amostra_num_id:'foto'});
   snapshot.numeracoes.push({id:'foto',elements:[{type:'FOTO',source:'database',csv_column:'URL'}]});
   snapshot.vinculos.push({modelo_id:11,banco_id:'banco'});
-  await assert.rejects(abrir(),{status:422});
+  const arquivos = Object.values((await abrir() as any).itens[0].fontes);
+  assert.equal(arquivos.length,301);
+  assert.ok(arquivos.includes('https://qr.invalid/299'));
   snapshot.vinculos=[]; // Sem contexto, nao adivinhar que uma URL e apenas conteudo.
-  await assert.rejects(abrir(),{status:422});
+  assert.equal(Object.keys((await abrir() as any).itens[0].fontes).length,301);
  }
 });
 function ambiente() {

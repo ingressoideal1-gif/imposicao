@@ -140,7 +140,10 @@ class SelecaoPiloto:
             # A mesma revisao comercial podia omitir modelos com PDF no gabarito.
             # Renovar uma vez pela nuvem, sem apagar arquivos nem aceitar recibo
             # compacto que preservaria a antiga classificacao "sem arte".
-            if anterior and anterior.get('fontes_gabarito') != 1:
+            # Fotos do Gerenciador eram omitidas dos recibos antigos. Uma
+            # conferencia completa renova a lista sem apagar o cache anterior.
+            if anterior and (anterior.get('fontes_gabarito') != 1
+                             or anterior.get('recursos_fotos') != 1):
                 anterior = None
             persistida = solicitados is None
             if persistida and (not anterior or anterior.get('protocolo') != 2 or anterior.get('offline_schema') != 1):

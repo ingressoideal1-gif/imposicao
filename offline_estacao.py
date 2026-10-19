@@ -180,29 +180,40 @@ class OfflineEstacao:
                     qr_base_v2.obter(pool)
             finally:
                 pool.fechar()
-        familias = {str(e.get('font_name') or e.get('font_family') or '') for e in elementos}
-        familias.discard('')
-        if familias:
-            import db
-            import font_cache
-            catalogo = db.get_catalogo_fontes()
-            for nome in familias:
-                familia = nome.split('|')[0].removeprefix('system:').lower().replace(' ', '')
-                # Regular, negrito e italico da mesma familia, conforme a selecao do motor.
-                fontes = [f for f in catalogo if any(str(f.get(k, '')).lower().replace(' ', '').startswith(familia)
-                          for k in ('font_family', 'nome'))]
-                for fonte in fontes:
-                    if fonte.get('arquivo_url'):
-                        url = fonte['arquivo_url']
-                        if url.startswith('/'):
-                            import os
-                            url = db.FONTES_BUCKET_URL + db._nome_objeto_fonte(os.path.basename(url))
-                        from pacotes_download import validar_url
-                        validar_url(url, self.servico.host)
-                        dados = font_cache.obter_bytes(url)
-                        with self.banco() as con:
-                            con.execute('INSERT OR REPLACE INTO offline_dependencias VALUES (?,?,?)',
-                                        (url, hashlib.sha256(dados).hexdigest(), dados))
+        if not any(e.get("font_name") or e.get("font_family") for e in elementos):
+            return
+        import db
+        import font_cache
+        from fontes_sistema import _fontes_instaladas, _chaves_de_fonte
+        catalogo = db.get_catalogo_fontes()
+        fontes_map = {str(f[k]).lower().strip(): f for f in catalogo
+                      for k in ('font_family', 'nome') if f.get(k)}
+        instaladas = _fontes_instaladas()
+        urls = set()
+        for el in elementos:
+            nome = str(el.get('font_name') or el.get('font_family') or '').strip()
+            if not nome or el.get('_font_data'):
+                continue
+            partes = nome[7:].split('|') if nome.startswith('system:') else [nome]
+            marcas = {p.strip().lower() for p in partes[1:]}
+            bold = 'bold' in marcas or el.get('font_weight') == 'bold' or el.get('bold') is True
+            italic = 'italic' in marcas or el.get('font_style') == 'italic'
+            chave = next((c for c in _chaves_de_fonte(partes[0], bold, italic, instaladas)
+                          if c in fontes_map), None)
+            url = (fontes_map[chave].get('arquivo_url') if chave is not None
+                   else el.get('arquivo_url') or el.get('font_url'))
+            if url:
+                if url.startswith('/'):
+                    import os
+                    url = db.FONTES_BUCKET_URL + db._nome_objeto_fonte(os.path.basename(url))
+                urls.add(url)
+        for url in sorted(urls):
+            from pacotes_download import validar_url
+            validar_url(url, self.servico.host)
+            dados = font_cache.obter_bytes(url)
+            with self.banco() as con:
+                con.execute('INSERT OR REPLACE INTO offline_dependencias VALUES (?,?,?)',
+                            (url, hashlib.sha256(dados).hexdigest(), dados))
 
     def ler_dependencia(self, url):
         with self.banco() as con:

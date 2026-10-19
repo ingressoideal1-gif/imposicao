@@ -160,3 +160,51 @@ def test_reenvio_faixa_recupera_ids_inteiros_apos_json(tmp_path,monkeypatch):
     outro=OfflineEstacao(s,SelecaoPiloto(s))
     outro.sincronizar_faixas(lambda:None);outro.sincronizar_faixas(lambda:None)
     assert chamadas==[1]
+
+
+def test_prepara_comic_e_estilos_com_as_mesmas_chaves_do_motor(tmp_path, monkeypatch):
+    import db
+    import font_cache
+    import fontes_sistema
+    import socket
+    import ast
+    import base64
+    from pathlib import Path
+    s, _, _, offline, _ = ambiente(tmp_path)
+    base = 'https://' + s.host + '/storage/v1/object/public/fontes/'
+    catalogo = [{'nome':n, 'font_family':n, 'arquivo_url':base+n+'.ttf'}
+                for n in ['arial', 'arialbd', 'comic', 'comicbd', 'comici']]
+    monkeypatch.setattr(db, 'get_catalogo_fontes', lambda: catalogo)
+    monkeypatch.setattr(fontes_sistema, '_fontes_instaladas', lambda: {
+        ('arial', True, False):'arialbd.ttf',
+        ('comic sans ms', False, False):'comic.ttf',
+        ('comic sans ms', True, False):'comicbd.ttf',
+        ('comic sans ms', False, True):'comici.ttf',
+    })
+    def proibido(*a, **kw): raise AssertionError('Rede proibida')
+    monkeypatch.setattr(socket.socket, 'connect', proibido)
+    baixadas=[]
+    def baixar(url):
+        baixadas.append(url)
+        return ('fonte-sintetica:'+url).encode()
+    monkeypatch.setattr(font_cache, 'obter_bytes', baixar)
+    elementos=[{'font_name':'system:Arial|bold'},
+               {'font_name':'system:Comic Sans MS'},
+               {'font_name':'system:Comic Sans MS|bold'},
+               {'font_name':'system:Comic Sans MS', 'font_style':'italic'},
+               {'font_name':'system:Comic Sans MS', 'bold':True},
+               {'font_name':'Custom', 'font_url':base+'custom.ttf'}]
+    offline.preparar_dependencias('99', {'numeracoes':[{'elements':elementos}]})
+    assert set(baixadas)=={base+n+'.ttf' for n in ['arialbd','comic','comicbd','comici','custom']}
+    assert len(baixadas)==5
+    # Executa a incorporacao real sem importar a aplicacao/servicos.
+    tree=ast.parse((Path(__file__).parents[1]/'app.py').read_text(encoding='utf-8-sig'))
+    node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_embed_system_fonts')
+    ns={'db':db, '_fontes_instaladas':fontes_sistema._fontes_instaladas,
+        '_chaves_de_fonte':fontes_sistema._chaves_de_fonte}
+    exec(compile(ast.Module(body=[node],type_ignores=[]),'app.py','exec'),ns)
+    ns['_embed_system_fonts']({'elements':elementos},resolver_recurso=offline.ler_dependencia)
+    for e in elementos:
+        assert base64.b64decode(e['_font_data']).startswith(b'fonte-sintetica:')
+    reinicio=OfflineEstacao(s, offline.selecao)
+    assert all(reinicio.ler_dependencia(u) is not None for u in baixadas)

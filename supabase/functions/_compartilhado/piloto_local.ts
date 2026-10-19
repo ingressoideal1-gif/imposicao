@@ -16,9 +16,7 @@ export function fontesPiloto(m: any, nums: any[], consumidores = new Map<any, an
   const verso = m.verso_arte_url || m.url_arquivo_arte_verso || m.verso_url_arquivo;
   if (typeof frente === 'string' && frente.startsWith('https://')) fontes.frente = frente;
   if (typeof verso === 'string' && verso.startsWith('https://')) fontes.verso = verso;
-  let visitados = 0;
   function visitar(v: any, recurso = true) {
-    if (++visitados > 100000) throw new Recusa(422, 'recursos excedem limite');
     if (typeof v === 'string' && v.startsWith('https://')) { if (recurso) extras.add(v); }
     else if (Array.isArray(v)) v.forEach(dado=>visitar(dado,recurso));
     else if (v && typeof v === 'object') Object.values(v).forEach(dado=>visitar(dado,recurso));
@@ -40,8 +38,18 @@ export function fontesPiloto(m: any, nums: any[], consumidores = new Map<any, an
         for (const linha of valor) {
           if (!linha || typeof linha !== 'object' || Array.isArray(linha)) { visitar(linha); continue; }
           for (const [coluna, dado] of Object.entries(linha)) {
-            // Colunas desconhecidas e compartilhadas com FOTO continuam seguras.
-            visitar(dado,!conteudo.has(coluna) || arquivos.has(coluna));
+            // O Gerenciador guarda URL e recorte em __fotos[coluna].
+            // Sao dependencias das colunas FOTO, nao colunas auxiliares de QR.
+            if (coluna === '__fotos' && consumidores.has(registro)) {
+              if (dado && typeof dado === 'object' && !Array.isArray(dado)) {
+                for (const foto of arquivos) visitar((dado as Record<string, any>)[foto]);
+              }
+              continue;
+            }
+            // Com vinculos resolvidos, so colunas consumidas como arquivo
+            // precisam de download. O banco integral permanece no snapshot.
+            if (consumidores.has(registro) && !arquivos.has(coluna)) continue;
+            if (!conteudo.has(coluna) || arquivos.has(coluna)) visitar(dado);
           }
         }
       } else if (chave === 'elements' && Array.isArray(valor)) {
@@ -56,7 +64,6 @@ export function fontesPiloto(m: any, nums: any[], consumidores = new Map<any, an
   }
   extras.delete(frente); extras.delete(verso);
   [...extras].sort().forEach((url, i) => { fontes['recurso_' + i] = url; });
-  if (Object.keys(fontes).length > 256) throw new Recusa(422, 'recursos excedem limite');
   return fontes;
 }
 function canonico(v: any): any {
@@ -126,7 +133,7 @@ export async function conferirPiloto(entrada: any, permissoes: any, consultar = 
   if (numero && nums.length !== 1) throw new Recusa(409, 'numeracao incompleta');
   if (await digestPiloto([m, nums]) !== entrada.digest) throw new Recusa(409, 'revisao mudou');
   const fontes = fontesPiloto(m, nums);
-  if (Object.keys(fontes).length > 256 || JSON.stringify(canonico(fontes)) !== JSON.stringify(canonico(entrada.fontes))) {
+  if (JSON.stringify(canonico(fontes)) !== JSON.stringify(canonico(entrada.fontes))) {
     throw new Recusa(409, 'fontes divergentes do cadastro');
   }
   const modelosAtuais = await ler(`pedidos_modelos?id=eq.${entrada.modelo}&select=*&limit=2`);
