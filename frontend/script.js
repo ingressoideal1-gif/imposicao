@@ -22660,7 +22660,7 @@ const PERM_NAV_MAP = {
     perm_lista_arte_view:  ['nav-lista-arte'],
     perm_impressoras_view: ['nav-impressoras'],
     perm_ideal_control_view: ['nav-ideal-control'],
-    perm_admin_view:       ['nav-admin', 'nav-adm', 'nav-entregas'],
+    perm_admin_view:       ['nav-admin', 'nav-adm'],
 };
 
 // Mapeamento: permissão _view → IDs das TELAS que ela protege.
@@ -22683,7 +22683,7 @@ const PERM_VIEW_MAP = {
     perm_lista_arte_view:  ['view-lista-arte'],
     perm_impressoras_view: ['view-impressoras'],
     perm_ideal_control_view: ['view-ideal-control'],
-    perm_admin_view:       ['view-admin', 'view-adm', 'view-entregas'],
+    perm_admin_view:       ['view-admin', 'view-adm'],
 };
 
 /**
@@ -22722,6 +22722,7 @@ for (const [permKey, viewIds] of Object.entries(PERM_VIEW_MAP)) {
  * tabelas do Supabase estiverem sem RLS.
  */
 function podeAbrirView(viewId) {
+    if(viewId==='view-entregas')return window.EntregasAcesso?.consultar===true;
     const perms = window._currentPerms;
     if (!perms) return true;
     const permKey = VIEW_PERM_REQUERIDA[viewId];
@@ -23211,7 +23212,7 @@ function applyPermissions(perms) {
     document.querySelectorAll('.nav-btn.admin-only').forEach(btn => {
         btn.style.display = perms.perm_admin_view ? '' : 'none';
     });
-    window.EntregasPainel?.atualizarAcesso();
+    window.EntregasAcesso?.atualizar();
 
     // Cabecalho de grupo some junto com o ultimo botao dele, e a contagem ao
     // lado do nome conta so o que este usuario pode abrir.
@@ -49023,11 +49024,24 @@ window.carregarFundoAtual = carregarFundoAtual;
 // FIM ADM FRETES
 
 // INICIO PAINEL ENTREGAS
+window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
+    async atualizar(){
+        const turno=++this.geracao;this.consultar=false;this.editar=false;
+        window.EntregasPainel?.atualizarAcesso();
+        try{const c=typeof vibeClient!=='undefined'?vibeClient:null;if(!c)return;
+            const {data,error}=await c.rpc('ve_entregas_permissoes',{});
+            if(turno!==this.geracao)return;
+            if(!error){this.consultar=data?.consultar===true;this.editar=this.consultar&&data?.editar===true;}
+        }catch{/* Sem resposta autenticada, acesso permanece fechado. */}
+        if(turno===this.geracao)window.EntregasPainel?.atualizarAcesso();
+    }
+};
+
 (() => {
     'use strict';
     const el = id => document.getElementById(id);
     let pagina = 0, geracao = 0, fotoGeracao = 0, demonstracao = false, ocupado = false;
-    const permitido = () => typeof papelAtual === 'function' && papelAtual() === 'admin' && window._currentPerms?.perm_admin_view === true;
+    const permitido = () => window.EntregasAcesso?.consultar===true;
     const cliente = () => typeof vibeClient !== 'undefined' ? vibeClient : null;
     const data = valor => valor ? new Date(valor).toLocaleString('pt-BR') : '—';
     function texto(tag, valor) { const node = document.createElement(tag); node.textContent = valor ?? '—'; return node; }
@@ -49036,7 +49050,8 @@ window.carregarFundoAtual = carregarFundoAtual;
     function atualizarAcesso() {
         if (!el('nav-entregas')) return;
         el('nav-entregas').style.display = permitido() ? '' : 'none';
-        if (!permitido()) { limparDados(); el('ve-mensagem').textContent = 'Acesso restrito ao ADM.'; el('view-entregas').classList.remove('active'); }
+        for(const id of ['ve-entregadores','ve-nova-rota'])el(id).hidden=window.EntregasAcesso?.editar!==true;
+        if (!permitido()) { limparDados(); el('ve-mensagem').textContent = 'Acesso a Entregas não autorizado.'; el('view-entregas').classList.remove('active'); }
     }
     async function detalhes(row) {
         if (!permitido()) return;
@@ -49116,7 +49131,7 @@ window.carregarFundoAtual = carregarFundoAtual;
                     for(const titulo of ['Ordem','Pedido','Situação','Previsão de entrega']){const th=texto('th',titulo);th.scope='col';titulos.append(th);}cabecalho.append(titulos);
                     paradas.forEach((p,i)=>{const linha=document.createElement('tr');linha.append(texto('td',i+1),texto('td',`Pedido ${p.pedido}`),texto('td',p.entregue?'Entregue':r.iniciada_em?'Em deslocamento':'Planejado'),texto('td',p.prevista_em?data(p.prevista_em):r.iniciada_em&&!p.entregue?'Aguardando atualização':'—'));corpo.append(linha);});
                     tabela.append(cabecalho,corpo);lista.append(tabela);box.append(lista);box.append(texto('p',r.iniciada_em?'Em deslocamento desde '+data(r.iniciada_em):'Rota planejada'));
-                    if(!demonstracao&&r.id&&!r.iniciada_em){const editar=texto('button','Alterar rota');editar.type='button';editar.className='btn btn-ghost';editar.onclick=()=>window.EntregasGestao?.editarRota(r.id);box.append(editar);
+                    if(window.EntregasAcesso?.editar&&!demonstracao&&r.id&&!r.iniciada_em){const editar=texto('button','Alterar rota');editar.type='button';editar.className='btn btn-ghost';editar.onclick=()=>window.EntregasGestao?.editarRota(r.id);box.append(editar);
                         if(paradas.some(p=>!p.entregue)){const iniciar=texto('button','Iniciar deslocamento');iniciar.type='button';iniciar.className='btn btn-primary';iniciar.onclick=()=>window.EntregasGestao?.iniciarDeslocamento(r.id);box.append(iniciar);}}
                     if(r.iniciada_em&&paradas.length&&paradas.every(p=>p.entregue))box.append(texto('p','Todas as entregas concluídas'));el('ve-rotas-lista').append(box);
                 }
@@ -49128,11 +49143,12 @@ window.carregarFundoAtual = carregarFundoAtual;
         el('ve-anterior').onclick = () => { if(!ocupado) carregar(Math.max(0,pagina-1)); };
         el('ve-proxima').onclick = () => { if(!ocupado) carregar(pagina+1); };
         el('ve-fechar').onclick = () => el('ve-detalhe').close(); el('ve-detalhe').addEventListener('close',limparFoto);
-        cliente()?.auth?.onAuthStateChange?.(evento => { if(evento === 'SIGNED_OUT') { limparDados(); el('ve-mensagem').textContent = 'Sessão encerrada. Entre novamente para consultar.'; } });
+        cliente()?.auth?.onAuthStateChange?.(evento => { if(evento === 'SIGNED_OUT') { window.EntregasAcesso.geracao++;window.EntregasAcesso.consultar=false;window.EntregasAcesso.editar=false;atualizarAcesso(); limparDados(); el('ve-mensagem').textContent = 'Sessão encerrada. Entre novamente para consultar.'; } });
         const anterior = window.showView;
         window.showView = function(id) { if (id === 'view-entregas' && !permitido()) { atualizarAcesso(); return; } if(anterior) anterior.apply(this,arguments); if(id === 'view-entregas') { demonstracao = false; carregar(0); window.EntregasMapa?.atualizar(); el('ve-rotas-atualizar').click(); } };
         atualizarAcesso();
     }
+    window.EntregasAcesso.atualizar();
     window.EntregasPainel = { abrir: () => { window.EntregasMapa?.atualizar(); return carregar(0); }, recarregar: () => { window.EntregasMapa?.atualizar(); return carregar(pagina); }, atualizarAcesso };
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
 })();
@@ -49141,13 +49157,13 @@ window.carregarFundoAtual = carregarFundoAtual;
 (() => {
     'use strict';
     const el=id=>document.getElementById(id), cliente=()=>typeof vibeClient!=='undefined'?vibeClient:null;
-    const permitido=()=>typeof papelAtual==='function'&&papelAtual()==='admin'&&window._currentPerms?.perm_admin_view===true;
+    const permitido=()=>window.EntregasAcesso?.consultar===true;
     let contexto=null,geracao=0,consulta=0,cadastro=null,operacao=null,rotaAnterior=null,rotaId=null,sequencia=[],offset=0,salvando=false;
     const texto=(tag,valor)=>{const n=document.createElement(tag);n.textContent=valor??'';return n;};
     const botao=(rotulo,acao)=>{const b=texto('button',rotulo);b.type='button';b.className='btn btn-ghost';b.onclick=acao;return b;};
-    async function rpc(nome,args={}) {if(!permitido())throw new Error('Acesso restrito ao ADM.');const {data,error}=await cliente().rpc(nome,args);if(error)throw new Error(error.message||'Operação não confirmada.');if(data==null)throw new Error('O servidor não confirmou a operação.');return data;}
+    async function rpc(nome,args={}) {if(!permitido())throw new Error('Acesso a Entregas não autorizado.');const {data,error}=await cliente().rpc(nome,args);if(error)throw new Error(error.message||'Operação não confirmada.');if(data==null)throw new Error('O servidor não confirmou a operação.');return data;}
     async function auth(body) {
-        if(!permitido())throw new Error('Acesso restrito ao ADM.');
+        if(!permitido())throw new Error('Acesso a Entregas não autorizado.');
         const {data,error}=await cliente().functions.invoke('vibe-entregas-admin',{body});
         if(error){let mensagem='Operação não confirmada. Confira os dados e tente novamente.';try{const r=await error.context.json();if(r.erro)mensagem=r.erro;}catch{}throw new Error(mensagem);}
         if(data?.confirmado!==true)throw new Error(data?.erro||'O servidor não confirmou o cadastro.');return data;

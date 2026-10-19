@@ -10,7 +10,7 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   await p.addStyleTag({ path: path.join(root, 'frontend/style.css') });
   await p.addStyleTag({ content: 'body{background:#0c1424;color:#e8edf6;font:14px system-ui;margin:0}.view-section{display:block!important}' });
   await p.evaluate(() => {
-   window.role = 'admin'; window.papelAtual = () => role; window._currentPerms = { perm_admin_view: true };
+   window.role = 'admin'; window.papelAtual = () => role; window._currentPerms = { perm_admin_view: true };window.EntregasAcesso={get consultar(){return papelAtual()==='admin';}};
    window.ENTREGAS_MAPA_CONFIG = { apiKey: '' };
    window.calls = []; window.routeCalls = []; window.lines = []; window.markers = []; window.pending = false;
    window.rows = [

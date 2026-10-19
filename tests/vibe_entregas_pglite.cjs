@@ -301,6 +301,19 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     assert.equal((await db.query('SELECT ve_assumir($1) AS r',[uuid(1100)])).rows[0].r.confirmado,true);
     await db.exec('RESET ROLE; SET ROLE anon');await assert.rejects(()=>assumir(1101),/permission denied/);
     console.log('PASS: autoatribuicao, idempotencia, retirada e retorno, Motoboy pronto, conflito, rota em deslocamento e inicio somente proprio.');
+    await db.exec(`RESET ROLE; CREATE TABLE perfis(id integer PRIMARY KEY,slug text,ativo boolean); CREATE TABLE usuarios(user_id uuid PRIMARY KEY,id_perfil integer REFERENCES perfis(id)); INSERT INTO perfis VALUES(3,'financeiro',true),(9,'expedidor',true),(10,'outro',true);`);
+    await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_perfis.sql'),'utf8'));
+    for(const [n,role,edit] of [[96,'financeiro',true],[97,'atendimento',false]]){
+      await db.exec(`RESET ROLE; INSERT INTO imposition_user_permissions(user_id,role,perm_admin_view,perm_admin_edit) VALUES('${uuid(n)}','${role}',false,false) ON CONFLICT(user_id) DO UPDATE SET role=excluded.role,perm_admin_view=false,perm_admin_edit=false`);
+      await login(n);const ctx=(await db.query('SELECT ve_admin_contexto() AS r')).rows[0].r;assert.equal(ctx.editar,edit);
+      if(!edit)await assert.rejects(()=>assumir(1103),/indisponivel/);
+      if(!edit)await assert.rejects(()=>db.query('SELECT ve_admin_editar_entregador_geral($1,$2,true)',[uuid(96),'Teste']),/ADM/);
+    }
+    await db.exec(`RESET ROLE; INSERT INTO usuarios VALUES('${uuid(97)}',9);`);await login(97);assert.equal((await db.query('SELECT ve_admin_edita() AS ok')).rows[0].ok,false);
+    await db.exec(`RESET ROLE; DELETE FROM imposition_user_permissions WHERE user_id='${uuid(96)}';INSERT INTO usuarios VALUES('${uuid(96)}',9);`);
+    await login(96);assert.equal((await db.query('SELECT ve_admin_contexto() AS r')).rows[0].r.editar,true);
+    await db.exec('RESET ROLE; UPDATE perfis SET ativo=false WHERE id=9');await login(96);await assert.rejects(()=>db.query('SELECT ve_admin_contexto()'),/ADM/);
+    console.log('PASS: Financeiro edita, Atendimento consulta e escrita negada, Expedidor ERP edita e perfil desativado bloqueado.');
     console.log('PASS: SQL real em memoria; pedido sem expedicao, retirada, foto privada, confirmacao, repeticao, filtro, isolamento e rollback atomico.');
   } finally { await db.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});
