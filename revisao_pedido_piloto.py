@@ -50,6 +50,7 @@ class CacheRevisaoPedido:
 
     def salvar(self, pedido, revisao, itens, pacotes, snapshot=None):
         registro = {'empresa':self.servico.empresa,'pedido':pedido,'revisao':revisao,'itens':itens,'pacotes':pacotes}
+        registro['fontes_gabarito'] = 1
         registro['conferido_em'] = datetime.now(timezone.utc).isoformat()
         if snapshot is not None:
             registro.update(protocolo=2, snapshot=snapshot, offline_schema=1)

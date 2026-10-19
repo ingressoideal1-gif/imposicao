@@ -107,3 +107,26 @@ Deno.test('impresso: conferencia somente leitura autorizada apenas no canal auto
   a.modelo.status_arte='EM ARTE';
   await assert.rejects(conferirPiloto(await a.entrada(),permitido,a.consultar,'Ingresso Ideal',undefined,true),{status:409});
 });
+
+
+Deno.test('piloto: PDF de frente do gabarito prepara modelo sem arte_url e preserva todos os recursos', () => {
+  const frente = 'https://storage.invalid/frente.pdf', verso = 'https://storage.invalid/verso.pdf';
+  const num = {elements:[{type:'PDF',face:'back',pdf_content:verso},
+    {type:'PDF',face:'both',pdf_content:frente}, {type:'FOTO',url:'https://storage.invalid/foto.jpg'}]};
+  const antes = JSON.stringify(num);
+  const fontes = fontesPiloto({}, [num]);
+  assert.equal(fontes.frente, frente);
+  assert.ok(Object.values(fontes).includes(verso));
+  assert.ok(Object.values(fontes).includes('https://storage.invalid/foto.jpg'));
+  assert.equal(Object.values(fontes).filter(u => u === frente).length, 1);
+  assert.equal(JSON.stringify(num), antes);
+  assert.equal(fontesPiloto({arte_url:verso}, [num]).frente, verso);
+});
+Deno.test('piloto: foto, fonte, verso isolado e PDF inline nao viram arquivo de frente', () => {
+  for (const num of [
+    {elements:[{type:'FOTO',url:'https://storage.invalid/foto.jpg'}]},
+    {elements:[{type:'TEXT',font_url:'https://storage.invalid/fonte.ttf'}]},
+    {elements:[{type:'PDF',face:'back',pdf_content:'https://storage.invalid/verso.pdf'}]},
+    {elements:[{type:'PDF',face:'front',pdf_content:'data:application/pdf;base64,JVBERg=='}]},
+  ]) assert.equal(fontesPiloto({}, [num]).frente, undefined);
+});

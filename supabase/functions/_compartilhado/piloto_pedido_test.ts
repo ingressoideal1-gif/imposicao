@@ -101,3 +101,22 @@ Deno.test('pedido v2: sinal persistido usa RPC propria, snapshot inicial e recib
   async()=>({pedido:'20',revisao:'a'.repeat(64),sem_mudanca:false,snapshot}),
   'teste',undefined,'test.supabase.co',true),{status:503});
 });
+
+
+Deno.test('pedido: credencial composta sem arte_url entra no pacote com todos os PDFs',async()=>{
+ const a=ambiente();
+ const frente=a.modelo.arte_url, verso=frente.replace('a.pdf','verso.pdf');
+ a.modelo.arte_url='';
+ Object.assign(a.numero,{pdf_content:frente,elements:[
+   {type:'PDF',face:'both',pdf_content:frente},
+   {type:'PDF',face:'both',pdf_content:verso},
+   {type:'FOTO',face:'both',id:'foto'}, {type:'TEXT',face:'both',id:'nome'}]});
+ const r:any=await a.chamar();
+ assert.equal(r.itens.length,1);
+ assert.equal(r.itens[0].fontes.frente,frente);
+ assert.ok(Object.values(r.itens[0].fontes).includes(verso));
+ assert.equal(r.itens[0].observacao.digest,await digestPiloto([a.modelo,[a.numero]]));
+ assert.equal(a.modelo.arte_url,'');
+ a.modelo.status_arte='AGUARDANDO_CLIENTE';
+ assert.equal((await a.chamar() as any).itens.length,0);
+});

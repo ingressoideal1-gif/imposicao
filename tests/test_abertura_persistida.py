@@ -71,3 +71,28 @@ def test_sem_sinal_ou_snapshot_incompleto_nao_libera_copia(tmp_path):
     s.coleta_autonoma.cliente.abrir_pedido = s.coleta_autonoma.cliente.conferir_pedido
     with pytest.raises(ConferenciaIndisponivel):
         p.abrir_pedido({'pedido': '99'})
+
+
+def test_cache_antigo_renova_modelo_omitido_sem_mudar_revisao_comercial(tmp_path):
+    import json
+    s, e, itens, snapshot = ambiente_v2(tmp_path)
+    p = SelecaoPiloto(s)
+    modelo = itens.pop()
+    p.abrir_pedido({'pedido': '99'})
+    antigo = p._cache.obter('99')
+    antigo.pop('fontes_gabarito')
+    con = s._db()
+    try:
+        con.execute('UPDATE revisoes_pedidos_piloto SET conteudo=? WHERE pedido=?',
+                    (json.dumps(antigo), '99'))
+        con.commit()
+    finally:
+        con.close()
+    itens.append(modelo)  # servidor corrigido, dados comerciais inalterados
+    r = SelecaoPiloto(s).abrir_pedido({'pedido': '99'})
+    assert len(r['pacotes']) == 2 and r['sem_arte'] == []
+    assert r['revisao_pedido'] == antigo['revisao']
+    assert p._cache.obter('99')['fontes_gabarito'] == 1
+    consultas = e['consultas']
+    SelecaoPiloto(s).abrir_pedido({'pedido': '99'})
+    assert e['consultas'] == consultas + 1
