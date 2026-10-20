@@ -79,6 +79,23 @@ const root = path.join(__dirname, '..');
             }, { timeout: 8000 }, idx, pagina, total);
         }
         await pronto(0, 1, 6); await pronto(1, 1, 4);
+        // Cadastro divergente: só a numeração personalizada do próprio modelo volta.
+        const selecao = await page.evaluate(async () => {
+            const itens = state.osItens.vibe_123;
+            const catalogo = state.numeracoes.map((n, i) => ({ ...n,
+                Cli_Num: 111, is_custom: true, os_item_id: itens[i].id }));
+            catalogo.push({ id: 'alheia', Cli_Num: 111, is_custom: true, os_item_id: 999 });
+            const antes = numeracoesDoCliente(catalogo, 222).length;
+            const ids = numeracoesDoCliente(catalogo, 222, itens).map(n => n.id);
+            const donoErrado = numeracoesDoCliente([{ ...catalogo[0], os_item_id: 999 }], 222, itens).length;
+            const semPersonalizacao = numeracoesDoCliente([{ ...catalogo[0], is_custom: false }], 222, itens).length;
+            state.numeracoes = numeracoesDoCliente(catalogo, 222, itens);
+            renderAmostrasOSItens('vibe_123');
+            return { antes, ids, donoErrado, semPersonalizacao };
+        });
+        assert.deepEqual(selecao, { antes: 0, ids: ['n1', 'n2'], donoErrado: 0, semPersonalizacao: 0 });
+        await pronto(0, 1, 6); await pronto(1, 1, 4);
+
         // Arte incorporada ao gabarito, sem arte_url: folhear muda nome e foto.
         await page.evaluate(() => {
             const item = state.osItens.vibe_123[0];

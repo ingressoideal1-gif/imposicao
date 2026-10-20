@@ -1297,6 +1297,18 @@ function arteDaFaceParaComposicao(item, face) {
     return item && item.arte_url;
 }
 
+// O cadastro comercial pode diferir do cliente usado ao criar o gabarito.
+// Uma exceção exige os dois vínculos: modelo -> numeração e numeração -> modelo.
+function numeracoesDoCliente(catalogo, idCliente, modelos = []) {
+    return (catalogo || []).filter(n => {
+        if (!n.Cli_Num || String(n.Cli_Num) === String(idCliente)) return true;
+        return n.is_custom === true && modelos.some(m =>
+            m.id != null && m.amostra_num_id && n.os_item_id != null &&
+            String(m.amostra_num_id) === String(n.id) &&
+            String(n.os_item_id) === String(m.id));
+    });
+}
+
 /**
  * Busca `elements` e `csv_data` SÓ das numerações que este pedido usa, e as
  * mescla no catálogo leve que já está em `state.numeracoes`.
@@ -1475,6 +1487,8 @@ async function initClientePage(numero, token) {
 
 
 
+        let catalogoNumeracoes = [];
+
         // Carregar formatos, cores e numerações para o state global do front
         try {
             const [coresRes, numeracoesRes, formatosRes, produtosRes] = await Promise.all([
@@ -1534,11 +1548,8 @@ async function initClientePage(numero, token) {
                 if (!Array.isArray(resposta.data)) throw new Error('Catálogo indisponível.');
             }
             state.cores = coresRes.data || [];
-            const allNums = numeracoesRes.data || [];
-            state.numeracoes = allNums.filter(n => {
-                if (!n.Cli_Num) return true;
-                return String(n.Cli_Num) === String(clienteState.idCliente);
-            });
+            catalogoNumeracoes = numeracoesRes.data || [];
+            state.numeracoes = numeracoesDoCliente(catalogoNumeracoes, clienteState.idCliente);
             state.formatos = formatosRes.data || [];
             state.produtosGlobais = produtosRes.data || [];
         } catch (err) {
@@ -1583,6 +1594,7 @@ async function initClientePage(numero, token) {
             // o `.map()` refaz adiante. Ela e deterministica e nao olha
             // `elements`: precisa de `id`, `name` e `is_custom`, que vieram na
             // consulta leve.
+            state.numeracoes = numeracoesDoCliente(catalogoNumeracoes, clienteState.idCliente, prodItems);
             await carregarMioloDasNumeracoes(prodItems || []);
 
             if (prodItems && prodItems.length > 0) {
