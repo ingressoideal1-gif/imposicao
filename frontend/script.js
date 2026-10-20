@@ -23208,6 +23208,7 @@ function applyPermissions(perms) {
     document.querySelectorAll('.nav-btn.admin-only').forEach(btn => {
         btn.style.display = perms.perm_admin_view ? '' : 'none';
     });
+    window.EntregasAcesso?.atualizar();
 
     // Cabecalho de grupo some junto com o ultimo botao dele, e a contagem ao
     // lado do nome conta so o que este usuario pode abrir.
@@ -34756,6 +34757,8 @@ window.showView = function(viewId) {
     if (rotuloAmostras) rotuloAmostras.textContent = state.amostrasOSAtivo ? 'Artes do pedido' : 'Amostras';
 
     window.NavegacaoPainel?.registrar(viewId);
+
+    if (viewId === 'view-fretes') window.FretesAdm?.abrir();
 
     // Hooks: carregar dados ao abrir certas views
     if (viewId === 'view-lista-arte') {
@@ -47811,7 +47814,7 @@ let _admImages = []; // cache de imagens carregadas
 
 // ── Troca de aba horizontal ────────────────────────────────────────────────
 window.switchAdmTab = function(tabId) {
-    if (tabId === 'fretes' && papelAtual() !== 'admin') return;
+    if (tabId === 'fretes') { window.showView('view-fretes'); return; }
     // Esconder todos os conteúdos de aba
     document.querySelectorAll('.adm-tab-content').forEach(el => el.style.display = 'none');
     // Desativar todos os botões
@@ -47829,7 +47832,6 @@ window.switchAdmTab = function(tabId) {
         btn.style.borderBottom = '2.5px solid var(--blue)';
     }
     // Carregar dados se necessário
-    if (tabId === 'fretes') window.FretesAdm?.abrir();
     if (tabId === 'imagens') loadAdmImages();
     if (tabId === 'aproveitamento' && typeof renderAdmAproveitamento === 'function') renderAdmAproveitamento();
     if (tabId === 'fundo' && typeof carregarFundoAtual === 'function') carregarFundoAtual();
@@ -48962,15 +48964,15 @@ window.carregarFundoAtual = carregarFundoAtual;
     }
     function atualizarAcesso() {
         const permitido = adm();
-        const botao = el('adm-fretes-botao');
+        const botao = el('nav-fretes');
         if (botao) botao.style.display = permitido ? '' : 'none';
-        if (!permitido && el('adm-tab-fretes')) {
+        if (!permitido && el('view-fretes')) {
             ++sequencia; linhas = []; cancelar(); render();
-            el('adm-tab-fretes').style.display = 'none';
+            el('view-fretes').classList.remove('active');
         }
     }
     function iniciar() {
-        if (!el('adm-tab-fretes')) return;
+        if (!el('view-fretes')) return;
         el('fretes-filtros').addEventListener('submit', evento => { evento.preventDefault(); carregar(0); });
         el('fretes-form').addEventListener('submit', salvar);
         el('fretes-cancelar').addEventListener('click', cancelar);
