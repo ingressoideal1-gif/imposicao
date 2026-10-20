@@ -22722,7 +22722,7 @@ for (const [permKey, viewIds] of Object.entries(PERM_VIEW_MAP)) {
  * tabelas do Supabase estiverem sem RLS.
  */
 function podeAbrirView(viewId) {
-    if (viewId === 'view-fretes') return papelAtual() === 'admin';
+    if (viewId === 'view-fretes') return window.FretesAdm?.permitido?.() === true;
     if(viewId==='view-entregas')return window.EntregasAcesso?.consultar===true;
     const perms = window._currentPerms;
     if (!perms) return true;
@@ -48831,7 +48831,8 @@ window.carregarFundoAtual = carregarFundoAtual;
     const ufs = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ');
     let linhas = [], original = null, pagina = 0, sequencia = 0, ocupado = false;
     const el = id => document.getElementById(id);
-    const adm = () => window.papelAtual?.() === 'admin';
+    let erpAdm = false, perfilConferido = '', verificacaoAcesso = 0;
+    const adm = () => window.papelAtual?.() === 'admin' || (erpAdm && perfilConferido === window.papelAtual?.());
     const texto = valor => String(valor ?? '');
     const dinheiro = valor => valor === null ? 'Não informado' : Number(valor).toLocaleString('pt-BR', {
         style: 'currency', currency: 'BRL', maximumFractionDigits: 20
@@ -48994,7 +48995,7 @@ window.carregarFundoAtual = carregarFundoAtual;
         } catch (erro) { aviso(erro.message, true); }
         finally { ocupado = false; el('fretes-campos').disabled = false; render(); }
     }
-    function atualizarAcesso() {
+    function exibirAcesso() {
         const permitido = adm();
         const botao = el('nav-fretes');
         if (botao) botao.style.display = permitido ? '' : 'none';
@@ -49002,6 +49003,22 @@ window.carregarFundoAtual = carregarFundoAtual;
             ++sequencia; linhas = []; cancelar(); render();
             el('view-fretes').classList.remove('active');
         }
+    }
+    async function atualizarAcesso() {
+        const turno = ++verificacaoAcesso;
+        erpAdm = false; perfilConferido = ''; exibirAcesso();
+        if (window.papelAtual?.() === 'admin') return;
+        try {
+            const cliente = typeof supabaseClient !== 'undefined' ? supabaseClient : null;
+            if (!cliente) return;
+            const sessao = await cliente.auth.getSession();
+            if (sessao?.error || !sessao?.data?.session || turno !== verificacaoAcesso) return;
+            const { data, error } = await cliente.rpc('imposition_fretes_adm');
+            if (turno !== verificacaoAcesso) return;
+            erpAdm = !error && data === true;
+            perfilConferido = window.papelAtual?.() || '';
+            exibirAcesso();
+        } catch { /* Falha de consulta preserva o acesso fechado. */ }
     }
     function iniciar() {
         if (!el('view-fretes')) return;
@@ -49012,7 +49029,7 @@ window.carregarFundoAtual = carregarFundoAtual;
         el('fretes-proxima').addEventListener('click', () => carregar(pagina + 1));
         atualizarAcesso();
     }
-    window.FretesAdm = { abrir: () => carregar(0), atualizarAcesso };
+    window.FretesAdm = { abrir: () => carregar(0), atualizarAcesso, permitido: adm };
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
     else iniciar();
 })();

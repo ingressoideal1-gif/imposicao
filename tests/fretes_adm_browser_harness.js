@@ -48,6 +48,8 @@ const painel = html.slice(html.indexOf('<section id="view-fretes"'), html.indexO
                 auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:simular}
             });
             supabaseClient.auth.getSession=async()=>({data:{session:logado?{access_token:'fixture'}:null}});
+            window.admERP=false;window.falhaPerfil=false;
+            supabaseClient.rpc=async()=>({data:admERP,error:falhaPerfil?{message:'Indisponivel'}:null});
         ` });
         const modulo = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8').split('// INICIO ADM FRETES')[1].split('// FIM ADM FRETES')[0];
         await page.addScriptTag({ content: modulo });
@@ -70,6 +72,12 @@ const painel = html.slice(html.indexOf('<section id="view-fretes"'), html.indexO
             };
         }, html);
         assert.deepEqual(estrutura, { paginaIndependente: true, menuDireto: true, abaAntiga: false });
+        await page.evaluate(async()=>{role='visualizador';admERP=true;await FretesAdm.atualizarAcesso();});
+        assert.equal(await page.evaluate(()=>podeAbrirView('view-fretes')),true,'ADM ERP com perfil local visualizador pode abrir');
+        assert.notEqual(await page.$eval('#nav-fretes',e=>e.style.display),'none');
+        await page.evaluate(async()=>{falhaPerfil=true;await FretesAdm.atualizarAcesso();});
+        assert.equal(await page.evaluate(()=>podeAbrirView('view-fretes')),false,'erro de consulta fecha o acesso ERP');
+        await page.evaluate(async()=>{falhaPerfil=false;admERP=false;await FretesAdm.atualizarAcesso();});
         await page.evaluate(() => { role = 'operador'; FretesAdm.atualizarAcesso(); });
         await page.evaluate(() => FretesAdm.abrir());
         assert.equal(await page.evaluate(() => chamadas.length), 0, 'operador não consulta');
