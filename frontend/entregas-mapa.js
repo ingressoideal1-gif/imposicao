@@ -66,7 +66,7 @@
         selecionado = selecionado === id ? null : id;
         const b = new google.maps.LatLngBounds();
         for (const m of marcadores) {
-            const visivel = selecionado === null || m.id === selecionado || m.origem;
+            const visivel = selecionado === null || m.id === selecionado || m.ids?.includes(selecionado) || m.origem;
             m.marker.map = visivel ? mapa : null;
             if (visivel) b.extend(m.pos);
         }
@@ -81,7 +81,7 @@
             if (!row || !permitido()) return;
             const turno = geracao, popupAtual = ++popupGeracao;
             const box = node('div', '', 've-map-popup');
-            box.append(node('strong', `Pedido ${row.pedido}`), node('p', row.cliente || ''), node('p', row.endereco), node('p', situacao(row)));
+            box.append(node('strong', row.grupo ? `${row.modalidade==='veppo'?'Veppo':'Aéreo'} · ${row.grupo.length} pedido(s)` : `Pedido ${row.pedido}`), node('p', row.cliente || ''), node('p', row.endereco), node('p', situacao(row)));
             if (row.prevista_em) box.append(node('p', 'Previsão: ' + new Date(row.prevista_em).toLocaleString('pt-BR')));
             const b = node('button', 'Ver pedido na lista', 'btn btn-primary'); b.type = 'button'; b.hidden = !row.entregador_id && !['EXPEDICAO','EM TRANSITO'].includes(row.status_erp);
             b.onclick = () => { $('ve-busca').value = String(row.pedido); $('ve-status').value = row.entregador_id ? 'minha' : 'disponivel'; $('ve-filtros').requestSubmit(); $('ve-filtros').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
@@ -91,15 +91,17 @@
             try {
                 const ctx = await window.EntregasGestao?.contextoLinhas();
                 if (turno !== geracao || popupAtual !== popupGeracao || !permitido()) return;
-                const select = window.EntregasGestao?.seletor(row, ctx, texto => { mensagem.textContent = texto; });
-                if (!select) throw new Error('Seleção de entregador indisponível. Consulte a lista de pedidos.');
-                const label = node('label', 'Atribuir entregador'); label.append(select); atribuicao.prepend(label);
-                mensagem.textContent = select.disabled ? select.title : 'Ao selecionar, o pedido entra na rota do entregador.';
+                for(const pedido of row.grupo || [row]) {
+                    const select = window.EntregasGestao?.seletor(pedido, ctx, texto => { mensagem.textContent = texto; });
+                    if (!select) throw new Error('Seleção de entregador indisponível. Consulte a lista de pedidos.');
+                    const label = node('label', row.grupo?`Pedido ${pedido.pedido} · ${pedido.cliente} · ${situacao(pedido)}`:'Atribuir entregador'); label.append(select); atribuicao.append(label);
+                }
+                mensagem.textContent = 'Ao selecionar, o pedido entra na rota do entregador.';
                 if (!ctx.editar) mensagem.textContent = 'Seu acesso permite somente consultar.';
             } catch { if (turno === geracao && popupAtual === popupGeracao && permitido()) mensagem.textContent = 'Não foi possível consultar os entregadores. Feche e abra o pedido para tentar novamente.'; }
         };
         if (row) marker.addListener('click', abrir);
-        marcadores.push({ marker, pos, abrir, chave: row?.chave, id: row?.entregador_id || '', origem: !row }); bounds.extend(pos);
+        marcadores.push({ ids: row?.grupo?.map(p=>p.entregador_id || ''), marker, pos, abrir, chave: row?.chave, id: row?.entregador_id || '', origem: !row }); bounds.extend(pos);
     }
     function legenda(rows) {
         const grupos = new Map([['', rows]]);
@@ -142,7 +144,7 @@
             if (!c) throw new Error('Entre com sua conta ADM para abrir o mapa.');
             const rows = [], ids = new Set(); let cursor = null;
             do {
-                const { data, error } = await c.rpc('ve_admin_mapa', { p_apos: cursor });
+                const { data, error } = await c.rpc('ve_admin_mapa_modalidades', { p_apos: cursor, p_modalidade: window.EntregasModalidade?.atual || 'motoboy' });
                 if (!atual()) return;
                 if (error || !Array.isArray(data)) throw new Error('Consulta do mapa indisponível. Confira sua sessão e a implantação da consulta ADM.');
                 for (const row of data.slice(0, 200)) { if (!row.chave || ids.has(row.chave)) throw new Error('A lista mudou durante a consulta. Atualize o mapa.'); ids.add(row.chave); rows.push(row); }
@@ -160,13 +162,16 @@
             $('ve-mapa-status').textContent = 'Localizando a Ideal e os endereços das entregas…';
             const inicio = await localizar(origem, turno); if (!atual()) return;
             marcar(inicio, null, 'IDEAL', '#182b49');
-            const erros = [], posicoes = new Map();
+            const erros = [], posicoes = new Map(), gruposMarcados = new Set();
             for (const row of rows) {
                 if (!atual()) return;
                 try {
                     if (!row.endereco_completo) throw new Error('Endereço incompleto');
                     const pos = await localizar(row.endereco, turno); if (!atual()) return;
-                    posicoes.set(row.chave, pos); marcar(pos, row, '#' + row.pedido, corPedido(row));
+                    posicoes.set(row.chave, pos);
+                    if(['veppo','aereo'].includes(row.modalidade)){
+                        if(!gruposMarcados.has(row.modalidade)){gruposMarcados.add(row.modalidade);const grupo=rows.filter(p=>p.modalidade===row.modalidade);marcar(pos,{...row,grupo},`${row.modalidade==='veppo'?'Veppo':'Aéreo'} · ${grupo.length}`,grupo.every(p=>p.entregador_id===row.entregador_id)?corPedido(row):'#64748b');}
+                    }else marcar(pos, row, '#' + row.pedido, corPedido(row));
                 } catch { if (!atual()) return; erros.push(`Pedido ${row.pedido}: confira o endereço no ERP (${row.endereco || 'não informado'}).`); }
             }
             const rotas = new Map();
@@ -178,7 +183,7 @@
             for (const paradas of rotas.values()) {
                 if (!atual()) return;
                 paradas.sort((a, b) => a.ordem - b.ordem);
-                const d = paradas[0], pontos = paradas.map(p => posicoes.get(p.chave));
+                const d = paradas[0], pontos = paradas.filter((p,i)=>!i||!['veppo','aereo'].includes(p.modalidade)||paradas[i-1].modalidade!==p.modalidade).map(p => posicoes.get(p.chave));
                 if (pontos.some(p => !p)) { erros.push(`${d.entregador}: rota não desenhada porque há endereço para conferir.`); continue; }
                 try {
                     const request = { origin: inicio, destination: d.retorno ? inicio : pontos[pontos.length - 1], intermediates: (d.retorno ? pontos : pontos.slice(0, -1)).map(location => ({ location })), travelMode: 'DRIVING', optimizeWaypointOrder: false, fields: ['path'] };
