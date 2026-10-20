@@ -28947,7 +28947,7 @@ function normalizarStatusImpressao(status) {
     if (!status) return 'Aguardando';
     const s = status.toString().trim().toUpperCase();
     if (s === 'IMPRESSO') return 'Impresso';
-    if (s === 'AGUARD.' || s === 'AGUARDANDO') return 'Aguardando';
+    if (!s || s === 'AGUARD.' || s === 'AGUARDANDO' || s === 'PENDENTE') return 'Aguardando';
     // Sem acento e com sublinhado também: o valor viaja em URL, em CSV de
     // conferência e na mão de quem edita o banco, e um "CORRIGIR_ARTE" lido como
     // desconhecido destravaria a impressão em silêncio — o oposto do que ele diz.
@@ -31887,11 +31887,12 @@ function renderOrdens() {
         }
 
         // 2. Filtro de Setor -- os cards SOMAM (ver pedidoBateNosSetores)
-        if (!pedidoBateNosSetores(itens, state.filtroSetores)) return false;
+        if (!pedidoBateNosSetores(itens, state.filtroSetores, listaEhDosImpressos)) return false;
 
         // 3. Filtro de Estágio de Impressão
         if (state.filtroStatus) {
-            const matchStatus = itens.some(item => (item.impressao || 'AGUARD.').toUpperCase() === state.filtroStatus.toUpperCase());
+            const matchStatus = itens.some(item => normalizarStatusImpressao(item.impressao || item.status_impressao || item.status_producao)
+                === normalizarStatusImpressao(state.filtroStatus));
             if (!matchStatus) return false;
         }
 
@@ -32938,12 +32939,9 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
                 throw new Error('O banco não confirmou exatamente o modelo, pedido e status solicitados.');
             }
         } else {
-            const res = await fetch(`${API_BASE_URL}/api/os_itens/${itemId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status_impressao: novoStatus })
-            });
-            if (!res.ok) throw new Error('Falha ao atualizar');
+            // A rota legada grava producao_os_itens, não pedidos_modelos.
+            // Sem conexão confirmada, não apresentar uma marcação apenas local.
+            throw new Error('Conexão ao banco necessária para confirmar o status de impressão. Tente novamente quando a conexão voltar.');
         }
 
         if (itemId && itemId.toString().startsWith('vibe_item_')) {
@@ -32982,7 +32980,8 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
         const errMessage = e.message || e.details || (typeof e === 'object' ? JSON.stringify(e) : String(e));
         toast('Erro ao atualizar impressão: ' + errMessage, 'error');
         // Recarregar para reverter
-        await loadOSItens(osId);
+        try { await loadOSItens(osId, { atualizar: true }); }
+        catch (erroCarga) { console.warn('Não foi possível reler o status de impressão:', erroCarga); }
         return false;
     }
 }
@@ -33200,6 +33199,7 @@ function matchNumeracao(numText, formatoId) {
  * Auto-salva um campo do item da OS (formato_id, cor_id, numeracao_id)
  */
 async function autoSaveOSItemField(itemId, osId, field, value) {
+    if (field === 'status_impressao') return updateItemImpressao(itemId, osId, value);
     if (field === 'verso_tipo' || field === 'frente_verso') return;
     // A quantidade de cada modelo pertence ao ERP, inclusive depois da arte pronta.
     if (field === 'qtd' || field === 'quantidade') return;
@@ -34573,6 +34573,12 @@ async function impQueueUpdateField(itemId, osId, field, value) {
         return;
     }
 
+    if (field === 'status_impressao') {
+        const confirmado = await updateItemImpressao(itemId, osId, value);
+        renderImpOSQueue();
+        return confirmado;
+    }
+
     item[field] = value;
 
     // Recalcular num_final se qtd ou num_inicial mudar
@@ -34656,19 +34662,6 @@ async function impQueueUpdateField(itemId, osId, field, value) {
         : value;
     autoSaveOSItemField(itemId, osId, dbField, dbValue);
 
-    if (field === 'status_impressao') {
-        item.impressao = value;
-        // Atualizar também no state.modelosGlobais
-        const numOs = parseInt(osId.toString().replace('vibe_', ''));
-        if (state.modelosGlobais && state.modelosGlobais[numOs]) {
-            const mod = state.modelosGlobais[numOs].find(m => String(m.id) === String(itemId));
-            if (mod) {
-                mod.impressao = value;
-                mod.status_impressao = value;
-            }
-        }
-        renderImpOSQueue();
-    }
 }
 
 /** Gerar PDF para o item específico */
@@ -44276,15 +44269,16 @@ window.dispararEmailDiretoCliente = dispararEmailDiretoCliente;
  * Está aqui, com nome, e não solta dentro do filtro, porque é a regra que o
  * usuário pediu em 21/08/2026 e é o que precisa ficar travado por teste.
  */
-function pedidoBateNosSetores(itens, escolhidos) {
+function pedidoBateNosSetores(itens, escolhidos, incluirImpressos = false) {
     const setores = escolhidos || [];
     if (!setores.length) return true;
     const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
     const alvos = new Set(setores.map(norm));
     return (itens || []).some(item => {
         if (!alvos.has(norm(item.setor || ''))) return false;
-        const status = normalizarStatusImpressao(item.impressao || item.status_impressao);
-        return status === 'Aguardando' || status === STATUS_CORRIGIR_ARTE;
+        const status = normalizarStatusImpressao(item.impressao || item.status_impressao || item.status_producao);
+        return status === 'Aguardando' || status === STATUS_CORRIGIR_ARTE
+            || (incluirImpressos && status === 'Impresso');
     });
 }
 
