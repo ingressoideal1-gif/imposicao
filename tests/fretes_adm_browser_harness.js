@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const puppeteer = require('puppeteer');
 const raiz = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(raiz, 'frontend/index.html'), 'utf8');
-const painel = html.slice(html.indexOf('<div id="adm-tab-fretes"'), html.indexOf('<div id="adm-tab-fundo"'));
+const painel = html.slice(html.indexOf('<section id="view-fretes"'), html.indexOf('<section id="view-adm"'));
 
 (async () => {
     const browser = await puppeteer.launch({ headless: true });
@@ -14,7 +14,7 @@ const painel = html.slice(html.indexOf('<div id="adm-tab-fretes"'), html.indexOf
         // Apenas fixtures e fetch simulado: nenhuma conexão com Supabase.
         await page.setRequestInterception(true);
         page.on('request', req => req.abort());
-        await page.setContent(`<button id="adm-fretes-botao"></button>${painel}`);
+        await page.setContent(`<button id="nav-fretes"></button>${painel}`);
         const css = fs.readFileSync(path.join(raiz, 'frontend/style.css'), 'utf8').replace(/^@import[^;]+;/gm, '');
         await page.addStyleTag({ content: css });
         await page.addScriptTag({ path: path.join(raiz, 'frontend/supabase-js.min.js') });
@@ -51,10 +51,30 @@ const painel = html.slice(html.indexOf('<div id="adm-tab-fretes"'), html.indexOf
         ` });
         const modulo = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8').split('// INICIO ADM FRETES')[1].split('// FIM ADM FRETES')[0];
         await page.addScriptTag({ content: modulo });
+        const script = fs.readFileSync(path.join(raiz, 'frontend/script.js'), 'utf8');
+        const porteiro = script.slice(script.indexOf('function podeAbrirView(viewId) {'), script.indexOf('window.podeAbrirView = podeAbrirView;'));
+        await page.addScriptTag({ content: porteiro });
+        for (const perfil of ['', 'operador', 'financeiro', 'expedidor', 'atendimento', 'admin']) {
+            const acesso = await page.evaluate(perfil => {
+                role = perfil; FretesAdm.atualizarAcesso();
+                return { abrir: podeAbrirView('view-fretes'), menu: document.getElementById('nav-fretes').style.display !== 'none' };
+            }, perfil);
+            assert.deepEqual(acesso, { abrir: perfil === 'admin', menu: perfil === 'admin' });
+        }
+        const estrutura = await page.evaluate(html => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            return {
+                paginaIndependente: !doc.getElementById('view-fretes').parentElement.closest('#view-adm'),
+                menuDireto: !doc.getElementById('nav-fretes').closest('.nav-group-corpo'),
+                abaAntiga: !!doc.querySelector('[data-adm-tab="fretes"], #adm-tab-fretes')
+            };
+        }, html);
+        assert.deepEqual(estrutura, { paginaIndependente: true, menuDireto: true, abaAntiga: false });
+        await page.evaluate(() => { role = 'operador'; FretesAdm.atualizarAcesso(); });
         await page.evaluate(() => FretesAdm.abrir());
         assert.equal(await page.evaluate(() => chamadas.length), 0, 'operador não consulta');
-        assert.equal(await page.$eval('#adm-fretes-botao', e => e.style.display), 'none');
-        await page.evaluate(() => { role = 'admin'; FretesAdm.atualizarAcesso(); document.getElementById('adm-tab-fretes').style.display = ''; });
+        assert.equal(await page.$eval('#nav-fretes', e => e.style.display), 'none');
+        await page.evaluate(() => { role = 'admin'; FretesAdm.atualizarAcesso(); document.getElementById('view-fretes').classList.add('active'); });
         await page.evaluate(() => FretesAdm.abrir());
         assert.equal(await page.$$eval('#fretes-linhas tr', e => e.length), 50);
         assert.equal(await page.$$eval('#fretes-linhas img', e => e.length), 0, 'texto não vira HTML');
@@ -107,7 +127,7 @@ const painel = html.slice(html.indexOf('<div id="adm-tab-fretes"'), html.indexOf
         assert.equal(await page.$eval('#fretes-proxima', e => e.disabled), true);
         // Layout móvel: tabela pode rolar, formulário permanece dentro da tela.
         await page.setViewport({width:390,height:844});
-        await page.evaluate(async () => { role='admin'; modo='normal'; FretesAdm.atualizarAcesso(); document.getElementById('adm-tab-fretes').style.display=''; await FretesAdm.abrir(); });
+        await page.evaluate(async () => { role='admin'; modo='normal'; FretesAdm.atualizarAcesso(); document.getElementById('view-fretes').classList.add('active'); await FretesAdm.abrir(); });
         await page.click('#fretes-linhas button');
         assert.ok(await page.$eval('#fretes-form', e => e.getBoundingClientRect().right <= 390));
         await page.click('#fretes-cancelar');
