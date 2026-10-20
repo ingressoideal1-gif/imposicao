@@ -54,12 +54,26 @@
     }
     async function localizar(endereco, turno) {
         if (locais.has(endereco)) return locais.get(endereco);
-        const { results } = await new api.Geocoder().geocode({ address: endereco, componentRestrictions: { country: 'BR' } });
-        const r = results?.[0];
-        if (!r || results.length !== 1 || r.partial_match || !['ROOFTOP', 'RANGE_INTERPOLATED'].includes(r.geometry?.location_type)) throw new Error('Endereço sem localização precisa');
-        const pos = r.geometry.location.toJSON();
-        if (turno === geracao && permitido()) locais.set(endereco, pos);
-        return pos;
+        // Complementos identificam a unidade, mas podem impedir o Google de localizar o prédio.
+        // Preserve o endereço exibido e remova apenas segmentos reconhecidos após rua/número.
+        const partes = endereco.split(',').map(p => p.trim());
+        const semComplemento = partes.filter((p, i) => i < 2 || !/^(?:t[eé]rreo|conj(?:unto)?|ap(?:to|artamento)?|sala|loja|bloco|fundos|andar)\b\.?/i.test(p)).join(', ');
+        for (const address of [...new Set([endereco, semComplemento])]) {
+            if (turno !== geracao || !permitido()) throw new Error('Consulta cancelada');
+            let results;
+            try {
+                ({ results } = await new api.Geocoder().geocode({ address, componentRestrictions: { country: 'BR' } }));
+            } catch (e) {
+                if (e.code === 'ZERO_RESULTS') continue;
+                throw e;
+            }
+            const r = results?.[0];
+            if (!r || results.length !== 1 || r.partial_match || !['ROOFTOP', 'RANGE_INTERPOLATED'].includes(r.geometry?.location_type)) continue;
+            const pos = r.geometry.location.toJSON();
+            if (turno === geracao && permitido()) locais.set(endereco, pos);
+            return pos;
+        }
+        throw new Error('Endereço sem localização precisa');
     }
     function enquadrar(id) {
         if (!mapa || !bounds) return;
