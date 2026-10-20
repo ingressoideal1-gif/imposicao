@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1083">
+    <link rel="stylesheet" href="/style.css?v=1086">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -187,6 +187,7 @@
             </div>
 
             <button class="nav-btn" data-view="view-entregas" id="nav-entregas" style="display:none;">Entregas</button>
+            <button class="nav-btn" data-view="view-fretes" id="nav-fretes" style="display:none;">Fretes</button>
             <button type="button" class="nav-group admin-only" data-grupo="administracao" aria-expanded="false" style="display:none;">
                 <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.6 3.8 5v5.1c0 3.6 2.6 6.4 6.2 7.3 3.6-.9 6.2-3.7 6.2-7.3V5Z"/></svg>
                 <span class="nav-group-nome">Administração</span>
@@ -4019,6 +4020,50 @@
             <!-- ══════════════════════════════════════════════════════════════ -->
             <!-- VIEW: ADM - Configurações Gerais                              -->
             <!-- ══════════════════════════════════════════════════════════════ -->
+            <section id="view-fretes" class="view-section">
+                <h2>Cidades e tarifas de frete</h2>
+                <p>Consulte e edite as tarifas por cidade. Valores em reais. O adicional é cobrado por quilo iniciado acima de 1 kg.</p>
+                <form id="fretes-filtros" class="fretes-toolbar">
+                    <label>Cidade<input id="fretes-busca" type="search" maxlength="120" placeholder="Pesquisar cidade"></label>
+                    <label>UF<input id="fretes-uf" maxlength="2" size="4" placeholder="Todas"></label>
+                    <button class="btn btn-primary" type="submit">Consultar</button>
+                </form>
+                <p id="fretes-status" role="status" aria-live="polite"></p>
+                <div class="fretes-tabela">
+                    <table aria-label="Tarifas por cidade e transportadora">
+                        <thead><tr><th scope="col">Cidade</th><th scope="col">UF</th><th scope="col">SM · até 1 kg</th><th scope="col">SM · kg extra</th><th scope="col">UN · até 1 kg</th><th scope="col">UN · kg extra</th><th scope="col">MB · até 1 kg</th><th scope="col">MB · kg extra</th><th scope="col">Ações</th></tr></thead>
+                        <tbody id="fretes-linhas"></tbody>
+                    </table>
+                </div>
+                <div class="fretes-toolbar">
+                    <button id="fretes-anterior" type="button" class="btn btn-secondary" disabled>Anterior</button>
+                    <span id="fretes-pagina">Página 1</span>
+                    <button id="fretes-proxima" type="button" class="btn btn-secondary" disabled>Próxima</button>
+                </div>
+                <div id="fretes-editor" class="card" hidden>
+                    <h3 id="fretes-titulo-editor">Editar tarifas</h3>
+                    <p>Tarifa até 1 kg vazia ou zero indica que a transportadora não atende a cidade. As mudanças só são gravadas ao salvar e afetam as próximas cotações.</p>
+                    <form id="fretes-form">
+                        <fieldset id="fretes-campos"><legend class="sr-only">Dados da cidade e tarifas</legend>
+                            <div class="fretes-grade">
+                                <label>Cidade<input name="cidade" maxlength="120" required></label>
+                                <label>UF<input name="uf" maxlength="2" pattern="[A-Za-z]{2}" required></label>
+                                <label>SM · até 1 kg (R$)<input name="1kg_SM" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                <label>SM · kg adicional (R$)<input name="extra_SM" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                <label>UN · até 1 kg (R$)<input name="1kg_UN" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                <label>UN · kg adicional (R$)<input name="extra_UN" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                <label>MB · até 1 kg (R$)<input name="1kg_MB" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                                <label>MB · kg adicional (R$)<input name="extra_MB" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
+                            </div>
+                            <div class="fretes-toolbar">
+                                <button type="submit" class="btn btn-primary">Salvar alterações</button>
+                                <button id="fretes-cancelar" type="button" class="btn btn-secondary">Cancelar</button>
+                            </div>
+                        </fieldset>
+                    </form>
+                </div>
+            </section>
+
             <section id="view-adm" class="view-section">
 
                 <!-- Header -->
@@ -4059,7 +4104,6 @@
                         margin-bottom: -2px; border-radius: 6px 6px 0 0;
                         transition: all .2s;
                     ">📢 Avisos</button>
-                    <button id="adm-fretes-botao" class="adm-tab-btn" data-adm-tab="fretes" onclick="switchAdmTab('fretes')" style="display:none; background:none; border:none; padding:12px 20px; color:var(--text-dim); cursor:pointer;">Fretes</button>
                     <button class="adm-tab-btn" data-adm-tab="fundo" onclick="switchAdmTab('fundo')" style="
                         background: none; border: none; cursor: pointer;
                         padding: 10px 22px; font-size: 0.92rem; font-weight: 600;
@@ -4140,50 +4184,6 @@
 
                      A PORTARIA não recebe este fundo: ali a câmera trabalha a
                      cada quadro e a tela inteira já é significado. -->
-                <div id="adm-tab-fretes" class="adm-tab-content" style="display:none;">
-                    <h2>Cidades e tarifas de frete</h2>
-                    <p>Consulte e edite as tarifas por cidade. Valores em reais. O adicional é cobrado por quilo iniciado acima de 1 kg.</p>
-                    <form id="fretes-filtros" class="fretes-toolbar">
-                        <label>Cidade<input id="fretes-busca" type="search" maxlength="120" placeholder="Pesquisar cidade"></label>
-                        <label>UF<input id="fretes-uf" maxlength="2" size="4" placeholder="Todas"></label>
-                        <button class="btn btn-primary" type="submit">Consultar</button>
-                    </form>
-                    <p id="fretes-status" role="status" aria-live="polite"></p>
-                    <div class="fretes-tabela">
-                        <table aria-label="Tarifas por cidade e transportadora">
-                            <thead><tr><th scope="col">Cidade</th><th scope="col">UF</th><th scope="col">SM · até 1 kg</th><th scope="col">SM · kg extra</th><th scope="col">UN · até 1 kg</th><th scope="col">UN · kg extra</th><th scope="col">MB · até 1 kg</th><th scope="col">MB · kg extra</th><th scope="col">Ações</th></tr></thead>
-                            <tbody id="fretes-linhas"></tbody>
-                        </table>
-                    </div>
-                    <div class="fretes-toolbar">
-                        <button id="fretes-anterior" type="button" class="btn btn-secondary" disabled>Anterior</button>
-                        <span id="fretes-pagina">Página 1</span>
-                        <button id="fretes-proxima" type="button" class="btn btn-secondary" disabled>Próxima</button>
-                    </div>
-                    <div id="fretes-editor" class="card" hidden>
-                        <h3 id="fretes-titulo-editor">Editar tarifas</h3>
-                        <p>Tarifa até 1 kg vazia ou zero indica que a transportadora não atende a cidade. As mudanças só são gravadas ao salvar e afetam as próximas cotações.</p>
-                        <form id="fretes-form">
-                            <fieldset id="fretes-campos"><legend class="sr-only">Dados da cidade e tarifas</legend>
-                                <div class="fretes-grade">
-                                    <label>Cidade<input name="cidade" maxlength="120" required></label>
-                                    <label>UF<input name="uf" maxlength="2" pattern="[A-Za-z]{2}" required></label>
-                                    <label>SM · até 1 kg (R$)<input name="1kg_SM" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
-                                    <label>SM · kg adicional (R$)<input name="extra_SM" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
-                                    <label>UN · até 1 kg (R$)<input name="1kg_UN" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
-                                    <label>UN · kg adicional (R$)<input name="extra_UN" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
-                                    <label>MB · até 1 kg (R$)<input name="1kg_MB" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
-                                    <label>MB · kg adicional (R$)<input name="extra_MB" inputmode="decimal" autocomplete="off" placeholder="Não informado"></label>
-                                </div>
-                                <div class="fretes-toolbar">
-                                    <button type="submit" class="btn btn-primary">Salvar alterações</button>
-                                    <button id="fretes-cancelar" type="button" class="btn btn-secondary">Cancelar</button>
-                                </div>
-                            </fieldset>
-                        </form>
-                    </div>
-                </div>
-
                 <div id="adm-tab-fundo" class="adm-tab-content" style="display:none;">
 
                     <div style="display:grid; grid-template-columns: minmax(0,1fr) 340px; gap:20px; align-items:start;">
@@ -4617,7 +4617,7 @@
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
     <script src="/entregas-mapa.js?v=1084"></script>
-    <script src="script.js?v=1084"></script>
+    <script src="script.js?v=1086"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=1067"></script>
     <script src="qr-evento-envio.js?v=948"></script>

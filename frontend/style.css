@@ -6411,15 +6411,15 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
     .mtg-identificacao-linha select { flex: 1 1 90px; }
 }
 
-#adm-tab-fretes .fretes-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:16px 0; }
-#adm-tab-fretes label { display:flex; flex-direction:column; gap:6px; }
-#adm-tab-fretes input { padding:9px 12px; border:1px solid var(--border-color, #64748b); border-radius:6px; background:var(--bg-input, #161e2e); color:var(--text-main, #eee); max-width:100%; }
-#adm-tab-fretes .fretes-tabela { overflow-x:auto; }
-#adm-tab-fretes table { width:100%; border-collapse:collapse; }
-#adm-tab-fretes th, #adm-tab-fretes td { padding:12px; text-align:left; border-bottom:1px solid var(--border-color, #334155); white-space:nowrap; }
-#adm-tab-fretes th { font-size:.8rem; color:var(--text-dim); }
-#adm-tab-fretes fieldset { border:0; padding:0; min-width:0; }
-#adm-tab-fretes .fretes-grade { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; }
+#view-fretes .fretes-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:16px 0; }
+#view-fretes label { display:flex; flex-direction:column; gap:6px; }
+#view-fretes input { padding:9px 12px; border:1px solid var(--border-color, #64748b); border-radius:6px; background:var(--bg-input, #161e2e); color:var(--text-main, #eee); max-width:100%; }
+#view-fretes .fretes-tabela { overflow-x:auto; }
+#view-fretes table { width:100%; border-collapse:collapse; }
+#view-fretes th, #view-fretes td { padding:12px; text-align:left; border-bottom:1px solid var(--border-color, #334155); white-space:nowrap; }
+#view-fretes th { font-size:.8rem; color:var(--text-dim); }
+#view-fretes fieldset { border:0; padding:0; min-width:0; }
+#view-fretes .fretes-grade { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; }
 #fretes-editor { margin-top:20px; padding:20px; }
 #fretes-status { min-height:1.5em; }
 
