@@ -97,6 +97,7 @@
             if (typeof aplicarRegraProdutoPrateleira === 'function') aplicarRegraProdutoPrateleira(modelo);
             (state.modelosGlobais[modelo.id_int] ||= []).push(modelo);
         }
+        for (const os of state.ordens || []) aplicarConfirmacoesDoPedido(os.id, b);
         const prontos = new Set(registros.map(r => String(r.pedido)));
         for (const os of state.ordens || []) os._disponivelOffline = prontos.has(String(os.numero));
         if (!lista && !registros.length) toast('A lista ainda não foi sincronizada nesta estação. Conecte para baixá-la.', 'warning');
@@ -138,6 +139,9 @@
         for (const a of alvos) {
             const item = (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId));
             if (item) { item.impressao = 'IMPRESSO'; item.status_impressao = 'IMPRESSO'; item._confirmacaoLocalPendente = true; }
+            const numero = String(a.osId).replace(/^vibe_/, '');
+            const global = (state.modelosGlobais[numero] || []).find(i => String(i.id) === String(a.itemId));
+            if (global) { global.impressao = 'IMPRESSO'; global.status_impressao = 'IMPRESSO'; global._confirmacaoLocalPendente = true; }
         }
         if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
         pendente = null;
@@ -146,11 +150,17 @@
     }
     async function aplicarConfirmacoes(osId) {
         const b = await bootstrap();
+        aplicarConfirmacoesDoPedido(osId, b);
+    }
+    function aplicarConfirmacoesDoPedido(osId, b) {
         const numero = String(osId).replace(/^vibe_/, '');
         const atual = b.pedidos.find(p => p.pedido === numero);
         for (const c of b.confirmacoes || []) {
             if (c.dados.pedido !== numero || c.estado === 'conflito' || c.dados.revisao !== atual?.revisao) continue;
-            for (const item of state.osItens[osId] || []) if (c.dados.modelos.includes(String(item.id))) {
+            // O detalhe e a lista precisam usar a mesma confirmação persistida.
+            // Não altera o snapshot/revisão de arte preparado para impressão.
+            const modelos = [...(state.osItens[osId] || []), ...(state.modelosGlobais[numero] || [])];
+            for (const item of modelos) if (c.dados.modelos.includes(String(item.id))) {
                 item.impressao = 'IMPRESSO'; item.status_impressao = 'IMPRESSO';
                 item._confirmacaoLocalPendente = c.estado === 'pendente';
             }

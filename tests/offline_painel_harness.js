@@ -71,6 +71,11 @@ function extrair(nome) {
    assert(result.ok);assert.equal(result.ordens[0].numero,99);assert.equal(result.ordens[0].prazo_entrega,'2026-10-15');
    assert.equal(result.formatos[0].id,1);assert.equal(result.modelos[0].id,10);assert(result.item._confirmacaoLocalPendente);
    assert.equal(dados.confirmacoes.length,1);
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO');
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
+     'voltar à lista preserva confirmação local pendente');
+   assert.equal(snapshot.modelos[0].status_impressao,undefined,'não altera o snapshot preparado');
    assert.deepEqual(await page.evaluate(()=>state.produtosGlobais.map(p=>p.nomeReal||null)),
      ['Credencial 10x15','Cordão Preto','Chaveiro & Cordão',null,null]);
    assert.equal(snapshot.produtos[0].nomeReal,undefined,'snapshot original preservado');
@@ -97,6 +102,19 @@ function extrair(nome) {
    assert.equal(primeiro.cliente,'Cliente 0');assert.equal(primeiro.numero_cliente,100);
    assert.equal(primeiro.id_cliente,900);assert(primeiro._disponivelOffline);
    assert.equal(completa.ordens.filter(o=>o._disponivelOffline).length,1);
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
+     'lista resumida antiga não desfaz confirmação persistida');
+   dados.confirmacoes[0].estado='conflito';
+   await page.addScriptTag({url:origem+'/offline-estacao.js?conflito=1'});
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'AGUARDANDO',
+     'conflito não pode ser apresentado como impressão confirmada');
+   dados.confirmacoes[0].estado='pendente';
+   dados.confirmacoes[0].dados.revisao='c'.repeat(64);
+   await page.addScriptTag({url:origem+'/offline-estacao.js?revisao=1'});
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'AGUARDANDO',
+     'confirmação de outra revisão não pode marcar o modelo atual');
    dados.pedidos=[];
    await page.addScriptTag({url:origem+'/offline-estacao.js?lista=2'});
    assert.equal(await page.evaluate(async()=>{await PilotoOffline.carregarOrdens();return state.ordens.length;}),65);
