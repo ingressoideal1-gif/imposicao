@@ -28,6 +28,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  });
  const js=fs.readFileSync(path.join(root,'frontend/script.js'),'utf8');await p.addScriptTag({content:js.slice(js.indexOf('// INICIO PAINEL ENTREGAS'))});
  await p.evaluate(()=>EntregasPainel.abrir());
+ assert.deepEqual(await p.evaluate(()=>{const s=EntregasGestao.seletor({chave:'av1',pedido:'AV-1',avulsa:true,empresa:'__VIBE_AVULSA__',status_erp:'EXPEDICAO'},{editar:true,entregadores:[{usuario:'ativo',nome:'Ativo',ativo:true,empresas:['B']},{usuario:'inativo',nome:'Inativo',ativo:false,empresas:['B']}]});return [...s.options].map(o=>o.value);}),['','ativo']);
  assert.deepEqual(await p.$$eval('#ve-linhas tr:first-child select option',els=>els.map(e=>e.textContent)),['Selecionar entregador','Motorista A']);
  assert.equal(await p.$eval('#ve-linhas tr:nth-child(2) select',e=>e.disabled),true);
  assert.equal(await p.$$eval('#ve-linhas tr:first-child td',e=>e.length),7);

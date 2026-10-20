@@ -6465,3 +6465,7 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 
 .ve-modalidades { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
 .ve-modalidades [aria-pressed="true"] { background:var(--blue, #2563eb); color:white; }
+
+/* Cadastro de entregas avulsas */
+#ve-avulsa{width:min(620px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid #475569;border-radius:12px;padding:20px;background:#111827;color:#f1f5f9}
+#ve-avulsa label{display:grid;gap:4px;margin:10px 0}#ve-avulsa input{width:100%;box-sizing:border-box;padding:8px}#ve-avulsa button{margin:4px;padding:8px 12px}#ve-local-resultados button{display:block;text-align:left;width:100%;overflow-wrap:anywhere}#ve-local-campos{min-width:0}
