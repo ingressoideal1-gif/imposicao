@@ -20,7 +20,7 @@ def publicar(msi):
     manifesto = dict(schema=1, produto='NewProdPilotoOficial', version=versao,
         url=BASE + msi.name, sha256=hashlib.sha256(dados).hexdigest(),
         bytes=len(dados), size=len(dados),
-        notes='NewProd unico: corrige preparacao de fontes e fotos do Gerenciador, renova recursos antigos e preserva QR, numeracao, camadas PDF e rotacao das paginas pares. Disponivel para todas as estacoes.')
+        notes='NewProd unico: corrige persistencia e filtros de impressao, preserva confirmacoes locais ao voltar e inclui rotas mistas e entregas avulsas. Preserva fontes, fotos, QR, numeracao e camadas PDF. Disponivel para todas as estacoes.')
     validar(manifesto)
     teste = {**manifesto, 'produto': 'NewProdPilotoTeste',
         'url': BASE + 'NewProdPiloto_Teste_v' + versao + '.msi'}
