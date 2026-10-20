@@ -11,7 +11,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       GRANT USAGE ON SCHEMA auth,storage TO authenticated;
       CREATE TABLE imposition_user_permissions(user_id uuid PRIMARY KEY,role text,perm_admin_view boolean,perm_admin_edit boolean DEFAULT true);
-      CREATE TABLE propostas(id uuid PRIMARY KEY,id_int bigint,cliente text,empresa text,frete_escolhido text,status_interno text,id_endereco_ent text,obs_entrega text);
+      CREATE TABLE propostas(id uuid PRIMARY KEY,id_int bigint,cliente text,empresa text,frete_escolhido text,status_interno text,id_endereco_ent text,obs_entrega text,categoria_frete text);
       CREATE TABLE expedicoes(id bigint PRIMARY KEY,id_int integer,id_endereco_entrega uuid,qtd_volumes integer,data_entrega timestamptz);
       CREATE TABLE enderecos(id uuid PRIMARY KEY,endereco text,numero text,complemento text,bairro text,cidade text,uf text,cep text);
       CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
@@ -35,7 +35,8 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
     await db.exec('CREATE TABLE propostas_os(id_int integer,data_termino timestamp)');
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_modalidades.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_rotas_mistas.sql'),'utf8'));
-    if(process.env.TEST_AVULSAS){for(const nome of ['avulsas','avulsas_rotas'])await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_'+nome+'.sql'),'utf8'));}
+    {for(const nome of ['avulsas','avulsas_rotas'])await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_'+nome+'.sql'),'utf8'));}
+    await db.exec(fs.readFileSync(path.join(__dirname,'../sql/vibe_entregas_categoria_aereo.sql'),'utf8'));
 
     await db.exec(`INSERT INTO auth.users VALUES('${uuid(91)}'),('${uuid(92)}');
       INSERT INTO vibe_entregas_cadastros(operacao,email,nome,empresas,autor) VALUES('${uuid(90)}','teste@example.invalid','Motorista',ARRAY['A'],'${uuid(91)}');
@@ -51,6 +52,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
       INSERT INTO expedicoes(id,id_int) VALUES(1,1001),(2,1002);
       SELECT set_config('request.jwt.claim.sub','${uuid(91)}',false); SET ROLE authenticated;`);
     const query=async(sql,args=[]) => (await db.query(sql,args)).rows[0].dados;
+    await require('./vibe_entregas_categoria_aereo_cases.cjs')({db,query,uuid});
     if(process.env.TEST_AVULSAS)await require('./vibe_entregas_avulsas_cases.cjs')({db,query,uuid});
     assert.deepEqual((await query("SELECT ve_listar_modalidades('',0,'disponivel','motoboy') dados")).map(p=>p.id),['1004']);
     assert.deepEqual((await query("SELECT ve_admin_mapa_modalidades(NULL,'motoboy') dados")).map(p=>p.pedido),[1004]);
