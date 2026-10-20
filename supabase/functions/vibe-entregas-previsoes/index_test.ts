@@ -24,3 +24,8 @@ for(const modo of ['prever','iniciar','atualizar','negado','google-falha','desat
  if(['negado','desativado'].includes(modo))check(!calls.some(x=>x.includes('googleapis')));
  if(['prever','negado','desativado','google-falha'].includes(modo))check(!calls.some(x=>x.endsWith('/ve_previsao_aplicar')));
 });
+Deno.test('Veppo ocupa uma parada e recebe uma previsao para todos os pedidos do grupo',()=>{
+ const agrupado={...ctx,paradas:[{chave:'a',pedido:1,endereco:'Veppo',modalidade:'veppo'},{chave:'b',pedido:2,endereco:'Veppo',modalidade:'veppo'},{chave:'c',pedido:3,endereco:'Outro',modalidade:'motoboy'}]};
+ const r=previsoes(agrupado,{routes:[{legs:[{duration:'600s'},{duration:'1200s'}]}]});
+ check(r.a===r.b);check(r.c==='2026-10-19T12:35:00.000Z');
+});

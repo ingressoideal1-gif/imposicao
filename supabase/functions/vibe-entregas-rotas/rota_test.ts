@@ -34,3 +34,10 @@ Deno.test('Google somente apos reserva; chave nao aparece no retorno',async()=>{
  const r=await atender(new Request('http://local',{method:'POST',headers:{Authorization:'Bearer fake'},body:JSON.stringify({...entrada,id,pedidos:[id],ultima:id})}),mock,env);
  ok(r.status===200&&passos.length===4);ok(!(await r.text()).includes('google-secret-test'));
 });
+Deno.test('Otimiza grupos sem separar os pedidos da transportadora',()=>{
+ const paradas=[{chave:'a',pedido:1,endereco:'Veppo',modalidade:'veppo'},{chave:'b',pedido:2,endereco:'Veppo',modalidade:'veppo'},{chave:'c',pedido:3,endereco:'Cliente',modalidade:'motoboy'}];
+ const plano=preparar({pedidos:['a','b','c'],origem:'grafica',retorno:false,modo:'DRIVE',ultima:'b'},paradas);
+ if(plano.corpo.intermediates.length!==1)throw Error('Veppo repetida');
+ const r=interpretar({routes:[{distanceMeters:100,duration:'60s'}]},plano);
+ if(r.paradas.map(p=>p.chave).join(',')!=='c,a,b')throw Error('Grupo separado');
+});
