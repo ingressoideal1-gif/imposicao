@@ -27,7 +27,7 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
     class MapMock { constructor(el) { this.el = el; el.textContent = 'Google Maps simulado para teste · sem chamadas externas'; } fitBounds(b) { this.bounds = b; } }
     class Marker { constructor(o) { Object.assign(this, o); markers.push(this); } addListener(_, cb) { this.click = cb; } }
     class Polyline { constructor(o) { Object.assign(this, o); lines.push(this); } setMap(m) { this.map = m; } }
-    class Geocoder { async geocode({ address }) { const n = Number(address.match(/, (\d+)/)?.[1] || 1); return { results: [{ geometry: { location_type: 'ROOFTOP', location: { toJSON: () => ({ lat: -30 - n / 1000, lng: -51.2 }) } } }] }; } }
+    class Geocoder { async geocode({ address }) { if(window.geocodeOverride){const r=window.geocodeOverride(address);if(r)return r;} const n = Number(address.match(/, (\d+)/)?.[1] || 1); return { results: [{ geometry: { location_type: 'ROOFTOP', location: { toJSON: () => ({ lat: -30 - n / 1000, lng: -51.2 }) } } }] }; } }
     class InfoWindow { setContent(n) { window.popup = n; } open() {} close() {} }
     const Route = { computeRoutes: async r => { routeCalls.push(r); return { routes: [{ path: [r.origin, ...r.intermediates.map(p => p.location), r.destination] }] }; } };
     window.google = { maps: { LatLngBounds: Bounds, importLibrary: async () => ({ Map: MapMock, AdvancedMarkerElement: Marker, Polyline, Geocoder, InfoWindow, Route }) } };
@@ -93,6 +93,30 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   await p.evaluate(()=>markers.filter(m=>m.map&&m.content?.textContent==='Veppo · 2').at(-1).click());
   assert.equal(await p.evaluate(()=>popup.querySelectorAll('select').length),2);
   assert.match(await p.evaluate(()=>popup.textContent),/2001[\s\S]*2002/);
+  // Complementos nao impedem localizar o predio; respostas imprecisas continuam bloqueadas.
+  await p.evaluate(()=>{
+    window.EntregasModalidade.atual='motoboy';window.geocodeCalls=[];
+    window.geocodeOverride=address=>{
+      geocodeCalls.push(address);
+      if(address.includes('TERREO'))return {results:[{partial_match:true}]};
+      if(address.includes('CONJ'))throw Object.assign(new Error('Sem resultado'),{code:'ZERO_RESULTS'});
+      if(address.includes('Rua Incerta'))return {results:[{geometry:{location_type:'APPROXIMATE'}}]};
+    };
+    rows=[
+      {chave:'t1',pedido:3001,endereco:'Rua Exemplo, 123, TERREO, Centro, Cidade Teste, RS, 90000-000',endereco_completo:true,status_erp:'EXPEDICAO'},
+      {chave:'t2',pedido:3002,endereco:'Avenida Exemplo, 456, CONJ 101 102, Centro, Cidade Teste, RS, 90000-000',endereco_completo:true,status_erp:'EM PRODUCAO'},
+      {chave:'t3',pedido:3003,endereco:'Rua Incerta, 789, SALA 1, Centro, Cidade Teste, RS, 90000-000',endereco_completo:true,status_erp:'EXPEDICAO'}
+    ];
+    return EntregasMapa.atualizar();
+  });
+  assert.equal(await p.evaluate(()=>markers.filter(m=>m.map&&/^#300[12]$/.test(m.content?.textContent)).length),2);
+  assert.ok(await p.evaluate(()=>geocodeCalls.includes('Rua Exemplo, 123, Centro, Cidade Teste, RS, 90000-000')));
+  assert.ok(await p.evaluate(()=>geocodeCalls.includes('Avenida Exemplo, 456, Centro, Cidade Teste, RS, 90000-000')));
+  assert.match(await p.$eval('#ve-mapa-erros',e=>e.textContent),/3003/);
+  assert.doesNotMatch(await p.$eval('#ve-mapa-erros',e=>e.textContent),/3001|3002/);
+  assert.match(await p.evaluate(()=>rows[0].endereco),/TERREO/);
+  await p.evaluate(()=>EntregasMapa.atualizar());
+  assert.equal(await p.evaluate(()=>geocodeCalls.filter(a=>a==='Rua Exemplo, 123, Centro, Cidade Teste, RS, 90000-000').length),1);
   // Todas as paginas, sem limite silencioso de 50 pedidos e sem geocodificar endereco ausente.
   await p.evaluate(() => { rows = Array.from({ length: 202 }, (_, i) => ({ chave: String(i).padStart(4, '0'), pedido: i, endereco_completo: false })); return EntregasMapa.atualizar(); });
   assert.equal(await p.$eval('#ve-total', e => e.textContent), '202');
