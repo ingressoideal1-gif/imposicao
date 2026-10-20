@@ -7662,6 +7662,13 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
         return;
     }
 
+    if (field === 'status_impressao') {
+        const confirmado = await updateItemImpressao(itemId, osId, value);
+        renderPedOSQueue();
+        updatePedImprimirButtonsVisibility();
+        return confirmado;
+    }
+
     item[field] = value;
     autoSaveOSItemField(itemId, osId, field, value);
 
@@ -7731,20 +7738,6 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
     }
     enviarParaPedido(itemId, osId);
 
-    if (field === 'status_impressao') {
-        item.impressao = value;
-        // Atualizar também no state.modelosGlobais
-        const numOs = parseInt(osId.toString().replace('vibe_', ''));
-        if (state.modelosGlobais && state.modelosGlobais[numOs]) {
-            const mod = state.modelosGlobais[numOs].find(m => String(m.id) === String(itemId));
-            if (mod) {
-                mod.impressao = value;
-                mod.status_impressao = value;
-            }
-        }
-        renderPedOSQueue();
-        updatePedImprimirButtonsVisibility();
-    }
 }
 
 window.pedQueueGerarPDF = pedQueueGerarPDF;
