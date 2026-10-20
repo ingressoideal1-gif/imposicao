@@ -4441,13 +4441,14 @@
             <section id="view-entregas" class="view-section">
                 <div class="ve-painel">
                     <nav class="ve-modalidades" aria-label="Modalidade de entrega">
-                      <button type="button" class="btn btn-secondary" data-ve-modalidade="motoboy" aria-pressed="true">Motoboy</button>
+                      <button type="button" class="btn btn-secondary" data-ve-modalidade="todas" aria-pressed="true">Todas</button>
+                      <button type="button" class="btn btn-secondary" data-ve-modalidade="motoboy" aria-pressed="false">Motoboy</button>
                       <button type="button" class="btn btn-secondary" data-ve-modalidade="veppo" aria-pressed="false">Veppo</button>
                       <button type="button" class="btn btn-secondary" data-ve-modalidade="aereo" aria-pressed="false">Aéreo</button>
                     </nav>
                     <p id="ve-modalidade-info">Expedição do dia + Prontos para Expedir. Rotas em deslocamento permanecem visíveis.</p>
                     <h2>Entregas</h2><p>Planeje as saídas da Ideal e acompanhe cada entrega em um só lugar.</p>
-                    <div class="ve-gestao-acoes"><button type="button" class="btn btn-primary" id="ve-entregadores">Entregadores e acessos</button><button type="button" class="btn btn-ghost" id="ve-nova-rota">Criar rota</button></div>
+                    <div class="ve-gestao-acoes"><button type="button" class="btn btn-primary" id="ve-adicionar-entrega" hidden>Adicionar entrega</button><button type="button" class="btn btn-primary" id="ve-entregadores">Entregadores e acessos</button><button type="button" class="btn btn-ghost" id="ve-nova-rota">Criar rota</button></div>
                     <dialog id="ve-cadastros"><h3>Entregadores e acessos</h3><p>O login do PWA é o e-mail. Senhas não são exibidas; informe uma nova para redefinir.</p><button type="button" id="ve-novo-entregador" class="btn btn-primary">Novo entregador</button><div id="ve-cadastros-lista"></div><p id="ve-cadastros-msg" role="status"></p><button type="button" data-ve-fechar="ve-cadastros" class="btn btn-ghost">Fechar</button></dialog>
                     <dialog id="ve-cadastro"><form id="ve-cadastro-form" autocomplete="off"><h3 id="ve-cadastro-titulo">Novo entregador</h3>
                       <label>Nome<input id="ve-nome" required minlength="2" maxlength="120"></label>
@@ -4623,6 +4624,7 @@
     <script src="navegacao-painel.js?v=990"></script>
     <script src="origem-aprovacao.js?v=967"></script>
     <script src="/entregas-mapa.js?v=1088"></script>
+    <script src="/entregas-avulsas.js?v=1088"></script>
     <script src="script.js?v=1087"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=1067"></script>

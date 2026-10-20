@@ -88,9 +88,9 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   await p.evaluate(()=>markers.filter(m=>m.map&&m.title?.includes('1004')).at(-1).click());
   assert.equal(await p.evaluate(()=>popup.querySelector('select').disabled),true);
   await p.evaluate(()=>{window.EntregasModalidade={atual:'veppo'};rows=[{chave:'v1',pedido:2001,cliente:'A',modalidade:'veppo',endereco:'Destino Veppo 70',endereco_completo:true,status_erp:'EXPEDICAO',empresa:'A'},{chave:'v2',pedido:2002,cliente:'B',modalidade:'veppo',endereco:'Destino Veppo 70',endereco_completo:true,status_erp:'EXPEDICAO',empresa:'A'}];return EntregasMapa.atualizar();});
-  assert.equal(await p.evaluate(()=>markers.filter(m=>m.map&&m.content?.textContent==='Veppo · 2').length),1);
-  assert.ok(await p.evaluate(()=>calls.some(c=>c.args?.p_modalidade==='veppo')));
-  await p.evaluate(()=>markers.filter(m=>m.map&&m.content?.textContent==='Veppo · 2').at(-1).click());
+  assert.equal(await p.evaluate(()=>markers.filter(m=>m.map&&m.content?.textContent==='Veppo · #2001, #2002').length),1);
+  assert.ok(await p.evaluate(()=>calls.some(c=>c.args?.p_modalidade==='todas')));
+  await p.evaluate(()=>markers.filter(m=>m.map&&m.content?.textContent==='Veppo · #2001, #2002').at(-1).click());
   assert.equal(await p.evaluate(()=>popup.querySelectorAll('select').length),2);
   assert.match(await p.evaluate(()=>popup.textContent),/2001[\s\S]*2002/);
   // Complementos nao impedem localizar o predio; respostas imprecisas continuam bloqueadas.

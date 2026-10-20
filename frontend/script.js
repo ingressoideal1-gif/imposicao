@@ -49020,7 +49020,7 @@ window.carregarFundoAtual = carregarFundoAtual;
 // FIM ADM FRETES
 
 // INICIO PAINEL ENTREGAS
-window.EntregasModalidade = { atual: 'motoboy' };
+window.EntregasModalidade = { atual: 'todas' };
 window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
     async atualizar(){
         const turno=++this.geracao;this.consultar=false;this.editar=false;
@@ -49043,11 +49043,12 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
     const data = valor => valor ? new Date(valor).toLocaleString('pt-BR') : '—';
     function texto(tag, valor) { const node = document.createElement(tag); node.textContent = valor ?? '—'; return node; }
     function limparFoto() { fotoGeracao++; el('ve-comprovante').hidden = true; el('ve-comprovante').removeAttribute('src'); }
-    function limparDados() { window.EntregasMapa?.limpar(); window.EntregasGestao?.limpar(); geracao++; el('ve-rotas-lista').replaceChildren(); el('ve-rotas-mensagem').textContent=''; el('ve-linhas').replaceChildren(); limparFoto(); el('ve-detalhe').close(); el('ve-detalhe-texto').textContent = ''; el('ve-historico').replaceChildren(); el('ve-detalhe-titulo').textContent = 'Detalhes da entrega'; }
+    function limparDados() { window.EntregasMapa?.limpar(); window.EntregasGestao?.limpar(); window.EntregasAvulsas?.limpar(); geracao++; el('ve-rotas-lista').replaceChildren(); el('ve-rotas-mensagem').textContent=''; el('ve-linhas').replaceChildren(); limparFoto(); el('ve-detalhe').close(); el('ve-detalhe-texto').textContent = ''; el('ve-historico').replaceChildren(); el('ve-detalhe-titulo').textContent = 'Detalhes da entrega'; }
     function atualizarAcesso() {
         if (!el('nav-entregas')) return;
         el('nav-entregas').style.display = permitido() ? '' : 'none';
-        for(const id of ['ve-entregadores','ve-nova-rota'])el(id).hidden=window.EntregasAcesso?.editar!==true;
+        for(const id of ['ve-entregadores','ve-nova-rota','ve-adicionar-entrega'])el(id).hidden=window.EntregasAcesso?.editar!==true;
+        if(window.EntregasAcesso?.editar!==true)window.EntregasAvulsas?.limpar();
         if (!permitido()) { limparDados(); el('ve-mensagem').textContent = 'Acesso a Entregas não autorizado.'; el('view-entregas').classList.remove('active'); }
     }
     async function detalhes(row) {
@@ -49122,7 +49123,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
                 else { const c=cliente();const {data,error}=await c.rpc('ve_rotas_status',{});if(error||!Array.isArray(data))throw new Error('Consulta de rotas indisponível. Confira a implantação e sua autorização.');rows=data; }
                 if(turno!==geracao||!permitido())return;
                 el('ve-rotas-lista').replaceChildren();
-                for(const r of rows){const box=document.createElement('article'),paradas=(r.paradas||[]).filter(p=>(p.modalidade||'motoboy')===window.EntregasModalidade.atual);if(!paradas.length)continue;
+                for(const r of rows){const box=document.createElement('article'),paradas=(r.paradas||[]);if(!paradas.length)continue;
                     box.append(texto('h3',paradas[0]?.entregador||'Entregador'),texto('p',`${data(r.confirmada_em)} · ${paradas.filter(p=>p.entregue).length}/${paradas.length} concluídas`));
                     const lista=document.createElement('div');lista.className='ve-tabela';const tabela=document.createElement('table'),cabecalho=document.createElement('thead'),titulos=document.createElement('tr'),corpo=document.createElement('tbody');
                     for(const titulo of ['Ordem','Pedido','Situação','Previsão de entrega']){const th=texto('th',titulo);th.scope='col';titulos.append(th);}cabecalho.append(titulos);
@@ -49139,8 +49140,8 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         document.querySelectorAll('[data-ve-modalidade]').forEach(b=>b.onclick=()=>{
             window.EntregasModalidade.atual=b.dataset.veModalidade;
             document.querySelectorAll('[data-ve-modalidade]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
-            el('ve-modalidade-info').textContent=b.dataset.veModalidade==='motoboy'?'Expedição do dia + Prontos para Expedir. Rotas em deslocamento permanecem visíveis.':
-                (b.dataset.veModalidade==='veppo'?'Veppo · CEP 90035-040, nº 70.':'Aéreo · CEP 92020-400, nº 45.')+' Repasse em grupo à transportadora; o ERP permanece Em trânsito.';
+            el('ve-modalidade-info').textContent=['todas','motoboy'].includes(b.dataset.veModalidade)?'Expedição do dia + Prontos para Expedir. Rotas em deslocamento permanecem visíveis.':
+                (b.dataset.veModalidade==='veppo'?'Veppo · CEP 90035-040, nº 70.':'Aéreo · CEP 92020-400, nº 45.')+' Inclua cada pedido na rota desejada, junto com Motoboy. No repasse, o ERP permanece Em trânsito.';
             geracao++;ocupado=false;el('ve-linhas').replaceChildren();el('ve-busca').value='';
             window.EntregasGestao?.limpar();carregar(0);window.EntregasMapa?.atualizar();
         });
@@ -49183,7 +49184,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         select.className = 'form-control'; select.dataset.veEntregador = row.chave;
         select.setAttribute('aria-label', `Entregador do pedido ${row.pedido}`);
         const vazio = texto('option', 'Selecionar entregador'); vazio.value = ''; vazio.disabled = true; select.append(vazio);
-        for (const d of ctx.entregadores.filter(d=>d.ativo && d.empresas.includes(row.empresa))) {
+        for (const d of ctx.entregadores.filter(d=>d.ativo && (row.avulsa===true || d.empresas.includes(row.empresa)))) {
             const option = texto('option', d.nome); option.value = d.usuario; select.append(option);
         }
         if (row.entregador_id && ![...select.options].some(o=>o.value===row.entregador_id)) {
@@ -49228,7 +49229,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
     function editarCadastro(d=null){if(!contexto?.editar)return;geracao++;cadastro=d;operacao=crypto.randomUUID();el('ve-cadastro-titulo').textContent=d?'Editar entregador':'Novo entregador';el('ve-nome').value=d?.nome||'';el('ve-email').value=d?.email||'';el('ve-email').readOnly=!!d;el('ve-senha').value='';el('ve-senha').required=!d;el('ve-ativo').checked=d?.ativo??true;el('ve-ativo').disabled=!d;el('ve-senha-ajuda').textContent=d?'Deixe a senha vazia para manter a atual.':'Mínimo de 12 caracteres. Entregue a senha diretamente ao entregador.';el('ve-cadastro-msg').textContent='';el('ve-cadastro').showModal();}
     async function listarCadastros(){if(!permitido())return;geracao++;el('ve-cadastros-msg').textContent='Consultando…';el('ve-cadastros-lista').replaceChildren();if(!el('ve-cadastros').open)el('ve-cadastros').showModal();const turno=geracao;try{if(!await carregarContexto())return;el('ve-novo-entregador').disabled=!contexto.editar;for(const d of contexto.entregadores){const box=document.createElement('article');box.append(texto('strong',d.nome),texto('p',d.email+' · '+(d.ativo?'Ativo':'Inativo')));const b=botao('Editar / nova senha',()=>editarCadastro(d));b.disabled=!contexto.editar;box.append(b);el('ve-cadastros-lista').append(box);}el('ve-cadastros-msg').textContent=contexto.entregadores.length?'':'Nenhum entregador cadastrado.';}catch(e){if(turno===geracao)el('ve-cadastros-msg').textContent=e.message;}}
     function desenharSequencia(){el('ve-rota-sequencia').replaceChildren();sequencia.forEach((p,i)=>{const li=texto('li',`Pedido ${p.pedido} · ${p.entregue?(p.tipo_conclusao==='repasse'?'Repassado à transportadora':'Entregue'):p.cliente||'Pendente'} `);for(const [label,delta] of [['↑',-1],['↓',1]]){const b=botao(label,()=>{const j=i+delta;if(j<0||j>=sequencia.length)return;[sequencia[i],sequencia[j]]=[sequencia[j],sequencia[i]];rotaId=crypto.randomUUID();desenharSequencia();});b.setAttribute('aria-label',label==='↑'?'Mover pedido para cima':'Mover pedido para baixo');b.disabled=i+delta<0||i+delta>=sequencia.length;li.append(b);}const remover=botao('Remover',()=>{sequencia.splice(i,1);rotaId=crypto.randomUUID();desenharSequencia();});remover.disabled=!!p.entregue;li.append(remover);el('ve-rota-sequencia').append(li);});}
-    async function buscarPedidos(mais=false){const usuario=el('ve-rota-entregador').value;if(!usuario)return;const turno=geracao,q=++consulta;if(!mais){offset=0;el('ve-rota-disponiveis').replaceChildren();}el('ve-rota-msg').textContent='Consultando pedidos…';try{const rows=await rpc('ve_admin_pedidos_rota_modalidades',{p_modalidade:window.EntregasModalidade.atual,p_usuario:usuario,p_busca:el('ve-rota-busca').value.trim(),p_offset:offset});if(turno!==geracao||q!==consulta)return;for(const p of rows.slice(0,50)){const b=botao(`Adicionar #${p.pedido} · ${p.cliente}`,()=>{if(sequencia.some(x=>x.chave===p.chave))return;if(sequencia.length>=20){el('ve-rota-msg').textContent='Limite de 20 paradas.';return;}sequencia.push(p);rotaId=crypto.randomUUID();desenharSequencia();});el('ve-rota-disponiveis').append(b);}el('ve-rota-mais').hidden=rows.length<=50;offset+=50;el('ve-rota-msg').textContent=rows.length?'Selecione os pedidos e confira a ordem.':'Nenhum pedido disponível para este entregador.';}catch(e){if(turno===geracao&&q===consulta)el('ve-rota-msg').textContent=e.message;}}
+    async function buscarPedidos(mais=false){const usuario=el('ve-rota-entregador').value;if(!usuario)return;const turno=geracao,q=++consulta;if(!mais){offset=0;el('ve-rota-disponiveis').replaceChildren();}el('ve-rota-msg').textContent='Consultando pedidos…';try{const rows=await rpc('ve_admin_pedidos_rota_modalidades',{p_modalidade:'todas',p_usuario:usuario,p_busca:el('ve-rota-busca').value.trim(),p_offset:offset});if(turno!==geracao||q!==consulta)return;for(const p of rows.slice(0,50)){const b=botao(`Adicionar #${p.pedido} · ${p.modalidade || 'motoboy'} · ${p.cliente}`,()=>{if(sequencia.some(x=>x.chave===p.chave))return;if(sequencia.length>=20){el('ve-rota-msg').textContent='Limite de 20 paradas.';return;}sequencia.push(p);rotaId=crypto.randomUUID();desenharSequencia();});el('ve-rota-disponiveis').append(b);}el('ve-rota-mais').hidden=rows.length<=50;offset+=50;el('ve-rota-msg').textContent=rows.length?'Selecione os pedidos e confira a ordem.':'Nenhum pedido disponível para este entregador.';}catch(e){if(turno===geracao&&q===consulta)el('ve-rota-msg').textContent=e.message;}}
     async function abrirRota(id=null){if(!permitido())return;const turno=++geracao;try{if(!await carregarContexto())return;if(!contexto.editar)throw new Error('Seu perfil ADM não permite editar.');const rotas=await rpc('ve_admin_rotas');if(turno!==geracao)return;const r=id?rotas.find(x=>x.id===id):null;if(id&&!r)throw new Error('Rota alterada. Atualize a lista.');if(r?.iniciada_em)throw new Error('Rota em deslocamento não pode ser alterada.');el('ve-rota-entregador').replaceChildren();for(const d of contexto.entregadores.filter(x=>x.ativo)){const o=texto('option',d.nome);o.value=d.usuario;el('ve-rota-entregador').append(o);}if(r)el('ve-rota-entregador').value=r.usuario;el('ve-rota-entregador').disabled=!!r;rotaAnterior=r?.id||null;rotaId=crypto.randomUUID();sequencia=r?(r.paradas||[]).map(p=>({...p})):[];el('ve-rota-retorno-adm').checked=r?.retorno??false;el('ve-rota-busca').value='';el('ve-rota-titulo').textContent=r?'Alterar rota':'Criar rota';el('ve-rota-disponiveis').replaceChildren();el('ve-rota-msg').textContent='';desenharSequencia();el('ve-rota-editor').showModal();if(!el('ve-rota-entregador').value){el('ve-rota-msg').textContent='Cadastre um entregador ativo primeiro.';return;}await buscarPedidos();}catch(e){if(turno===geracao)el('ve-mensagem').textContent=e.message;}}
     let rotaDeslocamento = null;
     let paradasPrevisao = [], previsaoPronta = false, calculandoPrevisao = null;

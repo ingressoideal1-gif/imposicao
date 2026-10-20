@@ -5,7 +5,7 @@
   const labels = { disponivel: 'Disponíveis', minha: 'Minha rota', concluida: 'Concluídas' };
   const reasons = { repasse: 'Repassado à transportadora', entregue: 'Entregue', ausente: 'Destinatário ausente', endereco: 'Endereço incorreto', recusa: 'Entrega recusada' };
   let pedidos = [], filtro = 'minha', atual = null, foto = null, fotoURL = '', carregandoFoto = false, enviando = false, instalacao;
-  let usuario = null, modalidade = 'motoboy';
+  let usuario = null, modalidade = 'todas';
   let demo = true, offset = 0, consulta = 0, operacao = null, debounce, fotoLeitura = 0;
   async function carregar() {
     if (demo) { render(); return; }
@@ -42,8 +42,8 @@
     document.querySelectorAll('[data-modalidade]').forEach(b=>b.onclick=()=>{
     modalidade=b.dataset.modalidade;offset=0;consulta++;pedidos=[];
     document.querySelectorAll('[data-modalidade]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
-    $('busca').value='';$('modalidade-info').textContent=modalidade==='motoboy'?'Expedição do dia + Prontos para Expedir.':
-      (modalidade==='veppo'?'Veppo · CEP 90035-040, nº 70.':'Aéreo · CEP 92020-400, nº 45.')+' Confirme o repasse em grupo à transportadora.';
+    $('busca').value='';$('modalidade-info').textContent=['todas','motoboy'].includes(modalidade)?'Expedição do dia + Prontos para Expedir.':
+      (modalidade==='veppo'?'Veppo · CEP 90035-040, nº 70.':'Aéreo · CEP 92020-400, nº 45.')+' Pedidos incluídos individualmente na sua rota, junto com Motoboy.';
     render();carregar();
   });
   document.querySelectorAll('[data-filtro]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filtro === filtro)));
@@ -51,34 +51,28 @@
     const rows = pedidos.filter(p => p.estado === filtro && String(p.id).toLowerCase().includes(busca)).sort((a,b)=>(ordem.get(a.chave) ?? 999)-(ordem.get(b.chave) ?? 999));
     $('contador').textContent = `${rows.length} pedido${rows.length === 1 ? '' : 's'}`;
     $('lista').replaceChildren();
-    const gruposExibidos = new Set();
     for (const p of rows) {
-      if (p.estado==='minha' && ['veppo','aereo'].includes(p.modalidade) && ordem.has(p.chave)) {
-        if(gruposExibidos.has(p.modalidade))continue;gruposExibidos.add(p.modalidade);
-        const grupo=pedidos.filter(x=>x.estado==='minha'&&x.modalidade===p.modalidade&&ordem.has(x.chave));
-        const nome=p.modalidade==='veppo'?'Veppo':'Aéreo',card=text('article','','card');
-        card.append(text('h2',`${nome} · ${grupo.length} pedido(s)`),text('p',p.endereco));
-        const lista=document.createElement('ul');for(const x of grupo)lista.append(text('li',`Pedido ${x.id} · ${x.nome} · ${x.volumes ?? 'Volumes não informados'}`));card.append(lista);
-        card.append(text('p','Um comprovante para este grupo. O ERP permanece Em trânsito após o repasse.'));
-        if(p.prevista_em)card.append(text('p','Previsão de repasse: '+new Date(p.prevista_em).toLocaleString('pt-BR')));
-        if(rotaAtiva.iniciada_em&&grupo.every(x=>x.status_erp==='EM TRANSITO')){
-          const navegar=text('a','Navegar','route');navegar.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(p.endereco);navegar.target='_blank';navegar.rel='noopener noreferrer';card.append(navegar);
-          card.append(botao('Informar repasse do grupo',()=>abrir({...p,id:grupo.map(x=>x.id).join(', '),grupo,rota_id:rotaAtiva.id,nome:nome+' · Repasse',volumes:grupo.every(x=>Number.isFinite(x.volumes))?grupo.reduce((n,x)=>n+x.volumes,0):null})));
-        } else card.append(text('p','Aguardando início da rota.'));
-        $('lista').append(card);continue;
-      }
       const card = text('article', '', 'card');
       const liberada = !!rotaAtiva?.iniciada_em && ordem.has(p.chave) && p.status_erp === 'EM TRANSITO';
       if (p.estado === 'minha' && p === rows.find(x=>ordem.has(x.chave) && x.status_erp === 'EM TRANSITO') && liberada) { card.classList.add('proxima-entrega'); card.append(text('p', 'PRÓXIMA ENTREGA', 'eyebrow')); }
       if (['NOVO','AGUARDANDO','EM PRODUCAO'].includes(p.status_erp)) { card.classList.add('aguardando'); card.append(text('p','Aguardando produção')); }
-      card.append(text('span', p.estado === 'concluida' ? (p.registro?.resultado==='repasse'?'Repasse confirmado':demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? (p.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : 'Aguardando início da rota') : (p.status_erp==='EXPEDICAO'?'Pronto para Expedir':'Expedição do dia · aguardando produção'), 'tag'), text('h2', `Pedido ${p.id}`), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
+      card.append(text('span', p.estado === 'concluida' ? (p.registro?.resultado==='repasse'?'Repasse confirmado':demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? (p.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : 'Aguardando início da rota') : (p.status_erp==='EXPEDICAO'?'Pronto para Expedir':'Expedição do dia · aguardando produção'), 'tag'), text('h2', `${String(p.id).startsWith('AV-')?'Entrega':'Pedido'} ${p.id}`), text('p', p.modalidade==='veppo'?'Veppo':p.modalidade==='aereo'?'Aéreo':'Motoboy'), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
       if (p.prevista_em) card.append(text('p', 'Previsão de entrega: '+new Date(p.prevista_em).toLocaleString('pt-BR')));
       if (p.registro) card.append(text('p', `${reasons[p.registro.resultado]} · ${p.registro.recebedor || 'Tentativa registrada'} · ${new Date(p.registro.hora).toLocaleString('pt-BR')}`));
       const actions = text('div', '', 'actions');
       const rota = text('a', 'Navegar', 'route'); rota.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.endereco); rota.target = '_blank'; rota.rel = 'noopener noreferrer';
       if (p.endereco && p.endereco.trim() && (liberada || p.estado === 'concluida')) actions.append(rota);
       else if(!p.endereco?.trim()) card.append(text('p', 'Endereço não informado. Confira com a expedição.'));
-      if (p.estado === 'minha' && liberada) { actions.append(botao('Informar entrega', () => abrir(p))); actions.append(botao('Não consegui entregar', () => abrir(p, 'ausente'))); }
+      if (p.estado === 'minha' && liberada) {
+        if (['veppo','aereo'].includes(p.modalidade)) {
+          const grupo=pedidos.filter(x=>x.estado==='minha'&&x.modalidade===p.modalidade&&ordem.has(x.chave)&&x.status_erp==='EM TRANSITO');
+          const repassar=itens=>abrir({...p,id:itens.map(x=>x.id).join(', '),grupo:itens,rota_id:rotaAtiva.id,volumes:itens.every(x=>Number.isFinite(x.volumes))?itens.reduce((n,x)=>n+x.volumes,0):null});
+          actions.append(botao('Informar repasse deste pedido',()=>repassar([p])));
+          if(grupo.length>1&&p===grupo[0])actions.append(botao(`Repassar ${grupo.length} pedidos ${p.modalidade==='veppo'?'Veppo':'Aéreo'} desta rota`,()=>repassar(grupo)));
+        } else {
+          actions.append(botao('Informar entrega', () => abrir(p))); actions.append(botao('Não consegui entregar', () => abrir(p, 'ausente')));
+        }
+      }
       if(p.estado==='disponivel' && p.status_erp==='EXPEDICAO' && !demo){const b=botao('Assumir entrega',()=>assumir(p,b));b.disabled=enviando;actions.append(b);}
       card.append(actions); $('lista').append(card);
     }

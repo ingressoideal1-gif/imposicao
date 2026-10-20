@@ -158,7 +158,7 @@
             if (!c) throw new Error('Entre com sua conta ADM para abrir o mapa.');
             const rows = [], ids = new Set(); let cursor = null;
             do {
-                const { data, error } = await c.rpc('ve_admin_mapa_modalidades', { p_apos: cursor, p_modalidade: window.EntregasModalidade?.atual || 'motoboy' });
+                const { data, error } = await c.rpc('ve_admin_mapa_modalidades', { p_apos: cursor, p_modalidade: 'todas' });
                 if (!atual()) return;
                 if (error || !Array.isArray(data)) throw new Error('Consulta do mapa indisponível. Confira sua sessão e a implantação da consulta ADM.');
                 for (const row of data.slice(0, 200)) { if (!row.chave || ids.has(row.chave)) throw new Error('A lista mudou durante a consulta. Atualize o mapa.'); ids.add(row.chave); rows.push(row); }
@@ -184,7 +184,7 @@
                     const pos = await localizar(row.endereco, turno); if (!atual()) return;
                     posicoes.set(row.chave, pos);
                     if(['veppo','aereo'].includes(row.modalidade)){
-                        if(!gruposMarcados.has(row.modalidade)){gruposMarcados.add(row.modalidade);const grupo=rows.filter(p=>p.modalidade===row.modalidade);marcar(pos,{...row,grupo},`${row.modalidade==='veppo'?'Veppo':'Aéreo'} · ${grupo.length}`,grupo.every(p=>p.entregador_id===row.entregador_id)?corPedido(row):'#64748b');}
+                        if(!gruposMarcados.has(row.modalidade)){gruposMarcados.add(row.modalidade);const grupo=rows.filter(p=>p.modalidade===row.modalidade);marcar(pos,{...row,grupo},`${row.modalidade==='veppo'?'Veppo':'Aéreo'} · ${grupo.map(p=>'#'+p.pedido).join(', ')}`,grupo.every(p=>p.entregador_id===row.entregador_id)?corPedido(row):'#64748b');}
                     }else marcar(pos, row, '#' + row.pedido, corPedido(row));
                 } catch { if (!atual()) return; erros.push(`Pedido ${row.pedido}: confira o endereço no ERP (${row.endereco || 'não informado'}).`); }
             }
