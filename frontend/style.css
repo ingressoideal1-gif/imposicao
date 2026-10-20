@@ -6422,3 +6422,53 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 #adm-tab-fretes .fretes-grade { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; }
 #fretes-editor { margin-top:20px; padding:20px; }
 #fretes-status { min-height:1.5em; }
+<<<<<<< HEAD
+=======
+
+/* Acompanhamento Vibe Entregas */
+.ve-painel{max-width:1400px;margin:auto;padding:24px}.ve-filtros{display:flex;flex-wrap:wrap;gap:12px;align-items:end}.ve-filtros label{display:grid;gap:6px;font-size:13px}.ve-filtros input,.ve-filtros select{padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:inherit}.ve-tabela{overflow:auto}.ve-tabela table{width:100%;border-collapse:collapse}.ve-tabela td,.ve-tabela th{text-align:left;padding:14px;border-bottom:1px solid var(--border);vertical-align:top}.ve-tabela small{display:block;opacity:.75;margin-top:6px}.ve-paginacao{display:flex;gap:16px;align-items:center;margin-top:16px}#ve-detalhe{max-width:650px;width:calc(100% - 32px);max-height:90vh;border:1px solid var(--border);border-radius:12px;padding:24px;background:var(--bg-card,#fff);color:var(--text-main,#222)}#ve-detalhe::backdrop{background:#0008}#ve-comprovante{max-width:100%;max-height:60vh;object-fit:contain}.ve-painel [hidden]{display:none!important}
+/* Gestao ADM de entregadores e rotas */
+.ve-gestao-acoes{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}.ve-painel dialog{width:min(720px,94vw);max-height:90vh;overflow:auto}.ve-painel dialog label:not(.ve-check){display:grid;gap:5px;margin:10px 0}.ve-painel dialog input:not([type=checkbox]),.ve-painel dialog select{width:100%;box-sizing:border-box;padding:9px}.ve-painel .ve-check{display:flex;align-items:center;gap:8px;margin:8px 0}.ve-painel #ve-cadastros-lista article{border-bottom:1px solid #bbb;padding:14px 0}.ve-painel #ve-rota-disponiveis{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto}.ve-painel #ve-rota-sequencia li{margin:10px 0}.ve-painel [role=alert]{white-space:pre-wrap}
+
+/* Planejamento visual das entregas: estilos restritos a esta pagina. */
+#view-entregas .ve-painel{max-width:1680px;padding:24px 28px;color:var(--text-main,#e8edf6)}
+#view-entregas h2{font-size:28px;letter-spacing:-.6px;margin:0 0 5px}
+#view-entregas .ve-painel>p{color:var(--text-dim,#9aabc3);margin:6px 0 16px}
+.ve-visao-geral{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0 18px}
+.ve-visao-geral article{padding:16px 20px;border:1px solid var(--border,#29374b);border-radius:12px;background:var(--bg-card,#111b2d);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ve-visao-geral span{font-size:13px;color:var(--text-dim,#aebad0)}.ve-visao-geral strong{font-size:28px;line-height:1.2}
+.ve-mapa-layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px;margin:0 0 28px}
+.ve-mapa-card,.ve-mapa-lateral{border:1px solid var(--border,#29374b);border-radius:14px;overflow:hidden;background:var(--bg-card,#111b2d)}
+.ve-mapa-cabecalho{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;gap:12px}
+.ve-mapa-cabecalho h3,.ve-mapa-lateral h3,.ve-lista-cabecalho h3{font-size:16px;margin:0 0 5px}
+.ve-mapa-cabecalho p,.ve-mapa-lateral>p,.ve-lista-cabecalho p{font-size:12px;color:var(--text-dim,#aebad0);margin:0;line-height:1.5}
+#ve-mapa{height:510px;min-height:350px;background:#e9eef2;color:#19283d;position:relative}
+.ve-mapa-vazio{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:32px;box-sizing:border-box;background:radial-gradient(ellipse at center,#f7fafc,#dee7ec)}
+.ve-mapa-vazio strong{font-size:20px}.ve-mapa-vazio p{max-width:430px;line-height:1.7;font-size:14px}
+#ve-mapa-status{padding:12px 18px;font-size:12px;line-height:1.5;margin:0;color:var(--text-dim,#aebad0);min-height:42px;box-sizing:border-box}
+.ve-mapa-lateral{padding:20px 16px;max-height:640px;overflow:auto}.ve-mapa-lateral>p{margin-bottom:18px}
+.ve-mapa-todos{width:100%;border:1px solid var(--border,#334259);border-radius:8px;background:transparent;color:inherit;padding:10px;font:inherit;font-size:12px;cursor:pointer;margin-bottom:8px}
+.ve-mapa-entregador{border-bottom:1px solid var(--border,#29374b);padding:14px 0}
+.ve-mapa-grupo{display:flex;gap:10px;align-items:center;width:100%;border:0;background:transparent;color:inherit;text-align:left;padding:5px 0;cursor:pointer;font:inherit;border-radius:6px}
+.ve-mapa-grupo[aria-pressed=true]{outline:2px solid #689cff;outline-offset:4px}
+.ve-cor-rota{width:12px;height:12px;border-radius:50%;flex-shrink:0}.ve-mapa-grupo strong{display:block;font-size:14px}.ve-mapa-grupo small{display:block;margin-top:5px;font-size:11px;color:var(--text-dim,#aebad0)}
+.ve-mapa-pedidos{font-size:11px;line-height:1.7;color:var(--text-dim,#aebad0);overflow-wrap:anywhere;margin:8px 0 2px 22px}
+.ve-mapa-entregador .btn{font-size:11px;margin-left:12px}
+#ve-mapa-pendencias{margin-top:20px;font-size:12px;line-height:1.6;color:var(--text-main,#e8edf6)}#ve-mapa-pendencias summary{cursor:pointer;color:#e8a953}#ve-mapa-erros{padding-left:18px}#ve-mapa-erros li{margin:10px 0;overflow-wrap:anywhere}
+.ve-map-pin{display:block;min-width:30px;padding:8px 9px;border:2px solid white;border-radius:20px;color:white;text-align:center;font:700 12px system-ui;box-shadow:0 2px 7px #0005;transform:translateY(-4px)}
+.ve-map-popup{color:#15243c;max-width:260px;font:13px/1.5 system-ui}.ve-map-popup strong{font-size:16px}.ve-map-popup p{margin:6px 0}.ve-map-popup button{margin-top:8px}
+.ve-lista-cabecalho{margin-bottom:18px}.ve-rotas-painel{border:1px solid var(--border,#29374b);border-radius:10px;padding:14px 16px;margin:18px 0}.ve-rotas-painel h2{font-size:16px;font-weight:600;margin:0 0 12px}
+#ve-rotas-lista{display:flex;flex-direction:column;gap:14px}#ve-rotas-lista article{border:1px solid var(--border,#29374b);border-radius:10px;padding:18px}#ve-rotas-lista h3{margin:0 0 8px;font-size:15px}#ve-rotas-lista p,#ve-rotas-lista li{font-size:12px;line-height:1.7}#ve-rotas-lista ol{padding-left:20px}
+#view-entregas .ve-tabela{border:1px solid var(--border,#29374b);border-radius:10px}#view-entregas .ve-tabela th{font-size:11px;color:var(--text-dim,#aebad0);white-space:nowrap;background:var(--bg-card,#111b2d)}#view-entregas .ve-tabela td{font-size:12px}
+@media(max-width:1000px){.ve-mapa-layout{grid-template-columns:minmax(0,1fr)}.ve-mapa-lateral{max-height:330px}#ve-mapa-legenda{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.ve-mapa-todos{align-self:start}#ve-mapa{height:440px}}
+@media(max-width:600px){#view-entregas .ve-painel{padding:16px 12px}.ve-visao-geral{gap:6px}.ve-visao-geral article{padding:12px 8px;display:block}.ve-visao-geral span{display:block;font-size:10px;margin-bottom:7px}.ve-visao-geral strong{font-size:23px}.ve-mapa-cabecalho{align-items:start;padding:14px;flex-wrap:wrap}#ve-mapa{height:380px}.ve-mapa-lateral{padding:16px}.ve-filtros label{flex:1;min-width:125px}.ve-filtros input,.ve-filtros select{width:100%;box-sizing:border-box}}
+.ve-map-atribuicao{margin:12px 0;padding-top:10px;border-top:1px solid #d8e0ea}.ve-map-atribuicao label{display:grid;gap:6px;font-weight:600}.ve-map-atribuicao select{width:100%;max-width:260px;box-sizing:border-box;padding:8px;background:#fff;color:#15243c;border:1px solid #9caec4;border-radius:6px}.ve-map-atribuicao [role=status]{font-size:12px;line-height:1.4}
+.ve-mapa-todas-lista{max-height:250px;overflow:auto;margin-top:8px}.ve-mapa-item{display:flex;gap:9px;align-items:center;width:100%;padding:9px 4px;text-align:left;background:transparent;border:0;color:inherit;cursor:pointer}.ve-mapa-item:hover{background:#ffffff0c}.ve-mapa-item strong,.ve-mapa-item small{display:block}.ve-mapa-item strong{font-size:12px}.ve-mapa-item small{font-size:11px;opacity:.75;margin-top:3px}
+
+.ve-modalidades { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.ve-modalidades [aria-pressed="true"] { background:var(--blue, #2563eb); color:white; }
+
+/* Cadastro de entregas avulsas */
+#ve-avulsa{width:min(620px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid #475569;border-radius:12px;padding:20px;background:#111827;color:#f1f5f9}
+#ve-avulsa label{display:grid;gap:4px;margin:10px 0}#ve-avulsa input{width:100%;box-sizing:border-box;padding:8px}#ve-avulsa button{margin:4px;padding:8px 12px}#ve-local-resultados button{display:block;text-align:left;width:100%;overflow-wrap:anywhere}#ve-local-campos{min-width:0}
+>>>>>>> f35a3c1d (Inclui rotas mistas e entregas avulsas na entrega conjunta)

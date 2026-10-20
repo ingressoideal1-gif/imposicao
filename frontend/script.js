@@ -48984,3 +48984,284 @@ window.carregarFundoAtual = carregarFundoAtual;
 })();
 
 // FIM ADM FRETES
+
+// INICIO PAINEL ENTREGAS
+window.EntregasModalidade = { atual: 'todas' };
+window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
+    async atualizar(){
+        const turno=++this.geracao;this.consultar=false;this.editar=false;
+        window.EntregasPainel?.atualizarAcesso();
+        try{const c=typeof vibeClient!=='undefined'?vibeClient:null;if(!c)return;
+            const {data,error}=await c.rpc('ve_entregas_permissoes',{});
+            if(turno!==this.geracao)return;
+            if(!error){this.consultar=data?.consultar===true;this.editar=this.consultar&&data?.editar===true;}
+        }catch{/* Sem resposta autenticada, acesso permanece fechado. */}
+        if(turno===this.geracao)window.EntregasPainel?.atualizarAcesso();
+    }
+};
+
+(() => {
+    'use strict';
+    const el = id => document.getElementById(id);
+    let pagina = 0, geracao = 0, fotoGeracao = 0, demonstracao = false, ocupado = false;
+    const permitido = () => window.EntregasAcesso?.consultar===true;
+    const cliente = () => typeof vibeClient !== 'undefined' ? vibeClient : null;
+    const data = valor => valor ? new Date(valor).toLocaleString('pt-BR') : '—';
+    function texto(tag, valor) { const node = document.createElement(tag); node.textContent = valor ?? '—'; return node; }
+    function limparFoto() { fotoGeracao++; el('ve-comprovante').hidden = true; el('ve-comprovante').removeAttribute('src'); }
+    function limparDados() { window.EntregasMapa?.limpar(); window.EntregasGestao?.limpar(); window.EntregasAvulsas?.limpar(); geracao++; el('ve-rotas-lista').replaceChildren(); el('ve-rotas-mensagem').textContent=''; el('ve-linhas').replaceChildren(); limparFoto(); el('ve-detalhe').close(); el('ve-detalhe-texto').textContent = ''; el('ve-historico').replaceChildren(); el('ve-detalhe-titulo').textContent = 'Detalhes da entrega'; }
+    function atualizarAcesso() {
+        if (!el('nav-entregas')) return;
+        el('nav-entregas').style.display = permitido() ? '' : 'none';
+        for(const id of ['ve-entregadores','ve-nova-rota','ve-adicionar-entrega'])el(id).hidden=window.EntregasAcesso?.editar!==true;
+        if(window.EntregasAcesso?.editar!==true)window.EntregasAvulsas?.limpar();
+        if (!permitido()) { limparDados(); el('ve-mensagem').textContent = 'Acesso a Entregas não autorizado.'; el('view-entregas').classList.remove('active'); }
+    }
+    async function detalhes(row) {
+        if (!permitido()) return;
+        limparFoto(); const turno = fotoGeracao;
+        el('ve-detalhe-titulo').textContent = `Pedido ${row.pedido}`;
+        el('ve-detalhe-texto').textContent = `Entregador: ${row.entregador || 'Não atribuído'} · Recebedor: ${row.recebedor || 'Não informado'} · ${row.tipo_conclusao==='repasse'?'Repasse à transportadora':'Entrega'}: ${data(row.concluida_em)}`;
+        el('ve-historico').replaceChildren();
+        if (row.observacao) el('ve-historico').append(texto('p', row.observacao));
+        for (const t of row.tentativas || []) el('ve-historico').append(texto('p', `${data(t.registrada_em)} · ${t.motivo} · ${t.observacao || ''}`));
+        el('ve-foto-erro').textContent = ''; el('ve-detalhe').showModal();
+        if (!row.foto || demonstracao) { el('ve-foto-erro').textContent = demonstracao ? 'Demonstração sem foto real.' : 'Sem comprovante fotográfico.'; return; }
+        try {
+            const { data: resposta, error } = await cliente().storage.from('vibe-entregas-comprovantes').createSignedUrl(row.foto, 60);
+            if (error || !resposta?.signedUrl) throw new Error('Não foi possível acessar o comprovante.');
+            if (turno !== fotoGeracao || !permitido()) return;
+            el('ve-comprovante').src = resposta.signedUrl; el('ve-comprovante').hidden = false;
+        } catch (e) { if (turno === fotoGeracao) el('ve-foto-erro').textContent = e.message; }
+    }
+    function desenhar(rows, contextoLinhas) {
+        el('ve-linhas').replaceChildren();
+        for (const row of rows.slice(0, 50)) {
+            const tr = document.createElement('tr'), pedido = texto('td', row.pedido);
+            pedido.append(texto('small', row.cliente));
+            const entregador = texto('td', '');
+            entregador.append(window.EntregasGestao?.seletor(row, contextoLinhas) || texto('span', row.entregador || 'Ainda disponível'));
+            tr.append(pedido, entregador, texto('td', data(row.assumida_em)), texto('td', row.concluida_em ? (row.tipo_conclusao==='repasse'?'Repassado à transportadora':'Entregue') : row.status_erp==='EM TRANSITO' ? 'Em deslocamento' : row.entregador ? 'Planejado' : row.status_erp==='EXPEDICAO'?'Pronto para Expedir':'Expedição do dia · aguardando produção'), texto('td', data(row.prevista_em)));
+            const entrega = texto('td', data(row.concluida_em)); entrega.append(texto('small', row.recebedor || '—')); tr.append(entrega);
+            const td = document.createElement('td'), b = texto('button', 'Ver detalhes'); b.className = 'btn btn-ghost'; b.onclick = () => detalhes(row); td.append(b);
+            const foto = texto('button', '📷'); foto.type='button'; foto.className='btn btn-ghost'; foto.title=row.foto?'Visualizar comprovante':'Sem foto de entrega'; foto.setAttribute('aria-label',row.foto?'Visualizar foto do pedido '+row.pedido:'Pedido sem foto'); foto.disabled=!row.foto; foto.onclick=()=>detalhes(row); td.append(foto); tr.append(td); el('ve-linhas').append(tr);
+        }
+        if (!rows.length) { const tr = document.createElement('tr'), td = texto('td', 'Nenhuma entrega neste filtro.'); td.colSpan = 7; tr.append(td); el('ve-linhas').append(tr); }
+        el('ve-anterior').disabled = pagina === 0; el('ve-proxima').disabled = rows.length <= 50; el('ve-pagina').textContent = `Página ${pagina + 1}`;
+    }
+    async function carregar(novaPagina = 0) {
+        if (!permitido()) { atualizarAcesso(); return; }
+        const turno = ++geracao; pagina = novaPagina; ocupado = true;
+        el('ve-linhas').replaceChildren(); el('ve-pagina').textContent = ''; el('ve-anterior').disabled = true; el('ve-proxima').disabled = true;
+        el('ve-mensagem').textContent = 'Consultando entregas…';
+        try {
+            const de = el('ve-de').value, ate = el('ve-ate').value;
+            if (!de || !ate || de > ate) throw new Error('Confira o intervalo de datas.');
+            let rows;
+            if (demonstracao) {
+                rows = [{ pedido: 'DEMO-1001', cliente: 'Cliente demonstração', entregador: el('ve-status').value === 'disponivel' ? null : 'Entregador demonstração', assumida_em: null, concluida_em: el('ve-status').value === 'concluida' ? new Date().toISOString() : null, recebedor: el('ve-status').value === 'concluida' ? 'Pessoa de teste' : null, tentativas: el('ve-status').value === 'tentativa' ? [{ registrada_em: new Date().toISOString(), motivo: 'Destinatário ausente', observacao: 'Exemplo fictício' }] : [] }].filter(r => !el('ve-busca').value.trim() || r.pedido.includes(el('ve-busca').value.trim()));
+            } else {
+                const c = cliente(); if (!c) throw new Error('Entre com sua conta Vibe para consultar.');
+                const { data: sessao, error: erroSessao } = await c.auth.getSession();
+                if (erroSessao || !sessao?.session) throw new Error('Entre com sua conta Vibe para consultar.');
+                const { data: resultado, error } = await c.rpc('ve_acompanhar_modalidades', { p_modalidade: window.EntregasModalidade.atual, p_busca: el('ve-busca').value.trim(), p_filtro: el('ve-status').value, p_de: de, p_ate: ate, p_offset: pagina * 50 });
+                if (error) throw new Error(['PGRST202', '42883'].includes(error.code) ? 'Integração Entregas ainda não implantada. Você pode visualizar a demonstração.' : 'Não foi possível consultar. Confira sua autorização de gestor e tente novamente.');
+                if (!Array.isArray(resultado)) throw new Error('Resposta de consulta inválida.'); rows = resultado;
+            }
+            const contextoLinhas = !demonstracao && rows.some(r=>r.chave) ? await window.EntregasGestao?.contextoLinhas() : null;
+            if (turno !== geracao || !permitido()) return;
+            desenhar(rows, contextoLinhas); el('ve-rotas-atualizar').click(); el('ve-mensagem').textContent = demonstracao ? 'DEMONSTRAÇÃO · dados fictícios, sem acesso ao ERP.' : `${Math.min(rows.length,50)} registro(s) nesta página. Atualize para acompanhar novas entregas.`;
+        } catch (e) { if (turno === geracao) el('ve-mensagem').textContent = e.message; }
+        finally { if (turno === geracao) ocupado = false; }
+    }
+    function iniciar() {
+        if (!el('ve-filtros')) return;
+        const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+        el('ve-de').value = hoje; el('ve-ate').value = hoje;
+        el('ve-filtros').onsubmit = e => { e.preventDefault(); demonstracao = false; carregar(0); };
+        el('ve-demo').onclick = () => { demonstracao = true; window.EntregasMapa?.limpar(); carregar(0); };
+        el('ve-rotas-atualizar').onclick = async () => {
+            if(!permitido())return; const turno=geracao;
+            el('ve-rotas-mensagem').textContent='Consultando rotas…';
+            try {
+                let rows;
+                if(demonstracao)rows=[{confirmada_em:new Date().toISOString(),paradas:[{pedido:'DEMO-1001',entregador:'Entregador demonstração',entregue:false}]}];
+                else { const c=cliente();const {data,error}=await c.rpc('ve_rotas_status',{});if(error||!Array.isArray(data))throw new Error('Consulta de rotas indisponível. Confira a implantação e sua autorização.');rows=data; }
+                if(turno!==geracao||!permitido())return;
+                el('ve-rotas-lista').replaceChildren();
+                for(const r of rows){const box=document.createElement('article'),paradas=(r.paradas||[]);if(!paradas.length)continue;
+                    box.append(texto('h3',paradas[0]?.entregador||'Entregador'),texto('p',`${data(r.confirmada_em)} · ${paradas.filter(p=>p.entregue).length}/${paradas.length} concluídas`));
+                    const lista=document.createElement('div');lista.className='ve-tabela';const tabela=document.createElement('table'),cabecalho=document.createElement('thead'),titulos=document.createElement('tr'),corpo=document.createElement('tbody');
+                    for(const titulo of ['Ordem','Pedido','Situação','Previsão de entrega']){const th=texto('th',titulo);th.scope='col';titulos.append(th);}cabecalho.append(titulos);
+                    paradas.forEach((p,i)=>{const linha=document.createElement('tr');linha.append(texto('td',i+1),texto('td',`Pedido ${p.pedido}`),texto('td',p.entregue?(p.tipo_conclusao==='repasse'?'Repassado à transportadora':'Entregue'):r.iniciada_em?'Em deslocamento':'Planejado'),texto('td',p.prevista_em?data(p.prevista_em):r.iniciada_em&&!p.entregue?'Aguardando atualização':'—'));corpo.append(linha);});
+                    tabela.append(cabecalho,corpo);lista.append(tabela);box.append(lista);box.append(texto('p',r.iniciada_em?'Em deslocamento desde '+data(r.iniciada_em):'Rota planejada'));
+                    if(window.EntregasAcesso?.editar&&!demonstracao&&r.id&&!r.iniciada_em){const editar=texto('button','Alterar rota');editar.type='button';editar.className='btn btn-ghost';editar.onclick=()=>window.EntregasGestao?.editarRota(r.id);box.append(editar);
+                        if(paradas.some(p=>!p.entregue)){const iniciar=texto('button','Iniciar deslocamento');iniciar.type='button';iniciar.className='btn btn-primary';iniciar.onclick=()=>window.EntregasGestao?.iniciarDeslocamento(r.id);box.append(iniciar);}}
+                    if(r.iniciada_em&&paradas.length&&paradas.every(p=>p.entregue))box.append(texto('p','Todas as entregas concluídas'));el('ve-rotas-lista').append(box);
+                }
+                el('ve-rotas-mensagem').textContent=demonstracao?'DEMONSTRAÇÃO · sequência fictícia.':rows.length?'Até 50 rotas ativas, ordenadas por confirmação.':'Nenhuma rota ativa.';
+            } catch(e) {if(turno===geracao)el('ve-rotas-mensagem').textContent=e.message;}
+        };
+
+        document.querySelectorAll('[data-ve-modalidade]').forEach(b=>b.onclick=()=>{
+            window.EntregasModalidade.atual=b.dataset.veModalidade;
+            document.querySelectorAll('[data-ve-modalidade]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+            el('ve-modalidade-info').textContent=['todas','motoboy'].includes(b.dataset.veModalidade)?'Expedição do dia + Prontos para Expedir. Rotas em deslocamento permanecem visíveis.':
+                (b.dataset.veModalidade==='veppo'?'Veppo · CEP 90035-040, nº 70.':'Aéreo · CEP 92020-400, nº 45.')+' Inclua cada pedido na rota desejada, junto com Motoboy. No repasse, o ERP permanece Em trânsito.';
+            geracao++;ocupado=false;el('ve-linhas').replaceChildren();el('ve-busca').value='';
+            window.EntregasGestao?.limpar();carregar(0);window.EntregasMapa?.atualizar();
+        });
+        el('ve-status').onchange = () => carregar(0);
+        el('ve-anterior').onclick = () => { if(!ocupado) carregar(Math.max(0,pagina-1)); };
+        el('ve-proxima').onclick = () => { if(!ocupado) carregar(pagina+1); };
+        el('ve-fechar').onclick = () => el('ve-detalhe').close(); el('ve-detalhe').addEventListener('close',limparFoto);
+        cliente()?.auth?.onAuthStateChange?.(evento => { if(evento === 'SIGNED_OUT') { window.EntregasAcesso.geracao++;window.EntregasAcesso.consultar=false;window.EntregasAcesso.editar=false;atualizarAcesso(); limparDados(); el('ve-mensagem').textContent = 'Sessão encerrada. Entre novamente para consultar.'; } });
+        const anterior = window.showView;
+        window.showView = function(id) { if (id === 'view-entregas' && !permitido()) { atualizarAcesso(); return; } if(anterior) anterior.apply(this,arguments); if(id === 'view-entregas') { demonstracao = false; carregar(0); window.EntregasMapa?.atualizar(); el('ve-rotas-atualizar').click(); } };
+        atualizarAcesso();
+    }
+    window.EntregasAcesso.atualizar();
+    window.EntregasPainel = { abrir: () => { window.EntregasMapa?.atualizar(); return carregar(0); }, recarregar: () => { window.EntregasMapa?.atualizar(); return carregar(pagina); }, atualizarAcesso };
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
+})();
+// FIM PAINEL ENTREGAS
+// INICIO GESTAO ENTREGAS
+(() => {
+    'use strict';
+    const el=id=>document.getElementById(id), cliente=()=>typeof vibeClient!=='undefined'?vibeClient:null;
+    const permitido=()=>window.EntregasAcesso?.consultar===true;
+    let contexto=null,geracao=0,consulta=0,cadastro=null,operacao=null,rotaAnterior=null,rotaId=null,sequencia=[],offset=0,salvando=false;
+    const texto=(tag,valor)=>{const n=document.createElement(tag);n.textContent=valor??'';return n;};
+    const botao=(rotulo,acao)=>{const b=texto('button',rotulo);b.type='button';b.className='btn btn-ghost';b.onclick=acao;return b;};
+    async function rpc(nome,args={}) {if(!permitido())throw new Error('Acesso a Entregas não autorizado.');const {data,error}=await cliente().rpc(nome,args);if(error)throw new Error(error.message||'Operação não confirmada.');if(data==null)throw new Error('O servidor não confirmou a operação.');return data;}
+    async function auth(body) {
+        if(!permitido())throw new Error('Acesso a Entregas não autorizado.');
+        const {data,error}=await cliente().functions.invoke('vibe-entregas-admin',{body});
+        if(error){let mensagem='Operação não confirmada. Confira os dados e tente novamente.';try{const r=await error.context.json();if(r.erro)mensagem=r.erro;}catch{}throw new Error(mensagem);}
+        if(data?.confirmado!==true)throw new Error(data?.erro||'O servidor não confirmou o cadastro.');return data;
+    }
+    function limpar(){geracao++;consulta++;contexto=null;cadastro=null;operacao=null;sequencia=[];rotaId=null;rotaAnterior=null;el('ve-senha').value='';for(const id of ['ve-cadastros','ve-cadastro','ve-rota-editor','ve-deslocamento'])el(id).close();for(const id of ['ve-cadastros-lista','ve-rota-disponiveis','ve-rota-sequencia','ve-rota-entregador','ve-previsoes'])el(id).replaceChildren();el('ve-nome').value='';el('ve-email').value='';}
+    async function carregarContexto(){const turno=geracao;const c=await rpc('ve_admin_contexto');if(turno!==geracao||!permitido())return false;contexto=c;return true;}
+    let atribuindo = false;
+    function seletor(row, ctx, informar) {
+        const aviso = mensagem => { el('ve-mensagem').textContent = mensagem; if (informar) informar(mensagem); };
+        if (!ctx || !row.chave) return null;
+        const select = document.createElement('select');
+        select.className = 'form-control'; select.dataset.veEntregador = row.chave;
+        select.setAttribute('aria-label', `Entregador do pedido ${row.pedido}`);
+        const vazio = texto('option', 'Selecionar entregador'); vazio.value = ''; vazio.disabled = true; select.append(vazio);
+        for (const d of ctx.entregadores.filter(d=>d.ativo && (row.avulsa===true || d.empresas.includes(row.empresa)))) {
+            const option = texto('option', d.nome); option.value = d.usuario; select.append(option);
+        }
+        if (row.entregador_id && ![...select.options].some(o=>o.value===row.entregador_id)) {
+            const atual = texto('option', row.entregador || 'Entregador atual'); atual.value = row.entregador_id; atual.disabled = true; select.append(atual);
+        }
+        if(row.entregador_id && !row.concluida_em){const retirar=texto('option','Retirar entregador — voltar à lista');retirar.value='__retirar__';select.append(retirar);}
+        if(row.status_erp==='EM TRANSITO') [...select.options].forEach(o=>{if(o.value!=='__retirar__')o.disabled=true;});
+        select.value = row.entregador_id || '';
+        select.disabled = !ctx.editar || !!row.concluida_em || !['EXPEDICAO','EM TRANSITO'].includes(row.status_erp) || atribuindo;
+        select.title = row.concluida_em ? 'Entrega concluída: entregador preservado.' : row.status_erp==='EM TRANSITO' ? 'Você pode retirar o pedido e devolvê-lo à lista de disponíveis.' : row.status_erp!=='EXPEDICAO' ? 'Atribuição disponível quando o pedido estiver pronto para expedir.' : 'Ao selecionar, o pedido entra no fim da rota do entregador.';
+        select.onchange = async () => {
+            const usuario = select.value, anterior = row.entregador_id || null, turno = geracao;
+            if (atribuindo || !permitido() || !ctx.editar || row.concluida_em || !['EXPEDICAO','EM TRANSITO'].includes(row.status_erp)) { select.value = anterior || ''; return; }
+            const retirar=usuario==='__retirar__';
+            if(!retirar && row.status_erp!=='EXPEDICAO'){select.value=anterior||'';return;}
+            if(retirar && (!anterior || !window.confirm(`Retirar o pedido ${row.pedido} de ${row.entregador || 'seu entregador'} e voltar à lista de disponíveis?${row.status_erp==='EM TRANSITO' ? ' Confirme que o pacote está disponível para nova saída. O status voltará para Pronto para Expedir.' : ''}`))){select.value=anterior||'';return;}
+            atribuindo = true;
+            const controles = [...document.querySelectorAll('[data-ve-entregador]')].map(n=>[n,n.disabled]);
+            controles.forEach(([n])=>{n.disabled=true;});
+            aviso(retirar ? 'Retirando entregador e atualizando a rota…' : 'Atribuindo pedido e atualizando a rota…');
+            try {
+                const r = retirar ? await rpc('ve_admin_retirar_entregador',{p_proposta:row.chave,p_anterior:anterior}) : await rpc('ve_admin_atribuir_rota', {p_proposta:row.chave,p_usuario:usuario,p_anterior:anterior});
+                if (r.confirmado !== true || (retirar ? r.proposta !== row.chave || r.retirada !== true : r.usuario !== usuario || !r.id)) throw new Error('Atribuição não confirmada. Atualize a lista antes de tentar novamente.');
+                if (turno !== geracao || !permitido()) return;
+                atribuindo = false;
+                if(retirar) el('ve-status').value='disponivel';
+                await window.EntregasPainel?.recarregar();
+                if (turno !== geracao || !permitido()) return;
+                el('ve-rotas-atualizar').click();
+
+                aviso(retirar ? `Pedido ${row.pedido} sem entregador e disponível para nova atribuição. Rota atualizada.` : `Pedido ${row.pedido} atribuído. Rota atualizada; use Alterar rota para ajustar a ordem.`);
+            } catch(e) {
+                select.value = anterior || '';
+                if (turno === geracao && permitido()) aviso(e.message + ' Atualize a consulta para conferir o estado atual.');
+            } finally {
+                atribuindo = false;
+                controles.forEach(([n,disabled])=>{if(n.isConnected)n.disabled=disabled;});
+            }
+        };
+        return select;
+    }
+    function editarCadastro(d=null){if(!contexto?.editar)return;geracao++;cadastro=d;operacao=crypto.randomUUID();el('ve-cadastro-titulo').textContent=d?'Editar entregador':'Novo entregador';el('ve-nome').value=d?.nome||'';el('ve-email').value=d?.email||'';el('ve-email').readOnly=!!d;el('ve-senha').value='';el('ve-senha').required=!d;el('ve-ativo').checked=d?.ativo??true;el('ve-ativo').disabled=!d;el('ve-senha-ajuda').textContent=d?'Deixe a senha vazia para manter a atual.':'Mínimo de 12 caracteres. Entregue a senha diretamente ao entregador.';el('ve-cadastro-msg').textContent='';el('ve-cadastro').showModal();}
+    async function listarCadastros(){if(!permitido())return;geracao++;el('ve-cadastros-msg').textContent='Consultando…';el('ve-cadastros-lista').replaceChildren();if(!el('ve-cadastros').open)el('ve-cadastros').showModal();const turno=geracao;try{if(!await carregarContexto())return;el('ve-novo-entregador').disabled=!contexto.editar;for(const d of contexto.entregadores){const box=document.createElement('article');box.append(texto('strong',d.nome),texto('p',d.email+' · '+(d.ativo?'Ativo':'Inativo')));const b=botao('Editar / nova senha',()=>editarCadastro(d));b.disabled=!contexto.editar;box.append(b);el('ve-cadastros-lista').append(box);}el('ve-cadastros-msg').textContent=contexto.entregadores.length?'':'Nenhum entregador cadastrado.';}catch(e){if(turno===geracao)el('ve-cadastros-msg').textContent=e.message;}}
+    function desenharSequencia(){el('ve-rota-sequencia').replaceChildren();sequencia.forEach((p,i)=>{const li=texto('li',`Pedido ${p.pedido} · ${p.entregue?(p.tipo_conclusao==='repasse'?'Repassado à transportadora':'Entregue'):p.cliente||'Pendente'} `);for(const [label,delta] of [['↑',-1],['↓',1]]){const b=botao(label,()=>{const j=i+delta;if(j<0||j>=sequencia.length)return;[sequencia[i],sequencia[j]]=[sequencia[j],sequencia[i]];rotaId=crypto.randomUUID();desenharSequencia();});b.setAttribute('aria-label',label==='↑'?'Mover pedido para cima':'Mover pedido para baixo');b.disabled=i+delta<0||i+delta>=sequencia.length;li.append(b);}const remover=botao('Remover',()=>{sequencia.splice(i,1);rotaId=crypto.randomUUID();desenharSequencia();});remover.disabled=!!p.entregue;li.append(remover);el('ve-rota-sequencia').append(li);});}
+    async function buscarPedidos(mais=false){const usuario=el('ve-rota-entregador').value;if(!usuario)return;const turno=geracao,q=++consulta;if(!mais){offset=0;el('ve-rota-disponiveis').replaceChildren();}el('ve-rota-msg').textContent='Consultando pedidos…';try{const rows=await rpc('ve_admin_pedidos_rota_modalidades',{p_modalidade:'todas',p_usuario:usuario,p_busca:el('ve-rota-busca').value.trim(),p_offset:offset});if(turno!==geracao||q!==consulta)return;for(const p of rows.slice(0,50)){const b=botao(`Adicionar #${p.pedido} · ${p.modalidade || 'motoboy'} · ${p.cliente}`,()=>{if(sequencia.some(x=>x.chave===p.chave))return;if(sequencia.length>=20){el('ve-rota-msg').textContent='Limite de 20 paradas.';return;}sequencia.push(p);rotaId=crypto.randomUUID();desenharSequencia();});el('ve-rota-disponiveis').append(b);}el('ve-rota-mais').hidden=rows.length<=50;offset+=50;el('ve-rota-msg').textContent=rows.length?'Selecione os pedidos e confira a ordem.':'Nenhum pedido disponível para este entregador.';}catch(e){if(turno===geracao&&q===consulta)el('ve-rota-msg').textContent=e.message;}}
+    async function abrirRota(id=null){if(!permitido())return;const turno=++geracao;try{if(!await carregarContexto())return;if(!contexto.editar)throw new Error('Seu perfil ADM não permite editar.');const rotas=await rpc('ve_admin_rotas');if(turno!==geracao)return;const r=id?rotas.find(x=>x.id===id):null;if(id&&!r)throw new Error('Rota alterada. Atualize a lista.');if(r?.iniciada_em)throw new Error('Rota em deslocamento não pode ser alterada.');el('ve-rota-entregador').replaceChildren();for(const d of contexto.entregadores.filter(x=>x.ativo)){const o=texto('option',d.nome);o.value=d.usuario;el('ve-rota-entregador').append(o);}if(r)el('ve-rota-entregador').value=r.usuario;el('ve-rota-entregador').disabled=!!r;rotaAnterior=r?.id||null;rotaId=crypto.randomUUID();sequencia=r?(r.paradas||[]).map(p=>({...p})):[];el('ve-rota-retorno-adm').checked=r?.retorno??false;el('ve-rota-busca').value='';el('ve-rota-titulo').textContent=r?'Alterar rota':'Criar rota';el('ve-rota-disponiveis').replaceChildren();el('ve-rota-msg').textContent='';desenharSequencia();el('ve-rota-editor').showModal();if(!el('ve-rota-entregador').value){el('ve-rota-msg').textContent='Cadastre um entregador ativo primeiro.';return;}await buscarPedidos();}catch(e){if(turno===geracao)el('ve-mensagem').textContent=e.message;}}
+    let rotaDeslocamento = null;
+    let paradasPrevisao = [], previsaoPronta = false, calculandoPrevisao = null;
+    async function pedirPrevisoes(acao) {
+        const {data,error}=await cliente().functions.invoke('vibe-entregas-previsoes',{body:{id:rotaDeslocamento,acao}});
+        if(error){let mensagem='Não foi possível calcular os prazos. Tente novamente.';try{const body=await error.context.json();if(body.erro)mensagem=body.erro;}catch{}throw new Error(mensagem);}
+        if(data?.confirmado!==true || !data.previsoes)throw new Error(data?.erro || 'Previsões não confirmadas.');
+        return data;
+    }
+    function mostrarPrevisoes(previsoes) {
+        el('ve-previsoes').replaceChildren();
+        for(const p of paradasPrevisao){
+            const valor=previsoes[p.chave];if(!valor || !Number.isFinite(Date.parse(valor)))throw new Error('Previsão incompleta. Recalcule a rota.');
+            el('ve-previsoes').append(texto('p',`Pedido ${p.pedido} · chegada prevista: ${new Date(valor).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}`));
+        }
+    }
+    async function atualizarPrevisoes() {
+        if(calculandoPrevisao===geracao || salvando || !permitido())return;
+        const turno=geracao;calculandoPrevisao=turno;previsaoPronta=false;
+        el('ve-deslocamento-salvar').disabled=true;el('ve-previsoes-atualizar').disabled=true;el('ve-previsoes').replaceChildren();
+        el('ve-deslocamento-msg').textContent='Calculando os prazos pelo trajeto e trânsito…';
+        try{const r=await pedirPrevisoes('prever');if(turno!==geracao||!permitido())return;mostrarPrevisoes(r.previsoes);previsaoPronta=true;el('ve-deslocamento-msg').textContent='Estimativas do Google Maps. Os prazos serão atualizados ao confirmar a saída.';}
+        catch(e){if(turno===geracao)el('ve-deslocamento-msg').textContent=e.message;}
+        finally{if(calculandoPrevisao===turno)calculandoPrevisao=null;if(turno===geracao){el('ve-deslocamento-salvar').disabled=!previsaoPronta;el('ve-previsoes-atualizar').disabled=false;}}
+    }
+    async function iniciarDeslocamento(id) {
+        const turno=++geracao;
+        try{
+            if(!await carregarContexto())return;
+            if(!contexto.editar)throw new Error('Seu perfil ADM não permite editar.');
+            const rotas=await rpc('ve_admin_rotas');if(turno!==geracao)return;
+            const r=rotas.find(x=>x.id===id);if(!r||r.iniciada_em)throw new Error('Rota alterada ou já em deslocamento. Atualize a consulta.');
+            paradasPrevisao=r.paradas.filter(p=>!p.entregue);if(!paradasPrevisao.length)throw new Error('Não há pedidos pendentes nesta rota.');
+            rotaDeslocamento=id;previsaoPronta=false;el('ve-deslocamento').showModal();await atualizarPrevisoes();
+        }catch(e){if(turno===geracao)el('ve-mensagem').textContent=e.message;}
+    }
+    function iniciar(){if(!el('ve-entregadores'))return;
+        el('ve-entregadores').onclick=listarCadastros;el('ve-novo-entregador').onclick=()=>editarCadastro();el('ve-nova-rota').onclick=()=>abrirRota();
+        for(const b of document.querySelectorAll('[data-ve-fechar]'))b.onclick=()=>{if(!salvando)el(b.dataset.veFechar).close();};
+        el('ve-cadastro').addEventListener('close',()=>{el('ve-senha').value='';});
+        for(const id of ['ve-cadastros','ve-rota-editor','ve-deslocamento'])el(id).addEventListener('close',()=>{if(!salvando){geracao++;consulta++;}});
+        for(const id of ['ve-cadastro','ve-rota-editor','ve-deslocamento'])el(id).addEventListener('cancel',e=>{if(salvando)e.preventDefault();});
+        el('ve-cadastro-form').onsubmit=async e=>{e.preventDefault();if(salvando||!contexto?.editar||!permitido())return;const turno=geracao,senha=el('ve-senha').value,d=cadastro;el('ve-senha').value='';salvando=true;el('ve-cadastro-salvar').disabled=true;el('ve-cadastro-msg').textContent='Salvando…';let perfilSalvo=false;
+            try{if(d){if(await rpc('ve_admin_editar_entregador_geral',{p_usuario:d.usuario,p_nome:el('ve-nome').value.trim(),p_ativo:el('ve-ativo').checked})!==true)throw new Error('Cadastro não confirmado.');perfilSalvo=true;if(senha)await auth({acao:'senha',usuario:d.usuario,senha});}else await auth({acao:'criar',operacao,nome:el('ve-nome').value.trim(),email:el('ve-email').value.trim(),senha});if(turno!==geracao)return;el('ve-cadastro').close();await listarCadastros();el('ve-cadastros-msg').textContent='Cadastro confirmado.';}catch(err){if(turno===geracao)el('ve-cadastro-msg').textContent=(perfilSalvo?'Dados do entregador salvos. Senha não confirmada: ':'')+err.message;}finally{salvando=false;el('ve-cadastro-salvar').disabled=false;}};
+        el('ve-previsoes-atualizar').onclick=atualizarPrevisoes;
+        el('ve-deslocamento-form').onsubmit = async e => {
+            e.preventDefault(); if(salvando || !permitido() || !rotaDeslocamento) return;
+            if(!previsaoPronta || calculandoPrevisao===geracao)return;
+            const turno=geracao;
+            salvando=true; el('ve-deslocamento-salvar').disabled=true;
+            el('ve-deslocamento-msg').textContent='Confirmando deslocamento…';
+            try {
+                const r=await pedirPrevisoes('iniciar');
+                if(r.confirmado!==true || !r.iniciada_em) throw new Error('Início do deslocamento não confirmado.');
+                if(turno!==geracao || !permitido()) return;
+                el('ve-deslocamento').close();
+                await window.EntregasPainel?.recarregar();
+                if(turno!==geracao || !permitido()) return;
+                el('ve-rotas-atualizar').click(); el('ve-mensagem').textContent='Deslocamento confirmado. Previsões de entrega registradas.';
+            } catch(err) {if(turno===geracao)el('ve-deslocamento-msg').textContent=err.message;}
+            finally {salvando=false;el('ve-deslocamento-salvar').disabled=false;}
+        };
+        el('ve-rota-entregador').onchange=()=>{sequencia=[];rotaAnterior=null;rotaId=crypto.randomUUID();desenharSequencia();buscarPedidos();};el('ve-rota-busca-form').onsubmit=e=>{e.preventDefault();buscarPedidos();};el('ve-rota-mais').onclick=()=>buscarPedidos(true);el('ve-rota-retorno-adm').onchange=()=>{rotaId=crypto.randomUUID();};
+        el('ve-rota-salvar').onclick=async()=>{if(salvando||!permitido())return;if(!sequencia.length){el('ve-rota-msg').textContent='Selecione ao menos um pedido.';return;}const turno=geracao;salvando=true;el('ve-rota-salvar').disabled=true;try{const r=await rpc('ve_admin_salvar_rota',{p_id:rotaId,p_usuario:el('ve-rota-entregador').value,p_ordem:sequencia.map(p=>p.chave),p_anterior:rotaAnterior,p_retorno:el('ve-rota-retorno-adm').checked});if(r.confirmado!==true)throw new Error('Rota não confirmada.');if(turno!==geracao)return;el('ve-rota-editor').close();await window.EntregasPainel?.abrir();el('ve-rotas-atualizar').click();}catch(e){if(turno===geracao)el('ve-rota-msg').textContent=e.message;}finally{salvando=false;el('ve-rota-salvar').disabled=false;}};
+        cliente()?.auth?.onAuthStateChange?.(e=>{if(e==='SIGNED_OUT')limpar();});
+    }
+    window.EntregasGestao={limpar,editarRota:abrirRota,iniciarDeslocamento,seletor,contextoLinhas:()=>rpc('ve_admin_contexto')};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);else iniciar();
+})();
+// FIM GESTAO ENTREGAS

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#132e37"><meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Vibe Entregas</title><link rel="manifest" href="app.webmanifest"><link rel="apple-touch-icon" href="icon-192.png"><link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header><img src="../logo-ideal-2026.png" alt="Ingresso Ideal"><div><strong>Vibe Entregas</strong><span>Do pacote ao destino.</span></div><button id="instalar" hidden>Instalar</button></header>
+  <main>
+    <section id="inicio" class="intro"><h1>Vamos às entregas?</h1><p>Entre para acompanhar sua rota e registrar as entregas.</p></section>
+    <form id="login" hidden><h2>Entrar com sua conta</h2><label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required><label for="senha">Senha</label><input id="senha" type="password" autocomplete="current-password" required><button class="primary">Entrar</button><p id="login-erro" role="alert"></p></form>
+    <section id="operacao" hidden>
+      <div class="identity"><span id="identidade">Entregador demonstração</span><button id="sair">Sair</button></div>
+      <div class="notice" id="aviso-demo">Demonstração · nenhum registro é enviado ao ERP</div>
+      <p id="conexao" role="status"></p>
+      <label for="busca">Buscar pedido</label><input id="busca" type="search" inputmode="numeric" placeholder="Digite o número do pedido" autocomplete="off">
+      <nav aria-label="Modalidade de entrega"><button data-modalidade="todas" aria-pressed="true">Todas</button><button data-modalidade="motoboy" aria-pressed="false">Motoboy</button><button data-modalidade="veppo" aria-pressed="false">Veppo</button><button data-modalidade="aereo" aria-pressed="false">Aéreo</button></nav>
+      <p id="modalidade-info">Expedição do dia + Prontos para Expedir.</p>
+      <nav aria-label="Filtrar entregas"><button data-filtro="disponivel" aria-pressed="false">Disponíveis</button><button data-filtro="minha" aria-pressed="true">Minha rota</button><button data-filtro="concluida" aria-pressed="false">Concluídas hoje</button><button id="atualizar" type="button">Atualizar</button></nav>
+      <section id="rota-ativa"><p id="rota-progresso" role="status"></p><button id="iniciar-rota" type="button" hidden>Iniciar minha rota</button></section>
+      <div class="list-heading"><h1 id="titulo">Minha rota</h1><span id="contador"></span></div><div id="lista"></div><div id="paginacao" hidden><button id="anterior">Anterior</button><button id="proxima">Próxima página</button></div>
+    </section>
+    <p id="mensagem" role="status" aria-live="polite"></p>
+  </main>
+  <dialog id="formulario" aria-labelledby="form-titulo"><form id="registro">
+    <div class="dialog-heading"><h2 id="form-titulo">Informar entrega</h2><button type="button" id="fechar" aria-label="Fechar">×</button></div>
+    <p id="resumo"></p>
+    <label for="resultado">Resultado</label><select id="resultado"><option value="entregue">Entregue</option><option value="ausente">Destinatário ausente</option><option value="endereco">Endereço incorreto</option><option value="recusa">Entrega recusada</option></select>
+    <div id="recebimento"><label for="recebedor">Nome de quem recebeu</label><input id="recebedor" maxlength="120" autocomplete="off" required>
+    <label class="check"><input id="volumes" type="checkbox" required> Conferi e entreguei todos os volumes</label></div>
+    <div id="foto-bloco"><label for="foto">Foto do comprovante</label><input id="foto" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><small>Fotografe o pacote entregue. Até 10 MB.</small><img id="preview" alt="Prévia do comprovante" hidden></div>
+    <label for="observacao">Observação <span>(opcional)</span></label><textarea id="observacao" maxlength="500" rows="2"></textarea>
+    <p id="erro" role="alert"></p><button class="primary" type="submit">Revisar registro</button>
+  </form></dialog>
+  <dialog id="confirmacao" aria-labelledby="confirmar-titulo"><h2 id="confirmar-titulo">Confirmar entrega?</h2><p id="confirmar-resumo"></p><p class="notice" id="confirmar-aviso">Simulação: este registro não altera o ERP.</p><p id="envio-erro" role="alert"></p><button id="confirmar" class="primary">Confirmar simulação</button><button id="voltar">Voltar e revisar</button></dialog>
+  <script src="../supabase-js.min.js" defer></script><script src="public-config.js" defer></script><script src="api.js" defer></script><script src="rotas.js" defer></script><script src="rascunhos.js" defer></script><script src="app.js" defer></script>
+</body></html>
