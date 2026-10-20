@@ -8,7 +8,8 @@ END $$;
 ALTER TABLE public.vibe_entregas_registros
  ADD COLUMN pedido_erp uuid REFERENCES public.propostas(id),
  ADD COLUMN entrega_avulsa uuid REFERENCES public.vibe_entregas_avulsas(id);
-UPDATE public.vibe_entregas_registros SET pedido_erp=proposta;
+UPDATE public.vibe_entregas_registros SET pedido_erp=proposta
+ WHERE pedido_erp IS NULL AND entrega_avulsa IS NULL;
 ALTER TABLE public.vibe_entregas_registros
  DROP CONSTRAINT vibe_entregas_registros_proposta_fkey,
  ADD CONSTRAINT ve_registro_origem CHECK (
