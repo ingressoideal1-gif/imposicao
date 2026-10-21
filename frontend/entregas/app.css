@@ -5,3 +5,21 @@ header{flex-wrap:wrap}header>div{flex:1;min-width:140px}header #instalar{font-si
 #rotas-painel{background:#fff;border:1px solid #cbd8d4;border-radius:14px;padding:16px;margin:20px 0}#rotas-painel summary{font-weight:700;cursor:pointer;min-height:36px}#rotas-painel li{margin:12px 0;line-height:1.5}#rota-proxima{display:block;margin:16px 0}#rota-erro{color:#a52c2c}
 
 .proxima-entrega{border:2px solid #14684f}.aguardando{background:#eceeed;color:#59635f}.actions{flex-wrap:wrap}.actions>*{flex:1 1 140px}.intro{padding:8px 0}.intro h1{font-size:28px}#rota-ativa{padding:4px 16px;background:#e9f5ed;border-radius:12px;margin-bottom:16px}
+
+.card-envio{display:flex;align-items:center;gap:12px;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid #e2e9e5;font-size:13px;font-weight:700}
+.card-envio img{width:78px;height:32px;object-fit:contain}
+#navegacao-atalho{background:#e9f5ed;border:1px solid #a4c8b9;border-radius:16px;padding:16px;margin:16px 0}
+#navegacao-atalho p{font-size:13px;margin:8px 0}
+#navegacao-entregar{background:#14684f;color:white}
+#formulario{padding:20px;max-width:440px}
+#resumo{font-size:14px;padding:12px;background:#edf3ef;border-radius:10px}
+#foto-bloco{position:relative;margin-top:18px}
+.camera-botao{display:block;text-align:center;background:#e9f5ed;color:#10583f;border:2px dashed #7fa995;border-radius:12px;padding:18px 12px;cursor:pointer}
+.foto-input{position:absolute;width:1px;height:1px;opacity:0;padding:0;border:0;top:0;left:0}
+#foto-bloco:focus-within .camera-botao{outline:3px solid #d59b31;outline-offset:2px}
+#foto-status{display:block;text-align:center}
+#preview{display:block;margin:12px auto 0;max-height:130px}
+#observacao-bloco{margin:16px 0;font-size:14px}
+#observacao-bloco summary{cursor:pointer;min-height:44px;padding:12px 0;color:#527266}
+#revisar-registro{position:sticky;bottom:0;box-shadow:0 -5px 16px #fff}
+#confirmacao h2{margin-top:0}#confirmar-resumo{font-size:17px;font-weight:600;line-height:1.6}

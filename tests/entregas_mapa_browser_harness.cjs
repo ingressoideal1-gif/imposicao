@@ -20,7 +20,7 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
     { chave: '04', pedido: 1004, cliente: 'Disponível', endereco: 'Rua Teste, 40', endereco_completo: true },
     { chave: '05', pedido: 1005, cliente: 'Sem endereço', endereco: '', endereco_completo: false }
    ];
-   rows.forEach((r,i)=>r.status_erp=i===4?'EM PRODUCAO':'EXPEDICAO');
+   rows.forEach((r,i)=>{r.status_erp=i===4?'EM PRODUCAO':'EXPEDICAO';r.modalidade='motoboy';});
    window.vibeClient = { rpc: async (name, args) => { calls.push({ name, args }); if(name==='ve_admin_mapa_config') return {data:{}}; if (pending) await new Promise(r => window.resolvePending = r); return { data: args.p_apos ? rows.filter(r => r.chave > args.p_apos).slice(0, 201) : rows.slice(0, 201) }; } };
    window.installMaps = () => {
     class Bounds { constructor() { this.points = []; } extend(p) { this.points.push(p); } isEmpty() { return !this.points.length; } }
@@ -107,6 +107,7 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
       {chave:'t2',pedido:3002,endereco:'Avenida Exemplo, 456, CONJ 101 102, Centro, Cidade Teste, RS, 90000-000',endereco_completo:true,status_erp:'EM PRODUCAO'},
       {chave:'t3',pedido:3003,endereco:'Rua Incerta, 789, SALA 1, Centro, Cidade Teste, RS, 90000-000',endereco_completo:true,status_erp:'EXPEDICAO'}
     ];
+    rows.forEach(r=>r.modalidade='motoboy');
     return EntregasMapa.atualizar();
   });
   assert.equal(await p.evaluate(()=>markers.filter(m=>m.map&&/^#300[12]$/.test(m.content?.textContent)).length),2);
@@ -117,8 +118,29 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
   assert.match(await p.evaluate(()=>rows[0].endereco),/TERREO/);
   await p.evaluate(()=>EntregasMapa.atualizar());
   assert.equal(await p.evaluate(()=>geocodeCalls.filter(a=>a==='Rua Exemplo, 123, Centro, Cidade Teste, RS, 90000-000').length),1);
+  // Filtro de modalidade muda marcadores e contadores sem cortar uma rota mista.
+  await p.evaluate(()=>{
+   window.geocodeOverride=null;
+   rows=[
+    {chave:'m1',pedido:4001,modalidade:'motoboy',status_erp:'EXPEDICAO',endereco:'Rua Mista, 10',endereco_completo:true,rota_id:'mista',entregador_id:'paulo',entregador:'Paulo',ordem:1},
+    {chave:'a1',pedido:4002,modalidade:'aereo',status_erp:'EXPEDICAO',endereco:'Rua Aereo, 20',endereco_completo:true,rota_id:'mista',entregador_id:'paulo',entregador:'Paulo',ordem:2},
+    {chave:'v1',pedido:4003,modalidade:'veppo',status_erp:'EXPEDICAO',endereco:'Rua Veppo, 30',endereco_completo:true}
+   ];
+   EntregasModalidade.atual='aereo';return EntregasMapa.atualizar();
+  });
+  assert.equal(await p.$eval('#ve-total',e=>e.textContent),'1');
+  assert.deepEqual(await p.$$eval('.ve-mapa-item strong',els=>els.map(e=>e.textContent)),['#4002']);
+  assert.deepEqual(await p.evaluate(()=>markers.filter(m=>m.map).map(m=>m.content.textContent)),['IDEAL','Aéreo · #4002']);
+  assert.equal(await p.evaluate(()=>routeCalls.at(-1).intermediates.length),1,'Mantem parada Motoboy no trajeto misto');
+  for(const modalidade of ['motoboy','veppo','todas']){
+   await p.evaluate(m=>{EntregasModalidade.atual=m;return EntregasMapa.atualizar();},modalidade);
+   assert.equal(await p.$eval('#ve-total',e=>e.textContent),modalidade==='todas'?'3':'1');
+  }
+  await p.evaluate(()=>{rows=rows.filter(r=>r.modalidade!=='veppo');EntregasModalidade.atual='veppo';return EntregasMapa.atualizar();});
+  assert.equal(await p.$eval('#ve-total',e=>e.textContent),'0');
+  assert.equal(await p.$eval('#ve-total-rotas',e=>e.textContent),'0');
   // Todas as paginas, sem limite silencioso de 50 pedidos e sem geocodificar endereco ausente.
-  await p.evaluate(() => { rows = Array.from({ length: 202 }, (_, i) => ({ chave: String(i).padStart(4, '0'), pedido: i, endereco_completo: false })); return EntregasMapa.atualizar(); });
+  await p.evaluate(() => { EntregasModalidade.atual='todas';rows = Array.from({ length: 202 }, (_, i) => ({ chave: String(i).padStart(4, '0'), pedido: i, endereco_completo: false })); return EntregasMapa.atualizar(); });
   assert.equal(await p.$eval('#ve-total', e => e.textContent), '202');
   assert.ok(await p.evaluate(() => calls.some(c => c.args?.p_apos === '0199')));
   await p.evaluate(() => { pending = true; window.running = EntregasMapa.atualizar(); });

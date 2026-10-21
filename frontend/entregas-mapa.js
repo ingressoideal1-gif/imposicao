@@ -149,7 +149,7 @@
     }
     async function atualizar() {
         if (!$('ve-mapa') || !permitido()) { limpar(); return; }
-        const turno = ++geracao, atual = () => turno === geracao && permitido();
+        const turno = ++geracao, modalidade = window.EntregasModalidade?.atual || 'todas', atual = () => turno === geracao && permitido();
         apagarDesenho(); $('ve-mapa-legenda').replaceChildren(); $('ve-mapa-erros').replaceChildren(); $('ve-mapa-pendencias').hidden = true;
         $('ve-mapa-status').textContent = 'Consultando todos os pedidos pendentes…';
         for (const id of ['ve-total', 've-sem-entregador', 've-total-rotas']) $(id).textContent = '—';
@@ -164,8 +164,13 @@
                 for (const row of data.slice(0, 200)) { if (!row.chave || ids.has(row.chave)) throw new Error('A lista mudou durante a consulta. Atualize o mapa.'); ids.add(row.chave); rows.push(row); }
                 cursor = data.length > 200 ? data[199].chave : null;
             } while (cursor);
-            $('ve-total').textContent = rows.length; $('ve-sem-entregador').textContent = rows.filter(p => p.status_erp === 'EXPEDICAO').length;
-            $('ve-total-rotas').textContent = '0'; legenda(rows);
+            // Filtra a exibicao, preservando todas as paradas das rotas mistas no trajeto.
+            const visiveis = rows.filter(p => modalidade === 'todas' || p.modalidade === modalidade);
+            const chavesVisiveis = new Set(visiveis.map(p => p.chave));
+            const rotasVisiveis = new Set(visiveis.map(p => p.rota_id).filter(Boolean));
+            const contexto = rows.filter(p => chavesVisiveis.has(p.chave) || (p.rota_id && rotasVisiveis.has(p.rota_id)));
+            $('ve-total').textContent = visiveis.length; $('ve-sem-entregador').textContent = visiveis.filter(p => p.status_erp === 'EXPEDICAO').length;
+            $('ve-total-rotas').textContent = '0'; legenda(visiveis);
             const { data: configuracao, error: erroConfig } = await c.rpc('ve_admin_mapa_config');
             if (!atual()) return;
             if (erroConfig) throw new Error('Configuração do mapa indisponível. Confira sua sessão ADM.');
@@ -177,19 +182,20 @@
             const inicio = await localizar(origem, turno); if (!atual()) return;
             marcar(inicio, null, 'IDEAL', '#182b49');
             const erros = [], posicoes = new Map(), gruposMarcados = new Set();
-            for (const row of rows) {
+            for (const row of contexto) {
                 if (!atual()) return;
                 try {
                     if (!row.endereco_completo) throw new Error('Endereço incompleto');
                     const pos = await localizar(row.endereco, turno); if (!atual()) return;
                     posicoes.set(row.chave, pos);
+                    if (!chavesVisiveis.has(row.chave)) continue;
                     if(['veppo','aereo'].includes(row.modalidade)){
-                        if(!gruposMarcados.has(row.modalidade)){gruposMarcados.add(row.modalidade);const grupo=rows.filter(p=>p.modalidade===row.modalidade);marcar(pos,{...row,grupo},`${row.modalidade==='veppo'?'Veppo':'Aéreo'} · ${grupo.map(p=>'#'+p.pedido).join(', ')}`,grupo.every(p=>p.entregador_id===row.entregador_id)?corPedido(row):'#64748b');}
+                        if(!gruposMarcados.has(row.modalidade)){gruposMarcados.add(row.modalidade);const grupo=visiveis.filter(p=>p.modalidade===row.modalidade);marcar(pos,{...row,grupo},`${row.modalidade==='veppo'?'Veppo':'Aéreo'} · ${grupo.map(p=>'#'+p.pedido).join(', ')}`,grupo.every(p=>p.entregador_id===row.entregador_id)?corPedido(row):'#64748b');}
                     }else marcar(pos, row, '#' + row.pedido, corPedido(row));
                 } catch { if (!atual()) return; erros.push(`Pedido ${row.pedido}: confira o endereço no ERP (${row.endereco || 'não informado'}).`); }
             }
             const rotas = new Map();
-            for (const row of rows) {
+            for (const row of contexto) {
                 if (row.rota_id) { if (!rotas.has(row.rota_id)) rotas.set(row.rota_id, []); rotas.get(row.rota_id).push(row); }
                 else if (row.entregador_id) erros.push(`Pedido ${row.pedido}: atribuído, mas sem sequência em uma rota ativa.`);
             }
