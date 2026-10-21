@@ -1,6 +1,6 @@
 'use strict';
-const CACHE = 'vibe-entregas-v11';
-const FILES = ['./', './index.html', './app.js', './api.js', './rotas.js', './rascunhos.js', './public-config.js', './icon-192.png', './icon-512.png', './app.css', './app.webmanifest', '../logo-ideal-2026.png', '../supabase-js.min.js'];
+const CACHE = 'vibe-entregas-v12';
+const FILES = ['./', './index.html', './app.js', './api.js', './rotas.js', './rascunhos.js', './public-config.js', './icon-192.png', './icon-512.png', './app.css', './logo-veppo.png', './logo-azul.png', './logo-motoboy.png', './app.webmanifest', '../logo-ideal-2026.png', '../supabase-js.min.js'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('vibe-entregas-') && key !== CACHE).map(key => caches.delete(key))))));
 self.addEventListener('fetch', event => {

@@ -5,7 +5,7 @@
   const labels = { disponivel: 'Disponíveis', minha: 'Minha rota', concluida: 'Concluídas' };
   const reasons = { repasse: 'Repassado à transportadora', entregue: 'Entregue', ausente: 'Destinatário ausente', endereco: 'Endereço incorreto', recusa: 'Entrega recusada' };
   let pedidos = [], filtro = 'minha', atual = null, foto = null, fotoURL = '', carregandoFoto = false, enviando = false, instalacao;
-  let usuario = null, modalidade = 'todas';
+  let usuario = null, modalidade = 'todas', destinoNavegacao = null;
   let demo = true, offset = 0, consulta = 0, operacao = null, debounce, fotoLeitura = 0;
   async function carregar() {
     if (demo) { render(); return; }
@@ -56,11 +56,15 @@
       const liberada = !!rotaAtiva?.iniciada_em && ordem.has(p.chave) && p.status_erp === 'EM TRANSITO';
       if (p.estado === 'minha' && p === rows.find(x=>ordem.has(x.chave) && x.status_erp === 'EM TRANSITO') && liberada) { card.classList.add('proxima-entrega'); card.append(text('p', 'PRÓXIMA ENTREGA', 'eyebrow')); }
       if (['NOVO','AGUARDANDO','EM PRODUCAO'].includes(p.status_erp)) { card.classList.add('aguardando'); card.append(text('p','Aguardando produção')); }
-      card.append(text('span', p.estado === 'concluida' ? (p.registro?.resultado==='repasse'?'Repasse confirmado':demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? (p.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : 'Aguardando início da rota') : (p.status_erp==='EXPEDICAO'?'Pronto para Expedir':'Expedição do dia · aguardando produção'), 'tag'), text('h2', `${String(p.id).startsWith('AV-')?'Entrega':'Pedido'} ${p.id}`), text('p', p.modalidade==='veppo'?'Veppo':p.modalidade==='aereo'?'Aéreo':'Motoboy'), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
+      card.append(text('span', p.estado === 'concluida' ? (p.registro?.resultado==='repasse'?'Repasse confirmado':demo ? 'Entrega simulada' : 'Entrega confirmada') : p.estado === 'minha' ? (p.status_erp === 'EM TRANSITO' ? 'Em deslocamento' : 'Aguardando início da rota') : (p.status_erp==='EXPEDICAO'?'Pronto para Expedir':'Expedição do dia · aguardando produção'), 'tag'), text('h2', `${String(p.id).startsWith('AV-')?'Entrega':'Pedido'} ${p.id}`), text('p', p.nome), text('p', p.endereco), text('p', `${p.volumes ?? 'Não informado'} volume${p.volumes === 1 ? '' : 's'}`), text('p', p.nota));
+      const envio = text('div', '', 'card-envio'), nomeEnvio = p.modalidade==='veppo'?'Veppo':p.modalidade==='aereo'?'Aéreo · Azul':'Motoboy';
+      const logo = document.createElement('img'); logo.src = p.modalidade==='veppo'?'logo-veppo.png':p.modalidade==='aereo'?'logo-azul.png':'logo-motoboy.png'; logo.alt='';
+      logo.onerror=()=>{logo.hidden=true;};envio.append(logo,text('span',nomeEnvio));card.prepend(envio);
       if (p.prevista_em) card.append(text('p', 'Previsão de entrega: '+new Date(p.prevista_em).toLocaleString('pt-BR')));
       if (p.registro) card.append(text('p', `${reasons[p.registro.resultado]} · ${p.registro.recebedor || 'Tentativa registrada'} · ${new Date(p.registro.hora).toLocaleString('pt-BR')}`));
       const actions = text('div', '', 'actions');
-      const rota = text('a', 'Navegar', 'route'); rota.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.endereco); rota.target = '_blank'; rota.rel = 'noopener noreferrer';
+      const rota = text('a', 'Navegar agora', 'route'); rota.href = 'https://www.google.com/maps/dir/?api=1&dir_action=navigate&travelmode=driving&destination=' + encodeURIComponent(p.endereco); rota.target = '_blank'; rota.rel = 'noopener noreferrer';
+      rota.onclick=()=>{destinoNavegacao=p.chave;atualizarAtalho();};
       if (p.endereco && p.endereco.trim() && (liberada || p.estado === 'concluida')) actions.append(rota);
       else if(!p.endereco?.trim()) card.append(text('p', 'Endereço não informado. Confira com a expedição.'));
       if (p.estado === 'minha' && liberada) {
@@ -76,8 +80,20 @@
       if(p.estado==='disponivel' && p.status_erp==='EXPEDICAO' && !demo){const b=botao('Assumir entrega',()=>assumir(p,b));b.disabled=enviando;actions.append(b);}
       card.append(actions); $('lista').append(card);
     }
+    atualizarAtalho();
     if (!rows.length) $('lista').append(text('p', busca ? 'Nenhum pedido encontrado para esse número.' : 'Nenhum pedido nesta lista.', 'empty'));
   }
+  function atualizarAtalho(){
+    const p=pedidos.find(x=>x.chave===destinoNavegacao && x.estado==='minha' && x.status_erp==='EM TRANSITO');
+    $('navegacao-atalho').hidden=!p;
+    if(p)$('navegacao-pedido').textContent=`Destino: ${p.id} · ${p.nome || ''}`;
+  }
+  $('navegacao-voltar').onclick=()=>{destinoNavegacao=null;atualizarAtalho();$('lista').scrollIntoView({block:'start'});};
+  $('navegacao-entregar').onclick=()=>{
+    const p=pedidos.find(x=>x.chave===destinoNavegacao),r=RotasEntregas.atual();
+    if(!p || p.estado!=='minha' || p.status_erp!=='EM TRANSITO' || !r?.iniciada_em || !r.paradas?.some(x=>x.chave===p.chave)){atualizarAtalho();return;}
+    abrir(['veppo','aereo'].includes(p.modalidade)?{...p,grupo:[p],rota_id:r.id}:p);
+  };
   async function assumir(p, b) {
     if(enviando || demo)return;
     if(!confirm(`Assumir a entrega do pedido ${p.id}? O pedido será incluído na sua rota.`))return;
@@ -94,12 +110,17 @@
     catch(e){if(usuario?.id===dono)aviso(e.message);}
     finally{enviando=false;$('iniciar-rota').disabled=false;}
   };
-  function limparFoto() { fotoLeitura++; carregandoFoto = false; if (fotoURL) URL.revokeObjectURL(fotoURL); fotoURL = ''; foto = null; $('preview').hidden = true; $('preview').removeAttribute('src'); }
-  async function abrir(p, motivo = 'entregue') { atual = p; operacao = crypto.randomUUID(); $('registro').reset(); limparFoto(); $('erro').textContent = ''; $('resumo').textContent = `${p.grupo?'Repasse do grupo · ':''}${p.id} · ${p.volumes == null ? 'Volumes não informados' : p.volumes + ' volume(s)'} · ${p.nome}`; $('resultado').value = motivo; $('resultado').disabled=!!p.grupo; $('resultado').querySelector('[value="entregue"]').textContent=p.grupo?'Repasse à transportadora':'Entregue';
+  function limparFoto() { fotoLeitura++; carregandoFoto = false; if (fotoURL) URL.revokeObjectURL(fotoURL); fotoURL = ''; foto = null; $('preview').hidden = true; $('preview').removeAttribute('src'); $('foto-rotulo').textContent='Tirar foto do comprovante'; $('foto-status').textContent='Fotografe o pacote no local da entrega.'; }
+  async function abrir(p, motivo = 'entregue') { atual = p; operacao = crypto.randomUUID(); $('registro').reset(); $('observacao-bloco').open=false; limparFoto(); $('erro').textContent = ''; $('resumo').textContent = `${p.grupo?'Repasse do grupo · ':''}${p.id} · ${p.volumes == null ? 'Volumes não informados' : p.volumes + ' volume(s)'} · ${p.nome}`; $('resultado').value = motivo; $('resultado').disabled=!!p.grupo; $('resultado').querySelector('[value="entregue"]').textContent=p.grupo?'Repasse à transportadora':'Entregue';
     try { const r = await RascunhosEntregas.ler(usuario.id, p.chave); if(r) { operacao=r.operacao; for(const id of ['resultado','recebedor','observacao']) $(id).value=r[id]; $('volumes').checked=r.volumes; foto=r.foto; if(foto){fotoURL=URL.createObjectURL(foto);$('preview').src=fotoURL;$('preview').hidden=false;} $('erro').textContent='Rascunho recuperado. Confira antes de confirmar.'; } } catch { $('erro').textContent='Não foi possível recuperar o rascunho neste aparelho.'; }
     if(p.grupo)$('resultado').value='entregue';
-    resultado(); $('formulario').showModal(); }
-  function resultado() { const entregue = $('resultado').value === 'entregue'; $('recebimento').hidden = !entregue; $('foto-bloco').hidden = !entregue; $('recebedor').required = entregue; $('volumes').required = entregue; }
+    $('observacao-bloco').open=!!$('observacao').value; resultado(); $('formulario').showModal(); if($('resultado').value==='entregue')$('recebedor').focus(); }
+  function resultado() { const entregue = $('resultado').value === 'entregue'; $('recebimento').hidden = !entregue; $('foto-bloco').hidden = !entregue; $('recebedor').required = entregue; $('volumes').required = entregue;
+    $('resultado-bloco').hidden=entregue; $('volumes-bloco').hidden=!entregue;
+    $('form-titulo').textContent=atual?.grupo?'Confirmar repasse':entregue?'Confirmar entrega':'Não consegui entregar';
+    $('revisar-registro').textContent=entregue?'Continuar':'Revisar tentativa';
+    if(foto){$('foto-rotulo').textContent='Trocar foto';$('foto-status').textContent='Foto pronta para enviar.';}
+  }
   $('resultado').onchange = () => { resultado(); salvarRascunho(); };
   async function salvarRascunho(){ if(!atual || !usuario) return; try { await RascunhosEntregas.salvar(usuario.id, atual.chave, {operacao,resultado:$('resultado').value,recebedor:$('recebedor').value,observacao:$('observacao').value,volumes:$('volumes').checked,foto}); } catch { $('erro').textContent='Rascunho não salvo neste aparelho. Mantenha a tela aberta até confirmar.'; } }
   $('registro').addEventListener('input', salvarRascunho);
@@ -107,7 +128,7 @@
     limparFoto(); $('erro').textContent = '';
     const file = $('foto').files[0]; if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) { $('erro').textContent = 'Escolha uma foto JPEG, PNG ou WebP de até 10 MB.'; $('foto').value = ''; return; }
-    carregandoFoto = true; const leitura = fotoLeitura;
+    carregandoFoto = true; $('foto-status').textContent='Preparando foto…'; const leitura = fotoLeitura;
     try {
       const imagem = await createImageBitmap(file);
       if(leitura !== fotoLeitura) { imagem.close(); return; }
@@ -119,7 +140,7 @@
       if(leitura !== fotoLeitura) return;
       foto = pronta;
       if (!foto) throw new Error('Foto inválida.');
-      fotoURL = URL.createObjectURL(foto); $('preview').src = fotoURL; $('preview').hidden = false;
+      fotoURL = URL.createObjectURL(foto); $('preview').src = fotoURL; $('preview').hidden = false; $('foto-rotulo').textContent='Trocar foto'; $('foto-status').textContent='Foto pronta para enviar.';
     } catch { if(leitura === fotoLeitura) { $('erro').textContent = 'Não foi possível abrir a foto. Tire outra ou escolha uma imagem compatível.'; $('foto').value = ''; } }
     finally { if(leitura === fotoLeitura) { carregandoFoto = false; await salvarRascunho(); } }
   };
@@ -129,8 +150,8 @@
     if ($('resultado').value === 'entregue' && (!$('recebedor').value.trim() || !foto || !$('volumes').checked)) { $('erro').textContent = 'Informe quem recebeu, confira todos os volumes e tire a foto.'; return; }
     $('confirmar-titulo').textContent = atual.grupo ? 'Confirmar repasse do grupo?' : $('resultado').value === 'entregue' ? 'Confirmar entrega?' : 'Registrar tentativa?';
     $('confirmar-resumo').textContent = `${atual.id} · ${atual.grupo?'Repasse à transportadora':reasons[$('resultado').value]}${$('resultado').value === 'entregue' ? (atual.grupo?' · Transportadora recebeu: ':' · Recebido por ') + $('recebedor').value.trim() : ''}`;
-    $('confirmar-aviso').textContent = demo ? 'Simulação: este registro não altera o ERP.' : atual.grupo ? 'Todos os pedidos deste grupo terão o repasse registrado. O ERP permanecerá Em trânsito.' : 'A entrega só será concluída após confirmação do servidor.';
-    $('confirmar').textContent = demo ? 'Confirmar simulação' : 'Confirmar registro'; $('envio-erro').textContent = '';
+    $('confirmar-aviso').textContent = demo ? 'Simulação: este registro não altera o ERP.' : atual.grupo ? 'Confirme os pedidos acima. O repasse à transportadora não conclui a entrega ao cliente.' : 'Confira o pedido e o nome de quem recebeu.';
+    $('confirmar').textContent = demo ? 'Confirmar simulação' : atual.grupo ? 'Confirmar repasse' : $('resultado').value==='entregue' ? 'Confirmar entrega' : 'Registrar tentativa'; $('envio-erro').textContent = '';
     $('formulario').close(); $('confirmacao').showModal();
   };
   $('confirmar').onclick = async () => {
@@ -152,7 +173,7 @@
   $('confirmacao').addEventListener('cancel', event => { event.preventDefault(); $('voltar').click(); });
   $('fechar').onclick = () => $('formulario').close();
   $('formulario').addEventListener('close', () => { /* Foto preservada ao revisar a confirmação. */ });
-  $('sair').onclick = async () => { try { if(!demo) { await VibeEntregas.sair(); await RascunhosEntregas.limpar(usuario.id); } usuario=null; consulta++; window.RotasEntregas?.limpar(); pedidos = []; atual = null; limparFoto(); $('busca').value = ''; $('lista').replaceChildren(); $('operacao').hidden = true; $('inicio').hidden = false; $('login').hidden = !VibeEntregas.ativo; aviso(''); } catch(e) { aviso(e.message); } };
+  $('sair').onclick = async () => { try { if(!demo) { await VibeEntregas.sair(); await RascunhosEntregas.limpar(usuario.id); } usuario=null; destinoNavegacao=null; $('navegacao-atalho').hidden=true; consulta++; window.RotasEntregas?.limpar(); pedidos = []; atual = null; limparFoto(); $('busca').value = ''; $('lista').replaceChildren(); $('operacao').hidden = true; $('inicio').hidden = false; $('login').hidden = !VibeEntregas.ativo; aviso(''); } catch(e) { aviso(e.message); } };
   $('busca').oninput = () => { if(demo) render(); else { clearTimeout(debounce); consulta++; offset=0; debounce=setTimeout(carregar,300); } };
   document.querySelectorAll('[data-filtro]').forEach(b => b.onclick = () => { filtro = b.dataset.filtro; offset=0; carregar(); });
   function conexao() { $('conexao').textContent = navigator.onLine ? '' : 'Sem conexão. Você pode preencher o comprovante; tente enviar quando o sinal voltar.'; }

@@ -19,6 +19,7 @@
       <p id="modalidade-info">Expedição do dia + Prontos para Expedir.</p>
       <nav aria-label="Filtrar entregas"><button data-filtro="disponivel" aria-pressed="false">Disponíveis</button><button data-filtro="minha" aria-pressed="true">Minha rota</button><button data-filtro="concluida" aria-pressed="false">Concluídas hoje</button><button id="atualizar" type="button">Atualizar</button></nav>
       <section id="rota-ativa"><p id="rota-progresso" role="status"></p><button id="iniciar-rota" type="button" hidden>Iniciar minha rota</button></section>
+      <section id="navegacao-atalho" hidden aria-label="Destino em navegação"><strong id="navegacao-pedido"></strong><p>Ao voltar do Maps, registre a entrega aqui.</p><div class="actions"><button id="navegacao-entregar" type="button">Informar entrega</button><button id="navegacao-voltar" type="button">Voltar à lista</button></div></section>
       <div class="list-heading"><h1 id="titulo">Minha rota</h1><span id="contador"></span></div><div id="lista"></div><div id="paginacao" hidden><button id="anterior">Anterior</button><button id="proxima">Próxima página</button></div>
     </section>
     <p id="mensagem" role="status" aria-live="polite"></p>
@@ -26,12 +27,13 @@
   <dialog id="formulario" aria-labelledby="form-titulo"><form id="registro">
     <div class="dialog-heading"><h2 id="form-titulo">Informar entrega</h2><button type="button" id="fechar" aria-label="Fechar">×</button></div>
     <p id="resumo"></p>
-    <label for="resultado">Resultado</label><select id="resultado"><option value="entregue">Entregue</option><option value="ausente">Destinatário ausente</option><option value="endereco">Endereço incorreto</option><option value="recusa">Entrega recusada</option></select>
+    <div id="resultado-bloco"><label for="resultado">O que aconteceu?</label><select id="resultado"><option value="entregue">Entregue</option><option value="ausente">Destinatário ausente</option><option value="endereco">Endereço incorreto</option><option value="recusa">Entrega recusada</option></select></div>
     <div id="recebimento"><label for="recebedor">Nome de quem recebeu</label><input id="recebedor" maxlength="120" autocomplete="off" required>
-    <label class="check"><input id="volumes" type="checkbox" required> Conferi e entreguei todos os volumes</label></div>
-    <div id="foto-bloco"><label for="foto">Foto do comprovante</label><input id="foto" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><small>Fotografe o pacote entregue. Até 10 MB.</small><img id="preview" alt="Prévia do comprovante" hidden></div>
-    <label for="observacao">Observação <span>(opcional)</span></label><textarea id="observacao" maxlength="500" rows="2"></textarea>
-    <p id="erro" role="alert"></p><button class="primary" type="submit">Revisar registro</button>
+    </div>
+    <div id="foto-bloco"><label for="foto" class="camera-botao" id="foto-rotulo">Tirar foto do comprovante</label><input id="foto" class="foto-input" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><small id="foto-status" role="status">Fotografe o pacote no local da entrega.</small><img id="preview" alt="Prévia do comprovante" hidden></div>
+    <label class="check" id="volumes-bloco"><input id="volumes" type="checkbox" required> Entreguei todos os volumes</label>
+    <details id="observacao-bloco"><summary>Adicionar observação (opcional)</summary><label for="observacao">Observação</label><textarea id="observacao" maxlength="500" rows="2"></textarea></details>
+    <p id="erro" role="alert"></p><button class="primary" type="submit" id="revisar-registro">Continuar</button>
   </form></dialog>
   <dialog id="confirmacao" aria-labelledby="confirmar-titulo"><h2 id="confirmar-titulo">Confirmar entrega?</h2><p id="confirmar-resumo"></p><p class="notice" id="confirmar-aviso">Simulação: este registro não altera o ERP.</p><p id="envio-erro" role="alert"></p><button id="confirmar" class="primary">Confirmar simulação</button><button id="voltar">Voltar e revisar</button></dialog>
   <script src="../supabase-js.min.js" defer></script><script src="public-config.js" defer></script><script src="api.js" defer></script><script src="rotas.js" defer></script><script src="rascunhos.js" defer></script><script src="app.js" defer></script>

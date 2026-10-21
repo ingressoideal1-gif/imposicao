@@ -32,6 +32,20 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  assert.deepEqual(await p.$$eval('#ve-linhas tr:first-child select option',els=>els.map(e=>e.textContent)),['Selecionar entregador','Motorista A']);
  assert.equal(await p.$eval('#ve-linhas tr:nth-child(2) select',e=>e.disabled),true);
  assert.equal(await p.$$eval('#ve-linhas tr:first-child td',e=>e.length),8);
+ // Cliques reais nas abas enviam o filtro selecionado e atualizam a lista.
+ await p.evaluate(()=>{
+  window.rowsAnteriores=rows;
+  rows=['motoboy','veppo','aereo'].map((modalidade,i)=>({pedido:9000+i,modalidade,status_erp:'EXPEDICAO'}));
+  window.rpcAnterior=vibeClient.rpc;
+  vibeClient.rpc=async(n,a)=>n==='ve_acompanhar_modalidades'?{data:rows.filter(r=>a.p_modalidade==='todas'||r.modalidade===a.p_modalidade)}:rpcAnterior(n,a);
+ });
+ for(const modalidade of ['motoboy','veppo','aereo','todas']){
+  await p.click(`[data-ve-modalidade="${modalidade}"]`);
+  await p.waitForFunction(n=>document.querySelectorAll('#ve-linhas tr').length===n,{},modalidade==='todas'?3:1);
+  assert.equal(await p.$eval(`[data-ve-modalidade="${modalidade}"]`,e=>e.getAttribute('aria-pressed')),'true');
+  if(modalidade!=='todas')assert.equal(await p.$eval('#ve-linhas .ve-forma-envio span',e=>e.textContent),{motoboy:'Motoboy',veppo:'Veppo',aereo:'Aéreo'}[modalidade]);
+ }
+ await p.evaluate(()=>{rows=rowsAnteriores;vibeClient.rpc=rpcAnterior;return EntregasPainel.abrir();});
  await p.evaluate(()=>fail=true);await p.select('#ve-linhas tr:first-child select','d1');
  await p.waitForFunction(()=>document.querySelector('#ve-mensagem').textContent.includes('Conflito'));assert.equal(await p.$eval('#ve-linhas tr:first-child select',e=>e.value),'');
  await p.evaluate(()=>fail=false);await p.select('#ve-linhas tr:first-child select','d1');
