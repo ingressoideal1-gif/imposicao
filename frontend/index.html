@@ -15,7 +15,7 @@
     <meta name="description"
         content="Ideal Imposition — Sistema profissional de imposição gráfica com dados variáveis (VDP): numeração, QR Code, código de barras.">
     <link rel="stylesheet" href="/vendor/quill-2.0.3/quill.core.css">
-    <link rel="stylesheet" href="/style.css?v=1092">
+    <link rel="stylesheet" href="/style.css?v=1094">
     <link rel="stylesheet" href="/producao-por-cor.css?v=948">
     <link rel="stylesheet" href="/pedido-colunas.css?v=982">
     <script src="pdf-lib.min.js?v=948"></script>
@@ -4449,20 +4449,20 @@
                     <p id="ve-modalidade-info">Expedição do dia + Prontos para Expedir. Rotas em deslocamento permanecem visíveis.</p>
                     <h2>Entregas</h2><p>Planeje as saídas da Ideal e acompanhe cada entrega em um só lugar.</p>
                     <div class="ve-gestao-acoes"><button type="button" class="btn btn-primary" id="ve-adicionar-entrega" hidden>Adicionar entrega</button><button type="button" class="btn btn-primary" id="ve-entregadores">Entregadores e acessos</button><button type="button" class="btn btn-ghost" id="ve-nova-rota">Criar rota</button></div>
-                    <dialog id="ve-cadastros"><h3>Entregadores e acessos</h3><p>O login do PWA é o e-mail. Senhas não são exibidas; informe uma nova para redefinir.</p><button type="button" id="ve-novo-entregador" class="btn btn-primary">Novo entregador</button><div id="ve-cadastros-lista"></div><p id="ve-cadastros-msg" role="status"></p><button type="button" data-ve-fechar="ve-cadastros" class="btn btn-ghost">Fechar</button></dialog>
-                    <dialog id="ve-cadastro"><form id="ve-cadastro-form" autocomplete="off"><h3 id="ve-cadastro-titulo">Novo entregador</h3>
+                    <dialog id="ve-cadastros" class="ve-dialogo" aria-labelledby="ve-cadastros-titulo"><header class="ve-dialogo-topo"><span class="ve-dialogo-etiqueta">EQUIPE DE ENTREGA</span><h3 id="ve-cadastros-titulo">Entregadores e acessos</h3><p>O login do PWA é o e-mail. Senhas não são exibidas; informe uma nova para redefinir.</p></header><div class="ve-dialogo-conteudo"><button type="button" id="ve-novo-entregador" class="btn btn-primary">Novo entregador</button><div id="ve-cadastros-lista"></div></div><footer class="ve-dialogo-rodape"><p id="ve-cadastros-msg" role="status"></p><div class="ve-dialogo-acoes"><button type="button" data-ve-fechar="ve-cadastros" class="btn btn-ghost">Fechar</button></div></footer></dialog>
+                    <dialog id="ve-cadastro" class="ve-dialogo" aria-labelledby="ve-cadastro-titulo"><form id="ve-cadastro-form" autocomplete="off"><header class="ve-dialogo-topo"><span class="ve-dialogo-etiqueta">ACESSO AO PWA</span><h3 id="ve-cadastro-titulo">Novo entregador</h3><p>Cadastre os dados de acesso do entregador.</p></header><div class="ve-dialogo-conteudo">
                       <label>Nome<input id="ve-nome" required minlength="2" maxlength="120"></label>
                       <label>E-mail de acesso<input id="ve-email" type="email" required maxlength="254" autocomplete="off"></label>
                       <label>Senha nova<input id="ve-senha" type="password" minlength="12" maxlength="128" autocomplete="new-password"></label><small id="ve-senha-ajuda">Mínimo de 12 caracteres. Entregue a senha diretamente ao entregador.</small>
                       <label class="ve-check"><input id="ve-ativo" type="checkbox" checked> Acesso ativo</label>
-                      <p id="ve-cadastro-msg" role="alert"></p><button id="ve-cadastro-salvar" class="btn btn-primary">Salvar entregador</button><button type="button" data-ve-fechar="ve-cadastro" class="btn btn-ghost">Cancelar</button>
+                      </div><footer class="ve-dialogo-rodape"><p id="ve-cadastro-msg" role="alert"></p><div class="ve-dialogo-acoes"><button id="ve-cadastro-salvar" class="btn btn-primary">Salvar entregador</button><button type="button" data-ve-fechar="ve-cadastro" class="btn btn-ghost">Cancelar</button></div></footer>
                     </form></dialog>
-                    <dialog id="ve-rota-editor"><h3 id="ve-rota-titulo">Criar rota</h3><p>Organize a sequência manualmente. Pedidos selecionados serão atribuídos ao entregador; removê-los da rota não desfaz a retirada.</p>
+                    <dialog id="ve-rota-editor" class="ve-dialogo" aria-labelledby="ve-rota-titulo"><header class="ve-dialogo-topo"><span class="ve-dialogo-etiqueta">PLANEJAMENTO</span><h3 id="ve-rota-titulo">Criar rota</h3><p>Organize a sequência manualmente. Pedidos selecionados serão atribuídos ao entregador; removê-los da rota não desfaz a retirada.</p></header><div class="ve-dialogo-conteudo">
                       <label>Entregador<select id="ve-rota-entregador"></select></label>
-                      <form id="ve-rota-busca-form"><label>Buscar pedido<input id="ve-rota-busca" inputmode="numeric" maxlength="30"></label><button class="btn btn-ghost">Buscar</button></form>
-                      <div id="ve-rota-disponiveis"></div><button type="button" id="ve-rota-mais" class="btn btn-ghost" hidden>Carregar mais pedidos</button>
-                      <h4>Ordem das paradas</h4><ol id="ve-rota-sequencia"></ol><label class="ve-check"><input id="ve-rota-retorno-adm" type="checkbox"> Retornar à gráfica</label>
-                      <p id="ve-rota-msg" role="alert"></p><button type="button" id="ve-rota-salvar" class="btn btn-primary">Salvar rota</button><button type="button" data-ve-fechar="ve-rota-editor" class="btn btn-ghost">Cancelar</button>
+                      <div class="ve-dialogo-bloco" aria-label="Pedidos disponíveis"><h4>Adicionar pedidos</h4><form id="ve-rota-busca-form"><label>Buscar pedido<input id="ve-rota-busca" inputmode="numeric" maxlength="30"></label><button class="btn btn-ghost">Buscar</button></form>
+                      <div id="ve-rota-disponiveis"></div><button type="button" id="ve-rota-mais" class="btn btn-ghost" hidden>Carregar mais pedidos</button></div>
+                      <div class="ve-dialogo-bloco"><h4>Ordem das paradas</h4><ol id="ve-rota-sequencia"></ol><label class="ve-check"><input id="ve-rota-retorno-adm" type="checkbox"> Retornar à gráfica</label></div></div>
+                      <footer class="ve-dialogo-rodape"><p id="ve-rota-msg" role="alert"></p><div class="ve-dialogo-acoes"><button type="button" id="ve-rota-salvar" class="btn btn-primary">Salvar rota</button><button type="button" data-ve-fechar="ve-rota-editor" class="btn btn-ghost">Cancelar</button></div></footer>
                     </dialog>
                     <dialog id="ve-deslocamento">
                       <h3>Iniciar deslocamento</h3><p>Previsões calculadas pelo Google Maps, saindo da Ideal e seguindo a ordem planejada. Incluem 5 minutos entre paradas para atendimento. Horário de Brasília. Após cada entrega, os prazos restantes serão recalculados a partir do último local confirmado.</p>
