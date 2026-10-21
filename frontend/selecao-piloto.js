@@ -268,9 +268,6 @@
             if (motivo) throw Error(motivo);
             const liberado = liberados.get(chave(alvo.itemId, alvo.osId));
             const item = (getOSItens(alvo.osId) || []).find(i => String(i.id) === String(alvo.itemId));
-            if (item?._confirmacaoLocalRevisaoNecessaria && !(typeof refazerLigado === 'function' && refazerLigado())) {
-                throw Error('Este modelo já teve impressão confirmada nesta estação. Confira o material e marque Impresso. Para reimpressão intencional, use Refazer.');
-            }
             if (!liberado || !item?._modeloOnline || liberado.modelo !== JSON.stringify(canonico(item._modeloOnline))) {
                 throw Error('Reabra o pedido para conferir a versão local antes de gerar ou imprimir.');
             }

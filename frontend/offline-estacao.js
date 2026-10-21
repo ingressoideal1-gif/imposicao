@@ -107,10 +107,6 @@
     async function conferencia(alvos) {
         const b = await bootstrap();
         for (const osId of new Set(alvos.map(a => a.osId))) aplicarConfirmacoesDoPedido(osId, b);
-        for (const a of alvos) {
-            const item = (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId));
-            if (item?._confirmacaoLocalRevisaoNecessaria && !(typeof refazerLigado === 'function' && refazerLigado())) throw Error('Este modelo já teve impressão confirmada nesta estação. Confira o material e marque Impresso. Para reimpressão intencional, use Refazer.');
-        }
         const pedidos = [...new Set(alvos.map(a => String(a.osId)))];
         const referencias = pedidos.map(osId => {
             const r = window.PilotoSelecao.revisaoPedido(osId);
@@ -158,6 +154,18 @@
         const b = await bootstrap();
         aplicarConfirmacoesDoPedido(osId, b);
     }
+    async function iniciarDecisao(itemId, osId, status) {
+        const dados = {id:crypto.randomUUID(), pedido:String(osId).replace(/^vibe_/, ''),
+            modelo:String(itemId), status, acao:'iniciar'};
+        await pedir('decisao-impressao-painel', dados);
+        pendente = null;
+        return dados;
+    }
+    async function encerrarDecisao(dados, concluir=true) {
+        await pedir('decisao-impressao-painel', {...dados, acao:concluir ? 'concluir' : 'cancelar'});
+        pendente = null;
+        await aplicarConfirmacoes('vibe_' + dados.pedido);
+    }
     function aplicarConfirmacoesDoPedido(osId, b) {
         const numero = String(osId).replace(/^vibe_/, '');
         const atual = (b.pedidos || []).find(p => String(p.pedido) === numero);
@@ -166,6 +174,7 @@
         // Uma nova decisão do operador substitui o conflito anterior do modelo.
         for (const c of b.confirmacoes || []) {
             if (String(c.dados.pedido) !== numero) continue;
+            if (c.estado === 'manual_pendente' || c.estado === 'cancelada') continue;
             // O detalhe e a lista precisam usar a mesma confirmação persistida.
             // Não altera o snapshot/revisão de arte preparado para impressão.
             const modelos = [...(state.osItens[osId] || []), ...(state.modelosGlobais[numero] || [])];
@@ -176,15 +185,15 @@
                 const impressoNoSnapshot = String(persistido?.status_impressao || '').trim().toUpperCase() === 'IMPRESSO';
                 const divergente = !impressoNoSnapshot && (c.estado === 'conflito' || c.dados.revisao !== atual?.revisao);
                 for (const item of modelos.filter(m => String(m.id) === id)) {
-                    // Estado de apresentação, nunca escrito no banco comercial.
-                    // Divergência não comprova impressão da nova arte, nem autoriza reimpressão.
-                    item.impressao = divergente ? 'Conferir impressão' : 'IMPRESSO';
+                    // O status continua sendo a ultima decisao do operador.
+                    // Divergencias de sincronizacao nao criam um quarto status.
+                    item.impressao = c.estado === 'manual' ? c.dados.status : 'IMPRESSO';
                     item.status_impressao = item.impressao;
-                    item._confirmacaoLocalRevisaoNecessaria = divergente;
+                    delete item._confirmacaoLocalRevisaoNecessaria;
                     item._confirmacaoLocalPendente = !divergente && !impressoNoSnapshot && c.estado === 'pendente';
                 }
             }
         }
     }
-    window.PilotoOffline = {bootstrap,catalogo,carregarOrdens,conferencia,confirmar,aplicarConfirmacoes,aplicarCatalogos};
+    window.PilotoOffline = {bootstrap,catalogo,carregarOrdens,conferencia,confirmar,aplicarConfirmacoes,aplicarCatalogos,iniciarDecisao,encerrarDecisao};
 })();

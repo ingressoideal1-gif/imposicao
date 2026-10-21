@@ -1,11 +1,12 @@
 /** Transporte restrito a SMTP sobre TLS/465, texto UTF-8 e um destinatário.
- * Não aceita host, credenciais, anexos ou comandos vindos da requisição.
+ * Host e credenciais vêm da configuração; imagens inline são validadas pelo serviço.
  * Usa TLS nativo do Deno com validação de certificado, sem novas dependências.
  */
 import { Recusa } from "./sessao.ts";
 
 export type ConfigSmtpArtes = { host: string; usuario: string; senha: string; remetente: string; nome: string };
-export type MensagemArte = { to: string; subject: string; text: string; html?: string };
+export type ImagemEmail = { cid: string; tipo: "image/png" | "image/jpeg"; base64: string };
+export type MensagemArte = { to: string; subject: string; text: string; html?: string; imagens?: ImagemEmail[] };
 export type ConexaoSmtp = Pick<Deno.TlsConn, "read" | "write" | "close">;
 type Conectar = (opcoes: { hostname: string; port: number }) => Promise<ConexaoSmtp>;
 
@@ -32,12 +33,26 @@ function cabecalho(texto: string): string {
 export function mensagemMime(config: ConfigSmtpArtes, mensagem: MensagemArte): string {
   const codificar = (texto: string) => base64(texto.replace(/\r?\n/g, "\r\n")).match(/.{1,76}/g)?.join("\r\n") || "";
   const limite = "ideal_" + crypto.randomUUID();
-  const conteudo = mensagem.html ? [
+  let conteudo = mensagem.html ? [
     `Content-Type: multipart/alternative; boundary="${limite}"`, "",
     `--${limite}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", codificar(mensagem.text),
     `--${limite}`, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", codificar(mensagem.html),
     `--${limite}--`, "",
   ] : ["Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", codificar(mensagem.text), ""];
+  if (mensagem.html && mensagem.imagens?.length) {
+    const relacionado = "artes_" + crypto.randomUUID();
+    conteudo = [
+      `Content-Type: multipart/related; boundary="${relacionado}"`, "",
+      `--${relacionado}`, ...conteudo,
+      ...mensagem.imagens.flatMap(imagem => [
+        `--${relacionado}`, `Content-Type: ${imagem.tipo}`,
+        "Content-Transfer-Encoding: base64", `Content-ID: <${imagem.cid}>`,
+        `Content-Disposition: inline; filename="${imagem.cid}.${imagem.tipo === "image/png" ? "png" : "jpg"}"`,
+        "", imagem.base64.match(/.{1,76}/g)?.join("\r\n") || "", "",
+      ]),
+      `--${relacionado}--`, "",
+    ];
+  }
   return [
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${crypto.randomUUID()}@${config.remetente.split("@")[1]}>`,

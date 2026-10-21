@@ -28,6 +28,12 @@ function extrair(nome) {
      if(req.url.endsWith('offline-painel')) return res.end(JSON.stringify(dados));
      let body=''; for await (const part of req) body+=part;
      if(req.url.endsWith('conferencia-trabalho-painel')) return res.end(JSON.stringify(dados));
+     if(req.url.endsWith('decisao-impressao-painel')) {
+       const d=JSON.parse(body);
+       if(d.acao==='iniciar') dados.confirmacoes.unshift({id:d.id,dados:{pedido:d.pedido,modelos:[d.modelo],status:d.status},estado:'manual_pendente'});
+       else dados.confirmacoes.find(c=>c.id===d.id).estado=d.acao==='concluir'?'manual':'cancelada';
+       return res.end('{"registrado_localmente":true}');
+     }
      if(req.url.endsWith('confirmar-impressao-painel')) {
        dados.confirmacoes.unshift({dados:JSON.parse(body),estado:'pendente'});
        return res.end('{"registrado_localmente":true}');
@@ -115,19 +121,19 @@ function extrair(nome) {
    dados.confirmacoes[0].estado='conflito';
    await page.addScriptTag({url:origem+'/offline-estacao.js?conflito=1'});
    await page.evaluate(()=>PilotoOffline.carregarOrdens());
-   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'Conferir impressão',
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
      'conflito não pode voltar à fila Aguardando nem declarar impressão da revisão atual');
    await page.evaluate(async()=>{state.osItens.vibe_99=[{id:10}];await PilotoOffline.aplicarConfirmacoes('vibe_99');});
-   assert.equal(await page.evaluate(()=>state.osItens.vibe_99[0]._confirmacaoLocalRevisaoNecessaria),true);
-   assert.match(await page.evaluate(async()=>{
+   assert.equal(await page.evaluate(()=>state.osItens.vibe_99[0]._confirmacaoLocalRevisaoNecessaria),undefined);
+   assert.equal(await page.evaluate(async()=>{
      try {await PilotoOffline.conferencia([{osId:'vibe_99',itemId:'10'}]);return 'permitiu';}
      catch(e){return e.message;}
-   }),/já teve impressão confirmada/,'impede gerar/imprimir novamente enquanto houver divergência');
+   }),'permitiu','sem nova dinamica: conferência usa os controles existentes');
    dados.confirmacoes[0].estado='pendente';
    dados.confirmacoes[0].dados.revisao='c'.repeat(64);
    await page.addScriptTag({url:origem+'/offline-estacao.js?revisao=1'});
    await page.evaluate(()=>PilotoOffline.carregarOrdens());
-   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'Conferir impressão',
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
      'mudança de revisão também exige conferência, sem recolocar em Aguardando');
    snapshot.modelos[0].status_impressao='IMPRESSO';
    await page.addScriptTag({url:origem+'/offline-estacao.js?sincronizado=1'});
@@ -135,12 +141,33 @@ function extrair(nome) {
    assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
      'snapshot atualizado confirma impressão mesmo se a lista resumida estiver antiga');
    await page.evaluate(async()=>{state.osItens.vibe_99=[{id:10}];await PilotoOffline.aplicarConfirmacoes('vibe_99');});
-   assert.equal(await page.evaluate(()=>state.osItens.vibe_99[0]._confirmacaoLocalRevisaoNecessaria),false);
+   assert.equal(await page.evaluate(()=>state.osItens.vibe_99[0]._confirmacaoLocalRevisaoNecessaria),undefined);
    delete snapshot.modelos[0].status_impressao;
    assert.equal(await page.evaluate(()=>confirmarImpressaoModelos([{osId:'vibe_99',itemId:'10'}])),true);
    await page.evaluate(()=>PilotoOffline.carregarOrdens());
    assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
      'nova confirmação explícita da revisão atual prevalece sobre registros antigos');
+   // O seletor original permite voltar a Aguardando. Reserva local vem antes
+   // da escrita, e a apresentação só muda depois da confirmação do banco.
+   await page.evaluate(()=>{
+     window.STATUS_CORRIGIR_ARTE='Corrigir Arte';
+     window.loadOSItens=async()=>{};
+     window.supabaseClient={from(){return {update(){return this;},eq(){return this;},async select(){return {data:[],error:null};}};}};
+   });
+   assert.equal(await page.evaluate(()=>updateItemImpressao('10','vibe_99','Aguardando')),false);
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO');
+   await page.evaluate(()=>{
+     window.supabaseClient={from(){return {update(){return this;},eq(){return this;},async select(){return {data:[{id:10,id_int:99,status_impressao:'Aguardando'}],error:null};}};}};
+   });
+   assert.equal(await page.evaluate(()=>updateItemImpressao('10','vibe_99','Aguardando')),true);
+   await page.addScriptTag({url:origem+'/offline-estacao.js?decisao=1'});
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'Aguardando',
+     'decisao manual persiste ao voltar e reabrir, sem recibo antigo desfaze-la');
+   assert.equal(await page.evaluate(()=>confirmarImpressaoModelos([{osId:'vibe_99',itemId:'10'}])),true);
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO');
    dados.pedidos=[];
    await page.addScriptTag({url:origem+'/offline-estacao.js?lista=2'});
    assert.equal(await page.evaluate(async()=>{await PilotoOffline.carregarOrdens();return state.ordens.length;}),65);

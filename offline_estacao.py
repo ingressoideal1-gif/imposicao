@@ -26,6 +26,7 @@ class OfflineEstacao:
         self.tentativas = {}
         self.falhas = {}
         self._catalogos_lock = threading.Lock()
+        self._confirmacoes_lock = threading.RLock()
 
     def sincronizar_catalogos(self, cliente, *, forcar=False):
         # Serializa a abertura pelo operador com a coleta em segundo plano.
@@ -253,6 +254,10 @@ class OfflineEstacao:
         return {'pedidos':pedidos, 'catalogos':catalogos}
 
     def confirmar(self, dados, operador):
+        with self._confirmacoes_lock:
+            return self._confirmar(dados, operador)
+
+    def _confirmar(self, dados, operador):
         if (not isinstance(dados, dict) or set(dados) != {'id','pedido','revisao','modelos'}
                 or str(uuid.UUID(dados['id'])) != dados['id']
                 or not isinstance(dados['modelos'], list) or not dados['modelos']
@@ -275,15 +280,66 @@ class OfflineEstacao:
 
     def confirmacoes(self):
         with self.banco() as con:
-            return [{'id':r[0], 'dados':json.loads(r[1]), 'estado':r[2]}
-                    for r in con.execute('SELECT id,dados,estado FROM offline_confirmacoes ORDER BY criado DESC LIMIT 500')]
+            registros = [{'id':r[0], 'dados':json.loads(r[1]), 'estado':r[2]}
+                    for r in con.execute("SELECT id,dados,estado FROM offline_confirmacoes WHERE estado != 'cancelada' ORDER BY criado DESC, rowid DESC")]
+        return registros
+
+    def decisao_manual(self, dados, operador):
+        """Suspende recibos antigos antes da escrita online, sem apagar o historico.
+
+        A reserva sobrevive a reinicio/queda de rede. So a confirmacao da escrita
+        muda a apresentacao; uma reserva incerta nunca reenfileira impressao.
+        """
+        if (not isinstance(dados, dict) or set(dados) != {'id','pedido','modelo','status','acao'}
+                or str(uuid.UUID(dados['id'])) != dados['id']
+                or dados['status'] not in ('Aguardando', 'Corrigir Arte')
+                or dados['acao'] not in ('iniciar','concluir','cancelar')):
+            raise ValueError('Decisao invalida.')
+        registro = self.selecao._cache.obter(dados['pedido'])
+        if not registro or str(dados['modelo']) not in {str(m['id']) for m in registro['snapshot']['modelos']}:
+            raise ValueError('Modelo de outro pedido ou sem preparacao.')
+        corpo = {'id':dados['id'], 'pedido':dados['pedido'], 'modelos':[str(dados['modelo'])],
+                 'status':dados['status'], 'operador':str(operador), 'empresa':self.servico.empresa}
+        with self._confirmacoes_lock, self.banco() as con:
+            antigo = con.execute('SELECT dados,estado FROM offline_confirmacoes WHERE id=?', (dados['id'],)).fetchone()
+            if antigo and json.loads(antigo[0]) != corpo:
+                raise ValueError('Identificador ja utilizado.')
+            if dados['acao'] == 'iniciar':
+                con.execute('INSERT OR IGNORE INTO offline_confirmacoes VALUES (?,?,?,?)',
+                            (dados['id'], json.dumps(corpo), 'manual_pendente', time.time()))
+            else:
+                if not antigo or antigo[1] not in ('manual_pendente','manual'):
+                    raise ValueError('Decisao ausente ou encerrada.')
+                if dados['acao'] == 'cancelar' and antigo[1] == 'manual':
+                    raise ValueError('Decisao ja concluida.')
+                con.execute('UPDATE offline_confirmacoes SET estado=? WHERE id=?',
+                            ('manual' if dados['acao']=='concluir' else 'cancelada', dados['id']))
+        return {'id':dados['id'], 'registrado_localmente':True}
 
     def sincronizar_confirmacoes(self, cliente, checkpoint):
+        # A reserva manual aguarda qualquer envio em andamento antes de autorizar
+        # a escrita online. Depois dela, um recibo antigo nao pode marcar de novo.
+        with self._confirmacoes_lock:
+            self._sincronizar_confirmacoes(cliente, checkpoint)
+
+    def _sincronizar_confirmacoes(self, cliente, checkpoint):
+        atuais = {}
+        for c in self.confirmacoes():
+            for modelo in c['dados']['modelos']:
+                atuais.setdefault((c['dados']['pedido'],str(modelo)), c['id'])
         with self.banco() as con:
-            lote = con.execute("SELECT id,dados FROM offline_confirmacoes WHERE estado='pendente' ORDER BY criado LIMIT 10").fetchall()
+            lote = con.execute("SELECT id,dados FROM offline_confirmacoes WHERE estado='pendente' ORDER BY criado").fetchall()
+        enviados = 0
         for id_, texto in lote:
             checkpoint()
-            resposta = cliente.chamar('confirmar-offline', json.loads(texto))
+            corpo = json.loads(texto)
+            corpo['modelos'] = [m for m in corpo['modelos'] if atuais.get((corpo['pedido'],str(m))) == id_]
+            if not corpo['modelos']:
+                continue
+            if enviados >= 10:
+                break
+            enviados += 1
+            resposta = cliente.chamar('confirmar-offline', corpo)
             if resposta.get('id') != id_ or resposta.get('estado') not in ('sincronizado','conflito'):
                 raise ValueError('Confirmacao remota incompleta.')
             with self.banco() as con:

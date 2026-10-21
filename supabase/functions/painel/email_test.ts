@@ -5,7 +5,7 @@ Deno.test("painel/email: sessão, grade, CORS Cloudflare, métodos e envio sem a
   const servir = Deno.serve, buscar = globalThis.fetch, ambiente = Deno.env.get, tls = Deno.connectTls;
   let handler!: (req: Request) => Promise<Response>;
   let permissoes: Record<string, unknown> | null = { perm_lista_arte_view: true, role: "designer" };
-  let consultas = 0, conexoes = 0;
+  let consultas = 0, conexoes = 0, escritaSmtp = "";
   const jwt = "cabecalho." + btoa(JSON.stringify({ sub: "usuario-sintetico", email: "operador@example.com" })) + ".assinatura";
   const vars: Record<string, string> = {
     SUPABASE_URL: "https://banco.example", SUPABASE_SERVICE_ROLE_KEY: "chave-sintetica",
@@ -24,6 +24,7 @@ Deno.test("painel/email: sessão, grade, CORS Cloudflare, métodos e envio sem a
       if (url.includes("imposition_user_permissions?")) dados = permissoes ? [permissoes] : [];
       else if (url.includes("pedidos_links_cliente?")) dados = [{ os_id: "vibe_11", numero_pedido: "11", token: "abc123" }];
       else if (url.includes("propostas?id_int=eq.11&select=id_int,texto_whatsapp,vendedor&limit=2")) dados = [{id_int:11,texto_whatsapp:"Total: R$ 148,05"}];
+      else if (url.includes("pedidos_modelos?id_int=eq.11&")) dados = [{ id: 1, nome_modelo: "Modelo", quantidade: 100 }];
       else throw new Error("consulta fora do contrato");
       return Promise.resolve(Response.json(dados));
     }) as typeof fetch;
@@ -32,7 +33,7 @@ Deno.test("painel/email: sessão, grade, CORS Cloudflare, métodos e envio sem a
       let bytes = new TextEncoder().encode("220 smtp\r\n250 AUTH PLAIN\r\n334 \r\n235 ok\r\n250 ok\r\n250 ok\r\n354 dados\r\n250 aceito\r\n221 fim\r\n");
       return {
         read: (buffer: Uint8Array) => { const n = Math.min(buffer.length, bytes.length); buffer.set(bytes.subarray(0, n)); bytes = bytes.subarray(n); return Promise.resolve(n || null); },
-        write: (buffer: Uint8Array) => Promise.resolve(buffer.length), close: () => {},
+        write: (buffer: Uint8Array) => { escritaSmtp += new TextDecoder().decode(buffer); return Promise.resolve(buffer.length); }, close: () => {},
       };
     }) as typeof Deno.connectTls;
     await import("./index.ts");
@@ -69,6 +70,16 @@ Deno.test("painel/email: sessão, grade, CORS Cloudflare, métodos e envio sem a
     }));
     assert.equal(resultado.status, 200); assert.equal((await resultado.json()).ok, true);
     assert.equal(conexoes, 1);
+    escritaSmtp = "";
+    const inline = await handler(req("email/enviar", "POST", {
+      os_id: "vibe_11", to: "cliente@example.com", subject: "Arte", body_text: "Confira as artes abaixo.", modo: "artes_corpo",
+      modelos: [{ id: "1", imagens: [{ face: "frente", pagina: 1,
+        dados: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1X8AAAAASUVORK5CYII=" }] }],
+    }));
+    assert.equal(inline.status, 200); assert.equal((await inline.json()).ok, true);
+    assert.equal(conexoes, 2);
+    assert.match(escritaSmtp, /multipart\/related/);
+    assert.match(escritaSmtp, /Content-ID: <arte-1-frente-1>/);
   } finally {
     Deno.serve = servir; globalThis.fetch = buscar; Deno.env.get = ambiente; Deno.connectTls = tls;
   }

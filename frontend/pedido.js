@@ -5624,7 +5624,6 @@ function renderPedOSQueue(opcoes = {}) {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Status')}
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
-                                ${item._confirmacaoLocalRevisaoNecessaria ? '<option value="" selected disabled>Conferir impressão</option>' : ''}
                                 <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
                                 <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
                                 <!-- O terceiro status (02/09/2026): a produção achou erro na

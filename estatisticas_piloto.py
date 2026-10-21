@@ -105,6 +105,7 @@ def criar_router_estatisticas(servico):
 
     @router.post('/api/pacotes-locais/conferencia-trabalho-painel')
     @router.post('/api/pacotes-locais/confirmar-impressao-painel')
+    @router.post('/api/pacotes-locais/decisao-impressao-painel')
     async def trabalho_offline(request: Request):
         exigir_painel(request, escrita=True)
         corpo = bytearray()
@@ -114,11 +115,12 @@ def criar_router_estatisticas(servico):
                 raise HTTPException(413, 'Solicitacao excede limite.')
         try:
             dados = json.loads(corpo)
-            if request.url.path.endswith('/confirmar-impressao-painel'):
+            if request.url.path.endswith(('/confirmar-impressao-painel','/decisao-impressao-painel')):
                 operador = getattr(request.state, 'operador', {})
                 if not operador.get('permissoes', {}).get('perm_imprimir'):
                     raise HTTPException(403, 'Sem permissao de impressao.')
-                resultado = await run_in_threadpool(offline.confirmar, dados, operador.get('uid', 'local'))
+                acao = offline.decisao_manual if request.url.path.endswith('/decisao-impressao-painel') else offline.confirmar
+                resultado = await run_in_threadpool(acao, dados, operador.get('uid', 'local'))
             else:
                 resultado = await run_in_threadpool(offline.conferir, dados)
             return resultado

@@ -125,6 +125,58 @@ def test_faixa_fica_em_fila_apos_reinicio_e_nao_duplica(tmp_path):
         assert con.execute('SELECT COUNT(*) FROM offline_faixas WHERE enviado=0').fetchone()[0]==1
 
 
+@pytest.mark.parametrize('status', ['Aguardando', 'Corrigir Arte'])
+def test_decisao_manual_substitui_recibo_antigo_apos_reinicio(tmp_path, status):
+    s,_,_,o,_=ambiente(tmp_path);o.ciclo()
+    impresso={'id':str(uuid.uuid4()),'pedido':'99','revisao':'a'*64,'modelos':['10']}
+    o.confirmar(impresso,'op')
+    decisao={'id':str(uuid.uuid4()),'pedido':'99','modelo':'10','status':status,'acao':'iniciar'}
+    o.decisao_manual(decisao,'op')
+    envios=[]
+    def enviar(a,d):
+        envios.append(d)
+        return {'id':d['id'],'estado':'sincronizado'}
+    cliente=SimpleNamespace(chamar=enviar)
+    o=OfflineEstacao(s,SelecaoPiloto(s))
+    o.sincronizar_confirmacoes(cliente,lambda:None)
+    assert envios==[], 'reserva incerta nao reenvia uma confirmacao antiga'
+    o.decisao_manual({**decisao,'acao':'concluir'},'op')
+    o=OfflineEstacao(s,SelecaoPiloto(s))
+    o.sincronizar_confirmacoes(cliente,lambda:None)
+    assert envios==[]
+    assert o.confirmacoes()[0]['dados']['status']==status
+    assert o.confirmacoes()[0]['estado']=='manual'
+    o.confirmar({**impresso,'id':str(uuid.uuid4())},'op')
+    o.sincronizar_confirmacoes(cliente,lambda:None)
+    assert len(envios)==1, 'nova impressao deliberada volta a sincronizar'
+
+
+def test_reserva_manual_espera_envio_em_andamento(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    s,_,_,o,_=ambiente(tmp_path);o.ciclo()
+    o.confirmar({'id':str(uuid.uuid4()),'pedido':'99','revisao':'a'*64,'modelos':['10']},'op')
+    entrou=threading.Event();liberar=threading.Event()
+    def enviar(a,d):
+        entrou.set();assert liberar.wait(5)
+        return {'id':d['id'],'estado':'sincronizado'}
+    with ThreadPoolExecutor(2) as pool:
+        envio=pool.submit(o.sincronizar_confirmacoes,SimpleNamespace(chamar=enviar),lambda:None)
+        assert entrou.wait(5)
+        reserva=pool.submit(o.decisao_manual,{'id':str(uuid.uuid4()),'pedido':'99','modelo':'10','status':'Aguardando','acao':'iniciar'},'op')
+        assert not reserva.done()
+        liberar.set();envio.result(5);reserva.result(5)
+    assert o.confirmacoes()[0]['estado']=='manual_pendente'
+
+
+def test_decisao_manual_recusa_modelo_e_operador_divergentes(tmp_path):
+    _,_,_,o,_=ambiente(tmp_path);o.ciclo()
+    d={'id':str(uuid.uuid4()),'pedido':'99','modelo':'10','status':'Aguardando','acao':'iniciar'}
+    with pytest.raises(ValueError):o.decisao_manual({**d,'modelo':'999'},'op')
+    o.decisao_manual(d,'op')
+    with pytest.raises(ValueError):o.decisao_manual({**d,'acao':'concluir'},'outro')
+
+
 def test_sincronizacao_indisponivel_nao_impede_preparacao(tmp_path):
     s,e,p,o,chamadas=ambiente(tmp_path)
     def falha(*args): raise ConexaoPilotoIndisponivel('sem rede')

@@ -51,6 +51,15 @@ def test_rotas_offline_confirmacao_exige_origem_e_permissao(tmp_path):
         b=c.get('/api/pacotes-locais/offline-painel',headers=h)
         assert b.status_code==200 and b.headers['cache-control']=='no-store'
         assert b.json()['confirmacoes'][0]['estado']=='pendente'
+        decisao='/api/pacotes-locais/decisao-impressao-painel'
+        d={'id':str(uuid.uuid4()),'pedido':'99','modelo':'10','status':'Aguardando','acao':'iniciar'}
+        permitido['valor']=False
+        assert c.post(decisao,json=d,headers=h).status_code==403
+        permitido['valor']=True
+        assert c.post(decisao,json=d,headers=dict(h,origin='https://fora.invalid')).status_code==403
+        assert c.post(decisao,json=d,headers=h).status_code==200
+        assert c.post(decisao,json={**d,'acao':'concluir'},headers=h).status_code==200
+        assert c.get('/api/pacotes-locais/offline-painel',headers=h).json()['confirmacoes'][0]['dados']['status']=='Aguardando'
         assert c.post('/api/pacotes-locais/conferencia-trabalho-painel',json=[{'pedido':'99','revisao':'b'*64}],headers=h).status_code==409
 
 

@@ -166,7 +166,7 @@ function montar() {
     c.state.activeOSItem={itemId:10,osId:'vibe_99'};
     c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]);
     c.getOSItens()[0]._confirmacaoLocalRevisaoNecessaria=true;
-    assert.throws(()=>c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]),/já teve impressão confirmada/);
+    c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]);
     c.refazerLigado=()=>true;
     c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]);
     c.refazerLigado=()=>false;

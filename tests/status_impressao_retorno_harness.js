@@ -62,8 +62,8 @@ function ambiente(resposta, conectado = true) {
     assert.equal(ctx.pedidoBateNosSetores(impresso, ['LASER']), false);
     assert.equal(ctx.pedidoBateNosSetores(impresso, ['LASER'], true), true);
     assert(script.includes('pedidoBateNosSetores(itens, state.filtroSetores, listaEhDosImpressos)'));
-    assert.equal(ctx.calcularStatusImpressaoPedido([{status_impressao:'Conferir impressão',_confirmacaoLocalRevisaoNecessaria:true}]),'Conferir impressão');
-    ctx.itens=[{impressao:'Conferir impressão',_confirmacaoLocalRevisaoNecessaria:true}];
+    assert.equal(ctx.calcularStatusImpressaoPedido([{status_impressao:'IMPRESSO'}]),'Impresso');
+    ctx.itens=[{impressao:'Impresso'}];
     assert.equal(vm.runInContext(predicate,ctx),false,'divergência não entra no filtro Aguardando');
 
     const sucesso = {data: [{id: 123, id_int: 999, status_impressao: 'Impresso'}], error: null};
