@@ -46,3 +46,15 @@ instalação, impressão física nem entrega de e-mail na caixa do destinatário
 Os relatórios e backups de publicação ficam em `dist/entrega` e no diretório
 `dist/publicacao-unica-1.3.25-*`. Reversão do agente exige nova versão superior
 com a fonte anterior, preservando os dados locais; não forçar downgrade.
+
+## Publicação confirmada
+
+Os dois downloads públicos completos passaram por tamanho e SHA-256.
+`latest.json`, `newprod-piloto-oficial.json` e `newprod-piloto-teste.json`
+foram relidos com cache-buster: versão 1.3.25, hash acima e sem restrição
+por estação. Fonte publicada na tag `agente-v1.3.25` (`8349092b`).
+Na consulta anterior à ativação, LASER-01 ainda reportava 1.3.23 / painel 1318.
+Nenhuma instalação ou reinicialização foi forçada.
+
+A integração do e-mail no frontend web está no PR #186, baseada em main
+para preservar alterações web que não pertencem ao agente.
