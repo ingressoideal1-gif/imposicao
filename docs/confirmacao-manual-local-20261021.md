@@ -29,11 +29,26 @@ nem apresenta sucesso. O caminho web e a devolução para Corrigir Arte permanec
   não comprova ausência de regressão real no banco.
 - Os pedidos 23258, 23300, 23959, 23891, 23956, 23914, 23993, 23571,
   23916 e 23868 foram consultados em 21/10: os 24 modelos estavam Impresso.
-  A estação e eventual remarcação ainda precisam ser identificadas; o estado
-  atual não comprova o histórico de cada ocorrência.
+  O operador identificou LASER-01 e confirmou remarcação manual depois do
+  reaparecimento. Portanto o estado atual pode ser da remarcação e não comprova
+  a persistência original. A estação já reportava 1.3.22/1317.
 - Conflitos de revisão continuam exigindo conferência; não foram convertidos
   automaticamente em confirmação remota. Nenhum pedido real foi alterado.
 
 A nova versão é 1.3.23, painel 1318. Publicação do MSI e adoção nas estações
 devem ser verificadas separadamente. Não executar instalação ou impressão
 como teste automático desta alteração.
+
+## Liberação suspensa durante o diagnóstico
+
+O MSI foi construído e auditado localmente, sem ativar manifestos nem instalar
+estações. A confirmação do operador sobre a remarcação exige identificar o
+caminho da primeira confirmação e verificar eventual conflito da fila local.
+O heartbeat não expõe `offline_confirmacoes`. A consulta direta ao painel local
+da LASER-01 a partir deste computador expirou; não foi alterada a autorização
+nem a configuração de acesso para obter esses dados.
+
+O código atual omite a confirmação na lista quando ela está em conflito ou
+quando a revisão preparada muda; isso é uma hipótese adicional para o retorno
+visual e precisa ser correlacionado com os registros locais da ocorrência.
+Não atribuir essa hipótese aos dez pedidos sem essa evidência.
