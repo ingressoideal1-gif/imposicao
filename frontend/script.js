@@ -23148,6 +23148,11 @@ window.travarCardsDeModelosAprovados = travarCardsDeModelosAprovados;
  * aprovado por engano ficaria preso para sempre.
  */
 function bloqueioDeModeloAprovado(item, dataToUpdate) {
+    // A impressão prevalece sobre a permissão de reabrir uma arte aprovada.
+    if (['status_impressao', 'impressao'].some(c => String(item?.[c] || '').trim().toUpperCase() === 'IMPRESSO')
+        && ['amostra_status', 'status_arte'].some(c => Object.prototype.hasOwnProperty.call(dataToUpdate || {}, c))) {
+        return { silencioso: false, motivo: 'Modelo impresso: o status da arte não pode ser alterado.' };
+    }
     // O link do cliente é a tela em que ELE aprova. Travar ali seria travar
     // quem a regra existe para proteger.
     if (state.amostrasContainerId === 'cliente-amostras-itens-container') return null;
@@ -28762,6 +28767,10 @@ window.avisarCorrecaoDeArte = avisarCorrecaoDeArte;
  */
 async function devolverArteParaAlteracao(itemId, osId) {
     const item = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+    if (['status_impressao', 'impressao'].some(c => String(item?.[c] || '').trim().toUpperCase() === 'IMPRESSO')) {
+        toast('Modelo impresso: o status da arte não pode ser alterado.', 'warning');
+        return false;
+    }
     if (!item) {
         console.warn('[Corrigir Arte] item fora do state — a arte não foi para alteração:', itemId, osId);
         toast('Não foi possível devolver o modelo para correção: modelo não carregado. Atualize a tela e tente novamente.', 'error');

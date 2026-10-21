@@ -186,6 +186,11 @@ async function saveAmostraToDB(itemId, osId, dataToUpdate) {
         throw new Error('Modelo não encontrado. Reabra o link antes de aprovar.');
     }
 
+    if (['status_impressao', 'impressao'].some(c => String(itemLocal[c] || '').trim().toUpperCase() === 'IMPRESSO')
+        && ['amostra_status', 'status_arte'].some(c => Object.prototype.hasOwnProperty.call(dataToUpdate || {}, c))) {
+        throw new Error('Modelo impresso: o status da arte não pode ser alterado.');
+    }
+
     const modeloId = itemLocal._pedidoModeloId || itemLocal.id;
 
     if (!modeloId || modeloId === '') {
