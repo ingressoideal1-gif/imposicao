@@ -19,6 +19,68 @@ CODIGOS = {'canal_autonomo', 'credencial_ausente', 'resposta_invalida',
 ETAPAS = {'listar', 'conferir', 'conferir-pedido', 'abrir-pedido', 'recibo',
           'preparar-pedido', 'selecionar', 'spool', 'catalogos-offline', 'lista-offline', 'confirmar-offline'}
 
+RECURSOS_LOCAIS = {'qr_contratos', 'qr_base_legada', 'qr_base_v2', 'fontes', 'dependencias'}
+MOTIVOS_LOCAIS = {'contrato_recusado', 'contrato_sem_cache', 'contrato_invalido',
+                  'base_ausente', 'base_integridade_invalida', 'base_tamanho_invalido',
+                  'origem_fonte_recusada', 'http_recusado', 'permissao_negada',
+                  'arquivo_ausente', 'timeout', 'falha_recurso'}
+
+
+def _dependencia_local(erro):
+    """Classifica só a preparação local; nunca devolve mensagens ou caminhos.
+
+    A pilha identifica o recurso mesmo quando a origem pública da exceção é
+    selecao_piloto.py. Não abre arquivos, importa o motor nem consulta a rede.
+    """
+    quadros = []
+    trace = erro.__traceback__
+    while trace:
+        quadros.append((Path(trace.tb_frame.f_code.co_filename).name,
+                        trace.tb_frame.f_code.co_name))
+        trace = trace.tb_next
+    if ('offline_estacao.py', 'preparar_dependencias') not in quadros:
+        return {}
+    arquivos = {nome for nome, _ in quadros}
+    if 'qr_base_v2.py' in arquivos:
+        recurso = 'qr_base_v2'
+    elif 'qr_contratos.py' in arquivos:
+        recurso = 'qr_contratos'
+    elif 'qr_ideal.py' in arquivos:
+        recurso = 'qr_base_legada'
+    elif arquivos & {'font_cache.py', 'fontes_sistema.py', 'pacotes_download.py', 'db.py'}:
+        recurso = 'fontes'
+    else:
+        recurso = 'dependencias'
+    motivo = 'falha_recurso'
+    # Comparações exatas: não persistir texto livre nem partes da mensagem.
+    texto = erro.args[0] if erro.args and isinstance(erro.args[0], str) else None
+    if recurso == 'qr_contratos':
+        motivo = {
+            'QR Ideal: servidor recusou o contrato; confira a emissao antes de imprimir': 'contrato_recusado',
+            'QR Ideal: conecte a estacao uma vez para reservar esta emissao': 'contrato_sem_cache',
+            'Contrato QR invalido': 'contrato_invalido',
+            'Contrato QR repetido': 'contrato_invalido',
+        }.get(texto, motivo)
+    elif recurso in {'qr_base_legada', 'qr_base_v2'}:
+        if isinstance(erro, FileNotFoundError) or texto == 'QR12: base privada independente nao provisionada nesta estacao; solicite o provisionamento administrativo antes de imprimir':
+            motivo = 'base_ausente'
+        elif texto == 'QR Ideal: integridade da base privada nao confirmada':
+            motivo = 'base_integridade_invalida'
+        elif type(erro) is ValueError and ('qr_ideal.py', '__init__') in quadros:
+            motivo = 'base_tamanho_invalido'
+    elif recurso == 'fontes' and texto == 'Origem de recurso não permitida.':
+        motivo = 'origem_fonte_recusada'
+    if motivo == 'falha_recurso':
+        if isinstance(erro, HTTPError):
+            motivo = 'http_recusado'
+        elif isinstance(erro, PermissionError):
+            motivo = 'permissao_negada'
+        elif isinstance(erro, FileNotFoundError):
+            motivo = 'arquivo_ausente'
+        elif isinstance(erro, TimeoutError):
+            motivo = 'timeout'
+    return {'recurso_local': recurso, 'motivo_local': motivo}
+
 
 def _numero(valor):
     texto = str(valor) if isinstance(valor, (str, int)) and not isinstance(valor, bool) else ''
@@ -57,6 +119,8 @@ def _limpar(dados):
         r[campo] = v if type(v) is int and minimo <= v <= maximo else None
     from diagnostico_http import RESULTADOS
     for campo, permitidos in {
+        'recurso_local': RECURSOS_LOCAIS,
+        'motivo_local': MOTIVOS_LOCAIS,
         'motivo_http': RESULTADOS,
         'formato_resposta': {'json', 'html', 'outro'},
         'servidor_http': {'cloudflare', 'envoy', 'nginx', 'squid', 'outro'},
@@ -203,11 +267,11 @@ def registrar(erro, codigo, etapa, *, pedido=None, modelo=None, duracao_ms=None,
                       'tls' if isinstance(causa, ssl.SSLError) else
                       'timeout' if isinstance(causa, TimeoutError) else
                       'conexao' if isinstance(causa, ConnectionError) else None)
-        extras = {}
+        extras = _dependencia_local(erro)
         resposta = None
         if contexto_http is not None:
             from diagnostico_http import contexto
-            extras = contexto(erro, *contexto_http)
+            extras.update(contexto(erro, *contexto_http))
             if isinstance(erro, HTTPError):
                 # Manter o proprietário do stream vivo até a leitura em segundo plano.
                 resposta = erro if getattr(erro, 'fp', None) is not None else None
