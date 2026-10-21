@@ -625,6 +625,30 @@
      * trabalho aconteceu — a data ali só atrapalharia a leitura. Nos outros dias
      * ela aparece, porque aí a hora sozinha mentiria.
      */
+    function horaStatusDoModelo(item) {
+        if (!item) return '';
+        const mapa = tela.acabamento[String(item.id)] || {};
+        const registrado = mapa.statusEm || item.acabamento_status_registrado_em;
+        if (registrado) return registrado;
+        if (estagioDoModelo(item) === 'Pronto') return prontoEmDoModelo(item);
+        if (!(item.acabamento_status || mapa.status)) {
+            const hora = fn('horaStatusImpressao');
+            return hora ? hora(item) : '';
+        }
+        return '';
+    }
+
+    function carimboStatusDoModelo(item) {
+        const render = fn('carimboStatusHtml');
+        return render ? render(horaStatusDoModelo(item)) : '';
+    }
+
+    function carimboStatusDoPedido(modelos) {
+        const ultima = fn('ultimaHoraStatus');
+        const render = fn('carimboStatusHtml');
+        return ultima && render ? render(ultima(modelos.map(horaStatusDoModelo))) : '';
+    }
+
     function textoDaHoraDoPronto(iso) {
         if (!iso) return '';
         const t = new Date(iso);
@@ -1266,7 +1290,7 @@
                     <td><span class="badge">${modelos.length} ${modelos.length === 1 ? 'modelo' : 'modelos'}</span></td>
                     <td><strong>${qtdTotal.toLocaleString('pt-BR')}</strong></td>
                     <td style="text-align:center; vertical-align:middle;">${freteHtml}</td>
-                    <td>${seloDoEstagio(estagioPedido)}</td>
+                    <td>${seloDoEstagio(estagioPedido)}${carimboStatusDoPedido(modelos)}</td>
                     <td style="text-align:center; vertical-align:middle;">${badgePrazo ? badgePrazo(os) : ''}</td>
                 </tr>`;
         }).join('');
@@ -1509,7 +1533,7 @@
             const consultar = async fatia => {
                 const consulta = supabaseClient
                     .from('pedidos_modelos')
-                    .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url, acabamento_pronto_em, id_produto_proposta_origem')
+                    .select('id, id_int, acabamento_status, acabamento_responsavel, acabamento_foto_url, acabamento_pronto_em, acabamento_status_registrado_em, id_produto_proposta_origem')
                     .in('id_int', fatia);
                 const { data, error } = ler ? await ler(consulta, 'estágios do acabamento') : await consulta;
                 if (error) throw error;
@@ -1530,6 +1554,7 @@
                     responsavel: m.acabamento_responsavel || '',
                     foto: m.acabamento_foto_url || '',
                     prontoEm: m.acabamento_pronto_em || '',
+                    statusEm: m.acabamento_status_registrado_em || '',
                     // O produto que originou o modelo. É por ele que o
                     // recorte por setor descobre a que setor o modelo
                     // pertence — ver `setorDoModelo`. Vem de carona nesta
@@ -1916,7 +1941,7 @@
                     ${liberado ? '' : 'disabled'}
                     style="${ESTILO_BOTAO_REVISADO}${cor}${liberado ? '' : ESTILO_BOTAO_TRAVADO}"
                     onclick="AcabamentoPainel.mudarEstagio('${escJs(item.id)}', '${escJs(osId)}', '${alvo}')"
-                    title="${esc(titulo)}">${revisado ? '✓ ' : ''}Revisado</button>`;
+                    title="${esc(titulo)}">${revisado ? '✓ ' : ''}Revisado${revisado ? carimboStatusDoModelo(item) : ''}</button>`;
     }
 
     /**
@@ -2119,7 +2144,7 @@
     // de antes porque ele agora divide a linha com o seletor do responsável, e
     // é a barra inteira que precisa ficar rasa — o pedido do usuário em
     // 29/08/2026 foi ganhar espaço vertical.
-    const ESTILO_BOTAO_REVISADO = 'display: inline-flex; align-items: center; gap: 8px;'
+    const ESTILO_BOTAO_REVISADO = 'display: inline-flex; flex-direction: column; align-items: center; gap: 3px;'
         + ' border-style: solid; border-width: 1px; border-radius: 7px; cursor: pointer;'
         + ' padding: 6px 16px; font-size: 0.92rem; line-height: 1.1; white-space: nowrap;'
         + ' font-family: inherit; flex-shrink: 0;'
@@ -2228,7 +2253,7 @@
                         <span style="width: 22px; height: 22px; min-width: 22px; border-radius: 50%; background-color: ${corHex || 'transparent'}; border: ${corHex ? '2px solid rgba(255,255,255,0.8)' : '2px dashed rgba(207,230,251,0.45)'}; display: inline-block;" title="Cor de referência: ${esc(corNome || 'nenhuma')}"></span>
                         <strong style="font-size: 1.2rem; color: #ffffff;">${esc(item.produto || item.nome_modelo || 'Modelo')}</strong>
                         <span class="badge" title="Código do modelo">#${esc(item.modelo || item.id || '--')}</span>
-                        ${seloDoEstagio(estagio)}
+                        <span>${seloDoEstagio(estagio)}${carimboStatusDoModelo(item)}</span>
                         ${chipDoSetor}
                     </div>
                     ${responsavelNoTitulo(item, osId)}
@@ -7035,9 +7060,56 @@
         acabamento_foto_url: 'a foto',
     };
 
+    async function gravarStatusConfirmado(itemId, osId, valor) {
+        const s = estado();
+        const os = (s.ordens || []).find(o => String(o.id) === String(osId));
+        const numero = String(os ? os.numero : osId).replace(/^vibe_/, '');
+        const item = ((s.osItens && s.osItens[osId]) || []).find(i => String(i.id) === String(itemId));
+        try {
+            if (!/^\d+$/.test(numero) || typeof supabaseClient === 'undefined' || !supabaseClient) {
+                throw new Error('pedido ou conexão não confirmado');
+            }
+            const { data, error } = await supabaseClient.from('pedidos_modelos')
+                .update({ acabamento_status: valor })
+                .eq('id', /^\d+$/.test(String(itemId)) ? Number(itemId) : itemId)
+                .eq('id_int', Number(numero))
+                .select('id,id_int,acabamento_status,acabamento_pronto_em,acabamento_status_registrado_em');
+            if (error) throw error;
+            if (!Array.isArray(data) || data.length !== 1
+                || String(data[0].id) !== String(itemId)
+                || Number(data[0].id_int) !== Number(numero)
+                || (data[0].acabamento_status || null) !== valor) {
+                throw new Error('o banco não confirmou o status deste modelo');
+            }
+            const confirmado = data[0];
+            const campos = {
+                acabamento_status: confirmado.acabamento_status,
+                acabamento_pronto_em: confirmado.acabamento_pronto_em || null,
+                acabamento_status_registrado_em: confirmado.acabamento_status_registrado_em || null
+            };
+            if (item) Object.assign(item, campos);
+            const global = ((s.modelosGlobais || {})[Number(numero)] || []).find(m => String(m.id) === String(itemId));
+            if (global) Object.assign(global, campos);
+            const mapa = tela.acabamento[String(itemId)] || {};
+            Object.assign(mapa, { status: valor || '', prontoEm: campos.acabamento_pronto_em || '',
+                statusEm: campos.acabamento_status_registrado_em || '' });
+            tela.acabamento[String(itemId)] = mapa;
+            renderDetalhe();
+            render();
+            await sincronizarConclusaoDoSetor(osId, item ? item.setor : '');
+            renderDetalhe();
+            return true;
+        } catch (e) {
+            const aviso = fn('toast');
+            if (aviso) aviso(`Não deu para gravar o status deste modelo (${e.message || e}). Tente de novo.`, 'error');
+            return false;
+        }
+    }
+
     async function gravar(itemId, osId, campo, valor) {
         const s = estado();
         const limpo = (valor || '').trim() || null;
+        if (campo === 'acabamento_status') return gravarStatusConfirmado(itemId, osId, limpo);
 
         // A tela anda na frente do banco de propósito: o operador não pode
         // esperar a rede para ver a própria escolha. Se a gravação falhar, o
@@ -7046,10 +7118,6 @@
         const itens = (s.osItens && s.osItens[osId]) || [];
         const item = itens.find(i => String(i.id) === String(itemId));
 
-        // Lido ANTES de escrever: é o que diz se o Pronto é novo ou é o mesmo
-        // Pronto de antes sendo reclicado.
-        const eraPronto = item ? (estagioDoModelo(item) === 'Pronto') : false;
-
         if (item) item[campo] = limpo;
 
         // O mapa da lista anda junto: sem isto, voltar para a lista mostraria o
@@ -7057,26 +7125,6 @@
         const noMapa = tela.acabamento[String(itemId)] || { status: '', responsavel: '', foto: '', prontoEm: '' };
         noMapa[CAMPO_NO_MAPA[campo] || campo] = limpo || '';
         tela.acabamento[String(itemId)] = noMapa;
-
-        // A hora do Pronto é do BANCO (o gatilho a escreve), mas a tela anda na
-        // frente: sem este espelho, o carimbo só apareceria na próxima leitura,
-        // e o operador marcaria Pronto sem ver hora nenhuma. O valor daqui é o
-        // mesmo instante, com a diferença de uma ida de rede.
-        //
-        // Reclicar no Pronto que já estava aceso NÃO renova a hora — é a mesma
-        // regra do gatilho, repetida aqui para a tela não mostrar por um instante
-        // uma hora que o banco não vai gravar.
-        if (campo === 'acabamento_status') {
-            const agoraPronto = String(limpo || '').toLowerCase() === 'pronto';
-            if (!agoraPronto) {
-                noMapa.prontoEm = '';
-                if (item) item.acabamento_pronto_em = null;
-            } else if (!eraPronto) {
-                const carimbo = new Date().toISOString();
-                noMapa.prontoEm = carimbo;
-                if (item) item.acabamento_pronto_em = carimbo;
-            }
-        }
 
         const num = parseInt(String(osId).replace('vibe_', ''));
         if (s.modelosGlobais && s.modelosGlobais[num]) {
@@ -7099,12 +7147,6 @@
             const { error } = await consulta;
             if (error) throw error;
 
-            // O estágio mudou: o setor daquele modelo pode ter acabado de
-            // terminar (ou de deixar de estar terminado).
-            if (campo === 'acabamento_status') {
-                await sincronizarConclusaoDoSetor(osId, item ? item.setor : '');
-                renderDetalhe();
-            }
         } catch (e) {
             console.error(`[acabamento] erro ao gravar ${campo}:`, e);
             const aviso = fn('toast');
@@ -8012,6 +8054,9 @@
             faltamEstagiosNaLista,
             prontoEmDoModelo,
             textoDaHoraDoPronto,
+            horaStatusDoModelo,
+            carimboStatusDoModelo,
+            carimboStatusDoPedido,
             setorQueFechaComEstePronto,
             setorTemPeso,
             haComoGravarPeso,
