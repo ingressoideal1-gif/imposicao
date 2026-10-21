@@ -58,3 +58,24 @@ Nenhuma instalação ou reinicialização foi forçada.
 
 A integração do e-mail no frontend web está no PR #186, baseada em main
 para preservar alterações web que não pertencem ao agente.
+
+## Situação ao encerrar a entrega às estações
+
+- PC-JR-HOME reportou executável 1.3.25 e painel 1319.
+- LASER-01 continuou reportando 1.3.23 / painel 1318 na última consulta;
+  a disponibilização universal não comprova adoção nessa estação.
+- PR #186 integrado em `b73bc930580ae5cd33356720577056f4559a4f28`, tag v1097.
+  Todos os checks obrigatórios passaram. A primeira execução de produção
+  falhou ao iniciar Chrome (timeout de 30 segundos no setup); a repetição
+  passou sem alterar nem desativar testes.
+- A publicação web de produção ainda não foi comprovada: os dois domínios
+  continuaram retornando HTML e JavaScript anteriores na comparação com
+  cache-buster. A prévia Cloudflare passou, mas o check da publicação de
+  produção ainda não apareceu. Não houve segunda publicação forçada.
+- Função de e-mail: OPTIONS público 204 com origem permitida e GET sem
+  autenticação 401. Nenhuma mensagem real foi enviada.
+
+Para retomar a conferência web, usar o worktree
+`imposition-email-artes-integrado-20261021`, com evidências em `dist/entrega`:
+`email-merge.json`, `publico-web.json`, `conferir_publico.py` e log da execução
+transitória do CI. Não republicar código antigo sobre a main.
