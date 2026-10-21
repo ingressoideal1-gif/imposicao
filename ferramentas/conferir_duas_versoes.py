@@ -14,6 +14,7 @@ TESTES = [
     'test_escala_da_arte.py', 'test_engine_capas_camarote.py',
     'test_intervalo_atualizacao.py',
     'test_historico_impressao.py',
+    'test_retencao_agent_releases.py',
     'test_perfil_oficial.py','test_transicao_piloto.py','test_atualizador_oficial.py','test_publicar_pacote_oficial.py','test_auditoria_transicao_piloto.py','test_manifesto_oficial.py','test_controle_producao.py',
     'test_instalador_piloto.py',
     'test_gestao_estacoes.py', 'test_gdi_id_spool.py', 'test_temp_manager.py',

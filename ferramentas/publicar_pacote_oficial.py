@@ -12,6 +12,7 @@ import urllib.error
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from manifesto_oficial import BASE, validar, PRODUTO, PREFIXO_MSI, NOME_MANIFESTO
+from ferramentas.retencao_agent_releases import apos_publicacao
 
 
 def requisicao(url, *, dados=None, chave=None, substituir=False):
@@ -65,6 +66,16 @@ def publicar(msi, estacoes=None, ativar=False, bootstrap=False, promover=False):
             if confirmado!=manifest:raise ValueError('Manifesto publicado divergente')
         resultado.update(ativado=True,bootstrap_legado=bootstrap)
     (msi.parent/(msi.stem+'-publicacao.json')).write_text(json.dumps(resultado,indent=2),encoding='utf-8')
+    if ativar:
+        # A compilacao e o upload isolados nao autorizam retencao. Este ponto
+        # so e alcancado apos todos os manifestos desta publicacao serem relidos.
+        try:
+            resultado['retencao'] = apos_publicacao(resultado)
+        except Exception:
+            resultado['retencao'] = {'completo': False, 'erro': 'Retencao interrompida; consulte o backup e resultado local antes de retomar.'}
+            (msi.parent/(msi.stem+'-publicacao.json')).write_text(json.dumps(resultado,indent=2),encoding='utf-8')
+            raise
+        (msi.parent/(msi.stem+'-publicacao.json')).write_text(json.dumps(resultado,indent=2),encoding='utf-8')
     print(json.dumps(resultado),flush=True)
     return resultado
 

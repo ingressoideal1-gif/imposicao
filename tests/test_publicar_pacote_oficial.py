@@ -27,10 +27,33 @@ def test_promocao_nao_reenvia_msi_e_verifica_os_dois_manifestos(tmp_path,monkeyp
             objetos[nome]=kw['dados'];envios.append(nome)
         return io.BytesIO(objetos.get(nome,b'{}'))
     monkeypatch.setattr(p,'requisicao',abrir)
+    retencoes=[]
+    def reter(resultado):
+        assert resultado['ativado'] and resultado['download_conferido']
+        assert len(envios) == (2 if p.PRODUTO == 'NewProdPilotoOficial' else 1)
+        retencoes.append(True)
+        return {'completo':True}
+    monkeypatch.setattr(p,'apos_publicacao',reter)
     r=p.publicar(msi,['ESTACAO-TESTE'],True,p.PRODUTO == 'NewProdPilotoOficial',True)
     assert envios==[p.NOME_MANIFESTO]+(['latest.json'] if p.PRODUTO == 'NewProdPilotoOficial' else [])
     assert r['ativado'] and r['bootstrap_legado'] == (p.PRODUTO == 'NewProdPilotoOficial')
     assert msi.read_bytes()==b'sintetico'
+    assert retencoes == [True]
+
+
+@pytest.mark.parametrize('falha', ['upload', 'manifesto', 'so_upload'])
+def test_retencao_nao_roda_antes_de_publicacao_confirmada(tmp_path, monkeypatch, falha):
+    msi=tmp_path/(p.PREFIXO_MSI+'1.2.368.msi');msi.write_bytes(b'sintetico')
+    monkeypatch.setenv('SUPABASE_SERVICE_KEY','sintetica')
+    monkeypatch.setattr(p,'apos_publicacao',lambda *a:pytest.fail('Retencao prematura'))
+    def upload(*a):
+        if falha == 'upload':raise ValueError('upload falhou')
+    monkeypatch.setattr(p,'conferir_upload',upload)
+    monkeypatch.setattr(p,'requisicao',lambda *a,**k:io.BytesIO(b'{}'))
+    if falha == 'so_upload':
+        assert not p.publicar(msi,['TESTE'],False)['ativado']
+    else:
+        with pytest.raises(ValueError):p.publicar(msi,['TESTE'],True)
 
 
 def test_publicador_recusa_msi_de_outro_canal_antes_de_acessar_rede(tmp_path, monkeypatch):
