@@ -49089,15 +49089,27 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         el('ve-linhas').replaceChildren();
         for (const row of rows.slice(0, 50)) {
             const tr = document.createElement('tr'), pedido = texto('td', row.pedido);
+            tr.classList.toggle('ve-pedido-pronto', row.status_erp === 'EXPEDICAO' && !row.concluida_em);
             pedido.append(texto('small', row.cliente));
+            const envio = texto('td', ''), modalidade = {motoboy:'Motoboy', veppo:'Veppo', aereo:'Aéreo'}[row.modalidade];
+            envio.className = 've-forma-envio';
+            // Aéreo reutiliza a logo Azul Cargo/SVT do painel de produção.
+            const logo = modalidade && window.logoDoFrete?.(row.modalidade === 'aereo' ? 'SVT' : modalidade);
+            if (logo) {
+                const imagem = document.createElement('img');
+                imagem.src = logo; imagem.alt = ''; imagem.loading = 'lazy';
+                imagem.onerror = () => { imagem.hidden = true; };
+                envio.append(imagem);
+            }
+            envio.append(texto('span', row.avulsa ? 'Avulsa' : modalidade || '—'));
             const entregador = texto('td', '');
             entregador.append(window.EntregasGestao?.seletor(row, contextoLinhas) || texto('span', row.entregador || 'Ainda disponível'));
-            tr.append(pedido, entregador, texto('td', data(row.assumida_em)), texto('td', row.concluida_em ? (row.tipo_conclusao==='repasse'?'Repassado à transportadora':'Entregue') : row.status_erp==='EM TRANSITO' ? 'Em deslocamento' : row.entregador ? 'Planejado' : row.status_erp==='EXPEDICAO'?'Pronto para Expedir':'Expedição do dia · aguardando produção'), texto('td', data(row.prevista_em)));
+            tr.append(pedido, envio, entregador, texto('td', data(row.assumida_em)), texto('td', row.concluida_em ? (row.tipo_conclusao==='repasse'?'Repassado à transportadora':'Entregue') : row.status_erp==='EM TRANSITO' ? 'Em deslocamento' : row.entregador ? 'Planejado' : row.status_erp==='EXPEDICAO'?'Pronto para Expedir':'Expedição do dia · aguardando produção'), texto('td', data(row.prevista_em)));
             const entrega = texto('td', data(row.concluida_em)); entrega.append(texto('small', row.recebedor || '—')); tr.append(entrega);
             const td = document.createElement('td'), b = texto('button', 'Ver detalhes'); b.className = 'btn btn-ghost'; b.onclick = () => detalhes(row); td.append(b);
             const foto = texto('button', '📷'); foto.type='button'; foto.className='btn btn-ghost'; foto.title=row.foto?'Visualizar comprovante':'Sem foto de entrega'; foto.setAttribute('aria-label',row.foto?'Visualizar foto do pedido '+row.pedido:'Pedido sem foto'); foto.disabled=!row.foto; foto.onclick=()=>detalhes(row); td.append(foto); tr.append(td); el('ve-linhas').append(tr);
         }
-        if (!rows.length) { const tr = document.createElement('tr'), td = texto('td', 'Nenhuma entrega neste filtro.'); td.colSpan = 7; tr.append(td); el('ve-linhas').append(tr); }
+        if (!rows.length) { const tr = document.createElement('tr'), td = texto('td', 'Nenhuma entrega neste filtro.'); td.colSpan = 8; tr.append(td); el('ve-linhas').append(tr); }
         el('ve-anterior').disabled = pagina === 0; el('ve-proxima').disabled = rows.length <= 50; el('ve-pagina').textContent = `Página ${pagina + 1}`;
     }
     async function carregar(novaPagina = 0) {

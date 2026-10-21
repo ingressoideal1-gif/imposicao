@@ -6467,5 +6467,67 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 .ve-modalidades [aria-pressed="true"] { background:var(--blue, #2563eb); color:white; }
 
 /* Cadastro de entregas avulsas */
-#ve-avulsa{width:min(620px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid #475569;border-radius:12px;padding:20px;background:#111827;color:#f1f5f9}
-#ve-avulsa label{display:grid;gap:4px;margin:10px 0}#ve-avulsa input{width:100%;box-sizing:border-box;padding:8px}#ve-avulsa button{margin:4px;padding:8px 12px}#ve-local-resultados button{display:block;text-align:left;width:100%;overflow-wrap:anywhere}#ve-local-campos{min-width:0}
+#ve-avulsa{position:fixed;inset:0;margin:auto;width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-sizing:border-box;border:1px solid #344156;border-radius:18px;padding:0;background:#101827;color:var(--text,#e2e8f0);color-scheme:dark;box-shadow:0 24px 80px #0008}
+#ve-avulsa::backdrop{background:rgba(2,6,23,.76);backdrop-filter:blur(4px)}
+#ve-avulsa-form{margin:0;background:#101827;color:inherit}
+#ve-avulsa .ve-avulsa-topo{padding:24px 28px 20px;border-bottom:1px solid var(--border)}
+#ve-avulsa .ve-avulsa-etiqueta{font-size:10px;letter-spacing:.12em;font-weight:700;color:#93c5fd}
+#ve-avulsa h2{font-size:23px;line-height:1.3;margin:8px 0}
+#ve-avulsa .ve-avulsa-topo p{font-size:13px;line-height:1.5;color:var(--text-dim)}
+#ve-avulsa .ve-avulsa-conteudo{padding:20px 28px 24px}
+#ve-avulsa h3{font-size:14px;font-weight:600;margin:0}
+#ve-avulsa .ve-avulsa-busca{padding:16px;background:#162237;border:1px solid #2b3c55;border-radius:12px;margin-bottom:20px}
+#ve-avulsa label{display:block;font-size:12px;font-weight:500;color:#cbd5e1;margin:0}
+#ve-avulsa .ve-avulsa-busca>label{margin:12px 0 7px}
+#ve-avulsa input{display:block;width:100%;min-width:0;box-sizing:border-box;min-height:42px;margin-top:7px;padding:10px 12px;border:1px solid #344156;border-radius:8px;background:#0b1220;color:#f1f5f9;font:inherit;font-size:13px;outline:none}
+#ve-avulsa input::placeholder{color:#8291a8;opacity:1}
+#ve-avulsa input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #3b82f626}
+#ve-avulsa input:disabled{background:#192336;color:#b9c7da;opacity:1}
+#ve-avulsa button{margin:0;min-height:42px;font-size:12px;white-space:nowrap}
+#ve-avulsa .btn-secondary{background:#22324b;color:#e2e8f0;border:1px solid #405575}
+#ve-avulsa .btn-secondary:hover{background:#2c4160}
+#ve-avulsa button:focus-visible{outline:2px solid #93c5fd;outline-offset:3px}
+#ve-avulsa .ve-avulsa-busca-linha,#ve-avulsa .ve-avulsa-cep-linha{display:flex;gap:8px;align-items:center}
+#ve-avulsa .ve-avulsa-busca-linha input{margin:0}
+#ve-avulsa .ve-avulsa-cep-linha{margin-top:7px}
+#ve-avulsa .ve-avulsa-cep-linha input{margin:0;flex:1}
+#ve-avulsa .ve-avulsa-endereco-topo{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+#ve-local-campos{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;min-width:0;border:0;padding:0;margin:0}
+#ve-avulsa .ve-avulsa-largo{grid-column:span 12}
+#ve-avulsa .ve-avulsa-cep{grid-column:span 8}
+#ve-avulsa .ve-avulsa-numero{grid-column:span 4}
+#ve-avulsa .ve-avulsa-metade{grid-column:span 6}
+#ve-avulsa .ve-avulsa-cidade{grid-column:span 10}
+#ve-avulsa .ve-avulsa-uf{grid-column:span 2}
+#ve-local-uf{text-transform:uppercase}
+#ve-avulsa .ve-avulsa-opcional{color:#94a3b8;font-weight:400;margin-left:5px;font-size:11px}
+#ve-local-resultados{display:grid;gap:8px;max-height:180px;overflow:auto}
+#ve-local-resultados:not(:empty){margin-top:12px}
+#ve-local-resultados button{display:block;text-align:left;width:100%;padding:12px;border:1px solid #405575;border-radius:8px;background:#0f1b2e;color:#e2e8f0;white-space:normal;overflow-wrap:anywhere;line-height:1.5;cursor:pointer}
+#ve-local-resultados button:hover{background:#223757;border-color:#60a5fa}
+#ve-avulsa .ve-avulsa-rodape{position:sticky;bottom:0;padding:16px 28px;background:#101827;border-top:1px solid #344156}
+#ve-avulsa-msg{font-size:12px;line-height:1.5;color:#bfdbfe;overflow-wrap:anywhere}
+#ve-avulsa-msg:not(:empty){margin-bottom:12px}
+#ve-avulsa .ve-avulsa-acoes{display:flex;justify-content:flex-end;gap:10px}
+@media(max-width:520px){
+ #ve-avulsa{width:calc(100vw - 20px);max-height:calc(100dvh - 20px);border-radius:14px}
+ #ve-avulsa .ve-avulsa-topo{padding:20px}
+ #ve-avulsa .ve-avulsa-conteudo{padding:16px 20px 20px}
+ #ve-avulsa .ve-avulsa-rodape{padding:14px 20px}
+ #ve-avulsa .ve-avulsa-busca-linha{flex-wrap:wrap}
+ #ve-avulsa .ve-avulsa-busca-linha button{width:100%}
+ #ve-avulsa .ve-avulsa-cep{grid-column:span 12}
+ #ve-avulsa .ve-avulsa-numero{grid-column:span 12}
+ #ve-avulsa .ve-avulsa-metade{grid-column:span 12}
+ #ve-avulsa .ve-avulsa-cidade{grid-column:span 9}
+ #ve-avulsa .ve-avulsa-uf{grid-column:span 3}
+ #ve-avulsa .ve-avulsa-acoes .btn-primary{flex:1}
+}
+
+
+/* Forma de envio e prontidao na lista de Entregas. */
+#view-entregas .ve-forma-envio{min-width:100px}
+#view-entregas .ve-forma-envio img{display:block;height:28px;max-width:96px;object-fit:contain;margin-bottom:6px}
+#view-entregas .ve-forma-envio span{display:block;white-space:nowrap}
+#view-entregas .ve-tabela tr.ve-pedido-pronto>td{background:rgba(59,130,246,.12)}
+#view-entregas .ve-tabela tr.ve-pedido-pronto>td:first-child{box-shadow:inset 3px 0 #3b82f6;color:#93c5fd}

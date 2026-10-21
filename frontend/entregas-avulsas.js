@@ -6,26 +6,47 @@
     if (!botao) return;
     const dialog = document.createElement('dialog');
     dialog.id = 've-avulsa';
+    dialog.setAttribute('aria-labelledby', 've-avulsa-titulo');
     dialog.innerHTML = `<form id="ve-avulsa-form">
-      <h2>Adicionar entrega</h2>
-      <p>Use um local salvo ou cadastre um novo endereço. Esta entrega não cria um pedido no ERP.</p>
-      <label>Buscar local salvo (nome ou CEP)<input id="ve-local-busca" maxlength="120" autocomplete="off"></label>
-      <button type="button" id="ve-local-pesquisar">Buscar locais</button>
-      <div id="ve-local-resultados"></div><button type="button" id="ve-local-novo">Usar novo local</button>
-      <fieldset id="ve-local-campos"><legend>Local da entrega</legend>
-        <label>Nome do local<input id="ve-local-nome" required minlength="2" maxlength="120"></label>
-        <label>CEP<input id="ve-local-cep" required inputmode="numeric" maxlength="9" pattern="[0-9]{5}-?[0-9]{3}"></label>
-        <button type="button" id="ve-local-consultar-cep">Consultar CEP</button>
-        <label>Número<input id="ve-local-numero" required maxlength="20"></label>
-        <label>Rua / avenida<input id="ve-local-logradouro" required minlength="2" maxlength="180"></label>
-        <label>Complemento<input id="ve-local-complemento" maxlength="120"></label>
-        <label>Bairro<input id="ve-local-bairro" maxlength="120"></label>
-        <label>Cidade<input id="ve-local-cidade" required minlength="2" maxlength="120"></label>
-        <label>UF<input id="ve-local-uf" required maxlength="2" pattern="[A-Za-z]{2}"></label>
-      </fieldset>
-      <p id="ve-avulsa-msg" role="status" aria-live="polite"></p>
-      <button type="submit" id="ve-avulsa-salvar">Adicionar entrega</button>
-      <button type="button" id="ve-avulsa-cancelar">Cancelar</button>
+      <header class="ve-avulsa-topo">
+        <span class="ve-avulsa-etiqueta">NOVA ENTREGA</span>
+        <h2 id="ve-avulsa-titulo">Adicionar entrega</h2>
+        <p>Escolha um local salvo ou informe o endereço de destino.</p>
+      </header>
+      <div class="ve-avulsa-conteudo">
+        <section class="ve-avulsa-busca" aria-labelledby="ve-local-busca-titulo">
+          <h3 id="ve-local-busca-titulo">Já entregou neste local?</h3>
+          <label for="ve-local-busca">Buscar por nome ou CEP</label>
+          <div class="ve-avulsa-busca-linha">
+            <input id="ve-local-busca" maxlength="120" autocomplete="off" placeholder="Digite o nome do local ou CEP">
+            <button class="btn btn-secondary" type="button" id="ve-local-pesquisar">Buscar locais</button>
+          </div>
+          <div id="ve-local-resultados"></div>
+        </section>
+        <div class="ve-avulsa-endereco-topo">
+          <h3>Endereço da entrega</h3>
+          <button class="btn btn-ghost" type="button" id="ve-local-novo">Usar novo local</button>
+        </div>
+        <fieldset id="ve-local-campos" aria-label="Local da entrega">
+          <label class="ve-avulsa-largo">Nome do local<input id="ve-local-nome" required minlength="2" maxlength="120" placeholder="Ex.: Recepção da empresa"></label>
+          <label class="ve-avulsa-cep">CEP
+            <span class="ve-avulsa-cep-linha"><input id="ve-local-cep" required inputmode="numeric" maxlength="9" pattern="[0-9]{5}-?[0-9]{3}" placeholder="00000-000"><button class="btn btn-secondary" type="button" id="ve-local-consultar-cep">Consultar CEP</button></span>
+          </label>
+          <label class="ve-avulsa-numero">Número<input id="ve-local-numero" required maxlength="20" placeholder="Nº"></label>
+          <label class="ve-avulsa-largo">Rua / avenida<input id="ve-local-logradouro" required minlength="2" maxlength="180" placeholder="Preenchida ao consultar o CEP"></label>
+          <label class="ve-avulsa-metade">Complemento <span class="ve-avulsa-opcional">opcional</span><input id="ve-local-complemento" maxlength="120" placeholder="Sala, andar ou referência"></label>
+          <label class="ve-avulsa-metade">Bairro<input id="ve-local-bairro" maxlength="120"></label>
+          <label class="ve-avulsa-cidade">Cidade<input id="ve-local-cidade" required minlength="2" maxlength="120"></label>
+          <label class="ve-avulsa-uf">UF<input id="ve-local-uf" required maxlength="2" pattern="[A-Za-z]{2}" placeholder="RS"></label>
+        </fieldset>
+      </div>
+      <footer class="ve-avulsa-rodape">
+        <p id="ve-avulsa-msg" role="status" aria-live="polite"></p>
+        <div class="ve-avulsa-acoes">
+          <button class="btn btn-ghost" type="button" id="ve-avulsa-cancelar">Cancelar</button>
+          <button class="btn btn-primary" type="submit" id="ve-avulsa-salvar">Adicionar entrega</button>
+        </div>
+      </footer>
     </form>`;
     $('view-entregas').append(dialog);
     const campos = ['nome','cep','numero','logradouro','complemento','bairro','cidade','uf'];
