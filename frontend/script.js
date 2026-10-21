@@ -32851,6 +32851,17 @@ function formatDateTime(dateStr) {
  */
 async function updateItemImpressao(itemId, osId, novoStatus) {
     try {
+        // Na estação, a lista é reconstruída do snapshot local. Uma escrita
+        // direta na nuvem não deixa a confirmação durável que acompanha esse
+        // snapshot e o próximo retorno pode mostrar Aguardando novamente.
+        if (window.PilotoOffline && normalizarStatusImpressao(novoStatus) === 'Impresso') {
+            await window.PilotoOffline.confirmar([{ itemId: String(itemId), osId: String(osId) }]);
+            renderOrdens();
+            window.dispatchEvent(new CustomEvent('pedidos-modelo-status-impressao', {
+                detail: { itemId, osId, status: novoStatus }
+            }));
+            return true;
+        }
         if (normalizarStatusImpressao(novoStatus) === STATUS_CORRIGIR_ARTE) {
             const confirmado = await devolverArteParaAlteracao(itemId, osId);
             if (!confirmado) {

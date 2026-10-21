@@ -100,6 +100,16 @@ function ambiente(resposta, conectado = true) {
         correcao.ctx.devolverArteParaAlteracao = async () => { chamadas++; return true; };
         await correcao.ctx[name](123, 'vibe_999', 'status_impressao', 'Corrigir Arte');
         assert.equal(chamadas, 1, 'Preservar o fluxo de correção de arte');
+
+        const local = ambiente(null);
+        const alvos = [];
+        local.ctx.window.PilotoOffline = {async confirmar(lista) { alvos.push(...lista); }};
+        assert.equal(await local.ctx[name](123, 'vibe_999', 'status_impressao', 'Impresso'), true);
+        assert.equal(JSON.stringify(alvos), JSON.stringify([{itemId:'123',osId:'vibe_999'}]));
+        assert.equal(local.writes.length, 0, 'Estação usa confirmação durável, sem escrita direta');
+        local.ctx.window.PilotoOffline.confirmar = async () => { throw Error('Disco indisponível'); };
+        assert.equal(await local.ctx[name](123, 'vibe_999', 'status_impressao', 'Impresso'), false);
+        assert.equal(local.writes.length, 0, 'Falha local não pode contornar persistência');
     }
     console.log('OK: retorno/filtros, confirmação, zero linhas, falha de rede, registro divergente, offline e Corrigir Arte.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

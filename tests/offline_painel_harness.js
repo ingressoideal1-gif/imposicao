@@ -58,13 +58,17 @@ function extrair(nome) {
      window.PilotoSelecao={revisaoPedido:()=>({pedido:'99',revisao:'a'.repeat(64)})};
    });
    await page.addScriptTag({content:extrair('loadOrdensFromVibecode')});
+   await page.addScriptTag({content:extrair('normalizarStatusImpressao')+'\n'+extrair('updateItemImpressao')});
    await page.addScriptTag({url:origem+'/offline-estacao.js'});
    const result=await page.evaluate(async()=>{
      const ok=await PilotoOffline.carregarOrdens();
      const formatos=await PilotoOffline.catalogo('/formatos');
      const conferencia=await PilotoOffline.conferencia([{osId:'vibe_99',itemId:'10'}]);
      state.osItens.vibe_99=[{id:10}];
-     await PilotoOffline.confirmar([{osId:'vibe_99',itemId:'10'}]);
+     // O seletor manual deve usar a mesma confirmação durável do popup.
+     // Não existe acesso à nuvem neste ensaio.
+     const marcado = await updateItemImpressao('10','vibe_99','Impresso');
+     if (!marcado) throw Error('Seletor manual não confirmou localmente');
      state.osItens.vibe_99=[{id:10}]; await PilotoOffline.aplicarConfirmacoes('vibe_99');
      return {ok,ordens:state.ordens,formatos,modelos:conferencia.tabelas.pedidos_modelos,item:state.osItens.vibe_99[0]};
    });
