@@ -40,7 +40,7 @@ function ambiente(resposta, conectado = true) {
     };
     vm.createContext(ctx);
     for (const name of ['normalizarStatusImpressao', 'pedidoBateNosSetores',
-        'updateItemImpressao', 'autoSaveOSItemField', 'impQueueUpdateField']) {
+        'updateItemImpressao', 'autoSaveOSItemField', 'impQueueUpdateField', 'calcularStatusImpressaoPedido']) {
         vm.runInContext(extract(name), ctx);
     }
     vm.runInContext(extract('pedQueueUpdateField', pedido), ctx);
@@ -62,6 +62,9 @@ function ambiente(resposta, conectado = true) {
     assert.equal(ctx.pedidoBateNosSetores(impresso, ['LASER']), false);
     assert.equal(ctx.pedidoBateNosSetores(impresso, ['LASER'], true), true);
     assert(script.includes('pedidoBateNosSetores(itens, state.filtroSetores, listaEhDosImpressos)'));
+    assert.equal(ctx.calcularStatusImpressaoPedido([{status_impressao:'Conferir impressão',_confirmacaoLocalRevisaoNecessaria:true}]),'Conferir impressão');
+    ctx.itens=[{impressao:'Conferir impressão',_confirmacaoLocalRevisaoNecessaria:true}];
+    assert.equal(vm.runInContext(predicate,ctx),false,'divergência não entra no filtro Aguardando');
 
     const sucesso = {data: [{id: 123, id_int: 999, status_impressao: 'Impresso'}], error: null};
     for (const name of ['pedQueueUpdateField', 'impQueueUpdateField', 'autoSaveOSItemField']) {

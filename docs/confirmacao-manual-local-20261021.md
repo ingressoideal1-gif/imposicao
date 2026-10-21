@@ -39,16 +39,29 @@ A nova versão é 1.3.23, painel 1318. Publicação do MSI e adoção nas estaç
 devem ser verificadas separadamente. Não executar instalação ou impressão
 como teste automático desta alteração.
 
-## Liberação suspensa durante o diagnóstico
+## Ampliação para a confirmação original do popup
 
-O MSI foi construído e auditado localmente, sem ativar manifestos nem instalar
-estações. A confirmação do operador sobre a remarcação exige identificar o
-caminho da primeira confirmação e verificar eventual conflito da fila local.
+O primeiro MSI foi construído e auditado localmente, sem ativar manifestos nem
+instalar estações. O operador confirmou depois que a primeira marcação ocorreu
+no popup e autorizou executar a correção ampliada. Esse MSI deve ser reconstruído.
 O heartbeat não expõe `offline_confirmacoes`. A consulta direta ao painel local
 da LASER-01 a partir deste computador expirou; não foi alterada a autorização
 nem a configuração de acesso para obter esses dados.
 
-O código atual omite a confirmação na lista quando ela está em conflito ou
-quando a revisão preparada muda; isso é uma hipótese adicional para o retorno
-visual e precisa ser correlacionado com os registros locais da ocorrência.
-Não atribuir essa hipótese aos dez pedidos sem essa evidência.
+A 1.3.22 omite a confirmação na lista quando ela está em conflito ou quando a
+revisão preparada muda. Esse estado foi reproduzido em Chromium, partindo do
+popup real, e não pode retornar silenciosamente a Aguardando.
+
+A correção ampliada apresenta `Conferir impressão` no modelo e no pedido,
+exclui esse modelo do filtro Aguardando e recusa geração/impressão normal.
+O modo Refazer já existente continua permitindo reimpressão intencional.
+A marcação explícita de Impresso após conferir o material gera uma confirmação
+nova para a revisão preparada; a confirmação mais recente prevalece por modelo.
+O snapshot com Impresso confirmado também prevalece sobre a lista resumida antiga.
+Esse estado de conferência é apenas local: não é escrito em pedidos_modelos.
+
+Testes cobrem popup, seletor, persistência/reabertura, conflito, revisão diferente,
+snapshot impresso atualizado, decisão posterior do operador, bloqueio da geração
+e Refazer explícito. Sem os registros locais, não atribuir definitivamente o
+conflito aos dez pedidos específicos. Nenhum estado remoto deles foi reparado
+ou presumido por esta alteração.

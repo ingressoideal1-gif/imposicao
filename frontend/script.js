@@ -28959,6 +28959,7 @@ function normalizarStatusImpressao(status) {
  */
 function calcularStatusImpressaoPedido(modelos) {
     if (!modelos || modelos.length === 0) return 'Aguardando';
+    if (modelos.some(m => m._confirmacaoLocalRevisaoNecessaria)) return 'Conferir impressão';
     const todosImpressos = modelos.every(m =>
         normalizarStatusImpressao(m.impressao || m.status_impressao) === 'Impresso');
     return todosImpressos ? 'Impresso' : 'Aguardando';
@@ -28971,6 +28972,7 @@ function getStatusImpressaoBadge(status) {
     const map = {
         'Aguardando': { icon: '⏳', cls: 'badge-blue', label: 'Aguardando' },
         'Impresso': { icon: '✅', cls: 'badge-green', label: 'Impresso' },
+        'Conferir impressão': { icon: '⚠️', cls: 'badge-amber', label: 'Conferir impressão' },
         // Âmbar, e não vermelho: não é erro da impressora, é trabalho que voltou
         // para o designer. Ver `STATUS_CORRIGIR_ARTE`.
         'Corrigir Arte': { icon: '🎨', cls: 'badge-amber', label: 'Corrigir Arte' }
@@ -34360,6 +34362,7 @@ function renderImpOSQueue(opcoes = {}) {
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
+                                ${item._confirmacaoLocalRevisaoNecessaria ? '<option value="" selected disabled>Conferir impressão</option>' : ''}
                                 <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
                                 <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
                                 <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>

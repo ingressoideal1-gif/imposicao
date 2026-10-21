@@ -105,6 +105,12 @@
         return ok;
     }
     async function conferencia(alvos) {
+        const b = await bootstrap();
+        for (const osId of new Set(alvos.map(a => a.osId))) aplicarConfirmacoesDoPedido(osId, b);
+        for (const a of alvos) {
+            const item = (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId));
+            if (item?._confirmacaoLocalRevisaoNecessaria && !(typeof refazerLigado === 'function' && refazerLigado())) throw Error('Este modelo já teve impressão confirmada nesta estação. Confira o material e marque Impresso. Para reimpressão intencional, use Refazer.');
+        }
         const pedidos = [...new Set(alvos.map(a => String(a.osId)))];
         const referencias = pedidos.map(osId => {
             const r = window.PilotoSelecao.revisaoPedido(osId);
@@ -138,10 +144,10 @@
         for (const dados of grupos.values()) await pedir('confirmar-impressao-painel', dados);
         for (const a of alvos) {
             const item = (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId));
-            if (item) { item.impressao = 'IMPRESSO'; item.status_impressao = 'IMPRESSO'; item._confirmacaoLocalPendente = true; }
+            if (item) { item.impressao = 'IMPRESSO'; item.status_impressao = 'IMPRESSO'; item._confirmacaoLocalPendente = true; item._confirmacaoLocalRevisaoNecessaria = false; }
             const numero = String(a.osId).replace(/^vibe_/, '');
             const global = (state.modelosGlobais[numero] || []).find(i => String(i.id) === String(a.itemId));
-            if (global) { global.impressao = 'IMPRESSO'; global.status_impressao = 'IMPRESSO'; global._confirmacaoLocalPendente = true; }
+            if (global) { global.impressao = 'IMPRESSO'; global.status_impressao = 'IMPRESSO'; global._confirmacaoLocalPendente = true; global._confirmacaoLocalRevisaoNecessaria = false; }
         }
         if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
         pendente = null;
@@ -154,15 +160,29 @@
     }
     function aplicarConfirmacoesDoPedido(osId, b) {
         const numero = String(osId).replace(/^vibe_/, '');
-        const atual = b.pedidos.find(p => p.pedido === numero);
+        const atual = (b.pedidos || []).find(p => String(p.pedido) === numero);
+        const vistos = new Set();
+        // A API fornece as confirmações da mais recente para a mais antiga.
+        // Uma nova decisão do operador substitui o conflito anterior do modelo.
         for (const c of b.confirmacoes || []) {
-            if (c.dados.pedido !== numero || c.estado === 'conflito' || c.dados.revisao !== atual?.revisao) continue;
+            if (String(c.dados.pedido) !== numero) continue;
             // O detalhe e a lista precisam usar a mesma confirmação persistida.
             // Não altera o snapshot/revisão de arte preparado para impressão.
             const modelos = [...(state.osItens[osId] || []), ...(state.modelosGlobais[numero] || [])];
-            for (const item of modelos) if (c.dados.modelos.includes(String(item.id))) {
-                item.impressao = 'IMPRESSO'; item.status_impressao = 'IMPRESSO';
-                item._confirmacaoLocalPendente = c.estado === 'pendente';
+            for (const id of c.dados.modelos.map(String)) {
+                if (vistos.has(id)) continue;
+                vistos.add(id);
+                const persistido = atual?.snapshot?.modelos?.find(m => String(m.id) === id);
+                const impressoNoSnapshot = String(persistido?.status_impressao || '').trim().toUpperCase() === 'IMPRESSO';
+                const divergente = !impressoNoSnapshot && (c.estado === 'conflito' || c.dados.revisao !== atual?.revisao);
+                for (const item of modelos.filter(m => String(m.id) === id)) {
+                    // Estado de apresentação, nunca escrito no banco comercial.
+                    // Divergência não comprova impressão da nova arte, nem autoriza reimpressão.
+                    item.impressao = divergente ? 'Conferir impressão' : 'IMPRESSO';
+                    item.status_impressao = item.impressao;
+                    item._confirmacaoLocalRevisaoNecessaria = divergente;
+                    item._confirmacaoLocalPendente = !divergente && !impressoNoSnapshot && c.estado === 'pendente';
+                }
             }
         }
     }

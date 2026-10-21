@@ -29,7 +29,7 @@ function extrair(nome) {
      let body=''; for await (const part of req) body+=part;
      if(req.url.endsWith('conferencia-trabalho-painel')) return res.end(JSON.stringify(dados));
      if(req.url.endsWith('confirmar-impressao-painel')) {
-       dados.confirmacoes.push({dados:JSON.parse(body),estado:'pendente'});
+       dados.confirmacoes.unshift({dados:JSON.parse(body),estado:'pendente'});
        return res.end('{"registrado_localmente":true}');
      }
    }
@@ -37,7 +37,7 @@ function extrair(nome) {
    if(nome==='/') return res.end('<html><body><div id="user-profile-bar"></div></body></html>');
    const file=path.resolve('frontend','.'+nome);
    if(!file.startsWith(path.resolve('frontend')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
-   res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'application/octet-stream');
+   res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript; charset=utf-8':file.endsWith('.css')?'text/css':'application/octet-stream');
    res.end(fs.readFileSync(file));
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -59,6 +59,8 @@ function extrair(nome) {
    });
    await page.addScriptTag({content:extrair('loadOrdensFromVibecode')});
    await page.addScriptTag({content:extrair('normalizarStatusImpressao')+'\n'+extrair('updateItemImpressao')});
+   await page.addScriptTag({content:extrair('escHtmlSimples')+'\n'+extrair('confirmarImpressaoModelos')});
+   await page.evaluate(()=>{window.confirmarPopup=async()=>true;});
    await page.addScriptTag({url:origem+'/offline-estacao.js'});
    const result=await page.evaluate(async()=>{
      const ok=await PilotoOffline.carregarOrdens();
@@ -75,6 +77,8 @@ function extrair(nome) {
    assert(result.ok);assert.equal(result.ordens[0].numero,99);assert.equal(result.ordens[0].prazo_entrega,'2026-10-15');
    assert.equal(result.formatos[0].id,1);assert.equal(result.modelos[0].id,10);assert(result.item._confirmacaoLocalPendente);
    assert.equal(dados.confirmacoes.length,1);
+   assert.equal(await page.evaluate(()=>confirmarImpressaoModelos([{osId:'vibe_99',itemId:'10'}])),true,
+     'a confirmação original do popup também é persistida');
    assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO');
    await page.evaluate(()=>PilotoOffline.carregarOrdens());
    assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
@@ -111,14 +115,32 @@ function extrair(nome) {
    dados.confirmacoes[0].estado='conflito';
    await page.addScriptTag({url:origem+'/offline-estacao.js?conflito=1'});
    await page.evaluate(()=>PilotoOffline.carregarOrdens());
-   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'AGUARDANDO',
-     'conflito não pode ser apresentado como impressão confirmada');
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'Conferir impressão',
+     'conflito não pode voltar à fila Aguardando nem declarar impressão da revisão atual');
+   await page.evaluate(async()=>{state.osItens.vibe_99=[{id:10}];await PilotoOffline.aplicarConfirmacoes('vibe_99');});
+   assert.equal(await page.evaluate(()=>state.osItens.vibe_99[0]._confirmacaoLocalRevisaoNecessaria),true);
+   assert.match(await page.evaluate(async()=>{
+     try {await PilotoOffline.conferencia([{osId:'vibe_99',itemId:'10'}]);return 'permitiu';}
+     catch(e){return e.message;}
+   }),/já teve impressão confirmada/,'impede gerar/imprimir novamente enquanto houver divergência');
    dados.confirmacoes[0].estado='pendente';
    dados.confirmacoes[0].dados.revisao='c'.repeat(64);
    await page.addScriptTag({url:origem+'/offline-estacao.js?revisao=1'});
    await page.evaluate(()=>PilotoOffline.carregarOrdens());
-   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'AGUARDANDO',
-     'confirmação de outra revisão não pode marcar o modelo atual');
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'Conferir impressão',
+     'mudança de revisão também exige conferência, sem recolocar em Aguardando');
+   snapshot.modelos[0].status_impressao='IMPRESSO';
+   await page.addScriptTag({url:origem+'/offline-estacao.js?sincronizado=1'});
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
+     'snapshot atualizado confirma impressão mesmo se a lista resumida estiver antiga');
+   await page.evaluate(async()=>{state.osItens.vibe_99=[{id:10}];await PilotoOffline.aplicarConfirmacoes('vibe_99');});
+   assert.equal(await page.evaluate(()=>state.osItens.vibe_99[0]._confirmacaoLocalRevisaoNecessaria),false);
+   delete snapshot.modelos[0].status_impressao;
+   assert.equal(await page.evaluate(()=>confirmarImpressaoModelos([{osId:'vibe_99',itemId:'10'}])),true);
+   await page.evaluate(()=>PilotoOffline.carregarOrdens());
+   assert.equal(await page.evaluate(()=>state.modelosGlobais[99][0].status_impressao),'IMPRESSO',
+     'nova confirmação explícita da revisão atual prevalece sobre registros antigos');
    dados.pedidos=[];
    await page.addScriptTag({url:origem+'/offline-estacao.js?lista=2'});
    assert.equal(await page.evaluate(async()=>{await PilotoOffline.carregarOrdens();return state.ordens.length;}),65);

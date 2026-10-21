@@ -165,6 +165,12 @@ function montar() {
     liberar();await p;await c.enviarParaPedido(10,'vibe_99');assert.equal(c.cargas.length,1);assert.equal(c.state.pedidoSelecaoCarregando,null);
     c.state.activeOSItem={itemId:10,osId:'vibe_99'};
     c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]);
+    c.getOSItens()[0]._confirmacaoLocalRevisaoNecessaria=true;
+    assert.throws(()=>c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]),/já teve impressão confirmada/);
+    c.refazerLigado=()=>true;
+    c.PilotoSelecao.validarTrabalho([c.state.activeOSItem]);
+    c.refazerLigado=()=>false;
+    delete c.getOSItens()[0]._confirmacaoLocalRevisaoNecessaria;
     await c.PilotoSelecao.lerUrl('https://test.invalid/a.pdf');
     assert.throws(()=>c.PilotoSelecao.validarTrabalho([{itemId:11,osId:'vibe_99'}]));
     c.getOSItens()[0]._modeloOnline.quantidade=3;
