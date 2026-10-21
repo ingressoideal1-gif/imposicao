@@ -6531,3 +6531,45 @@ tr.linha-da-janela:hover { opacity: 1 !important; }
 #view-entregas .ve-forma-envio span{display:block;white-space:nowrap}
 #view-entregas .ve-tabela tr.ve-pedido-pronto>td{background:rgba(59,130,246,.12)}
 #view-entregas .ve-tabela tr.ve-pedido-pronto>td:first-child{box-shadow:inset 3px 0 #3b82f6;color:#93c5fd}
+
+/* Gestao de entregadores e rotas: mesmo acabamento do cadastro avulso. */
+#view-entregas .ve-dialogo{position:fixed;inset:0;margin:auto;width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;padding:0;border:1px solid #344156;border-radius:18px;background:#101827;color:#e2e8f0;color-scheme:dark;box-shadow:0 24px 80px #0008}
+#view-entregas .ve-dialogo::backdrop{background:rgba(2,6,23,.76);backdrop-filter:blur(4px)}
+.ve-dialogo form{margin:0;background:transparent}
+.ve-dialogo-topo{padding:24px 28px 20px;border-bottom:1px solid #344156}
+.ve-dialogo-etiqueta{font-size:10px;letter-spacing:.12em;font-weight:700;color:#93c5fd}
+.ve-dialogo-topo h3{font-size:23px;line-height:1.3;margin:8px 0}
+.ve-dialogo-topo p{font-size:13px;color:#94a3b8;line-height:1.5;margin:0}
+.ve-dialogo-conteudo{padding:20px 28px 24px}
+#view-entregas .ve-dialogo label:not(.ve-check){display:grid;gap:7px;margin:0 0 16px;font-size:12px;font-weight:500;color:#cbd5e1}
+#view-entregas .ve-dialogo input:not([type=checkbox]),#view-entregas .ve-dialogo select{min-width:0;min-height:42px;padding:10px 12px;border:1px solid #344156;border-radius:8px;background:#0b1220;color:#f1f5f9;font-size:13px}
+#view-entregas .ve-dialogo input:focus,#view-entregas .ve-dialogo select:focus{outline:2px solid #60a5fa;outline-offset:2px}
+#view-entregas .ve-dialogo input:disabled,#view-entregas .ve-dialogo select:disabled{background:#192336;color:#b9c7da;opacity:1}
+.ve-dialogo small{font-size:12px;line-height:1.5;color:#94a3b8;display:block;margin:-8px 0 16px}
+.ve-dialogo button{min-height:42px;white-space:normal;overflow-wrap:anywhere}
+.ve-dialogo .ve-check{font-size:13px;color:#cbd5e1;min-height:40px}
+.ve-dialogo input[type=checkbox]{accent-color:#3b82f6;width:18px;height:18px}
+.ve-dialogo-rodape{position:sticky;bottom:0;padding:16px 28px;border-top:1px solid #344156;background:#101827}
+.ve-dialogo-rodape p{font-size:12px;line-height:1.5;color:#bfdbfe;overflow-wrap:anywhere;margin:0}
+.ve-dialogo-rodape p:not(:empty){margin-bottom:12px}
+.ve-dialogo-acoes{display:flex;justify-content:flex-end;gap:10px}
+.ve-dialogo-acoes .btn-primary{order:2}
+.ve-dialogo-bloco{background:#162237;border:1px solid #2b3c55;border-radius:12px;padding:16px;margin-top:18px}
+.ve-dialogo-bloco h4{font-size:14px;margin:0 0 14px}
+#ve-rota-busca-form{display:flex;align-items:flex-end;gap:10px;margin-bottom:14px}
+#view-entregas #ve-rota-busca-form label{flex:1;min-width:0;margin:0}
+#view-entregas #ve-rota-disponiveis{display:grid;gap:8px;max-height:210px;overflow:auto}
+#ve-rota-disponiveis button{text-align:left;background:#0b1220;border:1px solid #344156;color:#e2e8f0}
+#view-entregas #ve-cadastros-lista article{border:1px solid #344156;background:#162237;border-radius:12px;padding:16px;margin-top:12px;overflow-wrap:anywhere}
+#ve-cadastros-lista article h4{margin:0 0 8px;font-size:15px}
+#ve-cadastros-lista article p{font-size:13px;color:#94a3b8;margin:6px 0 12px}
+#ve-rota-sequencia{padding-left:22px;font-size:13px;line-height:1.7}
+#ve-rota-sequencia li{padding:10px;border:1px solid #344156;border-radius:8px;background:#0b1220;overflow-wrap:anywhere}
+#ve-rota-sequencia button{margin:4px}
+#ve-rota-sequencia:empty::after{content:'Selecione pedidos acima para montar a sequência.';display:block;color:#94a3b8;padding:12px 0}
+@media(max-width:520px){
+ #view-entregas .ve-dialogo{width:calc(100vw - 20px);max-height:calc(100dvh - 20px);border-radius:14px}
+ .ve-dialogo-topo{padding:20px}.ve-dialogo-conteudo{padding:16px 20px 20px}.ve-dialogo-rodape{padding:14px 20px}
+ .ve-dialogo-acoes .btn-primary{flex:1}
+ #ve-rota-busca-form{flex-wrap:wrap}#ve-rota-busca-form button{width:100%}
+}
