@@ -4269,12 +4269,16 @@ class ImpositionEngine:
                     continue
                     
                 current_doc_base = doc_base
+                capa_item_start = None
+                capa_item_end = None
                 v_start = cfg.seq_start + (i_start * cfg.seq_increment)
                 v_end = cfg.seq_start + (i_end * cfg.seq_increment)
                 
                 if (cfg.layout_schema == "multi_artes" or (cfg.multi_artes and len(cfg.multi_artes) > 0)) and multi_map:
                     if i_start < len(multi_map):
                         arte_data_start = multi_map[i_start]
+                        capa_item_start = arte_data_start
+                        capa_item_end = multi_map[min(i_end, len(multi_map) - 1)]
                         if arte_data_start["doc_base"]:
                             current_doc_base = arte_data_start["doc_base"]
                         v_start = arte_data_start["val1"]
@@ -4318,15 +4322,14 @@ class ImpositionEngine:
                     camarote_num = cfg.c_ini + (bloco_num - 1)
                     bloco_str = f"Camarote {camarote_num:02d}"
                     sufixo_str = f" - de 1 a {cfg.l_cam}"
-                elif getattr(cfg, 'num_tipo', '') == 'TICKET':
-                    # TICKET: v_start/v_end são valores de "folha" — multiplicar por ticket_qtd
-                    tq = int(getattr(cfg, 'ticket_qtd', 1) or 1)
-                    if tq > 1:
-                        t_v_start = (v_start - 1) * tq + 1  # folha 1 → ingresso 1
-                        t_v_end = v_end * tq                  # folha 50 → ingresso 100
-                    else:
-                        t_v_start = v_start
-                        t_v_end = v_end
+                elif (capa_item_start or {}).get('num_tipo', cfg.num_tipo) == 'TICKET':
+                    tq = int((capa_item_start or {}).get('ticket_qtd', cfg.ticket_qtd) or 1)
+                    inicio = (capa_item_start or {}).get('start_base', cfg.seq_start)
+                    primeiro = capa_item_start['local_idx'] if capa_item_start else i_start
+                    ultimo = capa_item_end['local_idx'] if capa_item_end else i_end
+                    # Mesma regra do miolo: o inicio nao e multiplicado pelas vias.
+                    t_v_start = inicio + primeiro * tq
+                    t_v_end = inicio + (ultimo + 1) * tq - 1
                     t_v_start_str = str(t_v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_start).zfill(4)
                     t_v_end_str = str(t_v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_end).zfill(4)
                     bloco_str = f"Bloco {bloco_num:02d}"
@@ -4723,17 +4726,14 @@ class ImpositionEngine:
             camarote_num = (int(inicio) if inicio is not None else cfg.c_ini) + item_start['local_idx'] // lugares
             bloco_str = f"Camarote {camarote_num:02d}"
             sufixo_str = f" - de 1 a {lugares}"
-        elif getattr(cfg, 'num_tipo', '') == 'TICKET':
-            # TICKET: v_start/v_end são valores de "folha", não de ingresso
-            # Cada folha contém ticket_qtd ingressos
-            # v_start=1, v_end=50 com ticket_qtd=2 → range real = 0001 a 0100
-            tq = int(getattr(cfg, 'ticket_qtd', 1) or 1)
-            if tq > 1:
-                t_v_start = (v_start - 1) * tq + 1  # folha 1 → ingresso 1
-                t_v_end = v_end * tq                  # folha 50 → ingresso 100
-            else:
-                t_v_start = v_start
-                t_v_end = v_end
+        elif item_start.get('num_tipo', cfg.num_tipo) == 'TICKET':
+            tq = int(item_start.get('ticket_qtd', cfg.ticket_qtd) or 1)
+            inicio = item_start.get('start_base', v_start - item_start['local_idx'])
+            primeiro = item_start['local_idx']
+            ultimo = end_local_idx if model_idx is not None else item_end['local_idx']
+            # Os indices sao locais ao modelo, inclusive em blocos incompletos.
+            t_v_start = inicio + primeiro * tq
+            t_v_end = inicio + (ultimo + 1) * tq - 1
             t_v_start_str = str(t_v_start).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_start).zfill(4)
             t_v_end_str = str(t_v_end).zfill(cfg.seq_zeros) if hasattr(cfg, 'seq_zeros') and cfg.seq_zeros else str(t_v_end).zfill(4)
             bloco_str = f"Bloco {bloco_num:02d}"
