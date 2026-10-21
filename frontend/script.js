@@ -27384,7 +27384,7 @@ async function carregarModelosGlobais(exigirSucesso = false, numerosDaPesquisa =
                 const chunk = todosNumeros.slice(inicio, inicio + chunkSize);
                 const { data, error } = await lerDadosLista(supabaseClient
                     .from('pedidos_modelos')
-                    .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
+                    .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_impressao_registrado_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
                     .in('id_int', chunk), 'modelos');
                 if (error) throw error;
                 lotes[inicio / chunkSize] = data || [];
@@ -28787,6 +28787,7 @@ async function devolverArteParaAlteracao(itemId, osId) {
         return false;
     }
 
+    let statusRegistradoEm = null;
     try {
         // As duas mudanças que tornam o retrabalho possível são uma gravação só:
         // a impressão fica travada e a arte aprovada fica editável. Até a v872
@@ -28801,7 +28802,7 @@ async function devolverArteParaAlteracao(itemId, osId) {
             })
             .eq('id', idBanco)
             .eq('id_int', numOs)
-            .select('id, status_impressao, status_arte');
+            .select('id, status_impressao, status_arte, status_impressao_registrado_em');
 
         if (error) throw error;
         if (!data || data.length !== 1) {
@@ -28811,6 +28812,7 @@ async function devolverArteParaAlteracao(itemId, osId) {
                 String(data[0].status_arte || '').trim().toUpperCase() !== 'REPROVADA_CLIENTE') {
             throw new Error('o banco devolveu um estado diferente do solicitado');
         }
+        statusRegistradoEm = data[0].status_impressao_registrado_em || null;
     } catch (e) {
         console.error('[Corrigir Arte] gravação não confirmada:', e);
         toast('Não foi possível devolver o modelo para correção. Nada foi confirmado; atualize a tela e tente novamente. '
@@ -28823,6 +28825,8 @@ async function devolverArteParaAlteracao(itemId, osId) {
     [item, globais.find(m => String(m.id) === String(modeloId) || String(m.id) === String(itemId))].forEach(m => {
         if (!m) return;
         m.status_impressao = STATUS_CORRIGIR_ARTE;
+        m.status_impressao_registrado_em = statusRegistradoEm;
+        m.status_impressao_em = null;
         m.impressao = STATUS_CORRIGIR_ARTE;
         m.amostra_status = 'REPROVADA';
         m.status_arte = 'REPROVADA_CLIENTE';
@@ -28981,6 +28985,46 @@ function calcularStatusImpressaoPedido(modelos) {
 /**
  * Retorna badge HTML para o status da impressão do pedido
  */
+function formatarDataHoraStatus(iso) {
+    if (!iso) return '';
+    const data = new Date(iso);
+    if (!Number.isFinite(data.getTime())) return '';
+    const partes = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(data);
+    const parte = tipo => partes.find(p => p.type === tipo).value;
+    return `${parte('day')}/${parte('month')} ${parte('hour')}:${parte('minute')}h`;
+}
+
+function horaStatusImpressao(item) {
+    if (!item) return '';
+    return item.status_impressao_registrado_em
+        || (normalizarStatusImpressao(item.status_impressao || item.impressao) === 'Impresso'
+            ? item.status_impressao_em : '') || '';
+}
+
+function ultimaHoraStatus(horas) {
+    // Sem histórico completo, não atribuir uma hora ao status agregado.
+    if (!horas.length || horas.some(h => !h || !Number.isFinite(new Date(h).getTime()))) return '';
+    return new Date(Math.max(...horas.map(h => new Date(h).getTime()))).toISOString();
+}
+
+function carimboStatusHtml(iso) {
+    const texto = formatarDataHoraStatus(iso);
+    return texto ? `<small class="status-data-hora" style="display:block;font-size:0.72rem;line-height:1.4;white-space:nowrap" title="Último registro de status dos modelos exibidos">${texto}</small>` : '';
+}
+
+function rotuloStatusComHora(rotulo, status, item) {
+    const hora = normalizarStatusImpressao(item.status_impressao || item.impressao) === status
+        ? formatarDataHoraStatus(horaStatusImpressao(item)) : '';
+    return rotulo + (hora ? ` (${hora})` : '');
+}
+window.formatarDataHoraStatus = formatarDataHoraStatus;
+window.horaStatusImpressao = horaStatusImpressao;
+window.ultimaHoraStatus = ultimaHoraStatus;
+window.carimboStatusHtml = carimboStatusHtml;
+
 function getStatusImpressaoBadge(status) {
     const map = {
         'Aguardando': { icon: '⏳', cls: 'badge-blue', label: 'Aguardando' },
@@ -32391,7 +32435,7 @@ function renderOrdens() {
                         <td><span class="badge">${totalItens} ${totalItens === 1 ? 'modelo' : 'modelos'}</span></td>
                         <td><strong>${totalQtd.toLocaleString('pt-BR')}</strong></td>
                         <td style="text-align:center; vertical-align:middle;">${freteHtml}</td>
-                        <td>${getStatusImpressaoBadge(statusImpressaoPedido)}</td>
+                        <td>${getStatusImpressaoBadge(statusImpressaoPedido)}${carimboStatusHtml(ultimaHoraStatus(modelosParaStatus.map(horaStatusImpressao)))}</td>
                         <td style="text-align:center; vertical-align:middle;">${prazoBadgeHtml}</td>
                     </tr>
                 `;
@@ -32909,6 +32953,7 @@ function formatDateTime(dateStr) {
  * Atualiza status de impressão de um item
  */
 async function updateItemImpressao(itemId, osId, novoStatus) {
+    let horarioConfirmado = {};
     try {
         if (normalizarStatusImpressao(novoStatus) === STATUS_CORRIGIR_ARTE) {
             const confirmado = await devolverArteParaAlteracao(itemId, osId);
@@ -32938,7 +32983,7 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             } else {
                 query = query.eq('id', itemId);
             }
-            const { data, error } = await query.eq('id_int', Number(numero)).select('id,id_int,status_impressao');
+            const { data, error } = await query.eq('id_int', Number(numero)).select('id,id_int,status_impressao,status_impressao_em,status_impressao_registrado_em');
             if (error) throw error;
             if (!Array.isArray(data) || data.length !== 1
                 || String(data[0].id) !== String(itemId).trim()
@@ -32947,6 +32992,7 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
                 || normalizarStatusImpressao(data[0].status_impressao) !== normalizarStatusImpressao(novoStatus)) {
                 throw new Error('O banco não confirmou exatamente o modelo, pedido e status solicitados.');
             }
+            horarioConfirmado = { status_impressao_em: data[0].status_impressao_em || null, status_impressao_registrado_em: data[0].status_impressao_registrado_em || null };
         } else {
             // A rota legada grava producao_os_itens, não pedidos_modelos.
             // Sem conexão confirmada, não apresentar uma marcação apenas local.
@@ -32965,6 +33011,7 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             if (item) {
                 item.impressao = novoStatus;
                 item.status_impressao = novoStatus;
+                Object.assign(item, horarioConfirmado);
             }
         }
 
@@ -32975,6 +33022,7 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
             if (mod) {
                 mod.impressao = novoStatus;
                 mod.status_impressao = novoStatus;
+                Object.assign(mod, horarioConfirmado);
             }
         }
 
@@ -34398,13 +34446,13 @@ function renderImpOSQueue(opcoes = {}) {
                             🖨️ Imp.
                         </button>
                     </td>
-                    <td style="padding: 12px; width: 270px; min-width: 270px; max-width: 270px;" title="Status de Produção">
+                    <td style="padding: 12px; width: 355px; min-width: 355px; max-width: 355px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 1.05rem; font-weight: bold; color: #ffffff; white-space: nowrap;">Status</span>
                             <select style="${selectStyle}" onchange="impQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
-                                <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
-                                <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
-                                <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
+                                <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>${rotuloStatusComHora('Aguardando', 'Aguardando', item)}</option>
+                                <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>${rotuloStatusComHora('Impresso', 'Impresso', item)}</option>
+                                <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>${rotuloStatusComHora('🎨 Corrigir Arte', 'Corrigir Arte', item)}</option>
                             </select>
                         </div>
                     </td>

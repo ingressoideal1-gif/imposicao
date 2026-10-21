@@ -511,16 +511,34 @@ function montarAmbiente() {
                     },
                 }),
                 update(payload) {
-                    return {
-                        eq(coluna, valor) {
-                            self._gravacoes.push({ tabela, payload, coluna, valor });
-                            return Promise.resolve({ error: null });
-                        },
+                    const filtros = {};
+                    const gravar = () => {
+                        if (self._erroStatus) return {data: null, error: self._erroStatus};
+                        if (self._statusSemLinha) return {data: [], error: null};
+                        self._gravacoes.push({ tabela, payload, coluna: 'id', valor: filtros.id, filtros });
+                        return { error: null, data: [{ id: filtros.id, id_int: filtros.id_int, ...payload,
+                            acabamento_pronto_em: payload.acabamento_status === 'Pronto' ? '2026-10-23T00:30:00Z' : null,
+                            acabamento_status_registrado_em: '2026-10-23T00:30:00Z' }] };
                     };
+                    const consulta = {
+                        eq(coluna, valor) { filtros[coluna] = valor; return consulta; },
+                        select() { return Promise.resolve(gravar()); },
+                        then(res, rej) { return Promise.resolve(gravar()).then(res, rej); }
+                    };
+                    return consulta;
                 },
             };
         },
     };
+
+    for (const nome of ['formatarDataHoraStatus', 'horaStatusImpressao', 'ultimaHoraStatus', 'carimboStatusHtml']) {
+        const inicio = SCRIPT.indexOf('function ' + nome + '(');
+        const corpo = SCRIPT.slice(inicio, SCRIPT.indexOf('\n}', inicio) + 2);
+        janela[nome] = new Function('window', 'normalizarStatusImpressao',
+            'formatarDataHoraStatus', corpo + '; return ' + nome)(janela,
+            valor => String(valor || '').toLowerCase() === 'impresso' ? 'Impresso' : 'Aguardando',
+            janela.formatarDataHoraStatus);
+    }
 
     // `supabaseClient` chega como parametro: o arquivo pergunta por ele com
     // `typeof`, e sem o parametro isso seria um ReferenceError aqui.
@@ -1284,7 +1302,7 @@ function ambienteComPedidoAberto() {
         ok(codigo.indexOf(cor) === -1, 'o tom ' + cor + ' e da Producao e nao pode estar aqui');
     });
     const gravacoes = codigo.match(/from\('pedidos_modelos'\)\s*\.update\(/g) || [];
-    ok(gravacoes.length === 1, 'ha um unico ponto de gravacao', 'achei ' + gravacoes.length);
+    ok(gravacoes.length === 2, 'status confirmado e demais campos possuem gravacoes separadas', 'achei ' + gravacoes.length);
 })();
 
 (function oMenuVoltaParaAPaginaInicial() {
@@ -3174,6 +3192,31 @@ async function semNinguemNoPerfilOSeletorDizOQueFazer() {
     ok(html.indexOf('ATUALIZAR') !== -1, 'e diz como recarregar depois de resolver');
 }
 
+async function dataHoraConfirmadaDoStatus() {
+    const amb = ambienteComPedidoAberto();
+    await amb.painel.abrirPedido('os-200');
+    const item = amb.janela.state.osItens['os-200'].find(i => String(i.id) === '3001');
+    const anterior = item.acabamento_status;
+    amb.banco._statusSemLinha = true;
+    await amb.painel.mudarEstagio('3001', 'os-200', 'Pronto');
+    ok(item.acabamento_status === anterior, 'zero linhas nao confirma status');
+    ok(!item.acabamento_status_registrado_em, 'zero linhas nao inventa horario');
+    amb.banco._statusSemLinha = false;
+    amb.banco._erroStatus = {message: 'falha simulada'};
+    await amb.painel.mudarEstagio('3001', 'os-200', 'Pronto');
+    ok(item.acabamento_status === anterior, 'erro de rede preserva status anterior');
+    amb.banco._erroStatus = null;
+    await amb.painel.mudarEstagio('3001', 'os-200', 'Pronto');
+    ok(item.acabamento_status_registrado_em === '2026-10-23T00:30:00Z', 'usa hora devolvida pelo banco');
+    const html = amb.elementos['acab-detalhe-corpo'].innerHTML;
+    ok(/Revisado<small[^>]*[^]*?22\/10 21:30h<\/small><\/button>/.test(html), 'hora dentro do botao Revisado');
+    ok(amb.painel._regras.carimboStatusDoPedido([item]).includes('22/10 21:30h'), 'lista mostra data completa');
+    ok(amb.painel._regras.carimboStatusDoPedido([item, {id: 'sem-hora'}]) === '', 'historico incompleto nao inventa hora agregada');
+    await amb.painel.mudarEstagio('3001', 'os-200', '');
+    ok(item.acabamento_pronto_em === null, 'desmarcar limpa a hora antiga do Pronto');
+    ok(item.acabamento_status_registrado_em === '2026-10-23T00:30:00Z', 'desmarcar preserva o novo carimbo do banco');
+}
+
 async function gravarEscreveSoNasDuasColunasNovas() {
     const amb = ambienteComPedidoAberto();
     await amb.painel.abrirPedido('os-200');
@@ -3196,7 +3239,7 @@ async function gravarEscreveSoNasDuasColunasNovas() {
 
     // A tela ja mostra a escolha antes de a rede responder.
     const item = amb.janela.state.osItens['os-200'].find(i => String(i.id) === '3001');
-    ok(item.acabamento_status === 'Pronto', 'a escolha aparece na hora, sem esperar o banco');
+    ok(item.acabamento_status === 'Pronto', 'a escolha aparece depois da confirmacao do banco');
     ok(item.acabamento_responsavel === 'Cesar Almeida', 'o responsavel tambem');
 
     // Limpar o responsavel grava NULO, e nao texto vazio.
@@ -4947,6 +4990,7 @@ async function semAColunaNoBancoNaoFicaPerguntandoParaSempre() {
     await oResponsavelGravadoForaDoPerfilContinuaAparecendo();
     await semNinguemNoPerfilOSeletorDizOQueFazer();
     await gravarEscreveSoNasDuasColunasNovas();
+    await dataHoraConfirmadaDoStatus();
     await oEstagioDaListaVemDeConsultaPropria();
     await bancoSemAsColunasNaoDerrubaATela();
     await pedidoEncerradoComoTesteSomeDaFila();
