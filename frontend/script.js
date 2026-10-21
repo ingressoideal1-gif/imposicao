@@ -43516,6 +43516,14 @@ async function gerarLinkClienteBanner() {
 }
 window.gerarLinkClienteBanner = gerarLinkClienteBanner;
 
+async function abrirEmailArtesCorpoBanner() {
+    const osId = state.amostrasOSAtivo;
+    const os = osId && (typeof findOSInState === 'function' ? findOSInState(osId) : state.ordens?.find(o => o.id === osId));
+    if (!os) { toast('Abra um pedido antes de preparar o e-mail.', 'warning'); return; }
+    await abrirModalEnviarEmailCliente(osId, os.numero || os.id_int, '', 'artes_corpo');
+}
+window.abrirEmailArtesCorpoBanner = abrirEmailArtesCorpoBanner;
+
 // Confirmar o envio apenas fecha o pedido. "Em Aprovação" depende da
 // abertura e interação do cliente no portal, registradas por link_cliente_visto.
 async function concluirEnvioLinkParaAtendimento(osId) {
@@ -43823,6 +43831,138 @@ function _mostrarIconeEmailNaLinha(osId, numero, linkUrl) {
     setTimeout(() => { if (popup.parentNode) popup.remove(); }, 8000);
 }
 
+// Prévia e envio da segunda opção. Apenas leituras; não regenera nem grava artes.
+function mensagemEmailSemLink(pedido) {
+    return `Olá, ${pedido.clienteNome}!\n\nSeguem as artes do Pedido #${pedido.numero} para sua conferência. Todos os modelos estão apresentados abaixo.\n\nResponda a este e-mail para aprovar ou solicitar ajustes, indicando o modelo.\n\nAtenciosamente,\nAtendimento`;
+}
+
+async function imagensParaCorpoEmail(fonte) {
+    if (typeof fonte !== 'string' || !/^(https:\/\/|data:(image\/(png|jpeg|webp)|application\/pdf);base64,)/i.test(fonte)) {
+        throw new Error('A prévia precisa ser uma imagem ou PDF acessível. Gere a amostra do modelo antes de enviar.');
+    }
+    const resposta = await fetch(fonte, { credentials: 'omit', signal: AbortSignal.timeout(30000) });
+    if (!resposta.ok) throw new Error('Não foi possível carregar uma arte. Confira a prévia do modelo.');
+    const blob = await resposta.blob();
+    if (blob.size > 20000000) throw new Error('Uma arte excede 20 MB. Gere uma amostra menor ou use a opção com link.');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const jpeg = canvas => {
+        const dados = canvas.toDataURL('image/jpeg', 0.9);
+        if (dados.length > 1500000) throw new Error('Uma imagem está muito grande para o e-mail. Use a opção com link.');
+        return dados;
+    };
+    if (new TextDecoder().decode(bytes.subarray(0, 5)) === '%PDF-') {
+        if (typeof pdfjsLib === 'undefined') throw new Error('O leitor de PDF ainda não está disponível. Tente novamente.');
+        const tarefa = pdfjsLib.getDocument({ data: bytes });
+        try {
+            const pdf = await tarefa.promise;
+            if (pdf.numPages > 100) throw new Error('O PDF tem mais de 100 páginas. Use a opção com link.');
+            const imagens = [];
+            for (let pagina = 1; pagina <= pdf.numPages; pagina++) {
+                const page = await pdf.getPage(pagina);
+                const original = page.getViewport({ scale: 1 });
+                const viewport = page.getViewport({ scale: Math.min(2, 1600 / Math.max(original.width, original.height)) });
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport, background: 'rgb(255,255,255)' }).promise;
+                imagens.push(jpeg(canvas));
+                page.cleanup();
+            }
+            return imagens;
+        } finally { await tarefa.destroy(); }
+    }
+    const imagem = await createImageBitmap(blob);
+    try {
+        const escala = Math.min(1, 1600 / Math.max(imagem.width, imagem.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(imagem.width * escala));
+        canvas.height = Math.max(1, Math.round(imagem.height * escala));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(imagem, 0, 0, canvas.width, canvas.height);
+        return [jpeg(canvas)];
+    } finally { imagem.close(); }
+}
+
+async function prepararModelosEmailCorpo(pedido) {
+    if (!/^[1-9][0-9]*$/.test(String(pedido.numero))) throw new Error('Número do pedido inválido. Reabra o envio.');
+    const { data: modelos, error } = await supabaseClient.from('pedidos_modelos')
+        .select('id,nome_modelo,quantidade,padrao,gabarito_operacional,verso_tipo,amostra_cor_id,amostra_num_id,amostra_arte_base64,verso_amostra_arte_base64,arte_url,verso_arte_url')
+        .eq('id_int', Number(pedido.numero)).order('ordem', { ascending: true }).order('id', { ascending: true }).limit(101);
+    if (error) throw new Error('Não foi possível consultar os modelos do pedido. Tente novamente.');
+    if (!modelos?.length || modelos.length > 100) throw new Error('Esta opção precisa de 1 a 100 modelos com prévias prontas.');
+    const preparados = [];
+    let tamanho = 0, totalImagens = 0;
+    for (const modelo of modelos) {
+        if (window._activeEmailModalData !== pedido) throw new Error('O pedido aberto mudou. Prepare o e-mail novamente.');
+        const imagens = [];
+        const temComposicao = modelo.amostra_cor_id || modelo.amostra_num_id;
+        const frente = modelo.amostra_arte_base64 || (!temComposicao && modelo.arte_url);
+        const verso = modelo.verso_amostra_arte_base64 || (!temComposicao && modelo.verso_arte_url);
+        const tipoVerso = String(modelo.verso_tipo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        const exigeVerso = ['FXVERSO', 'VERSO COMUM', 'VERSO VARIAVEL', 'FRENTE E VERSO'].includes(tipoVerso);
+        if (!frente || (exigeVerso && !verso)) throw new Error(`Gere a prévia de ${!frente ? 'frente' : 'verso'} do modelo "${modelo.nome_modelo || modelo.id}" antes de enviar.`);
+        for (const [face, fonte] of [['frente', frente], ['verso', verso]]) {
+            if (!fonte) continue;
+            const paginas = await imagensParaCorpoEmail(fonte);
+            paginas.forEach((dados, idx) => {
+                tamanho += dados.length; totalImagens++;
+                if (tamanho > 11000000 || totalImagens > 100) throw new Error('As artes excedem o limite deste e-mail. Use a opção com link.');
+                imagens.push({ face, pagina: idx + 1, dados });
+            });
+        }
+        preparados.push({ id: String(modelo.id), imagens, nome: modelo.nome_modelo || 'Modelo',
+            detalhes: `Quantidade: ${modelo.quantidade ?? '—'} | Cor: ${modelo.padrao || 'Padrão'} | Numeração: ${modelo.gabarito_operacional || 'Padrão'}` });
+    }
+    return preparados;
+}
+
+async function alterarModoEmailCliente() {
+    const pedido = window._activeEmailModalData;
+    if (!pedido) return;
+    const modo = document.getElementById('modal-email-modo').value;
+    const corpo = document.getElementById('modal-email-body');
+    pedido.rascunhos ||= { link: pedido.bodyText, artes_corpo: mensagemEmailSemLink(pedido) };
+    pedido.rascunhos[pedido.modo || 'link'] = corpo.value;
+    pedido.modo = modo;
+    corpo.value = pedido.rascunhos[modo];
+    const inline = modo === 'artes_corpo';
+    document.getElementById('modal-email-link-box').hidden = inline;
+    document.getElementById('btn-email-outlook').hidden = inline;
+    document.getElementById('modal-email-body-hint').textContent = inline
+        ? 'As imagens abaixo serão incorporadas no corpo do e-mail. O cliente responde por e-mail para aprovar ou pedir ajustes.'
+        : 'Edite a mensagem se necessário. O e-mail inclui cabeçalho, resumo do orçamento cadastrado, botões de aprovação e pagamento e contato pelo WhatsApp.';
+    const previa = document.getElementById('modal-email-artes-corpo');
+    previa.hidden = !inline;
+    if (!inline) return;
+    previa.textContent = 'Preparando todas as artes para o corpo do e-mail…';
+    try {
+        pedido.preparoCorpo ||= prepararModelosEmailCorpo(pedido);
+        pedido.modelosCorpo = await pedido.preparoCorpo;
+        if (window._activeEmailModalData !== pedido || pedido.modo !== modo) return;
+        previa.replaceChildren();
+        for (const [idx, modelo] of pedido.modelosCorpo.entries()) {
+            const card = document.createElement('section');
+            card.style.cssText = 'background:#fff;color:#243449;padding:16px;border-radius:8px;margin-top:12px;overflow-wrap:anywhere;';
+            const titulo = document.createElement('h4'); titulo.textContent = `${idx + 1}. ${modelo.nome}`;
+            const detalhes = document.createElement('p'); detalhes.textContent = modelo.detalhes;
+            card.append(titulo, detalhes);
+            for (const imagem of modelo.imagens) {
+                const legenda = document.createElement('p'); legenda.textContent = `${imagem.face === 'frente' ? 'Frente' : 'Verso'} · Página ${imagem.pagina}`;
+                const img = document.createElement('img'); img.src = imagem.dados; img.alt = `${modelo.nome} — ${legenda.textContent}`;
+                img.style.cssText = 'display:block;max-width:100%;height:auto;';
+                card.append(legenda, img);
+            }
+            previa.appendChild(card);
+        }
+    } catch (e) {
+        pedido.preparoCorpo = null;
+        pedido.modelosCorpo = null;
+        if (window._activeEmailModalData !== pedido || pedido.modo !== modo) return;
+        previa.textContent = e.message;
+        toast(e.message, 'error');
+    }
+}
+
 function ensureModalEmailElement() {
     let modal = document.getElementById('modal-envio-email-cliente');
     if (!modal) {
@@ -43833,6 +43973,7 @@ function ensureModalEmailElement() {
             <style>
                 #modal-envio-email-cliente { font-family:Inter,"Segoe UI",Arial,sans-serif; }
                 #modal-envio-email-cliente * { box-sizing:border-box; }
+                #modal-envio-email-cliente [hidden] { display:none!important; }
                 #modal-envio-email-cliente .email-dialog { width:100%;max-width:900px;max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;background:#172436;color:#e2e8f0;border:1px solid #35445a;border-radius:18px;box-shadow:0 24px 80px #0008; }
                 #modal-envio-email-cliente .email-header { padding:22px 26px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:1px solid #35445a; }
                 #modal-envio-email-cliente h3 { margin:0 0 7px;font-size:21px;line-height:1.3;font-weight:700;letter-spacing:-.4px;color:#f8fafc; }
@@ -43875,7 +44016,12 @@ function ensureModalEmailElement() {
                     <button type="button" class="email-close" onclick="fecharModalEnviarEmailCliente()" aria-label="Fechar envio de e-mail">✕</button>
                 </div>
                 <div class="email-content">
-                    <div class="email-link">
+                    <div><label for="modal-email-modo">Opção de envio</label>
+                        <select id="modal-email-modo" onchange="alterarModoEmailCliente()" style="width:100%;padding:12px;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:15px;">
+                            <option value="link">1. Com link de aprovação (atual)</option>
+                            <option value="artes_corpo">2. Artes no corpo do e-mail, sem link do cliente</option>
+                        </select></div>
+                    <div class="email-link" id="modal-email-link-box">
                         <div class="email-link-text"><strong>Link de aprovação interativa</strong><span id="modal-email-link-display"></span></div>
                         <button type="button" onclick="copiarLinkClienteModal()">Copiar link</button>
                     </div>
@@ -43888,13 +44034,14 @@ function ensureModalEmailElement() {
                             <textarea id="modal-email-body" rows="12" aria-describedby="modal-email-body-hint"></textarea>
                             <p class="email-hint" id="modal-email-body-hint">Edite a mensagem se necessário. O e-mail inclui cabeçalho, resumo do orçamento cadastrado, botões de aprovação e pagamento e contato pelo WhatsApp.</p></div>
                     </div>
+                    <div id="modal-email-artes-corpo" hidden aria-live="polite"></div>
                 </div>
                 <div class="email-footer">
                     <div class="email-tools">
                         <button type="button" id="btn-abrir-config-email" onclick="abrirModalConfigEmail()">Remetente e teste</button>
                         <button type="button" onclick="copiarTextoEmailModal()">Copiar e-mail</button>
                         <button type="button" onclick="copiarWhatsAppModal()">Copiar WhatsApp</button>
-                        <button type="button" onclick="dispararMailtoCliente()">Abrir Outlook</button>
+                        <button type="button" id="btn-email-outlook" onclick="dispararMailtoCliente()">Abrir Outlook</button>
                     </div>
                     <div class="email-actions">
                         <button type="button" onclick="fecharModalEnviarEmailCliente()">Fechar</button>
@@ -44049,11 +44196,21 @@ function montarMensagemEmailCliente(osId, numero, linkUrl, dadosCliente) {
     return { osId, numero, linkUrl, clienteEmail, clienteNome, subject: assuntoStr, bodyText: bodyLines.join('\n') };
 }
 
-async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
+async function abrirModalEnviarEmailCliente(osId, numero, linkUrl, modoInicial = 'link') {
+    const abertura = (window._emailAberturaAtual || 0) + 1;
+    window._emailAberturaAtual = abertura;
     window._activeEmailModalData = null;
     emailUltimoEnvioAceito = "";
     console.log('[LinkDebug] abrirModalEnviarEmailCliente ENTRY osId=', osId, 'numero=', numero);
     const modal = ensureModalEmailElement();
+    const seletor = document.getElementById('modal-email-modo');
+    seletor.value = 'link'; seletor.disabled = true;
+    seletor.options[0].disabled = !linkUrl;
+    document.getElementById('modal-email-link-box').hidden = false;
+    document.getElementById('btn-email-outlook').hidden = false;
+    document.getElementById('modal-email-artes-corpo').hidden = true;
+    document.getElementById('modal-email-artes-corpo').replaceChildren();
+    document.getElementById('modal-email-body-hint').textContent = 'Edite a mensagem se necessário. O e-mail inclui cabeçalho, resumo do orçamento cadastrado, botões de aprovação e pagamento e contato pelo WhatsApp.';
     console.log('[LinkDebug] modal element:', modal, 'display antes:', modal?.style?.display);
     modal.style.display = 'flex'; // Exibir imediatamente!
     modal.style.zIndex = '999999';
@@ -44087,6 +44244,7 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
         toast('Preparando modelo de e-mail...', 'info');
 
         const dadosCliente = await buscarDadosEmailCliente(osId, numero);
+        if (window._emailAberturaAtual !== abertura) return;
         const mensagem = montarMensagemEmailCliente(osId, numero, linkUrl, dadosCliente);
         document.getElementById('modal-email-os-numero').textContent = numero || '';
         document.getElementById('modal-email-link-display').textContent = linkUrl || '';
@@ -44094,14 +44252,22 @@ async function abrirModalEnviarEmailCliente(osId, numero, linkUrl) {
         document.getElementById('modal-email-subject').value = mensagem.subject;
         document.getElementById('modal-email-body').value = mensagem.bodyText;
         window._activeEmailModalData = mensagem;
+        seletor.disabled = false;
+        if (modoInicial === 'artes_corpo') {
+            seletor.value = 'artes_corpo';
+            await alterarModoEmailCliente();
+        }
 
     } catch (e) {
+        if (window._emailAberturaAtual !== abertura) return;
         console.error('[Email Modal] Erro ao abrir modal de e-mail:', e);
         toast('Erro ao carregar dados para o e-mail: ' + e.message, 'error');
     }
 }
 
 function fecharModalEnviarEmailCliente() {
+    window._emailAberturaAtual = (window._emailAberturaAtual || 0) + 1;
+    window._activeEmailModalData = null;
     const modal = document.getElementById('modal-envio-email-cliente');
     if (modal) modal.style.display = 'none';
 }
@@ -44220,7 +44386,7 @@ function fecharModalConfigEmail() {
 async function executarOperacaoEmail(acao) {
     if (emailOperacaoEmAndamento) return;
     emailOperacaoEmAndamento = true;
-    const botoes = document.querySelectorAll('#btn-disparar-email-direto, #btn-testar-email-nuvem, #btn-enviar-link-os-banner');
+    const botoes = document.querySelectorAll('#btn-disparar-email-direto, #btn-testar-email-nuvem, #btn-enviar-link-os-banner, #btn-email-artes-corpo-banner');
     botoes.forEach(b => { b.disabled = true; });
     try { await acao(); }
     catch (e) { toast(e.message, 'error'); }
@@ -44242,13 +44408,20 @@ async function testarEnvioEmailConfig() {
 async function dispararEmailDiretoCliente() {
     return executarOperacaoEmail(async () => {
         const pedido = window._activeEmailModalData;
-        if (!pedido?.osId || !pedido?.linkUrl) throw new Error('Aguarde os dados do pedido carregarem antes de enviar.');
+        if (!pedido?.osId || (!pedido.linkUrl && pedido.modo !== 'artes_corpo')) throw new Error('Aguarde os dados do pedido carregarem antes de enviar.');
         const to = document.getElementById('modal-email-to').value.trim();
         const subject = document.getElementById('modal-email-subject').value.trim();
         if (!to || !document.getElementById('modal-email-to').checkValidity()) throw new Error('Informe um e-mail válido para o cliente.');
         if (!subject) throw new Error('Informe o assunto do e-mail.');
         const dados = { os_id: pedido.osId, link_url: pedido.linkUrl, to, subject,
             body_text: document.getElementById('modal-email-body').value };
+        if (pedido.modo === 'artes_corpo') {
+            if (!pedido.modelosCorpo?.length) throw new Error('Aguarde a preparação de todas as artes e confira a prévia antes de enviar.');
+            dados.modo = 'artes_corpo';
+            delete dados.link_url;
+            dados.modelos = pedido.modelosCorpo.map(({ id, imagens }) => ({ id, imagens }));
+            if (/\/cliente\/|LINK DE APROVAÇÃO INTERATIVA/i.test(dados.body_text)) throw new Error('Retire o link do cliente da mensagem desta opção.');
+        }
         toast('Enviando e-mail...', 'info');
         await enviarMensagemEmailCliente(dados, document.getElementById('btn-disparar-email-direto'));
     });

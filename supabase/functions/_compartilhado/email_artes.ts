@@ -2,6 +2,7 @@
 import { banco } from "./banco.ts";
 import { Recusa } from "./sessao.ts";
 import { layoutEmailArte } from "./email_artes_layout.ts";
+import { montarEmailArtesNoCorpo, validarModelosEmail } from "./email_artes_corpo.ts";
 import { obterLinkPagamentoVibe, type DependenciasPagamento } from "./link_pagamento_vibe.ts";
 import { enviarSmtpArtes, type ConfigSmtpArtes, type MensagemArte } from "./smtp_artes.ts";
 
@@ -70,7 +71,11 @@ export async function operarEmailArtes(
     throw new Recusa(422, "Esperava os dados do e-mail.");
   }
   const corpo = entrada as Record<string, unknown>;
-  const campos = acao === "testar" ? [] : ["os_id", "link_url", "to", "subject", "body_text"];
+  const noCorpo = acao === "enviar" && corpo.modo === "artes_corpo";
+  const campos = acao === "testar" ? [] : ["os_id", "to", "subject", "body_text", "modo", ...(noCorpo ? ["modelos"] : ["link_url"])];
+  if (corpo.modo !== undefined && (typeof corpo.modo !== "string" || !["link", "artes_corpo"].includes(corpo.modo))) {
+    throw new Recusa(422, "Escolha uma opção de envio válida.");
+  }
   if (Object.keys(corpo).some(k => !campos.includes(k))) {
     throw new Recusa(422, "Campo não permitido no envio de e-mail.");
   }
@@ -91,46 +96,51 @@ export async function operarEmailArtes(
     }
     const to = email(corpo.to), subject = texto(corpo.subject, 200);
     const body = texto(corpo.body_text, 50000, true);
-    let linhas;
-    try {
-      linhas = await (deps.consultar || banco)("GET",
-        `pedidos_links_cliente?os_id=eq.${encodeURIComponent(id)}&ativo=eq.true&select=os_id,numero_pedido,token&limit=2`);
-    } catch { throw new Recusa(503, "Não foi possível conferir o link de aprovação. Tente mais tarde."); }
-    if (!Array.isArray(linhas) || linhas.length !== 1 || linhas[0].os_id !== id ||
-        !/^[0-9]+$/.test(String(linhas[0].numero_pedido)) || !/^[a-zA-Z0-9]{6,12}$/.test(linhas[0].token)) {
-      throw new Recusa(409, "O pedido precisa de um único link de aprovação ativo antes do envio.");
+    const modelos = noCorpo ? validarModelosEmail(corpo.modelos) : [];
+    if (noCorpo) {
+      mensagem = { to, subject, ...await montarEmailArtesNoCorpo(body, id, modelos, deps.consultar || banco) };
+    } else {
+      let linhas;
+      try {
+        linhas = await (deps.consultar || banco)("GET",
+          `pedidos_links_cliente?os_id=eq.${encodeURIComponent(id)}&ativo=eq.true&select=os_id,numero_pedido,token&limit=2`);
+      } catch { throw new Recusa(503, "Não foi possível conferir o link de aprovação. Tente mais tarde."); }
+      if (!Array.isArray(linhas) || linhas.length !== 1 || linhas[0].os_id !== id ||
+          !/^[0-9]+$/.test(String(linhas[0].numero_pedido)) || !/^[a-zA-Z0-9]{6,12}$/.test(linhas[0].token)) {
+        throw new Recusa(409, "O pedido precisa de um único link de aprovação ativo antes do envio.");
+      }
+      const caminho = `/cliente/${linhas[0].numero_pedido}-${linhas[0].token}`;
+      let link: URL;
+      try { link = new URL(String(corpo.link_url)); }
+      catch { throw new Recusa(422, "Link de aprovação inválido."); }
+      const origemConhecida = [estado.portal, PORTAL, "https://ideal-imposition.vercel.app", "https://imposicao.vercel.app"].includes(link.origin) ||
+        (link.protocol === "http:" && ["localhost", "127.0.0.1"].includes(link.hostname));
+      if (!origemConhecida || link.pathname !== caminho || link.search || link.hash || link.username || link.password ||
+          typeof corpo.link_url !== "string" || !body.includes(corpo.link_url)) {
+        throw new Recusa(409, "O link da mensagem não corresponde ao pedido. Reabra o envio pela Lista de Artes.");
+      }
+      // Mesma fonte do orçamento no portal. Não recalcular preços a partir das artes.
+      let propostas;
+      try {
+        propostas = await (deps.consultar || banco)("GET",
+          `propostas?id_int=eq.${linhas[0].numero_pedido}&select=id_int,texto_whatsapp,vendedor&limit=2`);
+      } catch { throw new Recusa(503, "Não foi possível consultar o resumo do orçamento. Tente mais tarde."); }
+      if (!Array.isArray(propostas) || propostas.length > 1 ||
+          (propostas.length === 1 && String(propostas[0].id_int) !== String(linhas[0].numero_pedido))) {
+        throw new Recusa(409, "Não foi possível identificar o orçamento deste pedido.");
+      }
+      const resumo = propostas[0]?.texto_whatsapp;
+      if (resumo != null && (typeof resumo !== "string" || resumo.length > 50000)) {
+        throw new Recusa(503, "O resumo do orçamento precisa ser conferido antes do envio.");
+      }
+      const orcamento = resumo?.trim() || "Resumo não disponível neste e-mail. Consulte a aba Orçamento no link de aprovação ou fale com o atendimento.";
+      // Responsável da proposta, nunca o nome informado pelo navegador.
+      const vendedor = typeof propostas[0]?.vendedor === "string" ? propostas[0].vendedor : "";
+      // Links montados na estação também saem com o domínio público configurado.
+      mensagem = { to, subject, text: body.replaceAll(corpo.link_url, estado.portal + caminho) };
+      const pagamento = await obterLinkPagamentoVibe(String(linhas[0].numero_pedido), linhas[0].token, deps);
+      Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal, estado.portal + caminho, String(linhas[0].numero_pedido), orcamento, vendedor, pagamento));
     }
-    const caminho = `/cliente/${linhas[0].numero_pedido}-${linhas[0].token}`;
-    let link: URL;
-    try { link = new URL(String(corpo.link_url)); }
-    catch { throw new Recusa(422, "Link de aprovação inválido."); }
-    const origemConhecida = [estado.portal, PORTAL, "https://ideal-imposition.vercel.app", "https://imposicao.vercel.app"].includes(link.origin) ||
-      (link.protocol === "http:" && ["localhost", "127.0.0.1"].includes(link.hostname));
-    if (!origemConhecida || link.pathname !== caminho || link.search || link.hash || link.username || link.password ||
-        typeof corpo.link_url !== "string" || !body.includes(corpo.link_url)) {
-      throw new Recusa(409, "O link da mensagem não corresponde ao pedido. Reabra o envio pela Lista de Artes.");
-    }
-    // Mesma fonte do orçamento no portal. Não recalcular preços a partir das artes.
-    let propostas;
-    try {
-      propostas = await (deps.consultar || banco)("GET",
-        `propostas?id_int=eq.${linhas[0].numero_pedido}&select=id_int,texto_whatsapp,vendedor&limit=2`);
-    } catch { throw new Recusa(503, "Não foi possível consultar o resumo do orçamento. Tente mais tarde."); }
-    if (!Array.isArray(propostas) || propostas.length > 1 ||
-        (propostas.length === 1 && String(propostas[0].id_int) !== String(linhas[0].numero_pedido))) {
-      throw new Recusa(409, "Não foi possível identificar o orçamento deste pedido.");
-    }
-    const resumo = propostas[0]?.texto_whatsapp;
-    if (resumo != null && (typeof resumo !== "string" || resumo.length > 50000)) {
-      throw new Recusa(503, "O resumo do orçamento precisa ser conferido antes do envio.");
-    }
-    const orcamento = resumo?.trim() || "Resumo não disponível neste e-mail. Consulte a aba Orçamento no link de aprovação ou fale com o atendimento.";
-    // Responsável da proposta, nunca o nome informado pelo navegador.
-    const vendedor = typeof propostas[0]?.vendedor === "string" ? propostas[0].vendedor : "";
-    // Links montados na estação também saem com o domínio público configurado.
-    mensagem = { to, subject, text: body.replaceAll(corpo.link_url, estado.portal + caminho) };
-    const pagamento = await obterLinkPagamentoVibe(String(linhas[0].numero_pedido), linhas[0].token, deps);
-    Object.assign(mensagem, layoutEmailArte(mensagem.text, estado.portal, estado.portal + caminho, String(linhas[0].numero_pedido), orcamento, vendedor, pagamento));
   }
   const referencia = crypto.randomUUID();
   try {

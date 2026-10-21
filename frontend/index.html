@@ -2391,8 +2391,9 @@
                          que levam para fora desta tela (enviar ao cliente, fechar). -->
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
                         <span style="font-size: 1.45rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">Artes do pedido <span id="amostras-os-numero"></span> <span id="amostras-os-vibe"></span> <span style="color: var(--text-dim); font-weight: 400; margin: 0 6px;">—</span> <span id="amostras-os-cliente" style="font-weight: 600; font-size: 1.3rem; color: #e2e8f0;"></span> <span id="amostras-os-itens-count" class="badge badge-amber" style="margin-left: 6px;"></span></span>
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <button class="btn btn-warning btn-sm" id="btn-enviar-link-os-banner" onclick="gerarLinkClienteBanner()" style="font-size: 0.78rem; font-weight: 700; background: linear-gradient(135deg,#f59e0b,#d97706); color:#fff; border:none; border-radius:8px; height:34px; padding:0 14px; display: inline-flex; align-items: center; gap: 6px; cursor:pointer;" title="Enviar e-mail de aprovação ao cliente sem abrir o editor">✉️ Enviar Link ao Cliente</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-email-artes-corpo-banner" onclick="abrirEmailArtesCorpoBanner()" style="font-size:0.78rem;min-height:34px;" title="Conferir e enviar todos os modelos no corpo do e-mail, sem link do cliente">✉️ Enviar Artes no E-mail</button>
                             <button class="btn btn-ghost btn-sm" onclick="clearAmostrasOS()" style="font-size: 0.78rem; height: 34px;">← Voltar à Lista de Arte</button>
                         </div>
                     </div>
@@ -4625,7 +4626,7 @@
     <script src="origem-aprovacao.js?v=967"></script>
     <script src="/entregas-mapa.js?v=1093"></script>
     <script src="/entregas-avulsas.js?v=1092"></script>
-    <script src="script.js?v=1095"></script>
+    <script src="script.js?v=1097"></script>
     <script src="acesso-estacao.js?v=1010"></script>
     <script src="dashboard-arte.js?v=1067"></script>
     <script src="qr-evento-envio.js?v=948"></script>
