@@ -1185,6 +1185,7 @@ class ImpositionConfig:
                  refazer_de: int = 0,
                  refazer_ate: int = 0,
                  refazer_set: int = 1,
+                 refazer_set_ate: int = None,
                  refazer_celulas: list = None,
                  refazer_repetir: bool = False,
                  pedido=None,
@@ -1332,6 +1333,7 @@ class ImpositionConfig:
         self.refazer_de = int(refazer_de) if refazer_de else 0
         self.refazer_ate = int(refazer_ate) if refazer_ate else 0
         self.refazer_set = int(refazer_set) if refazer_set else 1
+        self.refazer_set_ate = int(refazer_set_ate) if refazer_set_ate is not None else None
         # Itens a refazer, identificados pela POSIÇÃO NO MODELO (1-based): o 1º,
         # o 6º, o 22º ticket do trabalho. NÃO é a pose da folha — pedir "22" num
         # formato de dez células é legítimo e quer dizer o vigésimo segundo
@@ -1552,6 +1554,16 @@ def _folhas_por_set_da_tela(set_definitions, bloco):
         for camada in range(depth):
             saida.append(max(0, min(int(bloco), n - camada * int(bloco))))
     return saida
+
+
+def _validar_extremos_refazer(folhas_por_set, set_de, folha_de, set_ate, folha_ate):
+    """Valida a faixa inteira antes do primeiro arquivo/callback de impressão."""
+    for numero, folha in ((set_de, folha_de), (set_ate, folha_ate)):
+        if numero < 1 or numero > len(folhas_por_set):
+            raise ValueError(f"Refazer: set {numero} nao existe; este trabalho tem {len(folhas_por_set)} set(s).")
+        total = folhas_por_set[numero - 1]
+        if folha < 1 or folha > total:
+            raise ValueError(f"Refazer: folha {folha} nao existe no set {numero}; este set tem {total} folha(s).")
 
 
 class ImpositionEngine:
@@ -2964,6 +2976,8 @@ class ImpositionEngine:
         r_de = int(getattr(cfg, "refazer_de", 0) or 0)
         r_ate = int(getattr(cfg, "refazer_ate", 0) or 0)
         r_set = int(getattr(cfg, "refazer_set", 1) or 1)
+        intervalo_sets = cfg.refazer_set_ate is not None
+        r_set_ate = cfg.refazer_set_ate if intervalo_sets else r_set
         # Lista, não conjunto: a ordem decide qual item ocupa qual posição na
         # folha compactada (ver `refazer_celulas` no ImpositionConfig).
         r_cels = list(getattr(cfg, "refazer_celulas", None) or [])
@@ -2978,6 +2992,9 @@ class ImpositionEngine:
                     + f" nao existem — este modelo tem {cfg.total_items} item(ns)."
                 )
         else:
+            if intervalo_sets and (min(r_de, r_ate, r_set, r_set_ate) < 1
+                                  or (r_set, r_de) > (r_set_ate, r_ate)):
+                raise ValueError("Refazer: intervalo de sets invalido. Informe os dois extremos em ordem.")
             if r_de > 0 and r_ate <= 0:
                 r_ate = r_de
             # Só "Até" preenchido: o frontend já recusa, mas o motor também atende
@@ -2985,7 +3002,7 @@ class ImpositionEngine:
             # o contrário (r_de = 0) desliga o filtro e refaz a tiragem inteira.
             if r_de <= 0 and r_ate > 0:
                 r_de = 1
-            if r_de > 0 and r_ate < r_de:
+            if r_de > 0 and (r_set, r_de) > (r_set_ate, r_ate):
                 raise ValueError(
                     f"Refazer: faixa invalida — 'ate' ({r_ate}) e menor que 'de' ({r_de})."
                 )
@@ -3630,6 +3647,8 @@ class ImpositionEngine:
             # folha 10" reimprimia em silencio a folha 10 da SOBRA, outra pilha.
             # Ver `_folhas_por_set_da_tela` e tests/test_engine_refazer_strict_assembly.py.
             folhas_por_set = _folhas_por_set_da_tela(set_definitions, cfg.sheets_per_block)
+            if intervalo_sets and not r_cels:
+                _validar_extremos_refazer(folhas_por_set, r_set, r_de, r_set_ate, r_ate)
             set_da_tela = 0
             for set_idx, set_def in enumerate(set_definitions):
                 depth = set_def.get("depth", 1)
@@ -3637,7 +3656,7 @@ class ImpositionEngine:
 
                 for layer_idx in range(depth):
                     set_da_tela += 1
-                    if r_de > 0 and set_da_tela != r_set:
+                    if r_de > 0 and not r_set <= set_da_tela <= r_set_ate:
                         continue
                     doc_out = fitz.open()
                     
@@ -3653,7 +3672,7 @@ class ImpositionEngine:
                         # Refazer: a folha conta DENTRO DA CAMADA (1..bloco), que e
                         # o que a tela mostra e o que o nome do arquivo diz.
                         sheet_num_in_set = sheet_within_set - start_sheet + 1
-                        if r_de > 0 and (sheet_num_in_set < r_de or sheet_num_in_set > r_ate):
+                        if r_de > 0 and not (r_set, r_de) <= (set_da_tela, sheet_num_in_set) <= (r_set_ate, r_ate):
                             continue
                             
                         # Frente
@@ -3706,6 +3725,14 @@ class ImpositionEngine:
             print(f"[engine] strict_assembly: Gerado com sucesso.")
             return
 
+        if intervalo_sets and not r_cels:
+            # Os sets de Cut & Stack da tela existem também sem capa.
+            if cfg.layout_schema == "cut_stack" and cfg.cut_stack_mode == "strict":
+                stack_size = cfg.sheets_per_block * cfg.block_depth
+            folhas_intervalo = [min(stack_size, total_sheets - i * stack_size)
+                               for i in range(math.ceil(total_sheets / max(stack_size, 1)))]
+            _validar_extremos_refazer(folhas_intervalo, r_set, r_de, r_set_ate, r_ate)
+
         for S in range(total_sheets):
             set_idx = S // stack_size
             
@@ -3714,10 +3741,10 @@ class ImpositionEngine:
             # de origem foi aplicado ao montar `fontes` — aplicá-lo de novo aqui
             # descartaria as folhas compactadas.
             if r_de > 0 and not empacotando:
-                if (set_idx + 1) != r_set:
+                if not r_set <= (set_idx + 1) <= r_set_ate:
                     continue
                 sheet_num_in_set = (S % stack_size) + 1
-                if sheet_num_in_set < r_de or sheet_num_in_set > r_ate:
+                if not (r_set, r_de) <= (set_idx + 1, sheet_num_in_set) <= (r_set_ate, r_ate):
                     continue
             
             if set_idx != set_idx_current:
@@ -3751,8 +3778,11 @@ class ImpositionEngine:
                             "folhas": len(doc_out), "folhas_entregues": self.folhas_entregues,
                             "folhas_no_trabalho": total_sheets,
                         })
-                    doc_out.close()
-                    doc_out = fitz.open()
+                    # Só esvazia o documento quando o set foi salvo acima.
+                    # Sem capa/lote, todos os sets pertencem ao PDF único.
+                    if cfg.has_cover or folhas_por_lote:
+                        doc_out.close()
+                        doc_out = fitz.open()
 
                 if cfg.has_cover and not refazendo:
                     self._generate_capa(set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets, multi_map)

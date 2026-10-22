@@ -1192,6 +1192,11 @@ function drawPedPreview() {
     // Guardar o total de folhas ANTES da compactação é essencial: uma vez
     // compactada, a prévia passa a mostrar folhas de saída, e validar "De: 7"
     // contra elas recusaria uma folha de origem que existe.
+    window.pedRefazerFolhasPorSet = is_strict_mode
+        ? (window.currentAssemblySets ? window.currentAssemblySets.map(s => s.num_sheets)
+            : Array.from({ length: sets_needed }, (_, i) => Math.min(stack_size, Math.ceil(total_items / poses_per_sheet) - i * stack_size)))
+        : [total_sheets];
+    sincronizarSetFinalRefazer();
     window.pedRefazerTotalFolhas = visible_sheets;
     window.pedRefazerTotalCelulas = total_items;
     if (typeof sincronizarLimitesRefazer === 'function') sincronizarLimitesRefazer();
@@ -2819,17 +2824,62 @@ window.getRefazerCelulasSelecionadas = getRefazerCelulasSelecionadas;
 
 // Chamado de dentro de drawPedPreview(): põe nos campos os limites reais desta
 // imposição — quantas folhas tem o set e quantos itens tem o modelo.
+function sincronizarSetFinalRefazer() {
+    const el = document.getElementById('ped-refazer-set-ate');
+    if (!el) return;
+    const totais = window.pedRefazerFolhasPorSet || [];
+    if (el.options.length !== totais.length + 1) {
+        const atual = el.value;
+        el.innerHTML = '';
+        el.add(new Option('Mesmo set', ''));
+        totais.forEach((_, i) => el.add(new Option(`Set ${i + 1}`, i + 1)));
+        el.value = Number(atual) <= totais.length ? atual : '';
+    }
+}
+
+// Os limites pertencem aos extremos escolhidos, não ao set aberto na prévia.
+function intervaloRefazerFolhas() {
+    const setEl = document.getElementById('ped-refazer-set');
+    const setDe = setEl && setEl.style.display !== 'none' ? Number(setEl.value) : 1;
+    const setAte = Number(document.getElementById('ped-refazer-set-ate')?.value || setDe);
+    const de = Number(document.getElementById('ped-refazer-de')?.value);
+    const ateRaw = document.getElementById('ped-refazer-ate')?.value;
+    const ate = ateRaw ? Number(ateRaw) : (setDe === setAte ? de : 0);
+    const totais = window.pedRefazerFolhasPorSet || [window.pedRefazerTotalFolhas || 0];
+    if (![setDe, setAte, de, ate].every(n => Number.isSafeInteger(n) && n > 0)) {
+        return { erro: 'Refazer Folhas: informe set e folha inicial e final com números inteiros positivos.' };
+    }
+    if (setAte < setDe || (setDe === setAte && ate < de)) {
+        return { erro: 'Refazer Folhas: o fim do intervalo é anterior ao início.' };
+    }
+    for (const [set, folha] of [[setDe, de], [setAte, ate]]) {
+        if (!totais[set - 1] || folha > totais[set - 1]) {
+            return { erro: `Refazer Folhas: a folha ${folha} não existe no set ${set} (${totais[set - 1] || 0} folhas).` };
+        }
+    }
+    const total = totais.slice(setDe - 1, setAte).reduce((a, b) => a + b, 0)
+        - (de - 1) - (totais[setAte - 1] - ate);
+    return { setDe, setAte, de, ate, total,
+        resumo: `Set ${setDe}, folha ${de} → Set ${setAte}, folha ${ate} · ${total} folha(s) físicas` };
+}
+
 function sincronizarLimitesRefazer() {
     const totalFolhas = window.pedRefazerTotalFolhas || 0;
     const totalCelulas = window.pedRefazerTotalCelulas || 0;
 
-    for (const id of ['ped-refazer-de', 'ped-refazer-ate']) {
+    const setDe = Number(document.getElementById('ped-refazer-set')?.value || 1);
+    const setAte = Number(document.getElementById('ped-refazer-set-ate')?.value || setDe);
+    const totais = window.pedRefazerFolhasPorSet || [totalFolhas];
+    for (const [id, set] of [['ped-refazer-de', setDe], ['ped-refazer-ate', setAte]]) {
         const el = document.getElementById(id);
-        if (el && totalFolhas > 0) el.max = totalFolhas;
+        if (el) el.max = totais[set - 1] || 0;
     }
-
     const infoFolhas = document.getElementById('ped-refazer-total');
-    if (infoFolhas) infoFolhas.textContent = totalFolhas ? `de ${totalFolhas} folhas` : '';
+    if (infoFolhas) {
+        const faixa = intervaloRefazerFolhas();
+        infoFolhas.textContent = faixa.erro || faixa.resumo;
+        infoFolhas.style.color = faixa.erro ? '#f87171' : 'var(--text-muted)';
+    }
 
     const infoCels = document.getElementById('ped-refazer-cel-info');
     if (infoCels) {
@@ -2942,7 +2992,7 @@ function resetRefazerControls() {
         const el = document.getElementById(id);
         if (el) el.checked = false;
     }
-    for (const id of ['ped-refazer-de', 'ped-refazer-ate', 'ped-refazer-cel']) {
+    for (const id of ['ped-refazer-de', 'ped-refazer-ate', 'ped-refazer-cel', 'ped-refazer-set-ate']) {
         const el = document.getElementById(id);
         if (el) el.value = '';
     }
@@ -2970,36 +3020,18 @@ function montarRefazerPayload(isRefazer) {
     const partes = [];
 
     if (usaFolhas) {
-        const totalFolhas = window.pedRefazerTotalFolhas || 0;
-        const deRaw = document.getElementById('ped-refazer-de')?.value;
-        const ateRaw = document.getElementById('ped-refazer-ate')?.value;
-        const de = parseInt(deRaw);
-        const ate = parseInt(ateRaw);
-
-        if (isNaN(de) || de < 1) {
-            // O caso clássico: só "Até" preenchido. Antes disso passar, o motor
-            // lia refazer_de = 0, desligava o filtro e refazia o trabalho inteiro.
-            return { erro: 'Refazer Folhas: preencha "De:" com a primeira folha da faixa.' };
+        const faixa = intervaloRefazerFolhas();
+        if (faixa.erro) return faixa;
+        resultado.refazer_de = faixa.de;
+        resultado.refazer_ate = faixa.ate;
+        resultado.refazer_set = faixa.setDe;
+        if (faixa.setAte !== faixa.setDe) {
+            resultado.refazer_set_ate = faixa.setAte;
+            partes.push(`set${faixa.setDe}_folha${faixa.de}-set${faixa.setAte}_folha${faixa.ate}`);
+        } else {
+            partes.push(faixa.de === faixa.ate ? `folha${faixa.de}` : `folhas${faixa.de}-${faixa.ate}`);
+            if (faixa.setDe > 1) partes.unshift(`set${faixa.setDe}`);
         }
-        const ateFinal = (isNaN(ate) || ate < 1) ? de : ate;
-        if (ateFinal < de) {
-            return { erro: `Refazer Folhas: "Até" (${ateFinal}) é menor que "De" (${de}).` };
-        }
-        if (totalFolhas && de > totalFolhas) {
-            return { erro: `Refazer Folhas: a folha ${de} não existe — este set tem ${totalFolhas} folha(s).` };
-        }
-        if (totalFolhas && ateFinal > totalFolhas) {
-            return { erro: `Refazer Folhas: a folha ${ateFinal} não existe — este set tem ${totalFolhas} folha(s).` };
-        }
-
-        const setEl = document.getElementById('ped-refazer-set');
-        const set = (setEl && setEl.style.display !== 'none') ? (parseInt(setEl.value) || 1) : 1;
-
-        resultado.refazer_de = de;
-        resultado.refazer_ate = ateFinal;
-        resultado.refazer_set = set;
-        partes.push(de === ateFinal ? `folha${de}` : `folhas${de}-${ateFinal}`);
-        if (set > 1) partes.unshift(`set${set}`);
     }
 
     if (usaCels) {
@@ -6736,6 +6768,7 @@ async function executarPedImposition(mode, isRefazer) {
         refazer_de: refazer.refazer_de,
         refazer_ate: refazer.refazer_ate,
         refazer_set: refazer.refazer_set,
+        ...(refazer.refazer_set_ate != null ? { refazer_set_ate: refazer.refazer_set_ate } : {}),
         refazer_celulas: refazer.refazer_celulas,
 
         // A escala da camada de arte do modelo (31/08/2026). 100/100 é o

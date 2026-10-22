@@ -405,7 +405,7 @@ def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
     from canais_newprod import CANAL
     return {"version": LOCAL_AGENT_VERSION, "canal": CANAL, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
-            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_capas_fila_v1", "teatro_capa_descricao_atual_v1", "teatro_snapshot_v1", "qr_ideal_contrato_v2", "texto_banco_contorno_v1", "escala_modelo_blocos_v1"]}
+            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_capas_fila_v1", "teatro_capa_descricao_atual_v1", "teatro_snapshot_v1", "qr_ideal_contrato_v2", "texto_banco_contorno_v1", "escala_modelo_blocos_v1", "refazer_intervalo_sets_v1"]}
 
 @app.get("/api/update/check")
 def consultar_atualizacao():
@@ -1598,6 +1598,7 @@ async def impose_file(
             refazer_de=int(data.get("refazer_de", 0) or 0),
             refazer_ate=int(data.get("refazer_ate", 0) or 0),
             refazer_set=int(data.get("refazer_set", 1) or 1),
+            refazer_set_ate=data.get("refazer_set_ate"),
             refazer_celulas=data.get("refazer_celulas") or [],
             # A Montagem duplica celula de proposito e manda esta chave; o
             # Pedido nao manda, e segue deduplicando. Ver `refazer_repetir`

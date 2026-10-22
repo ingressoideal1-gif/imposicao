@@ -73,7 +73,7 @@ def impor(tmp_path, **refazer):
     """Roda o motor e devolve (paginas, numeros por pagina)."""
     out = tmp_path / "refazer.pdf"
     cfg = ImpositionConfig(
-        base_file="base_ticket.pdf",  # inexistente: o motor impoe so a numeracao
+        base_file="",  # sem arte: o motor impoe so a numeracao
         out_pdf=str(out),
         formato=FORMATO,
         numeracao=NUMERACAO,
@@ -196,7 +196,7 @@ def test_posicao_inexistente_e_erro(tmp_path):
 def _impor_cut_stack(tmp_path, **refazer):
     out = tmp_path / "cutstack.pdf"
     cfg = ImpositionConfig(
-        base_file="base_ticket.pdf", out_pdf=str(out), formato=FORMATO,
+        base_file="", out_pdf=str(out), formato=FORMATO,
         numeracao=NUMERACAO, saida=SAIDA, seq_start=SEQ_INICIO, seq_end=SEQ_FIM,
         seq_increment=1, layout_schema="cut_stack", cut_stack_mode="independent",
         **refazer,
@@ -256,7 +256,7 @@ def _numeros_em_ordem_de_leitura(caminho):
 def _impor_para_ordem(tmp_path, **refazer):
     out = tmp_path / "refazer.pdf"
     cfg = ImpositionConfig(
-        base_file="base_ticket.pdf", out_pdf=str(out), formato=FORMATO,
+        base_file="", out_pdf=str(out), formato=FORMATO,
         numeracao=NUMERACAO, saida=SAIDA, seq_start=SEQ_INICIO, seq_end=SEQ_FIM,
         seq_increment=1, layout_schema="sequential", **refazer,
     )
@@ -324,7 +324,7 @@ def test_o_config_guarda_a_opcao_de_repetir():
     o que sobra fica na ordem recebida. Sem a chave, o padrao e desligado.
     """
     comum = dict(
-        base_file="base_ticket.pdf", out_pdf="ignorado.pdf", formato=FORMATO,
+        base_file="", out_pdf="ignorado.pdf", formato=FORMATO,
         numeracao=NUMERACAO, saida=SAIDA, seq_start=1, seq_end=4,
     )
     cfg = ImpositionConfig(refazer_celulas=["3", "x", "1", 0, "3"], refazer_repetir=True, **comum)
@@ -338,7 +338,7 @@ def test_o_config_guarda_a_opcao_de_repetir():
 
 def test_sem_refazer_a_lista_de_celulas_fica_vazia():
     cfg = ImpositionConfig(
-        base_file="base_ticket.pdf",
+        base_file="",
         out_pdf="ignorado.pdf",
         formato=FORMATO,
         numeracao=NUMERACAO,

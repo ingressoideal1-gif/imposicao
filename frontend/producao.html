@@ -1413,16 +1413,21 @@
                                             <input type="checkbox" id="ped-refazer-checkbox" onchange="onRefazerToggle('folhas')">
                                             Refazer Folhas
                                         </label>
-                                        <div id="ped-refazer-inputs" style="display: none; align-items: center; gap: 6px;">
-                                            <select id="ped-refazer-set" class="form-control" style="width: auto; padding: 2px 4px; height: 24px; font-size: 0.8rem; display: none;" onchange="onRefazerFolhaChange()">
-                                                <option value="1">Set 1</option>
-                                            </select>
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">De:</span>
-                                            <input type="number" id="ped-refazer-de" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 5" oninput="onRefazerFolhaChange()" title="Primeira folha da faixa. A prévia pula para ela assim que você digita.">
-                                            <span style="font-size:0.75rem; color:var(--text-muted);">Até:</span>
-                                            <input type="number" id="ped-refazer-ate" class="form-control" style="width: 50px; padding: 2px 4px; height: 24px; font-size: 0.8rem; text-align: center;" min="1" placeholder="Ex: 10">
-                                            <span id="ped-refazer-total" style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;"></span>
-                                        </div>
+                                        <div id="ped-refazer-inputs" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0;">
+                                                <span style="font-size:0.78rem;">De:</span>
+                                                <select id="ped-refazer-set" aria-label="Set inicial" class="form-control" style="width:auto;padding:2px 6px;height:28px;font-size:0.8rem;display:none;" onchange="onRefazerFolhaChange()">
+                                                    <option value="1">Set 1</option>
+                                                </select>
+                                                <span style="font-size:0.78rem;">Folha:</span>
+                                                <input type="number" id="ped-refazer-de" aria-label="Folha inicial" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 5" oninput="onRefazerFolhaChange()" title="Primeira folha do intervalo. A prévia pula para ela.">
+                                                <span style="font-size:0.78rem;">Até:</span>
+                                                <select id="ped-refazer-set-ate" aria-label="Set final" class="form-control" style="width:auto;padding:2px 6px;height:28px;font-size:0.8rem;" onchange="sincronizarLimitesRefazer()">
+                                                    <option value="">Mesmo set</option>
+                                                </select>
+                                                <span style="font-size:0.78rem;">Folha:</span>
+                                                <input type="number" id="ped-refazer-ate" aria-label="Folha final" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 10" oninput="sincronizarLimitesRefazer()">
+                                                <span id="ped-refazer-total" role="status" style="flex-basis:100%;font-size:0.72rem;white-space:normal;"></span>
+                                            </div>
 
                                         <label style="font-size: 0.75rem; margin-bottom: 0; display: flex; align-items: center; gap: 4px; cursor: pointer;" title="Refaz itens escolhidos pela POSIÇÃO no modelo (o 1º, o 6º, o 22º ticket). Eles são compactados: preenchem a folha célula a célula, sem espaço em branco.">
                                             <input type="checkbox" id="ped-refazer-cel-checkbox" onchange="onRefazerToggle('celulas')">

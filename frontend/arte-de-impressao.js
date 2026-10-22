@@ -178,6 +178,9 @@
     // Capacidade do motor, e nao a versao da tela, determina o PDF gerado.
     function conferirRecursosDoMotor(dados, info) {
         const capacidades = Array.isArray(info?.capabilities) ? info.capabilities : [];
+        if (dados.refazer_set_ate != null && !capacidades.includes('refazer_intervalo_sets_v1')) {
+            throw new Error('Atualize o NewProd desta estação para refazer um intervalo entre sets. Nenhuma folha foi enviada.');
+        }
         const versao = String(info?.version || '').replace(/^NewProd\s+/i, '');
         const artes = dados.multi_artes || [];
         const alvos = artes.length ? artes : [dados];
