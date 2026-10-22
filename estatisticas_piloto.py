@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, Response
 from pacotes_locais import _sem_links, LimiteRecursoExcedido
+from catalogo_revisoes import CatalogoCheio
 
 
 def _erro_diagnosticado(status, detalhe, erro, etapa, corpo):
@@ -215,6 +216,8 @@ def criar_router_estatisticas(servico):
             raise _erro_diagnosticado(409, 'Pedido não conferido. Reabra e tente novamente.', erro, etapa, corpo) from None
         except LimiteRecursoExcedido as erro:
             raise _erro_diagnosticado(413, erro.detalhe, erro, etapa, corpo) from None
+        except CatalogoCheio as erro:
+            raise _erro_diagnosticado(422, {'codigo': 'catalogo_local_cheio'}, erro, etapa, corpo) from None
         except (ValueError, KeyError, TypeError, StopIteration) as erro:
             raise _erro_diagnosticado(422, 'Pedido ou pacote local incompatível.', erro, etapa, corpo) from None
         except OSError as erro:

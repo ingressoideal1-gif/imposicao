@@ -37,6 +37,14 @@ class SelecaoPiloto:
             self._lock.release()
 
     def _preparar_item(self, dados, item, *, conferido_em=None, recursos_anteriores=None):
+        if item:
+            with self.servico.proteger_antecipacao(item):
+                return self._preparar_item_protegido(dados, item, conferido_em=conferido_em,
+                                                     recursos_anteriores=recursos_anteriores)
+        return self._preparar_item_protegido(dados, item, conferido_em=conferido_em,
+                                             recursos_anteriores=recursos_anteriores)
+
+    def _preparar_item_protegido(self, dados, item, *, conferido_em=None, recursos_anteriores=None):
         s = self.servico
         cliente = s.coleta_autonoma.cliente
         if not item or item['observacao']['digest'] != dados['digest']:

@@ -105,6 +105,9 @@
             }
             const codigo = r.headers.get('X-NewProd-Diagnostico') || '';
             const referencia = /^D-[a-f0-9]{12}$/.test(codigo) ? ' Informe ao suporte o codigo ' + codigo + '.' : '';
+            if (detalhe?.codigo === 'catalogo_local_cheio') {
+                throw Error('O catálogo local está cheio e não há revisões antigas que possam ser arquivadas com segurança.' + referencia);
+            }
             throw Error('Nao foi possivel abrir o pedido (HTTP ' + r.status + ').' + referencia);
         }
         const resposta = await r.json();

@@ -9,6 +9,8 @@ import threading
 import tempfile
 import hashlib
 import re
+from contextlib import contextmanager
+from catalogo_revisoes import reservar_vaga
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -57,6 +59,40 @@ class ServicoPacotes:
         self._acordar = threading.Event()
         self._thread = None
         self.erro_catalogo = False
+        self._revisoes_em_uso = {}
+
+    @staticmethod
+    def _configuracao_antecipacao(item):
+        return {'tipo': 'antecipacao_online', 'fontes': item['fontes'], 'observacao': item['observacao'],
+                'preparacao_completa': False, 'aprovacao_versionada': False}
+
+    @contextmanager
+    def proteger_antecipacao(self, item):
+        cfg = self._configuracao_antecipacao(item)
+        revisao = hashlib.sha256(json.dumps(cfg, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        chave = (item['modelo'], revisao)
+        with self.preparador._cv:
+            self._revisoes_em_uso[chave] = self._revisoes_em_uso.get(chave, 0) + 1
+        try:
+            yield
+        finally:
+            with self.preparador._cv:
+                self._revisoes_em_uso[chave] -= 1
+                if not self._revisoes_em_uso[chave]:
+                    del self._revisoes_em_uso[chave]
+
+    def _reservar_vaga(self, con, manifesto):
+        # Também conferir a imutabilidade quando uma revisão arquivada reaparece.
+        anterior = con.execute('SELECT conteudo FROM catalogo_arquivo WHERE modelo=? AND revisao=?',
+                               (manifesto['modelo'], manifesto['revisao'])).fetchone()
+        if anterior and json.loads(anterior[0])['manifesto'] != manifesto:
+            raise ValueError('Revisão imutável.')
+        with self.preparador._cv:
+            protegidas = set(self._revisoes_em_uso)
+            protegidas.update((k[1], k[2]) for k in self.preparador._tarefas)
+            if self.preparador._ativo:
+                protegidas.add(tuple(self.preparador._ativo[1:]))
+            reservar_vaga(con, self.limite_catalogo, protegidas)
 
     def antecipar(self, item, authorization=None, *, _conferidor=None):
         """Snapshot limitado do catálogo online. Não recebe credenciais ou aprova impressão."""
@@ -83,8 +119,7 @@ class ServicoPacotes:
             raise ValueError('Modelo não aprovado na consulta.')
         conferidor = _conferidor or self.conferir
         conferido_em = conferidor(item, authorization) if conferidor else None
-        cfg = {'tipo': 'antecipacao_online', 'fontes': fontes, 'observacao': observacao,
-               'preparacao_completa': False, 'aprovacao_versionada': False}
+        cfg = self._configuracao_antecipacao(item)
         revisao = hashlib.sha256(json.dumps(cfg, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         m = dict(schema=1, empresa=self.empresa, modelo=modelo, revisao=revisao,
                  configuracao=cfg, arquivos={'frente': None, 'verso': None})
@@ -116,6 +151,9 @@ class ServicoPacotes:
         con = sqlite3.connect(self.raiz / 'catalogo.sqlite3', timeout=15)
         con.execute('PRAGMA synchronous=FULL')
         con.execute('CREATE TABLE IF NOT EXISTS catalogo ('
+                    'modelo TEXT NOT NULL,revisao TEXT NOT NULL,conteudo TEXT NOT NULL,'
+                    'PRIMARY KEY(modelo,revisao))')
+        con.execute('CREATE TABLE IF NOT EXISTS catalogo_arquivo ('
                     'modelo TEXT NOT NULL,revisao TEXT NOT NULL,conteudo TEXT NOT NULL,'
                     'PRIMARY KEY(modelo,revisao))')
         con.execute('CREATE TABLE IF NOT EXISTS origens ('
@@ -354,8 +392,8 @@ class ServicoPacotes:
                                    (m['modelo'], m['revisao'])).fetchone()
             if anterior and json.loads(anterior[0])['manifesto'] != m:
                 raise ValueError('Revisão imutável.')
-            if not anterior and con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= self.limite_catalogo:
-                raise ValueError('Limite do catálogo piloto atingido.')
+            if not anterior:
+                self._reservar_vaga(con, m)
             con.execute('INSERT OR REPLACE INTO catalogo VALUES (?,?,?)', (m['modelo'], m['revisao'], texto))
             con.commit()
             self.preparador.atualizar_agenda(m, setor=setor,
@@ -447,8 +485,8 @@ class ServicoPacotes:
                                    (m['modelo'], m['revisao'])).fetchone()
             if anterior and json.loads(anterior[0])['manifesto'] != m:
                 raise ValueError('Revisão imutável.')
-            if not anterior and con.execute('SELECT COUNT(*) FROM catalogo').fetchone()[0] >= self.limite_catalogo:
-                raise ValueError('Catálogo do piloto cheio.')
+            if not anterior:
+                self._reservar_vaga(con, m)
             for nome in recursos:
                 info = m['arquivos'][nome]
                 import shutil
