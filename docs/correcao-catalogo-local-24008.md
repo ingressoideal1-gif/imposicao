@@ -53,10 +53,25 @@ conferidos dentro do executável; o provisionamento QR v2 continua incluído.
 - SHA-256: `27070849074ac5d55ec3afc53e1bb64716b1f78157463239ca056692c4653525`.
 
 A correção do painel é servida pelo agente empacotado. Não exige deploy do site
-nem de Edge Functions. Publicação e adoção nas estações serão registradas após
-a conferência dos downloads e dos manifestos. Não foi feita limpeza manual do
+nem de Edge Functions. A publicação foi confirmada conforme registro abaixo. Não foi feita limpeza manual do
 catálogo real nem reinício do aplicativo.
 
 Validação de release: as três identidades históricas passaram com 1.153 testes,
 2 pulados, 1 aviso de depreciação e 2 subtestes cada, além dos harnesses
 JavaScript correspondentes. As três identidades recebem o mesmo instalador.
+
+## Publicação confirmada — 22/10/2026
+
+Fonte publicada no commit `63b5fc93`, tag `agente-v1.3.29`, branch
+`release/newprod-1.3.29-catalogo-local`. MSI publicado nos dois endereços
+históricos; ambos os downloads completos corresponderam ao tamanho e SHA-256
+acima antes de ativar os avisos. Os três manifestos foram relidos com parâmetro
+anticache e confirmaram 1.3.29, sem restrição por estação.
+
+Evidências e cópias dos manifestos anteriores: `dist/publicacao-unica-1.3.29-*/`.
+A publicação usou a credencial de Storage já configurada; não alterou secrets,
+Edge Functions, dados comerciais ou catálogos de estações diretamente.
+
+Às 11h59 (São Paulo), nenhuma estação ainda informava 1.3.29. PC-JR-HOME e
+LASER-01 informavam 1.3.28; TEX-01, 1.3.27. A instalação, a abertura real do
+24008 no NewProd e a impressão permanecem sem confirmação desta release.
