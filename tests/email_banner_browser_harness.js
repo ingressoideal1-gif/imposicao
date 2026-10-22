@@ -34,9 +34,11 @@ function extrair(nome, async = false) {
                 return true;
             }
             function clearAmostrasOS() { window.fechamentos++; state.amostrasOSAtivo = null; }
+            function showView() {}
             function pedidoCancelado() { return false; }
             function pedidoSaiuDaArte() { return false; }
             function modeloEmCorrecaoDeArte() { return false; }
+            function modeloEstaAprovado() { return false; }
             function toast(msg) { window.avisos.push(msg); }
             const supabaseClient = {
                 auth:{getSession:async()=>({data:{session:{access_token:'sintetico'}}})},
@@ -47,17 +49,20 @@ function extrair(nome, async = false) {
                     return {
                         update(dados) { payload = dados; return this; },
                         eq(campo, valor) { filtros[campo] = valor; return this; },
+                        in() { return this; },
                         select() {
+                            if (!payload) return this;
                             window.gravacoes.push({tabela,payload,filtros});
                             if (opcoes.erroStatus) return {data:[],error:null};
                             if (tabela === 'pedidos_links_cliente') {
                                 if (filtros.os_id !== 'vibe_11' || filtros.ativo !== true) throw new Error('Link sem filtro');
                                 statusLink = payload.status_arte;
-                                return {data:[{id:'link-11',os_id:'vibe_11',status_arte:statusLink}]};
+                                return {data:[{id:'link-11',os_id:'vibe_11',status_arte:statusLink,cliente_abriu_em:null}]};
                             }
                             if (filtros.id_int !== 11) throw new Error('Arte sem filtro');
                             return {data:[{id:'arte-11',status:payload.status}]};
-                        }
+                        },
+                        then(resolve) { resolve({data:[{id:'link-11'}],error:null}); }
                     };
                 }
             };
@@ -112,12 +117,12 @@ function extrair(nome, async = false) {
         await page.evaluate(() => resolverEnvio());
         await page.waitForSelector('#modal-email-sucesso[open]');
         assert.equal(await page.$eval('#modal-email-sucesso-destinatario', e=>e.textContent),'cliente@example.com');
-        assert.equal(await page.evaluate(() => retornos.length),0,'Aguarda confirmação do operador');
+        assert.equal(await page.evaluate(() => retornos.length),1,'Retorna ao atendimento logo após o aceite');
         await page.click('#modal-email-sucesso button');
         await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
         assert.equal(await page.evaluate(() => state.amostrasOSAtivo),null,'Confirmação fecha o pedido');
-        assert.deepEqual(await page.evaluate(() => gravacoes),[],'Envio e confirmação não gravam status');
-        assert.deepEqual(await page.evaluate(() => retornos),[],'Confirmação não prepara registro de arte');
+        assert.equal(await page.evaluate(() => gravacoes.length),2,'Envio grava arte e link');
+        assert.equal(await page.evaluate(() => retornos.length),1,'Envio prepara registro de arte');
         assert.equal(await page.evaluate(() => envios.length),1);
         assert.deepEqual(await page.evaluate(() => classificarPedidoNaArte(state.ordens[0])),
             {statusCalculado:'Enviar Arte',fila:'aprovacao'},'Sem interação permanece Enviar Arte');
@@ -162,8 +167,8 @@ function extrair(nome, async = false) {
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => !document.getElementById('modal-email-sucesso'));
         assert.equal(await page.evaluate(() => state.amostrasOSAtivo),'vibe_99','Retorno do envio não fecha outro pedido');
-        assert.equal(await page.evaluate(() => fechamentos),1);
-        assert.deepEqual(await page.evaluate(() => gravacoes),[],'Escape também não grava status');
+        assert.equal(await page.evaluate(() => fechamentos),2);
+        assert.equal(await page.evaluate(() => gravacoes.length),4,'Escape não repete a gravação');
         assert.equal(await page.evaluate(() => envios.length),3,'Escape conclui sem reenviar');
         assert.deepEqual(erros,[]);
         console.log('OK: banner envia sem editor; sucesso após aceite, duplicidade, cadastro inválido, preparo e falha');

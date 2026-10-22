@@ -25,6 +25,7 @@ function extrair(nome, async = false) {
             window.modelos = []; window.consultas = []; window.cadastros = {};
             function toast(msg) { avisos.push(msg); }
             function mostrarSucessoEnvioEmail(to) { sucessos.push(to); }
+            async function concluirEnvioLinkParaAtendimento(osId) { window.retornoEmail = osId; }
             async function buscarDadosEmailCliente(osId) {
                 if (cadastros[osId]) await cadastros[osId];
                 return {clienteNome:'Cliente Exemplo',clienteEmail:'cliente@example.com',atendente:'Atendimento'};
@@ -99,6 +100,7 @@ function extrair(nome, async = false) {
         }
         await page.evaluate(() => dispararEmailDiretoCliente());
         const enviado = await page.evaluate(() => envios[0]);
+        assert.equal(await page.evaluate(() => retornoEmail), enviado.os_id, 'Envio das artes também retorna o pedido ao atendimento');
         if (preview) fs.writeFileSync(preview + '/pedido-sintetico.json', JSON.stringify(enviado));
         assert.equal(enviado.modo, 'artes_corpo');
         assert.equal(enviado.link_url, undefined);
