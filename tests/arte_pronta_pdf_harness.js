@@ -29,8 +29,9 @@ function fixture(mode, pages, changes = {}) {
     };
     ctx.window = ctx;
     vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/cor-numeracao-do-modelo.js'), 'utf8'), ctx);
     for (const name of ['temVerso', 'versoUnico', 'modoDeVersoDoModelo']) vm.runInContext(extract(pedido, name), ctx);
-    for (const name of ['assinaturaDoPdfParaPronto', 'validarPaginasDoPdfParaPronto', 'decisionAmostraItem']) vm.runInContext(extract(main, name), ctx);
+    for (const name of ['pdfImparFrenteVersoParDoModelo', 'assinaturaDoPdfParaPronto', 'validarPaginasDoPdfParaPronto', 'decisionAmostraItem']) vm.runInContext(extract(main, name), ctx);
     return { ctx, item, calls, notices };
 }
 (async () => {
@@ -60,6 +61,22 @@ function fixture(mode, pages, changes = {}) {
         await f.ctx.decisionAmostraItem(1, 'os', 'PRONTO');
         assert(!f.calls.includes('save'), fail); cases++;
     }
+    // Regressão: Ímpar/Par não pode escapar da trava com Modo PDF desligado.
+    for (const emLote of [false, true]) {
+        const f = fixture('pdf_odd_even', 80, { modo_pdf: false, qtd: 40 });
+        await f.ctx.decisionAmostraItem(1, 'os', 'PRONTO', { emLote });
+        assert(!f.calls.includes('save'), 'Ímpar/Par sem Modo PDF não grava PRONTO');
+        assert(!f.calls.includes('snapshot'));
+        assert(!f.calls.includes('fetch'));
+        assert(f.notices.some(n => n.includes('exige Modo PDF e regra Pdf Paginado')));
+        cases++;
+    }
+    const missing = fixture('pdf_odd_even', 80, { modo_pdf: false, qtd: 40 });
+    missing.ctx.state.numeracoes = [];
+    await missing.ctx.decisionAmostraItem(1, 'os', 'PRONTO');
+    assert(!missing.calls.includes('save'), 'numeração ausente não pode liberar o modelo');
+    assert(missing.notices.some(n => n.includes('Recarregue a numeração')));
+    cases++;
     const conventional = fixture('front', 1, { modo_pdf: false });
     await conventional.ctx.decisionAmostraItem(1, 'os', 'PRONTO');
     assert(conventional.calls.includes('save'));

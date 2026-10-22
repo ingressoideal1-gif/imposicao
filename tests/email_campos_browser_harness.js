@@ -58,6 +58,7 @@ function extrair(nome) {
                 return {vendedor:window.vendedorProposta,cliente:null};
             }
             function abrirModalConfigEmail() {}
+            async function concluirEnvioLinkParaAtendimento() {}
             function toast() {}
             const state = {ordens:[{id:'vibe_11',numero:11,cliente:'Cliente de Exemplo'}],todasArtes:[],osItens:{}};
             window.fetch = () => new Promise(resolve => {window.resolverEnvio = resolve;});

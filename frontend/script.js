@@ -41292,11 +41292,17 @@ function assinaturaDoPdfParaPronto(item) {
 // Confere o original no clique, inclusive em lote; o viewer pode estar fechado
 // ou conter um arquivo anterior. Nunca usa a imagem da amostra como contagem.
 async function validarPaginasDoPdfParaPronto(item) {
-    if (!item?.modo_pdf) return;
+    if (!item) throw new Error('Modelo não carregado. Atualize a tela e tente novamente.');
     const numeracaoId = numeracaoIdDoItem(item);
     if (numeracaoId && !(state.numeracoes || []).some(n => String(n.id) === String(numeracaoId))) {
         throw new Error('Não foi possível conferir o modo de impressão. Recarregue a numeração do modelo.');
     }
+    // Confira a configuração antes de dispensar os modelos convencionais:
+    // Ímpar/Par exige Modo PDF mesmo quando o original tem páginas suficientes.
+    if (pdfImparFrenteVersoParDoModelo(item) && !item.modo_pdf) {
+        throw new Error('PDF Ímpar Frente e Verso Par exige Modo PDF e regra Pdf Paginado. Ative o Modo PDF do modelo antes de marcar PRONTO.');
+    }
+    if (!item.modo_pdf) return;
     const quantidade = Number(item.qtd ?? item.quantidade);
     if (!Number.isSafeInteger(quantidade) || quantidade < 1) {
         throw new Error('Informe uma quantidade inteira e positiva para o modelo.');
@@ -41349,7 +41355,7 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
         const idxAlvo = itens.findIndex(i => String(i.id) === String(itemId));
         const itemAlvo = idxAlvo >= 0 ? itens[idxAlvo] : null;
 
-        if (itemAlvo?.modo_pdf) {
+        {
             try {
                 await garantirTabelasDaAmostra();
                 pdfConferido = assinaturaDoPdfParaPronto(itemAlvo);
@@ -43572,11 +43578,54 @@ async function abrirEmailArtesCorpoBanner() {
 }
 window.abrirEmailArtesCorpoBanner = abrirEmailArtesCorpoBanner;
 
-// Confirmar o envio apenas fecha o pedido. "Em Aprovação" depende da
-// abertura e interação do cliente no portal, registradas por link_cliente_visto.
+// Depois do aceite do e-mail, devolver a arte ao atendimento. Não alterar os
+// modelos nem regredir pedidos que já saíram da arte.
 async function concluirEnvioLinkParaAtendimento(osId) {
+    const os = state.ordens.find(o => o.id === osId);
+    if (!os) throw new Error('Pedido não encontrado. Atualize a lista para conferir o retorno.');
+    const itens = state.osItens[osId] || [];
+    if (pedidoCancelado(os) || pedidoSaiuDaArte(os) || itens.some(modeloEmCorrecaoDeArte)
+        || (itens.length > 0 && itens.every(modeloEstaAprovado))) return;
+    const numero = parseInt(os.numero || os.id_int, 10);
+    if (!await garantirLinhaDePedidoArte(numero)) throw new Error('Não foi possível preparar o registro da arte.');
+    const artes = await atualizarPedidoArteConfirmado(numero, { status: 'Enviar Arte' });
+    const { data: links, error: erroLinks } = await supabaseClient.from('pedidos_links_cliente')
+        .select('id').eq('os_id', osId).eq('ativo', true);
+    if (erroLinks) throw erroLinks;
+    if (!Array.isArray(links)) throw new Error('Não foi possível conferir o link do pedido.');
+    if (links.length) {
+        const { data, error } = await supabaseClient.from('pedidos_links_cliente')
+            .update({ status_arte: 'Enviar Arte', cliente_abriu_em: null })
+            .eq('os_id', osId).eq('ativo', true).in('id', links.map(link => link.id))
+            .select('id, status_arte, cliente_abriu_em');
+        if (error) throw error;
+        if (!Array.isArray(data) || links.some(link => !data.some(row =>
+            row.id === link.id && row.status_arte === 'Enviar Arte' && row.cliente_abriu_em === null))) {
+            throw new Error('O banco não confirmou Enviar Arte no link do pedido.');
+        }
+    }
+    if (!osId.startsWith('vibe_')) {
+        const { data, error } = await supabaseClient.from('producao_ordens_servico')
+            .update({ status: 'Enviar Arte' }).eq('id', osId).select('id, status');
+        if (error) throw error;
+        if (!Array.isArray(data) || data.length !== 1 || data[0].id !== osId || data[0].status !== 'Enviar Arte') {
+            throw new Error('O banco não confirmou Enviar Arte na ordem de serviço.');
+        }
+    }
+    const anteriores = state.todasArtes || [];
+    state.todasArtes = anteriores.filter(arte => parseInt(arte.id_int, 10) !== numero)
+        .concat(artes.map(arte => ({ ...anteriores.find(anterior => anterior.id === arte.id), ...arte, id_int: numero })));
+    if (state.linksClienteData?.[osId]) {
+        Object.assign(state.linksClienteData[osId], { status_arte: 'Enviar Arte', cliente_abriu_em: null });
+    }
+    gravarStatusOverride(osId, 'Enviar Arte');
+    os.status = 'Enviar Arte';
+    if (window._activeEmailModalData?.osId === osId) fecharModalEnviarEmailCliente();
     // O envio pode terminar depois de o operador abrir outro pedido.
-    if (state.amostrasOSAtivo === osId) clearAmostrasOS();
+    if (state.amostrasOSAtivo === osId) {
+        clearAmostrasOS();
+        showView('view-lista-arte');
+    }
 }
 
 /**
@@ -44480,7 +44529,16 @@ async function enviarMensagemEmailCliente(dados, origem, aoConfirmar = null) {
     if (assinatura === emailUltimoEnvioAceito) throw new Error('Esta mensagem já foi aceita pelo servidor. Confira o recebimento antes de preparar um novo envio.');
     await requisitarEmail('enviar', dados);
     emailUltimoEnvioAceito = assinatura;
-    mostrarSucessoEnvioEmail(dados.to, origem, aoConfirmar);
+    const concluir = aoConfirmar || (() => concluirEnvioLinkParaAtendimento(dados.os_id));
+    try {
+        await concluir();
+    } catch (e) {
+        mostrarSucessoEnvioEmail(dados.to, origem, concluir);
+        toast('O e-mail já foi enviado, mas o retorno ao atendimento está pendente: '
+            + e.message + ' Clique em Entendido para tentar concluir sem reenviar.', 'warning');
+        return;
+    }
+    mostrarSucessoEnvioEmail(dados.to, origem);
 }
 
 window.abrirModalConfigEmail = abrirModalConfigEmail;
