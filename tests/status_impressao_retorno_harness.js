@@ -48,6 +48,21 @@ function ambiente(resposta, conectado = true) {
 }
 (async () => {
     const {ctx} = ambiente(null);
+    for (const nome of ['formatarDataHoraStatus', 'horaStatusImpressao', 'ultimaHoraStatus', 'carimboStatusHtml', 'rotuloStatusComHora']) {
+        vm.runInContext(extract(nome), ctx);
+    }
+    assert.equal(ctx.formatarDataHoraStatus('2026-10-23T00:30:00Z'), '22/10 21:30h');
+    assert.equal(ctx.formatarDataHoraStatus('invalida'), '');
+    assert.equal(ctx.formatarDataHoraStatus(null), '');
+    assert.equal(ctx.horaStatusImpressao({status_impressao: 'Impresso', status_impressao_registrado_em: '2026-10-23T00:30:00Z', _confirmacaoLocalPendente: true}), '', 'Confirmacao local pendente nao exibe o horario do status anterior');
+    for (const status of ['Aguardando', 'Impresso', 'Corrigir Arte']) {
+        const item = {status_impressao: status, status_impressao_registrado_em: '2026-10-23T00:30:00Z'};
+        assert.equal(ctx.rotuloStatusComHora(status, status, item), status + ' (22/10 21:30h)');
+    }
+    assert.equal(ctx.horaStatusImpressao({status_impressao: 'Aguardando', status_impressao_em: '2026-10-23T00:30:00Z'}), '');
+    assert.equal(ctx.ultimaHoraStatus(['2026-10-23T00:30:00Z', '2026-10-22T20:00:00Z']), '2026-10-23T00:30:00.000Z');
+    assert.equal(ctx.ultimaHoraStatus(['2026-10-23T00:30:00Z', null]), '');
+    assert.equal(ctx.carimboStatusHtml('invalida'), '');
     // Antes: resumo AGUARD.; depois: modelos com status_producao=PENDENTE.
     const predicate = script.match(/const matchStatus = (itens\.some\([\s\S]*?);/)[1];
     ctx.state.filtroStatus = 'AGUARD.';
@@ -66,7 +81,7 @@ function ambiente(resposta, conectado = true) {
     ctx.itens=[{impressao:'Impresso'}];
     assert.equal(vm.runInContext(predicate,ctx),false,'divergência não entra no filtro Aguardando');
 
-    const sucesso = {data: [{id: 123, id_int: 999, status_impressao: 'Impresso'}], error: null};
+    const sucesso = {data: [{id: 123, id_int: 999, status_impressao: 'Impresso', status_impressao_registrado_em: '2026-10-23T00:30:00Z'}], error: null};
     for (const name of ['pedQueueUpdateField', 'impQueueUpdateField', 'autoSaveOSItemField']) {
         let liberar;
         const a = ambiente(new Promise(resolve => { liberar = resolve; }));
@@ -77,6 +92,8 @@ function ambiente(resposta, conectado = true) {
         assert.equal(await pendente, true);
         assert.equal(a.item.impressao, 'Impresso');
         assert.equal(a.global.status_impressao, 'Impresso');
+        assert.equal(a.item.status_impressao_registrado_em, '2026-10-23T00:30:00Z');
+        assert.equal(a.global.status_impressao_registrado_em, a.item.status_impressao_registrado_em);
         assert.equal(a.writes.filter(x => Array.isArray(x) && x[0] === 'id_int')[0][1], 999);
 
         for (const resposta of [

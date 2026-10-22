@@ -45,7 +45,7 @@ export async function listaOffline(entrada:any, operador:any, consultar=banco,
   }
   const [origens,modelos,prazos,artes]=await Promise.all([
     lotes('produtos_proposta','id,id_int,id_produto,nome_produto,modelo_descri,qtd,created_at,updated_at,amostra_cor_id,amostra_num_id,amostra_status,amostra_obs,amostra_arte_base64,arte_url','id_int',ids),
-    lotes('pedidos_modelos','id,id_int,id_produto_proposta_origem,status_arte,status_impressao,status_impressao_em,status_producao,quantidade,ordem,nome_modelo,amostra_num_id,amostra_arte_base64,arte_url','id_int',ids),
+    lotes('pedidos_modelos','id,id_int,id_produto_proposta_origem,status_arte,status_impressao,status_impressao_em,status_impressao_registrado_em,status_producao,quantidade,ordem,nome_modelo,amostra_num_id,amostra_arte_base64,arte_url','id_int',ids),
     lotes('propostas_os','id,id_int,data_termino,codigo_rastreamento','id_int',ids),
     lotes('pedidos_artes','id,id_int,status,nome_evento,designer_nome,designer_uid,entrega_dados','id_int',ids)
   ]);

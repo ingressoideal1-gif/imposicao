@@ -5353,7 +5353,7 @@ function renderPedOSQueue(opcoes = {}) {
                             ${temCamarote
                                 ? th('Q_CAM', L_NUM) + th('L_CAM', L_NUM) + th('C_INI', L_NUM) + th('Bloco', L_NUM)
                                 : th('Qtd', L_NUM) + th('N. inicial', L_NUM) + th('N. final', L_NUM) + th('Bloco', L_NUM)}
-                            ${th('Cor', L_COR)}${th('Numeração', 200)}${th('Verso', 120)}${th('Status', 150)}
+                            ${th('Cor', L_COR)}${th('Numeração', 200)}${th('Verso', 120)}${th('Status', 285)}
                         </tr>
                     </thead>`;
 
@@ -5620,17 +5620,17 @@ function renderPedOSQueue(opcoes = {}) {
                         </div>
                         ${modoIncompativel ? `<div class="ped-modo-incompativel-vibe" role="alert" style="padding:6px 8px;color:#fef3c7;background:#422006;border:1px solid #fbbf24;border-radius:4px;font-size:0.8rem;white-space:normal;overflow-wrap:anywhere;">Incompatível com o pedido: ${escHtmlSimples(item.verso_tipo)}. Ajuste a numeração ou o pedido no Vibe.</div>` : ''}
                     </td>
-                    <td style="padding: 6px; width: 150px; min-width: 150px;" title="Status de Produção">
+                    <td style="padding: 6px; width: 285px; min-width: 285px;" title="Status de Produção">
                         <div style="display: flex; align-items: center; gap: 6px;">
                             ${rot('Status')}
                             <select style="${selectStyle}" onchange="pedQueueUpdateField('${item.id}', '${osId}', 'status_impressao', this.value)" onclick="event.stopPropagation()">
-                                <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>Aguardando</option>
-                                <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>Impresso</option>
+                                <option value="Aguardando" ${normalizarStatusImpressao(item.status_impressao) === 'Aguardando' ? 'selected' : ''}>${rotuloStatusComHora('Aguardando', 'Aguardando', item)}</option>
+                                <option value="Impresso" ${normalizarStatusImpressao(item.status_impressao) === 'Impresso' ? 'selected' : ''}>${rotuloStatusComHora('Impresso', 'Impresso', item)}</option>
                                 <!-- O terceiro status (02/09/2026): a produção achou erro na
                                      arte e devolve o modelo ao designer. Trava a impressão
                                      DESTE modelo e traz o pedido de volta para o card "Em
                                      Arte". Ver STATUS_CORRIGIR_ARTE no script.js. -->
-                                <option value="Corrigir Arte" ${typeof modeloEmCorrecaoDeArte === 'function' && modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
+                                <option value="Corrigir Arte" ${typeof modeloEmCorrecaoDeArte === 'function' && modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>${rotuloStatusComHora('🎨 Corrigir Arte', 'Corrigir Arte', item)}</option>
                             </select>
                         </div>
                     </td>

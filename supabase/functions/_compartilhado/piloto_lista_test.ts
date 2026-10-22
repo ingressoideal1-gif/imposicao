@@ -45,3 +45,22 @@ Deno.test('lista: nome oficial do produto acompanha o catalogo e altera a revisa
   assert.equal(novo.sem_mudanca,false);
   assert.equal(novo.lista?.produtos[0].nomeReal,nome);
 });
+
+Deno.test('lista: horario persistido acompanha o status e muda a revisao local',async()=>{
+  const a=ambiente(); let hora='2026-10-23T00:30:00Z';
+  const banco:any=async(method:string,path:string)=>{
+    if(path.startsWith('pedidos_modelos?')) {
+      assert.equal(method,'GET');
+      const campos=new URL('https://local/'+path).searchParams.get('select')!.split(',');
+      assert(campos.includes('status_impressao_registrado_em'));
+      return [{id:1,id_int:100,status_impressao:'Aguardando',status_impressao_registrado_em:hora}];
+    }
+    return a.banco(method,path);
+  };
+  const primeiro=await listaOffline({empresa:'teste',revisao:''},op,banco,'teste','1');
+  assert.equal(primeiro.lista?.modelos[0].status_impressao_registrado_em,hora);
+  hora='2026-10-23T01:30:00Z';
+  const novo=await listaOffline({empresa:'teste',revisao:primeiro.revisao},op,banco,'teste','1');
+  assert.equal(novo.sem_mudanca,false);
+  assert.equal(novo.lista?.modelos[0].status_impressao_registrado_em,hora);
+});
