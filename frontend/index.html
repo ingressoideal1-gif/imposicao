@@ -2288,15 +2288,20 @@
                                                 <input type="checkbox" id="ped-refazer-checkbox" onchange="onRefazerToggle('folhas')" style="width:16px;height:16px;cursor:pointer;">
                                                 Refazer Folhas
                                             </label>
-                                            <div id="ped-refazer-inputs" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 10px 22px;">
-                                                <select id="ped-refazer-set" class="form-control" style="width:auto;padding:2px 6px;height:28px;font-size:0.8rem;display:none;" onchange="onRefazerFolhaChange()">
+                                            <div id="ped-refazer-inputs" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0;">
+                                                <span style="font-size:0.78rem;">De:</span>
+                                                <select id="ped-refazer-set" aria-label="Set inicial" class="form-control" style="width:auto;padding:2px 6px;height:28px;font-size:0.8rem;display:none;" onchange="onRefazerFolhaChange()">
                                                     <option value="1">Set 1</option>
                                                 </select>
-                                                <span style="font-size:0.78rem;color:var(--text-dim);">De:</span>
-                                                <input type="number" id="ped-refazer-de" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 5" oninput="onRefazerFolhaChange()" title="Primeira folha da faixa. A pr&eacute;via pula para ela assim que voc&ecirc; digita.">
-                                                <span style="font-size:0.78rem;color:var(--text-dim);">At&eacute;:</span>
-                                                <input type="number" id="ped-refazer-ate" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 10">
-                                                <span id="ped-refazer-total" style="flex-basis:100%;font-size:0.72rem;color:var(--text-dim);"></span>
+                                                <span style="font-size:0.78rem;">Folha:</span>
+                                                <input type="number" id="ped-refazer-de" aria-label="Folha inicial" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 5" oninput="onRefazerFolhaChange()" title="Primeira folha do intervalo. A prévia pula para ela.">
+                                                <span style="font-size:0.78rem;">Até:</span>
+                                                <select id="ped-refazer-set-ate" aria-label="Set final" class="form-control" style="width:auto;padding:2px 6px;height:28px;font-size:0.8rem;" onchange="sincronizarLimitesRefazer()">
+                                                    <option value="">Mesmo set</option>
+                                                </select>
+                                                <span style="font-size:0.78rem;">Folha:</span>
+                                                <input type="number" id="ped-refazer-ate" aria-label="Folha final" class="form-control" style="width:64px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" min="1" placeholder="Ex: 10" oninput="sincronizarLimitesRefazer()">
+                                                <span id="ped-refazer-total" role="status" style="flex-basis:100%;font-size:0.72rem;white-space:normal;"></span>
                                             </div>
 
                                             <label style="font-size:0.8rem;margin-bottom:0;display:flex;align-items:center;gap:6px;cursor:pointer;" title="Refaz itens escolhidos pela POSICAO no modelo (o 1o, o 6o, o 22o ticket). Eles sao compactados: preenchem a folha celula a celula, sem espaco em branco.">
@@ -4590,12 +4595,12 @@
     <script src="banco-do-modelo.js?v=948"></script>
     <script src="teatro-banco.js?v=1034"></script>
     <script src="teatro-snapshot.js?v=1042"></script>
-    <script src="mapa-teatro-do-pedido.js?v=1098"></script>
+    <script src="mapa-teatro-do-pedido.js?v=1100"></script>
     <script src="logo-do-frete.js?v=948"></script>
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
-    <script src="pagamento-do-pedido.js?v=1098"></script>
-    <script src="arte-de-impressao.js?v=1052"></script>
+    <script src="pagamento-do-pedido.js?v=1100"></script>
+    <script src="arte-de-impressao.js?v=1100"></script>
     <script src="pacotes-locais.js?v=piloto4"></script>
     <script src="antecipacao-pedidos.js?v=piloto2"></script>
     <script src="pacote-entrada.js?v=piloto1"></script>
@@ -4632,7 +4637,7 @@
     <script src="qr-evento-envio.js?v=948"></script>
     <script src="ideal-control.js?v=1049"></script>
     <script src="criador-arte.js?v=964"></script>
-    <script src="/pedido.js?v=1098"></script>
+    <script src="/pedido.js?v=1100"></script>
     <script src="/producao-por-cor.js?v=1028"></script>
     <script src="montagem.js?v=1074"></script>
     <script src="acabamento.js?v=1098"></script>
