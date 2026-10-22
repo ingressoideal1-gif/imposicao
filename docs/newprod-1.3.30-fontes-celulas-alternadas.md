@@ -52,3 +52,19 @@ fisica. PDFs antigos precisam ser gerados novamente pelo agente corrigido.
 - Correcao confirmada no modulo engine empacotado, versao 1.3.30 e DLLs GDI.
 - ProductVersion: 1.3.30; tamanho: 196780032 bytes.
 - SHA-256 MSI: `05a379a62109564c7e05d84c9ed612eb8ae7ae3a3551a4c1bdc1d72f82d33f21`.
+
+## Publicacao confirmada em 22/10/2026
+
+- Fonte da release: `fae397b6`, tag `agente-v1.3.30` publicada.
+- PR #189 integrado em main como `7ad66c7bd5752bf76bda7870897208e6de7dfec8`,
+  apos todos os seis checks passarem, incluindo seguranca/recuperacao Windows.
+- Os dois downloads completos (Oficial e alias Teste) conferiram com o tamanho
+  e SHA-256 acima antes da ativacao dos manifestos.
+- `latest.json`, `newprod-piloto-oficial.json` e `newprod-piloto-teste.json`
+  relidos com cache-buster: 1.3.30, mesmo hash/tamanho, sem restricao por estacao.
+- Evidencias locais: dist/publicacao-unica-1.3.30-1792685100823565700/,
+  dist/verificacao-final.json, dist/msi-verificado.json e dist/auditoria-modulos.json.
+- Consulta final: nenhuma estacao consultada confirmou 1.3.30. A estacao local
+  respondeu NewProd 1.3.29 em 9001. Nenhuma instalacao/reinicializacao foi forcada.
+- Pendente operacional: atualizar a estacao, gerar novamente os PDFs e conferir
+  a impressao fisica. Os PDFs de validacao local nao comprovam papel impresso.
