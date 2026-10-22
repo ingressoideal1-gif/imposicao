@@ -1061,6 +1061,32 @@ def _rotate_rect(rect: fitz.Rect, angle: int, page: fitz.Page) -> tuple[fitz.Rec
     return mat
 
 
+def _vincular_fonte_da_pagina(page, font_name, font_xref):
+    """Fonte de um XObject importado nao pertence aos recursos da folha.
+
+    insert_font pode devolver essa fonte sem registrar /Resources/Font na
+    pagina. O texto direto entao some, embora o mesmo texto na pose girada
+    apareca. Vincular o xref retornado preserva os bytes e o nome da fonte.
+    """
+    doc = page.parent
+    alvo, caminho = page.xref, 'Resources'
+    tipo, valor = doc.xref_get_key(alvo, caminho)
+    if tipo == 'xref':
+        alvo, caminho = int(valor.split()[0]), ''
+    elif tipo == 'null':
+        doc.xref_set_key(alvo, caminho, '<<>>')
+    caminho = caminho + '/Font' if caminho else 'Font'
+    tipo, valor = doc.xref_get_key(alvo, caminho)
+    if tipo == 'xref':
+        alvo, caminho = int(valor.split()[0]), ''
+    elif tipo == 'null':
+        doc.xref_set_key(alvo, caminho, '<<>>')
+    caminho = caminho + '/' + font_name if caminho else font_name
+    referencia = f'{font_xref} 0 R'
+    if doc.xref_get_key(alvo, caminho) != ('xref', referencia):
+        doc.xref_set_key(alvo, caminho, referencia)
+
+
 def _salvar_pdf(doc, out_name):
     """Funil unico de gravacao dos PDFs de saida do engine.
 
@@ -2430,15 +2456,19 @@ class ImpositionEngine:
                 # o stream da fonte quando o mesmo xref ja existe na pagina.
                 try:
                     font_bytes = self._get_font_buffer(font_file)
-                    page.insert_font(fontname=font_name, fontbuffer=font_bytes)
+                    font_xref = page.insert_font(fontname=font_name, fontbuffer=font_bytes)
                     # insert_text usa apenas fontname — PyMuPDF encontra pelo xref ja registrado
                     # fontfile NAO e passado para evitar re-leitura do arquivo
                 except Exception as _fe:
                     # Fallback: tentar com fontfile diretamente
                     if os.path.isfile(font_file):
                         insert_kwargs["fontfile"] = font_file
+                        font_xref = page.insert_font(fontname=font_name, fontfile=font_file)
                     else:
                         raise ValueError("Fonte preparada indisponível; impressão interrompida") from _fe
+                # Fora do fallback: falha no vinculo deve interromper a geracao,
+                # nunca produzir novamente um PDF com numeros invisiveis.
+                _vincular_fonte_da_pagina(page, font_name, font_xref)
 
             # A ultima defesa contra o nome furado. Fica FORA do try acima de
             # proposito: o que ele protege e o registro da fonte, e um aviso
