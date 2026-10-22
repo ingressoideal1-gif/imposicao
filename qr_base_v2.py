@@ -18,7 +18,8 @@ def obter(legado):
         proteger_pasta(pasta)
         destino = pasta / POOL_V2_NOME
         if not destino.exists():
-            raise ValueError("QR12: base privada independente nao provisionada nesta estacao; solicite o provisionamento administrativo antes de imprimir")
+            from qr_provisionamento import obter_automaticamente
+            obter_automaticamente(destino)
         pool = PoolQR(str(destino))
         try:
             pool.verificar_integridade(POOL_V2_SHA256)

@@ -51,3 +51,42 @@ legado, necessario para reimprimir ingressos anteriores.
 A revisao intermediaria 1.2.357 usava uma derivacao que foi retirada antes de
 qualquer contrato v2. O alvo final desta entrega e 1.2.358. Ver
 [contrato, implantacao e pendencias](entrega-qr-ideal-12-caracteres-2026-10-05.md).
+
+## Provisionamento automatico da base v2
+
+O agente passa a solicitar a base v2 ao preparar um pedido que a exige, somente
+quando `qr_ideal_pool_qr12_1.bin` esta ausente. A base legada, contratos, numeracao
+e arquivos existentes permanecem intactos. Um arquivo v2 existente e divergente
+continua bloqueado: o provisionamento automatico nao o substitui.
+
+A rota `POST /functions/v1/piloto-local/base-qr-v2` usa a credencial privada ja
+provisionada no agente e o vinculo ativo da estacao. Exige as permissoes de
+producao e impressao, a empresa configurada e a inclusao explicita da estacao em
+`NEWPROD_QR_V2_ESTACOES` (nomes separados por virgula, sem curinga). Ausencia da
+configuracao bloqueia todas as estacoes. O nome enviado nao e um certificado de
+hardware: a autenticacao usa o segredo do agente e os vinculos existentes.
+
+O servidor usa `basePrivada(2)`, que le o objeto autenticado ja existente e
+confere seu tamanho e SHA-256. Nao aceita URL, bucket ou arquivo do cliente e nao
+devolve URL assinada. A resposta binaria tem `private, no-store`; requisicoes
+com Origin, inclusive localhost, sao recusadas. Sessoes de usuario e chave anon
+nao substituem a credencial do agente.
+
+O agente acessa somente a URL HTTPS fixa do projeto, recusa redirecionamentos,
+confere revisao, tamanho e SHA-256 fixos e grava um temporario dentro da pasta
+protegida. Publica o arquivo por link atomico sem sobrescrita, apos validacao.
+Uma falha capturada remove o temporario; uma corrida aceita somente o destino ja
+validado. Encerramento abrupto pode deixar um temporario na pasta protegida,
+mas nunca o promove a base utilizavel. Na tentativa seguinte, o arquivo instalado valido e reutilizado sem
+rede. A base nao entra no MSI nem nos logs. Os diagnosticos registram somente
+categorias fixas de recusa, indisponibilidade, tamanho ou integridade.
+
+Ordem de ativacao: publicar a Edge Function preservando sua autenticacao;
+configurar a lista de estacoes aprovadas no servidor; publicar o agente; conferir
+a versao instalada e uma nova abertura do pedido afetado. Nao e necessaria
+migracao nem alteracao dos contratos. Os testes locais usam apenas bytes
+sinteticos e nao comprovam o provisionamento real na grafica.
+
+Para suspender novas entregas, remover as estacoes dessa lista. Isso nao apaga
+nem revoga uma base ja instalada; a revogacao de estacao segue os controles
+existentes. Nao publicar a base no Storage publico para contornar uma recusa.

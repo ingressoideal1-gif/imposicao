@@ -22,6 +22,10 @@ class PoolSintetico:
 
 def test_base_independente_ausente_nao_deriva_do_legado(monkeypatch,tmp_path):
     import qr_base_v2,migracao_estacao
+    import qr_provisionamento
+    def indisponivel(_):
+        raise qr_provisionamento.ErroProvisionamentoQr('provisionamento_indisponivel')
+    monkeypatch.setattr(qr_provisionamento, 'obter_automaticamente', indisponivel)
     monkeypatch.setattr(qr_base_v2,"_pool",None)
     monkeypatch.setattr(migracao_estacao,"pasta_dados",lambda:tmp_path)
     monkeypatch.setattr(migracao_estacao,"proteger_pasta",lambda _:None)

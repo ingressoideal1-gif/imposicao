@@ -84,11 +84,15 @@ def test_base_legada(local, diagnosticos_isolados, conteudo, motivo):
 def test_base_v2_ausente_distinta_da_legada(local, monkeypatch, diagnosticos_isolados):
     import qr_contratos
     import qr_ideal
+    import qr_provisionamento
+    def indisponivel(_):
+        raise qr_provisionamento.ErroProvisionamentoQr('provisionamento_indisponivel')
+    monkeypatch.setattr(qr_provisionamento, 'obter_automaticamente', indisponivel)
     offline, pasta = local
     (pasta / 'base-sintetica.bin').write_bytes(b'12345678')
     monkeypatch.setattr(qr_contratos, 'obter', lambda _: [{'versao': 2}])
     monkeypatch.setattr(qr_ideal.PoolQR, 'verificar_integridade', lambda *a: None)
-    conferir_falha(offline, [{'type': 'QR_IDEAL'}], 'qr_base_v2', 'base_ausente', diagnosticos_isolados)
+    conferir_falha(offline, [{'type': 'QR_IDEAL'}], 'qr_base_v2', 'provisionamento_indisponivel', diagnosticos_isolados)
 
 
 def test_origem_fonte_recusada_sem_expor_url(local, monkeypatch, diagnosticos_isolados):

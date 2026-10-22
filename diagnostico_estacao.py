@@ -23,7 +23,9 @@ RECURSOS_LOCAIS = {'qr_contratos', 'qr_base_legada', 'qr_base_v2', 'fontes', 'de
 MOTIVOS_LOCAIS = {'contrato_recusado', 'contrato_sem_cache', 'contrato_invalido',
                   'base_ausente', 'base_integridade_invalida', 'base_tamanho_invalido',
                   'origem_fonte_recusada', 'http_recusado', 'permissao_negada',
-                  'arquivo_ausente', 'timeout', 'falha_recurso'}
+                  'arquivo_ausente', 'timeout', 'falha_recurso',
+                  'provisionamento_recusado', 'provisionamento_indisponivel',
+                  'download_incompleto', 'download_integridade_invalida'}
 
 
 def _dependencia_local(erro):
@@ -41,7 +43,7 @@ def _dependencia_local(erro):
     if ('offline_estacao.py', 'preparar_dependencias') not in quadros:
         return {}
     arquivos = {nome for nome, _ in quadros}
-    if 'qr_base_v2.py' in arquivos:
+    if arquivos & {'qr_base_v2.py', 'qr_provisionamento.py'}:
         recurso = 'qr_base_v2'
     elif 'qr_contratos.py' in arquivos:
         recurso = 'qr_contratos'
@@ -52,6 +54,9 @@ def _dependencia_local(erro):
     else:
         recurso = 'dependencias'
     motivo = 'falha_recurso'
+    motivo_qr = getattr(erro, 'motivo_qr', None)
+    if recurso == 'qr_base_v2' and isinstance(motivo_qr, str) and motivo_qr in MOTIVOS_LOCAIS:
+        return {'recurso_local': recurso, 'motivo_local': motivo_qr}
     # Comparações exatas: não persistir texto livre nem partes da mensagem.
     texto = erro.args[0] if erro.args and isinstance(erro.args[0], str) else None
     if recurso == 'qr_contratos':

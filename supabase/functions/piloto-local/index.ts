@@ -60,6 +60,13 @@ export async function handler(req: Request): Promise<Response> {
   if (req.method!=='POST') return resposta(405,{detail:'metodo recusado'});
   const acao = new URL(req.url).pathname.split('/').filter(Boolean).at(-1);
   try {
+    if (acao === 'base-qr-v2') {
+      // Nunca disponibilizar a base ao navegador, mesmo no painel localhost.
+      if (origin) return resposta(403, {detail:'origem recusada'});
+      const resultado = await operarPilotoEstacao(acao, req, conferirAgente);
+      if (!(resultado instanceof Response)) throw new Recusa(503, 'base QR indisponivel');
+      return resultado;
+    }
     if (['listar','conferir','conferir-pedido','abrir-pedido','catalogos-offline', 'lista-offline','confirmar-offline'].includes(acao || '')) return resposta(200,await operarPilotoEstacao(acao!,req,conferirAgente));
     if (acao==='conferir-sessao') return resposta(200,await conferirSessao(req));
     return resposta(404,{detail:'operacao inexistente'});

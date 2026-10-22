@@ -6,6 +6,7 @@ import { banco } from './banco.ts';
 import { conferirPedidoPiloto } from './piloto_pedido.ts';
 import { catalogosOffline, confirmarOffline } from './piloto_offline.ts';
 import { listaOffline } from './piloto_lista.ts';
+import { fornecerBaseQrV2 } from './qr_provisionamento.ts';
 
 function mesmaEstacao(a: unknown, b: unknown): boolean {
   const valido = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(v);
@@ -63,6 +64,7 @@ export async function operarPilotoEstacao(acao: string, req: Request,
   delete corpo.estacao;
   const operador = await conferirVinculoPiloto(operadorEstacao, estacao,
     Deno.env.get('PILOTO_LOCAL_EMPRESA'));
+  if (acao === 'base-qr-v2') return await fornecerBaseQrV2(corpo, operador, estacao);
   if (acao === 'listar') return await listarPiloto(corpo, operador);
   if (acao === 'catalogos-offline') return await catalogosOffline(corpo, operador);
   if (acao === 'lista-offline') return await listaOffline(corpo, operador);
