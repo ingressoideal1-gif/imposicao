@@ -116,13 +116,13 @@ def test_periodo_respeita_horas_do_dia_limite(historico):
     assert historico.relatorio(dias=1)['eventos']==[]
 
 
-def test_heartbeat_piloto_independente_da_fila(historico):
+def test_heartbeat_piloto_independente_da_fila(historico, tmp_path):
     from datetime import datetime, timezone
     import datetime as dt
     tree=ast.parse(Path('agent_worker.py').read_text(encoding='utf-8'))
     fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='sync_heartbeat')
     capturados=[]
-    contexto=dict(PILOTO=True,OFICIAL=False,AGENT_ID='piloto-id',AGENT_NAME='PC-TESTE',datetime=dt,
+    contexto=dict(PILOTO=True,OFICIAL=False,AGENT_ID='piloto-id',AGENT_NAME='PC-TESTE',datetime=dt,_CONFIG_DIR=str(tmp_path),
         print_service=SimpleNamespace(get_printers=lambda:[],get_printer_capabilities=lambda _:{}),
         versao_do_painel=lambda:{},get_local_ip=lambda:'127.0.0.1',_acesso_base=lambda:'',diagnostico_fontes=lambda:{},
         temp_manager=SimpleNamespace(diagnostico=lambda:{}),diagnostico_impressao=lambda:{},ultimo_update=lambda:{},
@@ -131,6 +131,7 @@ def test_heartbeat_piloto_independente_da_fila(historico):
     contexto['sync_heartbeat']()
     assert capturados[0]['name']=='PC-TESTE [Piloto]'
     assert capturados[0]['printers_json']['recebe_fila_remota'] is False
+    assert capturados[0]['printers_json']['diagnostico_update']['estado'] == 'nao_aplicavel'
 
 
 def test_permissoes_gestao_exigem_administracao():
