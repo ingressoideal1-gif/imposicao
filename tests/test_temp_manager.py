@@ -332,7 +332,7 @@ def test_relatorio_estacoes_distingue_ausencia_e_medicao_parcial():
     assert ">=2.00 GiB" in texto and "POUCO ESPACO" in texto and "UTC" in texto
 
 
-def test_diagnostico_carrega_no_heartbeat_sem_varrer_disco(monkeypatch):
+def test_diagnostico_carrega_no_heartbeat_sem_varrer_disco(monkeypatch, tmp_path):
     import datetime
     import gestao_estacoes
     monkeypatch.setattr(gestao_estacoes, 'resumo_publico', lambda: {})
@@ -340,7 +340,7 @@ def test_diagnostico_carrega_no_heartbeat_sem_varrer_disco(monkeypatch):
     snapshot = tm.diagnostico()
     snapshot["gerenciados"]["bytes"] = 999
     enviados = []
-    ns = dict(PILOTO=False,OFICIAL=False, temp_manager=tm, datetime=datetime, AGENT_ID="teste", AGENT_NAME="teste",
+    ns = dict(PILOTO=False,OFICIAL=False, temp_manager=tm, datetime=datetime, AGENT_ID="teste", AGENT_NAME="teste", _CONFIG_DIR=str(tmp_path),
               print_service=SimpleNamespace(get_printers=lambda: []), versao_do_painel=lambda: {},
               get_local_ip=lambda: "127.0.0.1", _acesso_base=lambda: "",
               diagnostico_fontes=lambda: {}, diagnostico_impressao=lambda: {}, ultimo_update=lambda: {},

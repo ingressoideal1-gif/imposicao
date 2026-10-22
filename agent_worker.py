@@ -202,6 +202,8 @@ def sync_heartbeat():
         # `printers_json.version`, e ele roda na tela do operador, que pode estar
         # desatualizada. Quebrar aquela tela para arrumar a coluna seria trocar
         # um incomodo de quem publica por um incomodo de quem imprime.
+        update = ultimo_update()
+        from diagnostico_update import resumo as resumo_update
         printers_json = {
             "printers": printers,
             "capabilities": capabilities,
@@ -212,7 +214,8 @@ def sync_heartbeat():
             "fontes": diagnostico_fontes(),
             "armazenamento": temp_manager.diagnostico(),
             "impressao": diagnostico_impressao(),
-            "ultimo_update": ultimo_update(),
+            "ultimo_update": update,
+            "diagnostico_update": resumo_update(_CONFIG_DIR, update),
             "canal": 'piloto' if PILOTO else 'producao',
             "recebe_fila_remota": not PILOTO or OFICIAL,
             "produto_oficial": OFICIAL,
