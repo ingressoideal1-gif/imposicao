@@ -25,6 +25,7 @@ const ctx = vm.createContext({
     fetch: async (url, opcoes) => {chamadas.push({url, opcoes}); return {ok:httpOk, json: async () => resposta};},
     toast: (msg, tipo) => avisos.push({msg, tipo}),
     mostrarSucessoEnvioEmail: to => sucessos.push(to),
+    concluirEnvioLinkParaAtendimento: async () => {},
 });
 vm.runInContext(trecho, ctx);
 (async () => {
