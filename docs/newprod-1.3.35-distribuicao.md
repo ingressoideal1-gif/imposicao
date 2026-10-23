@@ -57,3 +57,45 @@ As estacoes antigas ainda utilizam seu atualizador antigo na primeira troca.
 A publicacao nao conserta retroativamente esse transporte nem comprova adocao.
 Estacoes sem contato aguardam voltar a rede. Nao foram executados testes de
 impressao fisica ou geracao real como parte desta distribuicao.
+
+## Entrega confirmada em 23/10/2026
+
+- Fonte do agente: commit `5d63084c`, tag `agente-v1.3.35`, enviada ao remoto.
+- Fonte web: PR 198 integrado em `31856e65`, tag `v1105`. Todos os checks
+  obrigatorios aprovados. `index.html`, `producao.html` e `script.js` conferidos
+  por hash normalizado e cache-buster nos dois dominios operacionais.
+- Baterias do agente: 1.178 testes aprovados, 2 ignorados e 2 subtestes aprovados
+  por canal; 25 etapas concluidas em cada um de producao, piloto e oficial.
+- PyInstaller, preservador MSI e auditorias publicas aprovados. Conferidos
+  bytecode da versao 1.3.35, modulo de download e bytes dos tres arquivos de
+  painel alterados dentro do executavel.
+- MSI: `NewProdPiloto_Oficial_v1.3.35.msi`, ProductVersion 1.3.35,
+  196.792.320 bytes; SHA-256
+  `581b7723a1041bcaddf29b36295ad71cf8283658b7e749f9b7091999786c45aa`.
+- SHA-256 EXE:
+  `fb2eef8fa7b0c380b35c88590e8052b82874e757316bb1ffd9d86a76371da03c`.
+- Downloads completos dos dois aliases conferidos antes da ativacao. Os tres
+  manifestos foram relidos em 1.3.35, com o mesmo hash e sem lista `estacoes`.
+- Provas e backups em `dist/publicacao-unica-1.3.35-1792794661927293600/`;
+  inventario, validacao, pacote e hashes web em `dist/release1335/`.
+
+Consulta posterior: **23/10/2026, 19h36 BRT**. Nenhuma estacao havia confirmado
+1.3.35 naquele instante. Versoes mais recentes reportadas por nome:
+
+| Estacao | Versao reportada |
+| --- | --- |
+| PC-JR-HOME | 1.3.34 |
+| TEX-01 | 1.3.32 |
+| TEX-02 | 1.3.21 |
+| GUSTAVO-PROD | 1.3.30 |
+| ACABAMENTO-TEX | 1.3.9 |
+| LASER-01 | 1.3.32 |
+| LASER-02 | 1.3.33 |
+| LASER-04 | 1.3.30 |
+| LAPTOP-9BSK81S0 | 1.3.31 |
+
+Os erros citados acima ainda se referiam a tentativas das versoes 1.3.32 ou
+1.3.33, nao a uma falha comprovada da 1.3.35. Demais cadastros sem contato
+recente tambem permanecem elegiveis pela liberacao universal. Sem instalacao
+manual, reinicio forcado ou alteracao dos dados das estacoes nesta entrega.
+A publicacao terminou; a adocao pela frota depende das verificacoes automaticas.
