@@ -80,7 +80,7 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         window: {}, state, supabaseClient: cliente, vibeClient: cliente,
         document: { getElementById: () => null }, ESCALA_DA_AMOSTRA: 1,
         console: { warn: (...a) => log.erros.push(a), error: (...a) => log.erros.push(a), log() {} },
-        toast: (texto, tipo) => log.avisos.push({ texto, tipo }), confirm: () => true,
+        toast: (texto, tipo) => log.avisos.push({ texto, tipo }), confirm: () => true, prompt: () => 'Ajustar o nome',
         temSessaoDoSupabase: async () => true, pedidoIgnoradoNosPaineis: o => !!o.ignorado,
         gravarStatusOverride: (...a) => log.overrides.push(a),
         podeAgirEmLoteNoPedido: () => true, podeDestravarModeloAprovado: () => false,

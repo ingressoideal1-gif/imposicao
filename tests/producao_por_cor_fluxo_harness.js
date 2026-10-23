@@ -244,7 +244,8 @@ async function statusFixture(response) {
         f.ctx.state.osItens.vibe_1 = [{ id: 'vibe_item_99' }];
         const writes = [];
         f.ctx.supabaseClient = { from() { return { update(data) { writes.push(data); return this; }, eq() { return this; },
-            select() { return Promise.resolve({ data: [{ id: 11, status_impressao: 'Corrigir Arte', status_arte: 'REPROVADA_CLIENTE' }], error: null }); } }; } };
+            select() { return Promise.resolve({ data: [{ id: 11, status_impressao: 'Corrigir Arte', status_arte: 'REPROVADA_CLIENTE', observacao_arte: 'Ajustar o nome' }], error: null }); } }; } };
+        f.ctx.prompt = () => 'Ajustar o nome';
         f.ctx.avisarCorrecaoDeArte = () => {};
         vm.runInContext(extract(main, 'devolverArteParaAlteracao') + '\n' + extract(main, 'updateItemImpressao'), f.ctx);
         await f.api.changeStatus({ dataset: { statusItem: '11', statusOs: 'vibe_1' }, value: 'Corrigir Arte' });
