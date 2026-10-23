@@ -183,6 +183,18 @@ try {
     await page.waitForFunction(() => document.getElementById('view-amostras').classList.contains('active') && !window.customNumeracaoEditState);
     assert.equal(pedido.documento.modelos[0].verso_tipo, 'FRENTE E VERSO');
     assert.equal(pedido.documento.modelos[0].frente_verso, true);
+    // Templates do not require a client CSV to be ready.
+    pedido.documento.numeracoes.find(n => n.id === pedido.documento.modelos[0].amostra_num_id).elements = [{type:'TEXT',source:'database',csv_column:'Nome',font_size:12,x_mm:10,y_mm:10}];
+    await page.reload({waitUntil:'networkidle2'});
+    await page.waitForFunction(() => IdGenEditor.ativo);
+    assert.equal(await page.evaluate(()=>bancoDeDadosIncompletoDoModelo(state.osItens[IdGenEditor.chave][0])),null);
+    assert.equal(await page.$eval('[data-amostra-pronto]',e=>e.disabled),false);
+    await assert.rejects(page.evaluate(async()=>{const item=state.osItens[IdGenEditor.chave][0];await IdGenEditor.status(item.id,IdGenEditor.chave,'PRONTO');}),/PDF com 1 páginas/);
+    pedido.documento.modelos[0].modo_pdf=false;
+    await page.reload({waitUntil:'networkidle2'});await page.waitForFunction(()=>IdGenEditor.ativo);
+    await page.evaluate(async()=>{const item=state.osItens[IdGenEditor.chave][0];await IdGenEditor.status(item.id,IdGenEditor.chave,'PRONTO');});
+    assert.equal(pedido.documento.modelos[0].amostra_status,'PRONTO');
+    assert.equal(pedido.documento.numeracoes.find(n=>n.id===pedido.documento.modelos[0].amostra_num_id).csv_data,null);
     const antesExcluir = pedido.revisao;
     page.once('dialog', d => d.dismiss());
     await page.locator('[data-idgen-excluir]').click();

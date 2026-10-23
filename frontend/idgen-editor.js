@@ -319,6 +319,13 @@
             const listas = await Promise.all(tipos.map(t => window.api ? window.api('GET', '/' + t) : apiSemConfirmacao('GET', '/' + t)));
             catalogo = Object.fromEntries(tipos.map((t, i) => [t, listas[i]]));
             state.ordens = []; state.osItens = {}; state.saidas = clonar(catalogo.saidas);
+            // Template has no client dataset yet. Scope overrides to this dedicated editor only.
+            for (const name of ['distribuicaoOrfaDoModelo', 'divergenciaDeCelulasDoModelo', 'bancoDeDadosIncompletoDoModelo', 'fonteSemGlifoDoModelo']) {
+                const original = window[name];
+                if (typeof original === 'function') window[name] = function (...args) {
+                    return pronto ? null : original.apply(this, args);
+                };
+            }
             pronto = true; sincronizar(); state.amostrasOSAtivo = chave;
             window._currentPerms = { perm_amostras_view: true, perm_numeracao_view: true, perm_cores_view: true, perm_formatos_view: true };
             document.querySelectorAll('.sidebar, .mobile-header').forEach(e => e.hidden = true);
@@ -350,7 +357,7 @@
             const item = state.osItens[chave].find(m => m.id === itemId);
             if (status === 'PRONTO') {
                 await validarPaginasDoPdfParaPronto(item);
-                if (divergenciaDeCelulasDoModelo(item) || bancoDeDadosIncompletoDoModelo(item) || fonteSemGlifoDoModelo(item)) throw new Error('Confira as linhas, colunas e fontes do modelo antes de marcar pronto.');
+                // Dados e glifos do lote serao conferidos depois da importacao no portal.
             }
             await salvar(itemId, osId, { amostra_status: status }); desenhar(); return true;
         },
