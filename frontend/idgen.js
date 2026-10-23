@@ -51,8 +51,9 @@
         if (montado) return; montado = true;
         el('idgen-busca-form').onsubmit = async e => {
             e.preventDefault();
-            const busca = el('idgen-busca').value.trim();
-            if (busca.length < 2) return mensagem('Informe ao menos dois caracteres.');
+            const entrada = el('idgen-busca').value.trim();
+            if (!/^\d{1,10}$/.test(entrada) || Number(entrada) < 1 || Number(entrada) > 2147483647) return mensagem('Informe um número de cliente válido.');
+            const busca = String(Number(entrada));
             const botao = el('idgen-buscar'); botao.disabled = true;
             try {
                 const clientes = await pedir('clientes', { busca });
@@ -66,7 +67,7 @@
                         lista.replaceChildren();
                     };
                 }
-                mensagem(clientes.length ? '' : 'Nenhum cliente encontrado.');
+                mensagem(clientes.length ? '' : 'Nenhum cliente encontrado com esse número.');
             } catch (e) { mensagem(e.message); } finally { botao.disabled = false; }
         };
         el('idgen-nome').oninput = () => { criacaoId = null; };

@@ -50,14 +50,21 @@ try:
     INSERT INTO public.imposition_user_permissions VALUES ('{actor}', 'admin');
     CREATE TABLE public.clientes(id_cliente bigint PRIMARY KEY, nome text, fantasia text);
     INSERT INTO public.clientes VALUES (42, 'Cliente Sintetico', 'Teste');
+    INSERT INTO public.clientes VALUES (1, 'Cliente um', 'Um'), (142, 'Nome com 42', '42');
     CREATE TABLE public.pedidos_modelos(id bigint PRIMARY KEY, nome_modelo text);
     INSERT INTO public.pedidos_modelos VALUES (1, 'Preservar');
     """)
     sql((ROOT / 'sql/idgen_pedidos_editor.sql').read_text(encoding='utf-8'))
+    sql((ROOT / 'sql/idgen_cliente_por_numero.sql').read_text(encoding='utf-8'))
     call('listar', {}, role='anon', error='42501')
     call('listar', {}, role='authenticated', error='42501')
     sql('SET ROLE service_role; SELECT * FROM idgen_app.pedidos_editor;', error='42501')
-    assert call('clientes', {'busca': 'Teste'})[0]['id_cliente'] == 42
+    assert [c['id_cliente'] for c in call('clientes', {'busca': '42'})] == [42]
+    assert call('clientes', {'busca': '1'})[0]['id_cliente'] == 1
+    assert call('clientes', {'busca': '0042'})[0]['id_cliente'] == 42
+    assert call('clientes', {'busca': '4'}) == []
+    for invalido in ['Teste', '', '0', '-1', '4.2', '2147483648']:
+        call('clientes', {'busca': invalido}, error='22023')
     call('criar', {'id': order, 'cliente_id': 43, 'nome': 'Teste'}, error='22023')
     data = {'id': order, 'cliente_id': 42, 'nome': 'Teste'}
     created = call('criar', data)
@@ -72,7 +79,7 @@ try:
     sql(f"UPDATE public.imposition_user_permissions SET role='operador' WHERE user_id='{actor}';")
     call('listar', {}, error='42501')
     assert sql('SELECT nome_modelo FROM public.pedidos_modelos WHERE id=1;') == 'Preservar'
-    assert sql('SELECT count(*) FROM public.clientes;') == '1'
+    assert sql('SELECT count(*) FROM public.clientes;') == '3'
     print('PASS: migration, ACL, role, client lookup, idempotency, exact save, revision conflict, legacy preservation')
     print('Evidence:', WORK)
 finally:
