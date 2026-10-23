@@ -1,5 +1,8 @@
 # IdGen — janela compartilhada da Lista de Arte
 
+> Estado de implantação posterior: [entrega segura](idgen-entrega-segura-2026-10-23.md).
+> Este documento registra a conclusão local anterior à autorização de publicação.
+
 Entrega local de 23/10/2026, na branch `feat/idgen-menu-editor-20261022`,
 worktree `imposition-idgen-menu-20261022`, base `cd9275c8`.
 Não houve commit, publicação, SQL remoto ou alteração dos dados existentes.

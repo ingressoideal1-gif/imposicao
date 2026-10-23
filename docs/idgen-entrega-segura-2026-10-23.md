@@ -47,8 +47,32 @@ A bateria completa encontrou três recursos ausentes na lista de sincronização
 Foi corrigida a lista `PAINEL_ARQUIVOS` em `security_config.py`, incluindo também
 o módulo importado `idgen-pedidos.mjs`. Isso apenas registra os recursos; não
 distribui um agente novo nem comprova funcionamento nas estações instaladas.
-Primeira repetição: Produção Python 868 aprovados, 2 ignorados. Demais resultados
-e identidades de publicação devem ser registrados após conclusão.
+Repetição completa: Produção e Piloto, cada um com 868 testes Python aprovados,
+2 ignorados, e todos os harnesses de interface aprovados. Relatório local:
+`dist/entrega/idgen-canais.json`. Testes Chromium finais após versionamento de
+cache: `%TEMP%/idgen-editor-browser-B3By21` e `%TEMP%/idgen-menu-browser-KqFV6E`.
 
 Limites mantidos: 5 MiB por arquivo, 16 MiB por documento/corpo de requisição.
 Validação autenticada real e envio à produção gráfica não foram realizados.
+
+## Estado efetivo da entrega
+
+- Commit de implementação `88c12f61d5a0e9148a14d856f37b789c0fe79148` enviado.
+- PR [194](https://github.com/ingressoideal1-gif/imposicao/pull/194) aberto,
+  ainda não integrado. CI de compatibilidade em execução na última consulta.
+  Check Cloudflare Pages da branch aprovado; não é publicação de produção.
+- Migração específica aplicada no E-Deal em transação. Tabela e RPC confirmadas.
+- Pós-aplicação: os três hashes legados acima permaneceram exatamente iguais.
+- Tabela nova com zero pedidos e RLS ativo. `anon`/`authenticated` sem EXECUTE
+  na RPC; `authenticated` sem SELECT na tabela; `service_role` com EXECUTE.
+- Deploy exclusivamente de `idgen-interno` tentado e recusado pelo Supabase:
+  HTTP 403, `Missing required permission(s): edge_functions_write`.
+  O comando terminou com falha. Nenhum sucesso de deploy desse endpoint é alegado.
+- Frontend de produção ainda não integrado/publicado. Não houve instalação ou
+  publicação de agente NewProd. Não executar a migração novamente na retomada.
+
+Para retomar: atualizar o acesso conectado com a permissão necessária (sem
+enviar tokens em chat), publicar somente `idgen-interno`, verificar JWT/CORS e
+recusas sem sessão, aguardar todos os checks do PR e integrar. Só então comparar
+os assets em `imposition.ai-ideal.com.br` e `imposicao.pages.dev`, registrar
+deployment/tag e validar com uma sessão real de operador sem expor credenciais.
