@@ -14,6 +14,36 @@ function ambiente() {
     });
     return { editor, chamadas };
 }
+
+test('exclusão remove só o modelo e seus vínculos, preservando recursos e outros modelos', async () => {
+    const { editor } = ambiente(); await editor.abrir('pedido-a');
+    await editor.alterar(d => {
+        d.modelos.push({ id: 'modelo-b' }); d.bancos = [{ id: 'banco' }];
+        d.cores = [{ id: 'cor' }]; d.anexos = [{ id: 'anexo' }];
+        d.vinculos = [{ modelo_id: 'modelo-a', banco_id: 'banco' }, { modelo_id: 'modelo-b', banco_id: 'banco' }];
+        d.briefing = { observacoes: { 'modelo-a': 'A', 'modelo-b': 'B' } };
+    });
+    await editor.excluirModelo('modelo-a');
+    const d = editor.pedido.documento;
+    assert.deepEqual(d.modelos, [{ id: 'modelo-b' }]);
+    assert.deepEqual(d.vinculos, [{ modelo_id: 'modelo-b', banco_id: 'banco' }]);
+    assert.deepEqual(d.briefing.observacoes, { 'modelo-b': 'B' });
+    assert.deepEqual(d.bancos, [{ id: 'banco' }]); assert.deepEqual(d.cores, [{ id: 'cor' }]);
+    assert.deepEqual(d.anexos, [{ id: 'anexo' }]);
+});
+
+test('exclusão recusa outro pedido e modelo aprovado; falha conserva modelo confirmado', async () => {
+    const { editor, chamadas } = ambiente(); await editor.abrir('pedido-a');
+    await assert.rejects(editor.excluirModelo('outro'), /não pertence/);
+    assert.equal(chamadas.length, 1);
+    await editor.salvarModelo('modelo-a', { amostra_status: 'APROVADA' });
+    await assert.rejects(editor.excluirModelo('modelo-a'), /aprovado/);
+    await editor.salvarModelo('modelo-a', { amostra_status: 'PENDENTE' });
+    const antes = structuredClone(editor.pedido);
+    editor.enviar = async () => { throw new Error('Conflito'); };
+    await assert.rejects(editor.excluirModelo('modelo-a'), /Conflito/);
+    assert.deepEqual(editor.pedido, antes);
+});
 test('salvamentos simultâneos preservam ambos os campos e incrementam revisão', async () => {
     const { editor, chamadas } = ambiente(); await editor.abrir('pedido-a');
     await Promise.all([editor.salvarModelo('modelo-a', { arte_escala_h: 110 }), editor.salvarModelo('modelo-a', { numeracao_inicio: 100 })]);

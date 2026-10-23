@@ -16,11 +16,18 @@
         if (!sessao?.pedido) return;
         const d = doc();
         for (const tipo of ['formatos', 'cores', 'numeracoes']) state[tipo] = clonar(d[tipo] || []);
+        state.numeracoes.forEach(normalizarNumeracaoLida);
         const antigos = state.osItens[chave] || [];
         state.osItens[chave] = d.modelos.map(m => {
             const item = antigos.find(i => i.id === m.id) || {};
             for (const k of Object.keys(item)) delete item[k];
             Object.assign(item, clonar(m), { _source: 'idgen', _dbLoaded: true, id_int: contexto.id });
+            const num = state.numeracoes.find(n => n.id === m.amostra_num_id);
+            const versoTipo = VersoDoModelo.doModo(num?.print_mode);
+            if (versoTipo) {
+                item.verso_tipo = versoTipo;
+                item.frente_verso = VersoDoModelo.temVerso(versoTipo);
+            }
             item.numeracao_id = item.amostra_num_id;
             item.num_inicial = item.numeracao_inicio ?? item.num_inicial ?? 1;
             item.num_final = item.numeracao_fim ?? item.num_final;
@@ -45,8 +52,10 @@
             const num = doc().numeracoes.find(n => n.id === dados.amostra_num_id);
             if (dados.amostra_num_id && !num) throw new Error('Numeração não pertence ao pedido IdGen.');
             dados.numeracao = num?.name || '';
-            if (num) Object.assign(dados, VersoDoModelo.payload({ amostra_num_id: num.id }, item, state.numeracoes));
         }
+        const numAtual = doc().numeracoes.find(n => n.id === ('amostra_num_id' in dados ? dados.amostra_num_id : item.amostra_num_id));
+        const versoTipo = VersoDoModelo.doModo(numAtual?.print_mode);
+        if (versoTipo) Object.assign(dados, { verso_tipo: versoTipo, frente_verso: VersoDoModelo.temVerso(versoTipo) });
         if (dados.amostra_cor_id && !doc().cores.some(c => c.id === dados.amostra_cor_id)) throw new Error('Cor não pertence ao pedido IdGen.');
         try { await sessao.salvarModelo(itemId, dados); sincronizar(); return { confirmado: true }; }
         catch (e) {
@@ -68,7 +77,11 @@
         if (method === 'GET' && tipo === 'saidas') return clonar(catalogo.saidas);
         if (!['formatos', 'cores', 'numeracoes'].includes(tipo)) throw new Error('Cadastro indisponível no editor IdGen.');
         const lista = doc()[tipo] || [];
-        if (method === 'GET') return clonar(id ? lista.find(x => String(x.id) === id) : lista);
+        if (method === 'GET') {
+            const registros = clonar(lista);
+            if (tipo === 'numeracoes') registros.forEach(normalizarNumeracaoLida);
+            return id ? registros.find(x => String(x.id) === id) : registros;
+        }
         if (!['POST', 'PUT', 'DELETE'].includes(method)) throw new Error('Operação inválida.');
         const alvo = id || crypto.randomUUID();
         await alterar(d => {
@@ -135,6 +148,21 @@
         return resultado;
     }
     function ajustarTela() {
+        doc().modelos.forEach((modelo, idx) => {
+            const header = document.getElementById('amostra-item-num-' + idx)?.closest('.card')?.querySelector('.card-header');
+            if (!header || header.querySelector('[data-idgen-excluir]')) return;
+            const b = node('button', 'Excluir modelo', header);
+            b.type = 'button'; b.className = 'btn btn-secondary'; b.dataset.idgenExcluir = modelo.id;
+            b.disabled = modelo.amostra_status === 'APROVADA';
+            b.onclick = async () => {
+                if (!confirm('Excluir o modelo "' + (modelo.nome_modelo || modelo.produto || 'Sem nome') + '" deste pedido IdGen? Esta ação não pode ser desfeita pela tela.')) return;
+                b.disabled = true;
+                try {
+                    await sessao.excluirModelo(modelo.id);
+                    sincronizar(); desenhar(); toast('Modelo excluído do pedido IdGen.', 'success');
+                } catch (e) { erro(e); b.disabled = false; }
+            };
+        });
         // Fluxos comerciais do ERP não fazem parte de um pedido IdGen.
         const banner = document.getElementById('amostras-os-banner');
         for (const b of banner?.querySelectorAll('button') || []) {
@@ -211,6 +239,12 @@
         location.assign(u.href);
     }
     function formulario() {
+        const compativel = (tipo, registro, formatoId) => {
+            if (!registro || !formatoId) return false;
+            const ids = tipo === 'numeracoes' && Array.isArray(registro.formato_ids)
+                ? registro.formato_ids : [registro.formato_id];
+            return ids.some(id => id != null && String(id) === String(formatoId));
+        };
         const view = document.getElementById('view-amostras');
         const caixa = node('div', '', null); caixa.className = 'card'; caixa.id = 'idgen-modelo-form';
         node('h2', 'IdGen — ' + sessao.pedido.nome, caixa);
@@ -221,9 +255,23 @@
         for (const [tipo, rotulo] of [['formatos', 'Formato'], ['cores', 'Cor'], ['numeracoes', 'Numeração']]) {
             const lab = node('label', rotulo, f), sel = node('select', '', lab); sel.required = true; sel.id = 'idgen-modelo-' + tipo;
             node('option', 'Selecione…', sel).value = '';
-            for (const item of catalogo[tipo]) { const opt = node('option', item.name || item.nome || item.id, sel); opt.value = item.id; }
+            if (tipo === 'formatos') for (const item of catalogo[tipo]) { const opt = node('option', item.name || item.nome || item.id, sel); opt.value = item.id; }
             campos[tipo] = sel;
         }
+        function filtrar() {
+            const formatoId = campos.formatos.value;
+            for (const tipo of ['cores', 'numeracoes']) {
+                const sel = campos[tipo], anterior = sel.value;
+                const itens = catalogo[tipo].filter(item => compativel(tipo, item, formatoId));
+                sel.replaceChildren();
+                node('option', !formatoId ? 'Selecione o formato primeiro' : itens.length ? 'Selecione…' : 'Nenhuma opção compatível', sel).value = '';
+                for (const item of itens) { const opt = node('option', item.name || item.nome || item.id, sel); opt.value = item.id; }
+                sel.value = itens.some(item => String(item.id) === anterior) ? anterior : '';
+                sel.disabled = !itens.length;
+            }
+        }
+        campos.formatos.onchange = filtrar;
+        filtrar();
         const adicionar = node('button', 'Adicionar modelo', f); adicionar.type = 'submit'; adicionar.className = 'btn btn-primary';
         f.querySelectorAll('label').forEach(e => { e.style.cssText = 'display:grid;gap:6px;font-size:0.85rem'; });
         f.querySelectorAll('input,select').forEach(e => { e.className = 'form-control'; e.style.minWidth = '0'; });
@@ -232,6 +280,10 @@
             e.preventDefault(); adicionar.disabled = true;
             try {
                 const formato = catalogo.formatos.find(x => String(x.id) === campos.formatos.value);
+                if (!formato || !['cores', 'numeracoes'].every(tipo => compativel(tipo,
+                    catalogo[tipo].find(x => String(x.id) === campos[tipo].value), formato.id))) {
+                    throw new Error('Selecione uma cor e uma numeração compatíveis com o formato.');
+                }
                 // As listagens são enxutas; copiar as linhas completas antes de trocar os IDs.
                 const [rc, rn] = await Promise.all([
                     supabaseClient.from('producao_cores').select('*').eq('id', campos.cores.value).single(),
@@ -239,10 +291,15 @@
                 ]);
                 if (rc.error || rn.error || !rc.data || !rn.data) throw new Error('Não foi possível copiar os cadastros selecionados.');
                 const cor = clonar(rc.data), numeracao = clonar(rn.data);
+                normalizarNumeracaoLida(numeracao);
+                if (!compativel('cores', cor, formato.id) || !compativel('numeracoes', numeracao, formato.id)) {
+                    throw new Error('O formato desses cadastros mudou. Atualize o pedido antes de adicionar o modelo.');
+                }
                 for (const [registro, camposArquivo] of [[cor, ['pdf_base64', 'pdf_verso_base64']], [numeracao, ['bg_url', 'preview_jpg']]]) {
                     for (const campo of camposArquivo) if (typeof registro[campo] === 'string' && registro[campo].startsWith('https:')) registro[campo] = await arquivo(registro[campo]);
                 }
-                await sessao.adicionarModelo({ nome: nome.value, formato, cor, numeracao });
+                await sessao.adicionarModelo({ nome: nome.value, formato, cor, numeracao,
+                    versoTipo: VersoDoModelo.doModo(numeracao.print_mode) });
                 sincronizar(); desenhar(); nome.value = ''; toast('Modelo adicionado ao IdGen.', 'success');
             } catch (e) { erro(e); } finally { adicionar.disabled = false; }
         };
@@ -251,7 +308,7 @@
     async function iniciar() {
         try {
             if (!contexto.valido) throw new Error('Identificador IdGen inválido.');
-            const { PedidosIdGen } = await import('./idgen-pedidos.mjs?v=1101');
+            const { PedidosIdGen } = await import('./idgen-pedidos.mjs?v=1102');
             sessao = new PedidosIdGen(window.IdGen.pedir);
             await sessao.abrir(contexto.id); // O servidor valida sessão e papel antes de abrir.
             const tipos = ['formatos', 'cores', 'numeracoes', 'saidas'];

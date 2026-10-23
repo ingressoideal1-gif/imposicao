@@ -25,7 +25,10 @@ try {
             const { acao, dados } = JSON.parse(options.body); chamadasIdGen.push(acao);
             let body;
             if (acao === 'listar') body = pedidosIdGen;
-            if (acao === 'clientes') body = [{ id_cliente: 42, nome: 'Teste', fantasia: '<img src=x onerror=alert(1)>' }];
+            if (acao === 'clientes') {
+                if (dados.busca !== '42') throw new Error('A busca deve enviar somente o número normalizado.');
+                body = [{ id_cliente: 42, nome: 'Teste', fantasia: '<img src=x onerror=alert(1)>' }];
+            }
             if (acao === 'criar') { body = { id: dados.id, cliente_id: dados.cliente_id, nome: dados.nome }; pedidosIdGen.push(body); }
             return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
         };
@@ -33,6 +36,8 @@ try {
     await page.addScriptTag({ content: script });
     await page.evaluate(() => IdGen.iniciar());
     await page.type('#idgen-busca', 'Teste'); await page.click('#idgen-buscar');
+    assert.deepEqual(await page.evaluate(() => chamadasIdGen), ['listar']);
+    await page.$eval('#idgen-busca', e => { e.value = '0042'; }); await page.click('#idgen-buscar');
     await page.waitForSelector('#idgen-clientes button');
     assert.equal(await page.$('#idgen-clientes img'), null);
     await page.click('#idgen-clientes button');
