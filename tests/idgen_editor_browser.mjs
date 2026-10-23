@@ -15,11 +15,15 @@ const catalogo = {
     producao_numeracoes: [{ id: 'n1', name: 'Credencial', formato_id: 'f1', tipo: 'SEQUENCIAL', print_mode: 'front', elements: [], csv_data: null, bg_url: null }],
     producao_saidas: [], catalogo_fontes: [],
 };
+catalogo.producao_formatos.push({ id: 'f2', name: 'Outro formato', width_mm: 80, height_mm: 100 }, { id: 'f3', name: 'Sem cadastros', width_mm: 90, height_mm: 120 });
+catalogo.producao_cores.push({ id: 'c2', name: 'Cor de outro formato', formato_id: 'f2' });
+catalogo.producao_numeracoes.push({ id: 'n2', name: 'Outro', formato_id: 'f2', print_mode: 'front' }, { id: 'multi', name: 'Vários formatos', formato_id: 'f2', formato_ids: ['f1', 'f2'], print_mode: 'front' });
 // Editor and Supabase SDK are real; network responses and session are synthetic.
 const browser = await launch({ headless: true });
 const evidence = await mkdtemp(join(tmpdir(), 'idgen-editor-browser-'));
+const errors = [];
 try {
-    const page = await browser.newPage(); const errors = [], writes = [], rejected = [];
+    const page = await browser.newPage(); const writes = [], rejected = [];
     await page.setViewport({ width: 1440, height: 1000 });
     page.on('pageerror', e => errors.push(e.message));
     await page.evaluateOnNewDocument(() => {
@@ -69,6 +73,20 @@ try {
     });
     await page.goto('https://idgen-test.invalid/?idgen=' + id, { waitUntil: 'networkidle2' });
     await page.waitForSelector('#idgen-modelo-form', { timeout: 15000 });
+    assert.equal(await page.$eval('#idgen-modelo-cores', e => e.disabled), true);
+    const opcoes = selector => page.$$eval(selector + ' option', opts => opts.map(o => o.value).filter(Boolean));
+    await page.select('#idgen-modelo-formatos', 'f1');
+    assert.deepEqual(await opcoes('#idgen-modelo-cores'), ['c1']);
+    assert.deepEqual(await opcoes('#idgen-modelo-numeracoes'), ['n1', 'multi']);
+    await page.select('#idgen-modelo-cores', 'c1'); await page.select('#idgen-modelo-numeracoes', 'n1');
+    await page.select('#idgen-modelo-formatos', 'f2');
+    assert.equal(await page.$eval('#idgen-modelo-cores', e => e.value), '');
+    assert.equal(await page.$eval('#idgen-modelo-numeracoes', e => e.value), '');
+    assert.deepEqual(await opcoes('#idgen-modelo-cores'), ['c2']);
+    assert.deepEqual(await opcoes('#idgen-modelo-numeracoes'), ['n2', 'multi']);
+    await page.select('#idgen-modelo-formatos', 'f3');
+    assert.deepEqual(await opcoes('#idgen-modelo-cores'), []);
+    assert.equal(await page.$eval('#idgen-modelo-numeracoes', e => e.disabled), true);
     await page.type('#idgen-modelo-nome', 'Credencial A');
     await page.select('#idgen-modelo-formatos', 'f1'); await page.select('#idgen-modelo-cores', 'c1'); await page.select('#idgen-modelo-numeracoes', 'n1');
     await page.click('#idgen-modelo-form button[type=submit]');
@@ -107,9 +125,11 @@ try {
         return out;
     });
     assert.deepEqual(bloqueios, [true, true, true]);
-    await page.evaluate(() => editCustomNumeracao(0, IdGenEditor.chave, state.osItens[IdGenEditor.chave][0].id));
+    await page.click('button[title="Editar Numeração exclusivamente para este Modelo"]');
     await page.waitForFunction(() => document.getElementById('num-formato').value !== '' && document.getElementById('btn-num-voltar').style.display !== 'none');
-    await page.evaluate(async () => { document.getElementById('num-name').value = 'Numeração IdGen editada'; await window.saveNumeracao(); });
+    await page.$eval('#num-name', e => { e.value = 'Numeração IdGen editada'; });
+    await page.click('#btn-num-save');
+    await page.waitForFunction(() => IdGenEditor.documento.numeracoes.some(n => n.name === 'Numeração IdGen editada'));
     assert.ok(pedido.documento.numeracoes.some(n => n.name === 'Numeração IdGen editada'));
     await page.evaluate(async () => {
         const cor = state.cores[0];
@@ -144,10 +164,42 @@ try {
     }, { timeout: 20000 });
     assert.deepEqual(rejected, []);
     await page.screenshot({ path: join(evidence, 'editor.png'), fullPage: true });
+    // Documento antigo: numeração duplex, categoria ausente no modelo.
+    pedido.documento.numeracoes.find(n => n.id === pedido.documento.modelos[0].amostra_num_id).print_mode = 'duplex';
+    delete pedido.documento.modelos[0].verso_tipo;
+    delete pedido.documento.modelos[0].frente_verso;
+    await page.reload({ waitUntil: 'networkidle2' });
+    await page.waitForSelector('#amostra-item-num-0');
+    assert.equal(await page.evaluate(() => state.osItens[IdGenEditor.chave][0].verso_tipo), 'FRENTE E VERSO');
+    assert.equal(await page.evaluate(() => document.getElementById('amostras-itens-container').innerText.includes('Pedido no Vibe:')), false);
+    await page.click('button[title="Editar Numeração exclusivamente para este Modelo"]');
+    await page.waitForFunction(() => state.numFormato && document.getElementById('btn-num-voltar').style.display !== 'none');
+    assert.equal(await page.$eval('#num-print-mode', e => e.value), 'duplex');
+    assert.equal(await page.$eval('#num-print-mode', e => e.validationMessage), '');
+    assert.equal(await page.$eval('#num-print-mode option[value=front]', e => e.disabled), false);
+    assert.equal(await page.evaluate(() => document.getElementById('view-numeracao').innerText.includes('altere primeiro no Vibe')), false);
+    await page.click('#btn-num-save');
+    await page.waitForFunction(() => IdGenEditor.documento.modelos[0].verso_tipo === 'FRENTE E VERSO');
+    await page.waitForFunction(() => document.getElementById('view-amostras').classList.contains('active') && !window.customNumeracaoEditState);
+    assert.equal(pedido.documento.modelos[0].verso_tipo, 'FRENTE E VERSO');
+    assert.equal(pedido.documento.modelos[0].frente_verso, true);
+    const antesExcluir = pedido.revisao;
+    page.once('dialog', d => d.dismiss());
+    await page.locator('[data-idgen-excluir]').click();
+    assert.equal(pedido.revisao, antesExcluir);
+    assert.equal(pedido.documento.modelos.length, 1);
+    page.once('dialog', d => d.accept());
+    await page.locator('[data-idgen-excluir]').click();
+    await page.waitForFunction(() => IdGenEditor.documento.modelos.length === 0);
+    assert.equal(pedido.documento.modelos.length, 0);
+    assert.equal(pedido.documento.anexos.length, 1);
+    await page.reload({ waitUntil: 'networkidle2' });
+    await page.waitForFunction(() => IdGenEditor.ativo && IdGenEditor.documento.modelos.length === 0);
     await writeFile(join(evidence, 'resultado.json'), JSON.stringify({ errors, rejected, writes: writes.length }, null, 2));
     assert.deepEqual(errors, []);
     console.log('PASS shared editor: model, attributes, numbering, color, briefing, private art/attachment/PDF import, reload, legacy guard. Evidence:', evidence);
 } catch (e) {
+    console.error('Browser errors:', errors);
     console.error('Evidence:', evidence);
     const pages = await browser.pages(); await pages.at(-1)?.screenshot({ path: join(evidence, 'falha.png'), fullPage: true });
     await writeFile(join(evidence, 'pagina.txt'), await pages.at(-1).evaluate(() => document.body.innerText));

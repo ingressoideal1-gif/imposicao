@@ -44,7 +44,18 @@ export class PedidosIdGen {
             Object.assign(modelo, structuredClone(patch));
         });
     }
-    adicionarModelo({ nome, formato, cor, numeracao }) {
+    excluirModelo(id) {
+        return this.alterar(doc => {
+            const modelo = doc.modelos.find(m => m.id === id);
+            if (!modelo) throw new Error('Modelo não pertence ao pedido IdGen.');
+            if (modelo.amostra_status === 'APROVADA') throw new Error('Modelo aprovado: exclusão bloqueada.');
+            doc.modelos = doc.modelos.filter(m => m.id !== id);
+            if (doc.vinculos) doc.vinculos = doc.vinculos.filter(v => v.modelo_id !== id);
+            if (doc.briefing?.observacoes) delete doc.briefing.observacoes[id];
+            // Catálogos, bancos e anexos do pedido podem ser usados por outros modelos.
+        });
+    }
+    adicionarModelo({ nome, formato, cor, numeracao, versoTipo }) {
         if (!nome?.trim() || nome.length > 120 || /[<>"']/.test(nome) || !formato?.id || !cor?.id || !numeracao?.id) {
             return Promise.reject(new Error('Informe nome, formato, cor e numeração.'));
         }
@@ -59,6 +70,7 @@ export class PedidosIdGen {
             doc.formatos.push(fmt); doc.cores.push(c); doc.numeracoes.push(n);
             doc.modelos.push({ id: modeloId, nome_modelo: nome.trim(), produto: nome.trim(),
                 formato_id: fmt.id, amostra_cor_id: c.id, amostra_num_id: n.id,
+                ...(versoTipo ? { verso_tipo: versoTipo, frente_verso: versoTipo !== 'SÓ FRENTE' } : {}),
                 cor: c.name, numeracao: n.name, quantidade: 1, qtd: 1, amostra_status: 'PENDENTE' });
         });
     }

@@ -5426,6 +5426,7 @@ function modoDeVersoDoModelo(item) {
 window.modoDeVersoDoModelo = modoDeVersoDoModelo;
 
 function modelosDoEditorVibe() {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return []; // IdGen define o modo na própria numeração.
     const contexto = window.customNumeracaoEditState;
     if (!contexto) return [];
     if (contexto.view === 'imposicao' && !contexto.itemId) return [];
