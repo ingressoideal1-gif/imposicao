@@ -1003,6 +1003,7 @@ const COLUNAS_DA_NUMERACAO_NA_LISTA = 'id,empresa_id,name,formato_id,formato_ids
 const _pdfDeCorEmVoo = new Map();
 
 async function garantirPdfDaCor(cor, opcoes = {}) {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return cor;
     if (!cor || !cor.id) return cor;
     // `undefined` = a linha veio da lista enxuta. `null` = já foi buscado e a
     // cor não tem arquivo. Só o primeiro caso vai ao banco.
@@ -1074,6 +1075,7 @@ const _csvDaNumeracaoEmVoo = new Map();
  * o que tem — igual ao `garantirPdfDaCor`.
  */
 async function garantirCsvDaNumeracao(num) {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return num;
     if (!num || !num.id) return num;
     if (num.csv_data !== undefined) return num;
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return num;
@@ -1153,6 +1155,7 @@ window.numeracoesSemBancoBaixado = numeracoesSemBancoBaixado;
  */
 /** O numero da OS (`pedidos_modelos.id_int`), tirado dos modelos ja carregados. */
 function idIntDoPedido(osId) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor?.pedido(osId) ? window.IDGEN_CONTEXTO.id : null;
     const itens = (state.osItens && state.osItens[osId]) || [];
     const com = itens.find(it => it && it.id_int);
     return com ? com.id_int : null;
@@ -1178,6 +1181,7 @@ function tokenDoOperadorDaEstacao() {
 }
 
 async function chamarBancosPedido(acao, corpo, signal) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.bancos(acao, corpo);
     const local = window.location.hostname === 'localhost'
         || window.location.hostname === '127.0.0.1'
         || window.location.protocol === 'file:';
@@ -1210,6 +1214,7 @@ async function chamarBancosPedido(acao, corpo, signal) {
 window.chamarBancosPedido = chamarBancosPedido;
 
 function idIntDoBancoOuModelo(bancoId, modeloId) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IDGEN_CONTEXTO.id;
     const banco = (state.bancosDoPedido || []).find(b => String(b.id) === String(bancoId || ''));
     if (banco && banco.id_int) return Number(banco.id_int);
     for (const [osId, itens] of Object.entries(state.osItens || {})) {
@@ -1505,6 +1510,7 @@ async function ligarModeloAoBanco(itemId, bancoId, mapa) {
 window.ligarModeloAoBanco = ligarModeloAoBanco;
 
 async function carregarBancosDoPedido(osId, aoChegar) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { window.IdGenEditor.sincronizar(); return; }
     // Ausencia real vem como listas vazias. Falha de autorizacao ou rede precisa
     // subir: tratar falha como ausencia faria um modelo ligado ao banco cair na
     // numeracao sequencial e imprimir outro dado sem aviso.
@@ -1841,6 +1847,7 @@ function valorDoFormatoConfere(atual, esperado) {
 }
 
 async function apiSemConfirmacao(method, path, body = null) {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return window.IdGenEditor.api(method, path, body);
 
     if (typeof supabaseClient !== 'undefined' && supabaseClient && (path.startsWith('/formatos') || path.startsWith('/numeracoes') || path.startsWith('/saidas') || path.startsWith('/cores') || path.startsWith('/modelos_imposicao'))) {
 
@@ -2091,6 +2098,7 @@ async function consultarFotosProdutosComSessao() {
 }
 
 async function loadAll() {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) { window.IdGenEditor.sincronizar(); return; }
 
     try {
 
@@ -5483,6 +5491,7 @@ async function lerModeloModoVibe(item, osId) {
 }
 
 async function conferirModoVibeDaNumeracao(id, modo) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { if (!VersoDoModelo.doModo(modo)) throw new Error('Modo de impressão desconhecido.'); return; }
     if (!VersoDoModelo.doModo(modo)) throw new Error('Modo de impressão desconhecido.');
     for (const item of modelosDoEditorVibe()) {
         const atual = await lerModeloModoVibe(item, window.customNumeracaoEditState?.osId);
@@ -7344,6 +7353,7 @@ window.rasterizePdfToImage = async function (arrayBuffer) {
  * arte de fundo em silêncio, e o operador só descobriria ao reabrir a numeração.
  */
 function bancoGuardaArteDeFundo() {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return true;
     const linha = (state.numeracoes || [])[0];
     return !!linha && Object.prototype.hasOwnProperty.call(linha, 'bg_url');
 }
@@ -9569,6 +9579,7 @@ function deselectAllCards() {
 // - Salvar Numeração -
 
 async function uploadToStorage(content, fileName, path, opts = {}) {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return window.IdGenEditor.arquivo(content, fileName);
     if (!content) return '';
     if (typeof content === 'string' && content.startsWith('http')) return content; // Já é uma URL HTTP pública
 
@@ -9818,6 +9829,7 @@ window.comoEditarNumeracaoDoModelo = comoEditarNumeracaoDoModelo;
  * não pode virar "pode salvar à vontade".
  */
 async function modelosQueUsamNumeracao(numId) {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return (state.osItens[window.IdGenEditor.chave] || []).filter(m => m.amostra_num_id === numId);
     if (!numId) return [];
 
     const emMemoria = () => {
@@ -9978,6 +9990,7 @@ function nomeCurtoDoModelo(m) {
 }
 
 async function homonimasDoCatalogo(nome, idAtual) {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return state.numeracoes.filter(n => String(n.id) !== String(idAtual || '') && String(n.name).trim().toLowerCase() === String(nome).trim().toLowerCase());
     const alvo = String(nome || '').trim().toLowerCase();
     if (!alvo) return [];
 
@@ -10348,7 +10361,7 @@ window.saveNumeracao = async function () {
             // tirou da coluna. Isso não impede o save (é degradação, não quebra),
             // mas precisa deixar rastro: se alguém apertar a política de RLS do
             // bucket 'artes', é assim que isso vai regredir em silêncio sem este aviso.
-            if (typeof previewValor === 'string' && previewValor.startsWith('data:')) {
+            if (!window.IDGEN_CONTEXTO && typeof previewValor === 'string' && previewValor.startsWith('data:')) {
                 console.error('[Storage] Upload do preview da numeração falhou — caiu no fallback base64 (embutido em preview_jpg) em vez de ir para artes/previews-numeracoes/' + numeracaoId + '.jpg. Verifique as políticas de storage.objects do bucket "artes".');
                 toast('Não foi possível enviar o preview ao Storage — ele foi salvo embutido (base64) na numeração.', 'warning');
             }
@@ -17880,6 +17893,7 @@ async function salvarCsvDaNumeracao(numId, rows) {
  * e ali não há formulário para submeter: é uma alteração cirúrgica.
  */
 async function salvarCamposDaNumeracao(numId, patch) {
+    if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) return window.IdGenEditor.api('PUT', '/numeracoes/' + numId, patch);
 
     // Gravou por cima do banco de dados: o que `garantirCsvDaNumeracao` tiver
     // baixado desta numeracao esta velho a partir de agora.
@@ -19684,6 +19698,7 @@ window.mesclarNumeracoesNoCatalogo = mesclarNumeracoesNoCatalogo;
  * rede, a tela segue com o que tem, exatamente como antes.
  */
 async function recarregarNumeracoesDoPedido(osId, opcoes) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { window.IdGenEditor.sincronizar(); return; }
     try {
         if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Conexão de dados indisponível.');
         const itens = (state.osItens && state.osItens[osId]) || [];
@@ -22657,7 +22672,7 @@ const PERM_NAV_MAP = {
     perm_amostras_view:    ['nav-amostras'],
     perm_producao_view:    ['nav-lista-impressao', 'nav-dashboard-producao', 'nav-producao-cor', 'nav-montagem'],
     perm_acabamento_view:  ['nav-acabamento'],
-    perm_lista_arte_view:  ['nav-lista-arte'],
+    perm_lista_arte_view:  ['nav-lista-arte', 'nav-idgen'],
     perm_impressoras_view: ['nav-impressoras'],
     perm_ideal_control_view: ['nav-ideal-control'],
     perm_admin_view:       ['nav-admin', 'nav-adm'],
@@ -22680,7 +22695,7 @@ const PERM_VIEW_MAP = {
     perm_amostras_view:    ['view-amostras'],
     perm_producao_view:    ['view-lista-impressao', 'view-dashboard-producao', 'view-producao-cor', 'view-montagem'],
     perm_acabamento_view:  ['view-acabamento'],
-    perm_lista_arte_view:  ['view-lista-arte'],
+    perm_lista_arte_view:  ['view-lista-arte', 'view-idgen'],
     perm_impressoras_view: ['view-impressoras'],
     perm_ideal_control_view: ['view-ideal-control'],
     perm_admin_view:       ['view-admin', 'view-adm'],
@@ -23577,6 +23592,7 @@ window.handleGoogleLogin = async function() {
 
 // ──── Inicialização de auth (DOMContentLoaded) ────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { await window.IdGenEditor.iniciar(); return; }
     // Antes, qualquer acesso por localhost/127.0.0.1 pulava o login e recebia
     // admin total — inclusive o painel da estação, servido pelo próprio agente.
     // Como o cliente Supabase é inicializado ali do mesmo jeito, as gravações
@@ -28253,6 +28269,7 @@ async function atualizarQuantidadesDoERP(osId, numero) {
 
 /** Carrega os itens de uma OS específica. */
 async function loadOSItens(osId, opcoes = {}) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { window.IdGenEditor.sincronizar(); return; }
     // Todos os chamadores aguardam a mesma leitura; a chave canônica evita duplicação.
     const ordem = typeof findOSInState === 'function' ? findOSInState(osId) : null;
     osId = ordem?.id || osId;
@@ -29548,6 +29565,7 @@ function renderDesignersBoxHTML(osId, osNum) {
 }
 
 async function confirmAndSelectDesigner(osId, osNum, uid, nome) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { await window.IdGenEditor.briefing('designer_uid', uid); await window.IdGenEditor.briefing('designer_nome', nome); window.IdGenEditor.ajustarTela(); return; }
     if (!podeDefinirDesigner()) {
         toast('Só o atendimento ou o administrador define o designer de um pedido.', 'warning');
         return;
@@ -33256,6 +33274,7 @@ function matchNumeracao(numText, formatoId) {
  * Auto-salva um campo do item da OS (formato_id, cor_id, numeracao_id)
  */
 async function autoSaveOSItemField(itemId, osId, field, value) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.campo(itemId, osId, field, value);
     if (field === 'status_impressao') return updateItemImpressao(itemId, osId, value);
     if (field === 'verso_tipo' || field === 'frente_verso') return;
     // A quantidade de cada modelo pertence ao ERP, inclusive depois da arte pronta.
@@ -34793,6 +34812,8 @@ window.toggleDrawer = function(show) {
 
 // Função global de navegação entre views
 window.showView = function(viewId) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO && ['view-lista-cores', 'view-lista-formatos', 'view-catalogo'].includes(viewId)) viewId = 'view-amostras';
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO && !['view-amostras', 'view-numeracao', 'view-cores', 'view-formatos'].includes(viewId)) return;
     // Porteiro de permissão. Sem isto, esconder o botão no menu não impedia nada:
     // bastava um showView() disparado de outro ponto do código para a tela abrir
     // e carregar os dados.
@@ -34895,6 +34916,7 @@ window.showView = function(viewId) {
     if (viewId === 'view-montagem' && typeof abrirMontagem === 'function') {
         abrirMontagem();
     }
+    if (viewId === 'view-idgen') window.IdGen?.iniciar();
     if (viewId === 'view-ideal-control' && window.IdealControl) {
         // `iniciar()` é idempotente: liga os botões uma vez só e recarrega a
         // lista de pedidos a cada abertura. Abrir a mesma tela duas vezes não
@@ -34929,6 +34951,7 @@ window.showView = function(viewId) {
  * Helper resiliente para encontrar uma OS no state.ordens por id, id_int ou numero
  */
 function findOSInState(osId) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor?.pedido(osId) || null;
     if (!state.ordens || !state.ordens.length) return null;
     if (!osId && osId !== 0) return null;
     const osIdStr = String(osId).trim();
@@ -34970,6 +34993,7 @@ window.getOSItens = getOSItens;
  * Navega da Lista de Arte para a página de Amostras carregando os itens do pedido
  */
 async function navigateToAmostrasFromOS(osId) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { if (window.IdGenEditor.pedido(osId)) { showView('view-amostras'); renderAmostrasOSItens(osId); } return; }
     if (!podeAbrirView('view-amostras')) { avisarFaltaPermissao('view-amostras'); return; }
     const aindaAtual = window.NavegacaoPainel?.iniciarAcao() || (() => true);
     const abertura = { osId: null };
@@ -36483,7 +36507,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
 
 
     // No painel interno (isInternal), gerar box de entrega e faturamento
-    if (isInternal) {
+    if (isInternal && !window.IDGEN_CONTEXTO) {
         const isCorrigir = (entregaStatus === 'CORRIGIR');
         const isAlterado = (entregaStatus === 'ALTERADO');
         const isAprovado = (entregaStatus === 'APROVADO');
@@ -36679,7 +36703,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
 
 
     
-    if (isInternal) {
+    if (isInternal && !window.IDGEN_CONTEXTO) {
         loadBriefingBase(osId, osNum);
         loadAnexosPedido(osId, osNum);
         loadUltimosPedidos(osId, os.cliente);
@@ -36691,6 +36715,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
     desenharBoxDeBancos(osId);
 
     setTimeout(() => { desenharCardsAoAparecer(osId, itens, container); }, 50);
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) window.IdGenEditor?.ajustarTela();
 }
 
 /** Chegada de bancos/fontes: usa os mesmos avisos/travas do template, sem
@@ -37574,10 +37599,8 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
             const fileExt = file.name.split('.').pop();
             const fileName = `arte_${face}_${osId}_${itemId}_${Date.now()}.${fileExt}`;
             
-            const { data, error } = await supabaseClient
-                .storage
-                .from('artes')
-                .upload(fileName, file, { cacheControl: '3600', upsert: true });
+            const { data, error } = window.IDGEN_CONTEXTO ? { data: null, error: null }
+                : await supabaseClient.storage.from('artes').upload(fileName, file, { cacheControl: '3600', upsert: true });
                 
             if (error) throw error;
             
@@ -37586,7 +37609,7 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
                 .from('artes')
                 .getPublicUrl(fileName);
                 
-            const publicUrl = urlData.publicUrl;
+            const publicUrl = window.IDGEN_CONTEXTO ? await window.IdGenEditor.arquivo(file, file.name) : urlData.publicUrl;
 
             // Atualizar o state PRIMEIRO
             const osItems = state.osItens[osId];
@@ -38117,6 +38140,7 @@ function resolveItemCorNumIds(item, itemIdx = null) {
 window.resolveItemCorNumIds = resolveItemCorNumIds;
 
 async function saveAmostraToDB(itemId, osId, dataToUpdate) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.salvar(itemId, osId, dataToUpdate);
     // Salvar uma arte não pode devolver ao ERP uma quantidade antiga do cache.
     dataToUpdate = { ...dataToUpdate };
     delete dataToUpdate.verso_tipo;
@@ -40468,6 +40492,7 @@ async function desenharItemAmostraCombinada(idx, osId) {
 }
 
 async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente') {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return; // A previa IdGen nao publica snapshots nos buckets legados.
     if (!supabaseClient) return;
     // Produto de prateleira nao tem arte para compor. Gerar canvas aqui cria
     // uma miniatura branca e substitui a foto comercial no Link do Cliente.
@@ -40512,6 +40537,7 @@ async function snapshotAmostraAndUpload(idx, osId, item, canvas, face = 'frente'
 
 // Versão promisificada do snapshot — aguarda upload completar antes de resolver
 function snapshotAmostraSync(idx, osId, item, canvas, face) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return Promise.resolve();
     return new Promise((resolve) => {
         if (item && item._produto_prateleira) {
             resolve();
@@ -40774,7 +40800,8 @@ function editCustomNumeracao(idx, osId, itemId) {
     
     const modelName = `${item.produto} (Modelo ${idx + 1})`;
     
-    const os = (state.ordens || []).find(o => String(o.id) === String(osId) || String(o.id_int) === String(osId));
+    const os = window.IDGEN_CONTEXTO ? window.IdGenEditor.pedido(osId)
+        : (state.ordens || []).find(o => String(o.id) === String(osId) || String(o.id_int) === String(osId));
     const cliNum = os ? os.id_cliente : null;
 
     // Set custom state
@@ -41332,6 +41359,7 @@ async function validarPaginasDoPdfParaPronto(item) {
 
 /** Salva a decisão de um item de amostra, após as travas de prontidão. */
 async function decisionAmostraItem(itemId, osId, status, opts = {}) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { try { return await window.IdGenEditor.status(itemId, osId, status); } catch (e) { toast(e.message, 'error'); return false; } }
     // `opts.emLote`: chamada pelo botão em lote do pedido (`acaoEmLoteNoPedido`).
     // Grava e valida igual; só não avisa nem redesenha por modelo — o lote faz
     // isso uma vez no fim. `opts.obs` substitui a leitura do textarea. Devolve
@@ -41753,6 +41781,7 @@ window.acaoEmLoteNoPedido = async function(osId, acao) {
  * lê por que só vê um botão. No link do cliente a linha não existe.
  */
 function renderAcoesEmLoteDoPedido(osId) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { const el = document.getElementById('amostras-acoes-em-lote'); if (el) el.replaceChildren(); return; }
     const el = document.getElementById('amostras-acoes-em-lote');
     if (!el) return;
     const ehTelaDoCliente = (state.amostrasContainerId === 'cliente-amostras-itens-container');
@@ -41793,6 +41822,7 @@ function saveAmostraItemObs(itemId, osId, obs) {
  * Limpa o pedido ativo da tela de Amostras, voltando ao modo avulso
  */
 function clearAmostrasOS() {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.sair();
     state.amostrasOSAtivo = null;
     const container = document.getElementById('amostras-itens-container');
     const banner = document.getElementById('amostras-os-banner');
@@ -41959,6 +41989,7 @@ function updateAnexoSelectionCount(osId, osNum) {
  * Alterna a visibilidade (oculto: true/false) de anexos específicos e persiste no Supabase
  */
 async function toggleOcultarAnexos(osId, osNum, targetIds, novoStatusOculto) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.ocultarAnexos(targetIds, novoStatusOculto);
     const numInt = parseInt(osNum);
     if (isNaN(numInt)) return;
 
@@ -42087,6 +42118,7 @@ async function downloadAnexosSelecionadosZip(osId, osNum) {
  * Carrega e exibe os anexos vinculados ao pedido da coluna 'arquivos' (jsonb) na tabela 'pedidos_artes'
  */
 async function loadAnexosPedido(osId, osNum) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.anexos();
     const container = document.getElementById(`anexos-pedido-container-${osId}`);
     if (!container || !osNum) return;
 
@@ -42294,6 +42326,7 @@ async function loadAnexosPedido(osId, osNum) {
 
 
 async function uploadAnexoPedido(osId, osNum) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.escolherAnexos();
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
@@ -42787,6 +42820,7 @@ function updateBriefingUI(osId, osIntId) {
 
 let briefingSaveTimeout = null;
 async function saveBriefingField(osIntId, field, value, isObs = false, itemId = null) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.briefing(field, value, isObs, itemId);
     if (!osIntId || typeof supabaseClient === 'undefined') return;
     
     if (!state.pedidosArtesData) state.pedidosArtesData = {};
@@ -47344,6 +47378,7 @@ async function exportarPdfSomenteArte() {
 }
 
 async function importarPdfMultipage(event) {
+    if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) return window.IdGenEditor.importarPdf(event);
     const file = event.target.files[0];
     if (!file) return;
     

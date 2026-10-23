@@ -550,3 +550,6 @@ verify_jwt = true
 
 [functions.vibe-entregas-admin]
 verify_jwt = true
+
+[functions.idgen-interno]
+verify_jwt = true
