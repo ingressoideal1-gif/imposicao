@@ -47,6 +47,16 @@ def test_sucesso_nao_abre_arquivo(tmp_path):
     assert resumo(tmp_path, {'etapa': 'validado'})['estado'] == 'nao_aplicavel'
 
 
+def test_acao_falha_somente_por_lista_positiva(tmp_path):
+    _, registro = preparar(tmp_path,
+        'Error 1722. Program failed. Action PreservarDadosEstacao, location: SEGREDO\n'
+        'Action ended 10:00: InstallFinalize. Return value 3.\n'
+        'Action ended 10:00: TOKEN_PRIVADO. Return value 3.\n')
+    r = resumo(tmp_path, registro)
+    assert r['acoes_falhas'] == ['InstallFinalize', 'PreservarDadosEstacao']
+    assert 'SEGREDO' not in json.dumps(r) and 'TOKEN_PRIVADO' not in json.dumps(r)
+
+
 def test_juncao_recusada(tmp_path, monkeypatch):
     from pathlib import Path
     from types import SimpleNamespace

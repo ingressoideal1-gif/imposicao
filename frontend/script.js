@@ -28774,6 +28774,15 @@ async function devolverArteParaAlteracao(itemId, osId) {
         return false;
     }
 
+    const textoCorrecao = prompt('Corrigir arte — descreva a correção desejada para este modelo:',
+        item.amostra_obs || item.observacao_arte || '');
+    if (textoCorrecao === null) return false;
+    const observacaoArte = textoCorrecao.trim();
+    if (!observacaoArte) {
+        toast('Descreva a correção desejada antes de devolver o modelo para a arte.', 'warning');
+        return false;
+    }
+
     let statusRegistradoEm = null;
     try {
         // As duas mudanças que tornam o retrabalho possível são uma gravação só:
@@ -28787,18 +28796,20 @@ async function devolverArteParaAlteracao(itemId, osId) {
             .from('pedidos_modelos')
             .update({
                 status_impressao: STATUS_CORRIGIR_ARTE,
-                status_arte: 'REPROVADA_CLIENTE'
+                status_arte: 'REPROVADA_CLIENTE',
+                observacao_arte: observacaoArte
             })
             .eq('id', idBanco)
             .eq('id_int', numOs)
-            .select('id, id_int, status_impressao, status_arte, status_impressao_em, status_impressao_registrado_em');
+            .select('id, id_int, status_impressao, status_arte, status_impressao_em, status_impressao_registrado_em, observacao_arte');
 
         if (error) throw error;
         if (!data || data.length !== 1) {
             throw new Error('o banco não confirmou exatamente um modelo atualizado');
         }
         if (normalizarStatusImpressao(data[0].status_impressao) !== STATUS_CORRIGIR_ARTE ||
-                String(data[0].status_arte || '').trim().toUpperCase() !== 'REPROVADA_CLIENTE') {
+                String(data[0].status_arte || '').trim().toUpperCase() !== 'REPROVADA_CLIENTE' ||
+                data[0].observacao_arte !== observacaoArte) {
             throw new Error('o banco devolveu um estado diferente do solicitado');
         }
         if (decisaoLocal) {
@@ -28826,6 +28837,8 @@ async function devolverArteParaAlteracao(itemId, osId) {
         m.impressao = STATUS_CORRIGIR_ARTE;
         m.amostra_status = 'REPROVADA';
         m.status_arte = 'REPROVADA_CLIENTE';
+        m.observacao_arte = observacaoArte;
+        m.amostra_obs = observacaoArte;
     });
 
     // O classificador usa o modelo como fonte principal, então uma falha do
@@ -36246,7 +36259,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                         <div class="form-group" style="margin-bottom: 0; gap: 6px;">
                             <label for="amostra-obs-${item.id}" style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.06em;">Anotações / Observações de Alteração</label>
                             <textarea id="amostra-obs-${item.id}" class="form-control" rows="3" data-libera-aprovado="1" placeholder="Insira aqui os detalhes das alterações solicitadas..." style="resize: none; background: rgba(0, 0, 0, 0.2); font-size: 0.85rem; padding: 10px; flex: 1; min-height: 78px;"
-                                onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${obs}</textarea>
+                                onchange="saveAmostraItemObs('${item.id}', '${osId}', this.value)">${escapeHtml(obs)}</textarea>
                         </div>
                         <div class="amostra-decisao-btns" style="flex-direction: column; gap: 6px; margin-top: 0; justify-content: flex-end;">
                             ${state.amostrasContainerId === 'cliente-amostras-itens-container'

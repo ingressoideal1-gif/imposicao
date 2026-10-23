@@ -85,7 +85,8 @@ def updater(tmp_path, monkeypatch):
         assert c.reservar() is None, 'instalacao bloqueia nova producao'
         if ns.get('falhar_instalador'): raise OSError('simulado')
         installs.append(args)
-    ns = dict(PILOTO=False, OFICIAL=False, sys=SimpleNamespace(frozen=True), json=json, os=__import__('os'), time=SimpleNamespace(time=lambda: 1),
+    ns = dict(PILOTO=False, OFICIAL=False, sys=SimpleNamespace(frozen=True, executable=str(tmp_path/'NewProd.exe')), json=json, os=__import__('os'), time=SimpleNamespace(time=lambda: 1),
+              ultimo_update=lambda: {},
               tempfile=SimpleNamespace(gettempdir=lambda: str(tmp_path)),
               urllib=SimpleNamespace(request=SimpleNamespace(Request=lambda *a, **k: a[0], urlopen=urlopen)),
               _registrar_update=lambda status, **kwargs: log.append(status), _iniciar_instalador=install)

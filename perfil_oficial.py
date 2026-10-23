@@ -161,6 +161,6 @@ def confirmar_partida():
                        dict(versao=AGENT_VERSION, quando=agora(), painel_validado=True,
                             inicializacoes_anteriores_removidas=removidas))
     anterior = ultimo_update()
-    if anterior.get('etapa') == 'instalando':
+    if anterior.get('etapa') in ('instalando', 'validacao_pendente'):
         etapa = 'validado' if anterior.get('versao_alvo') == AGENT_VERSION else 'instalacao_nao_confirmada'
         _registrar_update(etapa, versao_alvo=anterior.get('versao_alvo'))

@@ -6,6 +6,7 @@ import stat
 
 LIMITE = 256 * 1024
 CODIGOS = {1303, 1304, 1310, 1311, 1321, 1402, 1603, 1618, 1638, 1721, 1722, 1920, 1923}
+ACOES = {'PreservarDadosEstacao', 'RemoveExistingProducts', 'InstallFiles', 'InstallFinalize'}
 
 
 def resumo(raiz, registro):
@@ -42,9 +43,13 @@ def resumo(raiz, registro):
         encoding = 'utf-16-le' if inicio == b'\xff\xfe' else 'utf-16-be' if inicio == b'\xfe\xff' else 'utf-8'
         texto = dados.decode(encoding, errors='replace').lstrip('\ufeff')
         codigos = {int(c) for c in re.findall(r'(?im)^\s*(?:MSI[^\r\n]*?:\s*)?(?:Error|Erro)\s+([0-9]{4})\b', texto)}
+        acoes = set(re.findall(r'(?im)^Action ended [^\r\n]*?: (\w+)\. Return value 3\.', texto))
+        # 1722 pode nomear a acao sem produzir a linha Return value 3.
+        acoes.update(re.findall(r'(?im)^\s*(?:MSI[^\r\n]*?:\s*)?(?:Error|Erro) 1722\.[^\r\n]*?\bAction (\w+)[, .]', texto))
         return {'schema': 1, 'estado': 'coletado', 'versao_alvo': versao,
                 'tentativa_em': quando.astimezone(timezone.utc).isoformat(),
                 'codigos_msi': sorted(codigos & CODIGOS),
+                'acoes_falhas': sorted(acoes & ACOES),
                 'retorno_3': bool(re.search(r'(?im)^Action ended [^\r\n]*Return value 3\.', texto)),
                 'leitura_parcial': offset > 0,
                 'causa_confirmada': False}

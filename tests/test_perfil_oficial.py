@@ -72,3 +72,26 @@ def test_perfil_nao_aceita_dados_fora_da_estacao(tmp_path):
     raiz=tmp_path/'NewProd Agent';raiz.mkdir()
     (raiz/'perfil-oficial.json').write_text(json.dumps(dict(schema=1,estacao=socket.gethostname(),dados='../alheio')))
     with pytest.raises(ValueError,match='Raiz'):p.configurar(tmp_path)
+
+
+@pytest.mark.parametrize('correta', [True, False])
+def test_confirma_partida_pendente_sem_acessar_registro_real(tmp_path, monkeypatch, correta):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from agent_version import AGENT_VERSION
+    (tmp_path/'NewProd Agent').mkdir()
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
+    def ausente(*args):
+        raise FileNotFoundError()
+    monkeypatch.setitem(sys.modules, 'winreg', SimpleNamespace(
+        HKEY_CURRENT_USER=0, KEY_QUERY_VALUE=1, KEY_SET_VALUE=2,
+        OpenKey=lambda *args: nullcontext(None), QueryValueEx=ausente))
+    gravados = []
+    alvo = AGENT_VERSION if correta else '0.0.0'
+    monkeypatch.setitem(sys.modules, 'agent_worker', SimpleNamespace(
+        ultimo_update=lambda: dict(etapa='validacao_pendente',versao_alvo=alvo),
+        _registrar_update=lambda etapa, **kw: gravados.append((etapa,kw))))
+    p.confirmar_partida()
+    assert gravados[0][0] == ('validado' if correta else 'instalacao_nao_confirmada')
+    prova = json.loads((tmp_path/'NewProd Agent'/'oficial-validado.json').read_text())
+    assert prova['versao'] == AGENT_VERSION and prova['painel_validado']

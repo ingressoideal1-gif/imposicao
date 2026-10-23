@@ -10,6 +10,7 @@ from entrega_impacto import impacto_testes, plano
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTES = [
+    'test_download_atualizacao.py',
     'test_compatibilidade_motor.py', 'test_texto_banco.py', 'test_modos_impressao.py',
     'test_escala_da_arte.py', 'test_engine_capas_camarote.py',
     'test_intervalo_atualizacao.py',

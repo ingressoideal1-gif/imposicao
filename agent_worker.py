@@ -903,6 +903,12 @@ _ARQUIVO_UPDATE = os.path.join(_CONFIG_DIR, "ultimo_update.json")
 def _registrar_update(etapa: str, versao_alvo=None, erro=None):
     """Grava em que ponto a atualizacao parou, para o heartbeat reportar."""
     from agent_version import AGENT_VERSION
+    from download_atualizacao import BLOQUEIOS
+    anterior = ultimo_update()
+    if anterior.get('etapa') in BLOQUEIOS and etapa in (
+            'adiado_producao', 'manifesto_indisponivel', 'aguardando_liberacao',
+            'sem_atualizacao', 'url_bloqueada', 'sha_ausente', 'download_falhou', 'sha_divergente'):
+        return anterior
     registro = {
         "quando": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "versao_no_momento": AGENT_VERSION,
@@ -911,8 +917,8 @@ def _registrar_update(etapa: str, versao_alvo=None, erro=None):
         "erro": (str(erro)[:200] if erro else None),
     }
     try:
-        with open(_ARQUIVO_UPDATE, "w", encoding="utf-8") as f:
-            json.dump(registro, f, ensure_ascii=False)
+        from persistencia_local import gravar_json_atomico
+        gravar_json_atomico(_ARQUIVO_UPDATE, registro)
     except Exception:
         pass
     return registro
@@ -1045,35 +1051,20 @@ def _verificar_atualizacao_ociosa(forcado: bool = False):
         _registrar_update("sha_ausente", versao_alvo=versao_nova)
         return
 
-    print(f"[update] Versao {versao_nova} disponivel (atual {AGENT_VERSION}). Baixando...", flush=True)
+    from download_atualizacao import baixar, exige_intervencao, FalhaDownload
+    if exige_intervencao(ultimo_update(), versao_nova, forcado):
+        return  # Nao apagar a evidencia nem repetir MSI fatal automaticamente.
     destino = os.path.join(tempfile.gettempdir(), f"NewProd_Setup_{versao_nova}.msi")
     try:
         req = urllib.request.Request(url_msi, headers={"User-Agent": "NewProd Agent"})
         from pacotes_download import SemRedirecionamento
         abrir = urllib.request.build_opener(SemRedirecionamento()).open if OFICIAL else urllib.request.urlopen
-        with abrir(req, timeout=600) as resp, open(destino, "wb") as f:
-            limite = manifesto['bytes'] if OFICIAL else 512*1024**2
-            total = 0
-            while bloco := resp.read(1024*1024):
-                total += len(bloco)
-                if total > limite: raise ValueError('Instalador excede tamanho declarado')
-                f.write(bloco)
-            if OFICIAL and total != limite: raise ValueError('Instalador incompleto')
-    except Exception as e:
-        print(f"[update] Falha no download: {e}", flush=True)
-        _registrar_update("download_falhou", versao_alvo=versao_nova, erro=e)
-        return
-
-    sha_obtido = hashlib.sha256(open(destino, "rb").read()).hexdigest()
-    if sha_obtido != sha_esperado:
-        print(f"[update] BLOQUEADO: sha256 divergente "
-              f"(esperado {sha_esperado[:12]}, obtido {sha_obtido[:12]}). Arquivo descartado.", flush=True)
-        try:
-            os.remove(destino)
-        except Exception:
-            pass
-        _registrar_update("sha_divergente", versao_alvo=versao_nova,
-                          erro=f"esperado {sha_esperado[:12]} obtido {sha_obtido[:12]}")
+        baixar(abrir, req, destino, manifesto.get('bytes'), sha_esperado,
+               os.path.dirname(sys.executable))
+    except Exception as erro:
+        motivo = str(erro) if isinstance(erro, FalhaDownload) else type(erro).__name__
+        _registrar_update("sha_divergente" if motivo == 'sha_divergente' else "download_falhou",
+                          versao_alvo=versao_nova, erro=motivo)
         return
 
     # Pode ter entrado trabalho durante o download. A tomada atomica impede

@@ -301,7 +301,7 @@ function pedidoNaProducao(extra) {
         'grava Corrigir Arte na mesma operacao');
     ok(f.indexOf("status_arte: 'REPROVADA_CLIENTE'") > 0,
         'grava Em Alteracao na mesma operacao');
-    ok(f.indexOf(".select('id, status_impressao, status_arte')") > 0,
+    ok(f.indexOf(".select('id, id_int, status_impressao, status_arte, status_impressao_em, status_impressao_registrado_em, observacao_arte')") > 0,
         'pede ao banco a linha efetivamente atualizada');
     ok(f.indexOf('data.length !== 1') > 0,
         'recusa zero linha e atualizacao ambigua');

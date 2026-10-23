@@ -58,7 +58,7 @@ function clienteQueResponde(resposta, chamadas) {
     };
 }
 
-function montar(resposta) {
+function montar(resposta, texto = '  Ajustar o nome  ') {
     const item = { id: 1000935, status_impressao: 'Aguardando', impressao: 'Aguardando', status_arte: 'APROVADA' };
     const global = { ...item };
     const state = {
@@ -70,7 +70,7 @@ function montar(resposta) {
     const fonte = extrairFuncao('devolverArteParaAlteracao');
     const devolver = new Function(
         'state', 'STATUS_CORRIGIR_ARTE', 'normalizarStatusImpressao',
-        'sincronizarStatusConsolidadoPedidoArte', 'toast', 'vibeClient', 'supabaseClient', 'console',
+        'sincronizarStatusConsolidadoPedidoArte', 'toast', 'vibeClient', 'supabaseClient', 'console', 'prompt', 'window',
         fonte + '\nreturn devolverArteParaAlteracao;'
     )(
         state,
@@ -80,7 +80,8 @@ function montar(resposta) {
         (msg, tipo) => chamadas.toasts.push({ msg, tipo }),
         cliente,
         cliente,
-        { log() {}, warn() {}, error() {} }
+        { log() {}, warn() {}, error() {} },
+        (mensagem, anterior) => { chamadas.popup = { mensagem, anterior }; return texto; }, {}
     );
     return { devolver, item, global, chamadas };
 }
@@ -155,7 +156,7 @@ function ok(condicao, nome, extra) {
 
 async function main() {
     const sucesso = montar({
-        data: [{ id: 1000935, status_impressao: 'Corrigir Arte', status_arte: 'REPROVADA_CLIENTE' }],
+        data: [{ id: 1000935, status_impressao: 'Corrigir Arte', status_arte: 'REPROVADA_CLIENTE', observacao_arte: 'Ajustar o nome' }],
         error: null
     });
     ok(await sucesso.devolver(1000935, 'vibe_21869') === true, 'sucesso confirmado');
@@ -179,6 +180,22 @@ async function main() {
         ok(falha.chamadas.sincronizacoes === 0, 'falha nao consolida estado inexistente');
         ok(falha.chamadas.toasts.some(t => t.tipo === 'error'), 'falha fica visivel ao operador');
     }
+
+    ok(sucesso.chamadas.payload.observacao_arte === 'Ajustar o nome', 'motivo gravado junto com os status');
+    ok(sucesso.item.amostra_obs === 'Ajustar o nome' && sucesso.global.observacao_arte === 'Ajustar o nome',
+        'motivo carregado no box e no catalogo');
+    for (const texto of [null, '', '   ']) {
+        const cancelado = montar({}, texto);
+        cancelado.item.amostra_obs = 'Anotacao anterior';
+        ok(await cancelado.devolver(1000935, 'vibe_21869') === false, 'cancelamento/vazio nao confirma');
+        ok(!cancelado.chamadas.tabela, 'cancelamento/vazio nao grava');
+        ok(cancelado.item.status_impressao === 'Aguardando' && cancelado.item.amostra_obs === 'Anotacao anterior',
+            'cancelamento preserva status e anotacao');
+        ok(cancelado.chamadas.popup.anterior === 'Anotacao anterior', 'popup permite editar anotacao existente');
+    }
+    const semMotivo = montar({ data: [{ id: 1000935, status_impressao: 'Corrigir Arte', status_arte: 'REPROVADA_CLIENTE' }] });
+    ok(await semMotivo.devolver(1000935, 'vibe_21869') === false, 'motivo nao confirmado pelo banco nao anuncia sucesso');
+    ok(semMotivo.item.amostra_obs === undefined, 'motivo nao confirmado nao muda memoria');
 
     const retorno = montarRetornoDoPedido({
         data: [
