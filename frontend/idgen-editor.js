@@ -42,21 +42,21 @@
         catch (e) { sincronizar(); throw e; }
     }
     async function salvar(itemId, osId, patch) {
-        if (!pedido(osId)) throw new Error('Pedido IdGen não está aberto.');
+        if (!pedido(osId)) throw new Error('Template IdGen não está aberto.');
         const item = doc().modelos.find(m => m.id === itemId);
-        if (!item) throw new Error('Modelo não pertence ao pedido IdGen.');
+        if (!item) throw new Error('Modelo não pertence ao template IdGen.');
         if (item.amostra_status === 'APROVADA') throw new Error('Lote aprovado: edição bloqueada.');
         const dados = clonar(patch);
         delete dados._isExplicitRemove;
         if ('amostra_num_id' in dados) {
             const num = doc().numeracoes.find(n => n.id === dados.amostra_num_id);
-            if (dados.amostra_num_id && !num) throw new Error('Numeração não pertence ao pedido IdGen.');
+            if (dados.amostra_num_id && !num) throw new Error('Numeração não pertence ao template IdGen.');
             dados.numeracao = num?.name || '';
         }
         const numAtual = doc().numeracoes.find(n => n.id === ('amostra_num_id' in dados ? dados.amostra_num_id : item.amostra_num_id));
         const versoTipo = VersoDoModelo.doModo(numAtual?.print_mode);
         if (versoTipo) Object.assign(dados, { verso_tipo: versoTipo, frente_verso: VersoDoModelo.temVerso(versoTipo) });
-        if (dados.amostra_cor_id && !doc().cores.some(c => c.id === dados.amostra_cor_id)) throw new Error('Cor não pertence ao pedido IdGen.');
+        if (dados.amostra_cor_id && !doc().cores.some(c => c.id === dados.amostra_cor_id)) throw new Error('Cor não pertence ao template IdGen.');
         try { await sessao.salvarModelo(itemId, dados); sincronizar(); return { confirmado: true }; }
         catch (e) {
             sincronizar();
@@ -86,7 +86,7 @@
         const alvo = id || crypto.randomUUID();
         await alterar(d => {
             const arr = d[tipo], index = arr.findIndex(x => String(x.id) === alvo);
-            if (method !== 'POST' && index < 0) throw new Error('Cadastro não pertence ao pedido IdGen.');
+            if (method !== 'POST' && index < 0) throw new Error('Cadastro não pertence ao template IdGen.');
             if (method === 'DELETE') {
                 if (d.modelos.some(m => [m.formato_id, m.amostra_cor_id, m.amostra_num_id].includes(alvo))) throw new Error('Cadastro em uso neste pedido.');
                 arr.splice(index, 1);
@@ -121,7 +121,7 @@
         });
     }
     async function bancos(acao, corpo) {
-        if (String(corpo.id_int) !== contexto.id) throw new Error('Banco de dados não pertence ao pedido IdGen.');
+        if (String(corpo.id_int) !== contexto.id) throw new Error('Banco de dados não pertence ao template IdGen.');
         if (acao === 'consultar') return { bancos: clonar(doc().bancos || []), vinculos: clonar(doc().vinculos || []) };
         let resultado;
         await alterar(d => {
@@ -155,19 +155,19 @@
             b.type = 'button'; b.className = 'btn btn-secondary'; b.dataset.idgenExcluir = modelo.id;
             b.disabled = modelo.amostra_status === 'APROVADA';
             b.onclick = async () => {
-                if (!confirm('Excluir o modelo "' + (modelo.nome_modelo || modelo.produto || 'Sem nome') + '" deste pedido IdGen? Esta ação não pode ser desfeita pela tela.')) return;
+                if (!confirm('Excluir o modelo "' + (modelo.nome_modelo || modelo.produto || 'Sem nome') + '" deste template IdGen? Esta ação não pode ser desfeita pela tela.')) return;
                 b.disabled = true;
                 try {
                     await sessao.excluirModelo(modelo.id);
-                    sincronizar(); desenhar(); toast('Modelo excluído do pedido IdGen.', 'success');
+                    sincronizar(); desenhar(); toast('Modelo excluído do template IdGen.', 'success');
                 } catch (e) { erro(e); b.disabled = false; }
             };
         });
-        // Fluxos comerciais do ERP não fazem parte de um pedido IdGen.
+        // Fluxos comerciais do ERP não fazem parte de um template IdGen.
         const banner = document.getElementById('amostras-os-banner');
         for (const b of banner?.querySelectorAll('button') || []) {
             const acao = b.getAttribute('onclick') || '';
-            if (/clearAmostrasOS/.test(acao)) { b.textContent = '← Pedidos IdGen'; b.onclick = sair; }
+            if (/clearAmostrasOS/.test(acao)) { b.textContent = '← Templates IdGen'; b.onclick = sair; }
             else if (!/^exportarPdf/.test(acao) && b.id !== 'btn-import-pdf-arte') b.hidden = true;
         }
         banner?.querySelectorAll('.banner-grupo').forEach(g => {
@@ -248,7 +248,11 @@
         const view = document.getElementById('view-amostras');
         const caixa = node('div', '', null); caixa.className = 'card'; caixa.id = 'idgen-modelo-form';
         node('h2', 'IdGen — ' + sessao.pedido.nome, caixa);
-        const sairBtn = node('button', '← Pedidos IdGen', caixa); sairBtn.className = 'btn btn-secondary'; sairBtn.onclick = sair;
+        const sairBtn = node('button', '← Templates IdGen', caixa); sairBtn.className = 'btn btn-secondary'; sairBtn.onclick = sair;
+        const liberar = node('a', 'Associar template ao cliente', caixa); liberar.className = 'btn btn-secondary';
+        liberar.href = 'https://idgen-5kg.pages.dev/?template=' + encodeURIComponent(contexto.id);
+        liberar.target = '_blank'; liberar.rel = 'noopener noreferrer';
+        liberar.title = 'Disponibilize a versão salva do template para o cliente.';
         const f = node('form', '', caixa); f.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end;margin-top:16px';
         const label = node('label', 'Nome do modelo', f), nome = node('input', '', label); nome.required = true; nome.maxLength = 120; nome.id = 'idgen-modelo-nome';
         const campos = {};
@@ -320,7 +324,7 @@
             document.querySelectorAll('.sidebar, .mobile-header').forEach(e => e.hidden = true);
             node('style', '.idgen-contexto [hidden],.idgen-contexto .sidebar,.idgen-contexto .drawer-trigger{display:none!important}.idgen-contexto .main-content{margin-left:0;width:100%}', document.head);
             for (const idView of ['view-numeracao', 'view-cores', 'view-formatos']) {
-                const b = node('button', '← Voltar ao pedido IdGen'); b.className = 'btn btn-secondary';
+                const b = node('button', '← Voltar ao template IdGen'); b.className = 'btn btn-secondary';
                 b.onclick = () => { window.showView('view-amostras'); desenhar(); };
                 document.getElementById(idView).prepend(b);
             }
@@ -329,7 +333,7 @@
             document.getElementById('loading-overlay')?.classList.remove('active');
         } catch (e) {
             const root = document.querySelector('.main-content') || document.body;
-            root.replaceChildren(); node('h2', 'Não foi possível abrir o pedido IdGen', root); node('p', e.message, root);
+            root.replaceChildren(); node('h2', 'Não foi possível abrir o template IdGen', root); node('p', e.message, root);
             const b = node('button', 'Voltar', root); b.onclick = sair;
         }
     }

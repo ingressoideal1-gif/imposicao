@@ -28,12 +28,17 @@
             if (turno !== sequencia) return;
             if (!Array.isArray(pedidos)) throw new Error('Lista de pedidos inválida.');
             const lista = el('idgen-pedidos'); lista.replaceChildren();
-            if (!pedidos.length) texto(lista, 'p', 'Nenhum pedido IdGen cadastrado.');
+            const recebidos = texto(lista, 'a', 'Pedidos recebidos dos clientes', 'btn btn-secondary');
+            recebidos.href = 'https://idgen-5kg.pages.dev/?pedidos=1'; recebidos.target = '_blank'; recebidos.rel = 'noopener noreferrer';
+            if (!pedidos.length) texto(lista, 'p', 'Nenhum template IdGen cadastrado.');
             for (const p of pedidos) {
                 const linha = texto(lista, 'div', '', 'card');
                 texto(linha, 'h3', p.nome);
                 texto(linha, 'p', 'Cliente ERP: ' + p.cliente_id);
-                const abrir = texto(linha, 'button', 'Abrir pedido', 'btn btn-primary');
+                const liberar = texto(linha, 'a', 'Associar template ao cliente', 'btn btn-secondary');
+                liberar.href = 'https://idgen-5kg.pages.dev/?template=' + encodeURIComponent(p.id);
+                liberar.target = '_blank'; liberar.rel = 'noopener noreferrer';
+                const abrir = texto(linha, 'button', 'Editar template', 'btn btn-primary');
                 abrir.type = 'button';
                 abrir.onclick = async () => {
                     abrir.disabled = true;
@@ -80,7 +85,7 @@
                 const p = await pedir('criar', { id: criacaoId, cliente_id: cliente.id_cliente, nome });
                 if (p?.id !== criacaoId) throw new Error('O servidor não confirmou o pedido.');
                 criacaoId = null; el('idgen-nome').value = '';
-                mensagem('Pedido IdGen criado.'); await listar();
+                mensagem('Template IdGen criado.'); await listar();
             } catch (e) { mensagem(e.message); } finally { botao.disabled = false; }
         };
         el('idgen-atualizar').onclick = listar;

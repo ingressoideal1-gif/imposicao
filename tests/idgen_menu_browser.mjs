@@ -44,6 +44,10 @@ try {
     await page.type('#idgen-nome', 'Credenciais sintéticas'); await page.click('#idgen-criar');
     await page.waitForSelector('#idgen-pedidos button');
     assert.equal(await page.$eval('#idgen-pedidos h3', e => e.textContent), 'Credenciais sintéticas');
+    const link = await page.$eval('#idgen-pedidos .card a', e => ({ href: e.href, target: e.target, rel: e.rel }));
+    const ownId = await page.evaluate(() => pedidosIdGen[0].id);
+    assert.equal(link.href, 'https://idgen-5kg.pages.dev/?template=' + ownId);
+    assert.equal(link.target, '_blank'); assert.equal(link.rel, 'noopener noreferrer');
     await page.click('#idgen-pedidos button');
     await page.waitForFunction(() => document.querySelector('#idgen-mensagem').textContent.includes('ainda não está habilitada'));
     assert.deepEqual(await page.evaluate(() => chamadasIdGen), ['listar', 'clientes', 'criar', 'listar']);
