@@ -28565,6 +28565,7 @@ async function loadOSItens(osId, opcoes = {}) {
             }
         }
 
+        if (window.PilotoOffline) await window.PilotoOffline.aplicarConfirmacoes(osId);
         renderOSItens(osId);
         // Não chamar renderOrdens() aqui para evitar re-renderizar a tabela durante a navegação para amostras
         return { ok: true };
@@ -28790,7 +28791,7 @@ async function devolverArteParaAlteracao(itemId, osId) {
             })
             .eq('id', idBanco)
             .eq('id_int', numOs)
-            .select('id, status_impressao, status_arte, status_impressao_registrado_em');
+            .select('id, id_int, status_impressao, status_arte, status_impressao_em, status_impressao_registrado_em');
 
         if (error) throw error;
         if (!data || data.length !== 1) {
@@ -28800,7 +28801,13 @@ async function devolverArteParaAlteracao(itemId, osId) {
                 String(data[0].status_arte || '').trim().toUpperCase() !== 'REPROVADA_CLIENTE') {
             throw new Error('o banco devolveu um estado diferente do solicitado');
         }
-        if (decisaoLocal) await window.PilotoOffline.encerrarDecisao(decisaoLocal);
+        if (decisaoLocal) {
+            const confirmado = {id:data[0].id, id_int:numOs, status_impressao:data[0].status_impressao,
+                status_impressao_em:data[0].status_impressao_em || null,
+                status_impressao_registrado_em:data[0].status_impressao_registrado_em || null};
+            window.PilotoOffline.registrarStatusConfirmado(confirmado);
+            await window.PilotoOffline.encerrarDecisao(decisaoLocal, true, confirmado);
+        }
         statusRegistradoEm = data[0].status_impressao_registrado_em || null;
     } catch (e) {
         console.error('[Corrigir Arte] gravação não confirmada:', e);
@@ -32899,17 +32906,6 @@ function formatDateTime(dateStr) {
 async function updateItemImpressao(itemId, osId, novoStatus) {
     let horarioConfirmado = {};
     try {
-        // Na estação, a lista é reconstruída do snapshot local. Uma escrita
-        // direta na nuvem não deixa a confirmação durável que acompanha esse
-        // snapshot e o próximo retorno pode mostrar Aguardando novamente.
-        if (window.PilotoOffline && normalizarStatusImpressao(novoStatus) === 'Impresso') {
-            await window.PilotoOffline.confirmar([{ itemId: String(itemId), osId: String(osId) }]);
-            renderOrdens();
-            window.dispatchEvent(new CustomEvent('pedidos-modelo-status-impressao', {
-                detail: { itemId, osId, status: novoStatus }
-            }));
-            return true;
-        }
         if (normalizarStatusImpressao(novoStatus) === STATUS_CORRIGIR_ARTE) {
             const confirmado = await devolverArteParaAlteracao(itemId, osId);
             if (!confirmado) {
@@ -32934,7 +32930,20 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
                 throw new Error('Registro do modelo e pedido não confirmado. Atualize a lista.');
             }
             const isNumericId = /^\d+$/.test(String(itemId).trim());
+            const {data: antes, error: erroAntes} = await supabaseClient.from('pedidos_modelos')
+                .select('id,id_int,status_impressao,status_impressao_registrado_em')
+                .eq('id', isNumericId ? parseInt(itemId,10) : itemId).eq('id_int',Number(numero));
+            if (erroAntes) throw erroAntes;
+            if (!Array.isArray(antes) || antes.length!==1 || String(antes[0].id)!==String(itemId).trim()
+                || Number(antes[0].id_int)!==Number(numero)) throw new Error('Modelo nao confirmado na rede.');
+            if (normalizarStatusImpressao(novoStatus)==='Impresso'
+                && normalizarStatusImpressao(antes[0].status_impressao)===STATUS_CORRIGIR_ARTE) {
+                throw new Error('O modelo esta em Corrigir Arte. Atualize e confira o pedido antes de confirmar.');
+            }
             let query = supabaseClient.from('pedidos_modelos').update({ status_impressao: novoStatus });
+            for (const campo of ['status_impressao','status_impressao_registrado_em']) {
+                query = antes[0][campo] == null ? query.is(campo,null) : query.eq(campo,antes[0][campo]);
+            }
             if (isNumericId) {
                 query = query.eq('id', parseInt(itemId, 10));
             } else {
@@ -32949,14 +32958,37 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
                 || normalizarStatusImpressao(data[0].status_impressao) !== normalizarStatusImpressao(novoStatus)) {
                 throw new Error('O banco não confirmou exatamente o modelo, pedido e status solicitados.');
             }
-            horarioConfirmado = { status_impressao_em: data[0].status_impressao_em || null, status_impressao_registrado_em: data[0].status_impressao_registrado_em || null };
+            // A resposta da escrita e a releitura devem identificar o mesmo registro.
+            // Uma fila local ou um PATCH sem linha nao confirma o status compartilhado.
+            const { data: relidos, error: erroLeitura } = await supabaseClient.from('pedidos_modelos')
+                .select('id,id_int,status_impressao,status_impressao_em,status_impressao_registrado_em')
+                .eq('id', data[0].id).eq('id_int', Number(numero));
+            if (erroLeitura) throw erroLeitura;
+            if (!Array.isArray(relidos) || relidos.length !== 1
+                || String(relidos[0].id) !== String(data[0].id)
+                || Number(relidos[0].id_int) !== Number(numero)
+                || !String(relidos[0].status_impressao || '').trim()
+                || normalizarStatusImpressao(relidos[0].status_impressao) !== normalizarStatusImpressao(novoStatus)) {
+                throw new Error('O status mudou ou nao foi confirmado na releitura do banco. Atualize o pedido.');
+            }
+            const confirmado = relidos[0];
+            horarioConfirmado = { status_impressao_em: confirmado.status_impressao_em || null,
+                status_impressao_registrado_em: confirmado.status_impressao_registrado_em || null,
+                _confirmacaoLocalPendente: false };
+            if (window.PilotoOffline) {
+                window.PilotoOffline.registrarStatusConfirmado(confirmado);
+                try { await window.PilotoOffline.encerrarDecisao(decisaoLocal, true, confirmado); }
+                catch (erroLocal) {
+                    console.warn('Status confirmado no banco; recibo local indisponivel:', erroLocal);
+                    toast('Status gravado no banco. A copia local precisa ser atualizada ao reabrir o pedido.', 'warning');
+                }
+            }
         } else {
             // A rota legada grava producao_os_itens, não pedidos_modelos.
             // Sem conexão confirmada, não apresentar uma marcação apenas local.
             throw new Error('Conexão ao banco necessária para confirmar o status de impressão. Tente novamente quando a conexão voltar.');
         }
 
-        if (decisaoLocal) await window.PilotoOffline.encerrarDecisao(decisaoLocal);
         if (itemId && itemId.toString().startsWith('vibe_item_')) {
             const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
             impOverrides[itemId] = novoStatus;
@@ -33913,7 +33945,6 @@ async function abrirImposicaoDoPedido(osId, numeroOS) {
     if (snapshotLocal) mesclarNumeracoesNoCatalogo(state.numeracoes, structuredClone(snapshotLocal.numeracoes).map(normalizarNumeracaoLida));
     const carregado = await loadOSItens(osId, { atualizar: true, exigirModelos, snapshotLocal });
     if (!aindaAtual() || carregado === false) return;
-    if (window.PilotoOffline) await window.PilotoOffline.aplicarConfirmacoes(osId);
     // Enxuto: quem abre o pedido cai no primeiro modelo pelo `enviarParaPedido`
     // logo abaixo, e e ele quem desce o banco do modelo aberto. Ver a linha
     // gemea no `enviarParaImposicao`.

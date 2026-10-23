@@ -17,6 +17,7 @@ function ambiente(resposta, conectado = true) {
     const writes = [], notices = [], reads = [];
     const query = {
         eq(k, v) { writes.push([k, v]); return this; },
+        is(k,v) { writes.push([k,v]); return this; },
         select() { return resposta; }
     };
     const ctx = {
@@ -24,7 +25,10 @@ function ambiente(resposta, conectado = true) {
         state: {osItens: {vibe_999: [item]}, modelosGlobais: {999: [global]}},
         supabaseClient: conectado ? {from(table) {
             assert.equal(table, 'pedidos_modelos');
-            return {update(payload) { writes.push(payload); return query; }};
+            return {select() {
+                const q={eq(){return q;},then(ok){return (writes.some(w=>w.status_impressao) ? resposta : Promise.resolve({data:[{id:123,id_int:999,status_impressao:'Aguardando'}]})).then(ok);}};
+                return q;
+            },update(payload) { writes.push(payload); return query; }};
         }} : null,
         findOSInState: () => ({numero: 999}),
         loadOSItens: async (...args) => { reads.push(args); },
@@ -121,15 +125,18 @@ function ambiente(resposta, conectado = true) {
         await correcao.ctx[name](123, 'vibe_999', 'status_impressao', 'Corrigir Arte');
         assert.equal(chamadas, 1, 'Preservar o fluxo de correção de arte');
 
-        const local = ambiente(null);
-        const alvos = [];
-        local.ctx.window.PilotoOffline = {async confirmar(lista) { alvos.push(...lista); }};
-        assert.equal(await local.ctx[name](123, 'vibe_999', 'status_impressao', 'Impresso'), true);
-        assert.equal(JSON.stringify(alvos), JSON.stringify([{itemId:'123',osId:'vibe_999'}]));
-        assert.equal(local.writes.length, 0, 'Estação usa confirmação durável, sem escrita direta');
-        local.ctx.window.PilotoOffline.confirmar = async () => { throw Error('Disco indisponível'); };
-        assert.equal(await local.ctx[name](123, 'vibe_999', 'status_impressao', 'Impresso'), false);
-        assert.equal(local.writes.length, 0, 'Falha local não pode contornar persistência');
+        const local = ambiente(Promise.resolve({data:[{id:123,id_int:999,status_impressao:'Impresso'}]}));
+        const eventos = [];
+        local.ctx.window.PilotoOffline = {
+            async confirmar(){throw Error('Nao usar fila local para confirmar na rede');},
+            async iniciarDecisao(){eventos.push('reserva');return {};},
+            registrarStatusConfirmado(){eventos.push('rede');},
+            async encerrarDecisao(){eventos.push('recibo');}
+        };
+        assert.equal(await local.ctx[name](123,'vibe_999','status_impressao','Impresso'),true);
+        assert.deepEqual(eventos,['reserva','rede','recibo']);
+        assert(local.writes.some(w=>w.status_impressao==='Impresso'));
+
     }
     console.log('OK: retorno/filtros, confirmação, zero linhas, falha de rede, registro divergente, offline e Corrigir Arte.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

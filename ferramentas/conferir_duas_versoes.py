@@ -36,7 +36,8 @@ HARNESSES = ['estatisticas_piloto_harness.js', 'montagem_harness.js', 'montagem_
              'ticket_previas_harness.js','numeracao_compatibilidade_harness.js',
              'mapas_teatro_harness.js','mapas_teatro_browser_harness.js',
              'teatro_snapshot_harness.js','teatro_vertical_modelo_harness.js',
-             'gabarito_vinculado_pedido_harness.js']
+             'gabarito_vinculado_pedido_harness.js', 'status_impressao_rede_harness.js',
+             'status_impressao_retorno_harness.js', 'offline_painel_harness.js']
 
 def selecionar(paths=None):
     perfil = plano(paths)['perfil'] if paths is not None else 'completo'

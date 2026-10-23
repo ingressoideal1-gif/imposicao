@@ -290,11 +290,27 @@ class OfflineEstacao:
         A reserva sobrevive a reinicio/queda de rede. So a confirmacao da escrita
         muda a apresentacao; uma reserva incerta nunca reenfileira impressao.
         """
-        if (not isinstance(dados, dict) or set(dados) != {'id','pedido','modelo','status','acao'}
+        if (not isinstance(dados, dict) or set(dados) not in ({'id','pedido','modelo','status','acao'}, {'id','pedido','modelo','status','acao','confirmado'})
                 or str(uuid.UUID(dados['id'])) != dados['id']
-                or dados['status'] not in ('Aguardando', 'Corrigir Arte')
+                or dados['status'] not in ('Aguardando', 'Corrigir Arte', 'Impresso')
                 or dados['acao'] not in ('iniciar','concluir','cancelar')):
             raise ValueError('Decisao invalida.')
+        confirmado = dados.get('confirmado')
+        if confirmado is not None:
+            campos = {'id', 'id_int', 'status_impressao', 'status_impressao_em', 'status_impressao_registrado_em'}
+            if (dados['acao'] != 'concluir' or not isinstance(confirmado, dict)
+                    or set(confirmado) != campos
+                    or str(confirmado['id']) != str(dados['modelo'])
+                    or str(confirmado['id_int']) != dados['pedido']
+                    or str(confirmado['status_impressao']).strip().upper() != dados['status'].upper()):
+                raise ValueError('Recibo do status divergente.')
+            for campo in ('status_impressao_em', 'status_impressao_registrado_em'):
+                if confirmado[campo] is not None:
+                    if not isinstance(confirmado[campo], str):
+                        raise ValueError('Horario do banco invalido.')
+                    quando = datetime.fromisoformat(confirmado[campo].replace('Z', '+00:00'))
+                    if quando.tzinfo is None:
+                        raise ValueError('Horario do banco sem fuso.')
         registro = self.selecao._cache.obter(dados['pedido'])
         if not registro or str(dados['modelo']) not in {str(m['id']) for m in registro['snapshot']['modelos']}:
             raise ValueError('Modelo de outro pedido ou sem preparacao.')
@@ -302,7 +318,7 @@ class OfflineEstacao:
                  'status':dados['status'], 'operador':str(operador), 'empresa':self.servico.empresa}
         with self._confirmacoes_lock, self.banco() as con:
             antigo = con.execute('SELECT dados,estado FROM offline_confirmacoes WHERE id=?', (dados['id'],)).fetchone()
-            if antigo and json.loads(antigo[0]) != corpo:
+            if antigo and {k:v for k,v in json.loads(antigo[0]).items() if k != 'confirmado'} != corpo:
                 raise ValueError('Identificador ja utilizado.')
             if dados['acao'] == 'iniciar':
                 con.execute('INSERT OR IGNORE INTO offline_confirmacoes VALUES (?,?,?,?)',
@@ -312,8 +328,17 @@ class OfflineEstacao:
                     raise ValueError('Decisao ausente ou encerrada.')
                 if dados['acao'] == 'cancelar' and antigo[1] == 'manual':
                     raise ValueError('Decisao ja concluida.')
-                con.execute('UPDATE offline_confirmacoes SET estado=? WHERE id=?',
-                            ('manual' if dados['acao']=='concluir' else 'cancelada', dados['id']))
+                if confirmado is None and dados['acao'] == 'concluir' and json.loads(antigo[0]).get('confirmado'):
+                    corpo['confirmado'] = json.loads(antigo[0])['confirmado']
+                if confirmado is not None:
+                    anterior_confirmado = json.loads(antigo[0]).get('confirmado')
+                    if anterior_confirmado is not None and anterior_confirmado != confirmado:
+                        raise ValueError('Recibo ja confirmado com outro estado.')
+                    corpo['confirmado'] = confirmado
+                con.execute('UPDATE offline_confirmacoes SET estado=?,dados=? WHERE id=?',
+                            ('manual' if dados['acao']=='concluir' else 'cancelada', json.dumps(corpo), dados['id']))
+                if dados['acao'] == 'concluir':
+                    self.proxima_lista = 0
         return {'id':dados['id'], 'registrado_localmente':True}
 
     def sincronizar_confirmacoes(self, cliente, checkpoint):

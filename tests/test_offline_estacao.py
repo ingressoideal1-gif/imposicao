@@ -125,7 +125,7 @@ def test_faixa_fica_em_fila_apos_reinicio_e_nao_duplica(tmp_path):
         assert con.execute('SELECT COUNT(*) FROM offline_faixas WHERE enviado=0').fetchone()[0]==1
 
 
-@pytest.mark.parametrize('status', ['Aguardando', 'Corrigir Arte'])
+@pytest.mark.parametrize('status', ['Aguardando', 'Corrigir Arte', 'Impresso'])
 def test_decisao_manual_substitui_recibo_antigo_apos_reinicio(tmp_path, status):
     s,_,_,o,_=ambiente(tmp_path);o.ciclo()
     impresso={'id':str(uuid.uuid4()),'pedido':'99','revisao':'a'*64,'modelos':['10']}
@@ -260,3 +260,23 @@ def test_prepara_comic_e_estilos_com_as_mesmas_chaves_do_motor(tmp_path, monkeyp
         assert base64.b64decode(e['_font_data']).startswith(b'fonte-sintetica:')
     reinicio=OfflineEstacao(s, offline.selecao)
     assert all(reinicio.ler_dependencia(u) is not None for u in baixadas)
+
+
+def test_recibo_confirmado_na_rede_persiste_sem_reenfileirar(tmp_path):
+    s,_,_,o,_=ambiente(tmp_path);o.ciclo()
+    d={'id':str(uuid.uuid4()),'pedido':'99','modelo':'10','status':'Impresso','acao':'iniciar'}
+    o.decisao_manual(d,'op')
+    row={'id':10,'id_int':99,'status_impressao':'IMPRESSO',
+         'status_impressao_em':'2026-10-23T12:00:00Z','status_impressao_registrado_em':'2026-10-23T12:00:00Z'}
+    o.decisao_manual({**d,'acao':'concluir','confirmado':row},'op')
+    o.decisao_manual({**d,'acao':'concluir','confirmado':row},'op')
+    outro=OfflineEstacao(s,SelecaoPiloto(s))
+    assert outro.confirmacoes()[0]['dados']['confirmado']==row
+    def proibido(*_): raise AssertionError('recibo online nao deve escrever novamente na nuvem')
+    outro.sincronizar_confirmacoes(SimpleNamespace(chamar=proibido),lambda:None)
+    for alteracao in ({'id':11},{'id_int':100},{'status_impressao':'Aguardando'},
+                      {'status_impressao_registrado_em':'2026-10-23T12:00:00'},
+                      {'status_impressao_registrado_em':'2026-10-23T13:00:00Z'}):
+        with pytest.raises(ValueError):
+            outro.decisao_manual({**d,'acao':'concluir','confirmado':{**row,**alteracao}},'op')
+    assert outro.confirmacoes()[0]['dados']['confirmado']==row

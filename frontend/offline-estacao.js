@@ -2,6 +2,54 @@
 (function () {
     'use strict';
     let pendente;
+    // Somente decisoes explicitamente confirmadas na rede entram neste mapa.
+    // Uma leitura iniciada antes da gravacao nao pode apagar a confirmacao.
+    const confirmadosRede = new Map();
+    const chaveStatus = (pedido, modelo) => String(pedido) + ':' + String(modelo);
+    const impresso = item => String(item?.status_impressao || item?.impressao || '').trim().toUpperCase() === 'IMPRESSO';
+    const emCorrecao = item => normalizarStatusImpressao(item?.status_impressao || item?.impressao) === 'Corrigir Arte';
+    const horaStatus = item => Date.parse(item?.status_impressao_registrado_em || item?.status_impressao_em || '') || 0;
+    function registrarStatusConfirmado(row) {
+        confirmadosRede.set(chaveStatus(row.id_int, row.id), {...row});
+        pendente = null;
+    }
+    function aplicarStatus(item, row) {
+        for (const campo of ['status_impressao', 'status_impressao_em', 'status_impressao_registrado_em']) {
+            item[campo] = row[campo] ?? null;
+        }
+        item.impressao = normalizarStatusImpressao(row.status_impressao);
+        item._confirmacaoLocalPendente = false;
+    }
+    async function lerStatusDaRede(modelos) {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient || !modelos.length) return false;
+        const porId = new Map(modelos.map(m => [String(m.id), m]));
+        const ids = [...porId.keys()];
+        try {
+            for (let i=0; i<ids.length; i+=100) {
+                const lote=ids.slice(i,i+100);
+                const {data,error}=await supabaseClient.from('pedidos_modelos')
+                    .select('id,id_int,status_impressao,status_impressao_em,status_impressao_registrado_em').in('id',lote);
+                if (error) throw error;
+                if (!Array.isArray(data) || data.length!==lote.length || new Set(data.map(r=>String(r.id))).size!==lote.length
+                    || data.some(r=>!lote.includes(String(r.id)) || String(r.id_int)!==String(porId.get(String(r.id))?.id_int))) {
+                    throw Error('Leitura de status incompleta.');
+                }
+                for (const row of data) {
+                    const item=porId.get(String(row.id));
+                    // Atualizacao automatica nunca rebaixa uma impressao observada.
+                    // Retorno deliberado e tratado pelo recibo da acao do operador.
+                    if (!impresso(item) || impresso(row) || emCorrecao(row)) aplicarStatus(item,row);
+                    const chave=chaveStatus(row.id_int,row.id), anterior=confirmadosRede.get(chave);
+                    if ((impresso(row) || emCorrecao(row)) && (!anterior || horaStatus(row)>horaStatus(anterior))) confirmadosRede.set(chave,{...row});
+                }
+            }
+            return true;
+        } catch (e) {
+            console.warn('Status da rede indisponivel; preservando a confirmacao local.', e);
+            return false;
+        }
+    }
+
     async function pedir(path, body) {
         const r = await fetch('/api/pacotes-locais/' + path, body === undefined ? {cache:'no-store'} : {
             method:'POST', headers:{'Content-Type':'application/json','X-Piloto-Painel':'1'}, body:JSON.stringify(body)
@@ -97,6 +145,7 @@
             if (typeof aplicarRegraProdutoPrateleira === 'function') aplicarRegraProdutoPrateleira(modelo);
             (state.modelosGlobais[modelo.id_int] ||= []).push(modelo);
         }
+        await lerStatusDaRede(Object.values(state.modelosGlobais).flat());
         for (const os of state.ordens || []) aplicarConfirmacoesDoPedido(os.id, b);
         const prontos = new Set(registros.map(r => String(r.pedido)));
         for (const os of state.ordens || []) os._disponivelOffline = prontos.has(String(os.numero));
@@ -130,28 +179,18 @@
         };
     }
     async function confirmar(alvos) {
-        const grupos = new Map();
-        for (const a of alvos) {
-            const r = window.PilotoSelecao.revisaoPedido(a.osId);
-            if (!r) throw Error('Revisão local não identificada.');
-            if (!grupos.has(r.pedido)) grupos.set(r.pedido, {...r, id:crypto.randomUUID(), modelos:[]});
-            grupos.get(r.pedido).modelos.push(String(a.itemId));
-        }
-        for (const dados of grupos.values()) await pedir('confirmar-impressao-painel', dados);
-        for (const a of alvos) {
-            const item = (state.osItens[a.osId] || []).find(i => String(i.id) === String(a.itemId));
-            if (item) { item.impressao = 'IMPRESSO'; item.status_impressao = 'IMPRESSO'; item._confirmacaoLocalPendente = true; item._confirmacaoLocalRevisaoNecessaria = false; }
-            const numero = String(a.osId).replace(/^vibe_/, '');
-            const global = (state.modelosGlobais[numero] || []).find(i => String(i.id) === String(a.itemId));
-            if (global) { global.impressao = 'IMPRESSO'; global.status_impressao = 'IMPRESSO'; global._confirmacaoLocalPendente = true; global._confirmacaoLocalRevisaoNecessaria = false; }
+        for (const alvo of alvos) {
+            if (!await updateItemImpressao(alvo.itemId, alvo.osId, 'Impresso')) return false;
         }
         if (typeof renderPedOSQueue === 'function') renderPedOSQueue();
-        pendente = null;
-        toast('Confirmação guardada nesta estação. O banco será atualizado quando houver conexão; nenhum arquivo será reenviado à impressora.', 'success');
+        if (typeof renderImpOSQueue === 'function') renderImpOSQueue();
+        if (typeof updatePedImprimirButtonsVisibility === 'function') updatePedImprimirButtonsVisibility();
         return true;
     }
     async function aplicarConfirmacoes(osId) {
         const b = await bootstrap();
+        const numero=String(osId).replace(/^vibe_/, '');
+        await lerStatusDaRede((state.osItens[osId] || []).map(m => { m.id_int ??= Number(numero); return m; }));
         aplicarConfirmacoesDoPedido(osId, b);
     }
     async function iniciarDecisao(itemId, osId, status) {
@@ -161,39 +200,43 @@
         pendente = null;
         return dados;
     }
-    async function encerrarDecisao(dados, concluir=true) {
-        await pedir('decisao-impressao-painel', {...dados, acao:concluir ? 'concluir' : 'cancelar'});
+    async function encerrarDecisao(dados, concluir=true, confirmado=null) {
+        await pedir('decisao-impressao-painel', {...dados, acao:concluir ? 'concluir' : 'cancelar', ...(confirmado ? {confirmado} : {})});
         pendente = null;
         await aplicarConfirmacoes('vibe_' + dados.pedido);
     }
     function aplicarConfirmacoesDoPedido(osId, b) {
         const numero = String(osId).replace(/^vibe_/, '');
-        const atual = (b.pedidos || []).find(p => String(p.pedido) === numero);
+        const modelos = [...(state.osItens[osId] || []), ...(state.modelosGlobais[numero] || [])];
         const vistos = new Set();
-        // A API fornece as confirmações da mais recente para a mais antiga.
-        // Uma nova decisão do operador substitui o conflito anterior do modelo.
         for (const c of b.confirmacoes || []) {
-            if (String(c.dados.pedido) !== numero) continue;
-            if (c.estado === 'manual_pendente' || c.estado === 'cancelada') continue;
-            // O detalhe e a lista precisam usar a mesma confirmação persistida.
-            // Não altera o snapshot/revisão de arte preparado para impressão.
-            const modelos = [...(state.osItens[osId] || []), ...(state.modelosGlobais[numero] || [])];
+            if (String(c.dados.pedido) !== numero || ['manual_pendente','cancelada'].includes(c.estado)) continue;
             for (const id of c.dados.modelos.map(String)) {
                 if (vistos.has(id)) continue;
                 vistos.add(id);
-                const persistido = atual?.snapshot?.modelos?.find(m => String(m.id) === id);
-                const impressoNoSnapshot = String(persistido?.status_impressao || '').trim().toUpperCase() === 'IMPRESSO';
-                const divergente = !impressoNoSnapshot && (c.estado === 'conflito' || c.dados.revisao !== atual?.revisao);
-                for (const item of modelos.filter(m => String(m.id) === id)) {
-                    // O status continua sendo a ultima decisao do operador.
-                    // Divergencias de sincronizacao nao criam um quarto status.
-                    item.impressao = c.estado === 'manual' ? c.dados.status : 'IMPRESSO';
-                    item.status_impressao = item.impressao;
-                    delete item._confirmacaoLocalRevisaoNecessaria;
-                    item._confirmacaoLocalPendente = !divergente && !impressoNoSnapshot && c.estado === 'pendente';
+                const chave=chaveStatus(numero,id);
+                const ack=c.dados.confirmado;
+                const anterior=confirmadosRede.get(chave);
+                if (ack && (!anterior || horaStatus(ack)>horaStatus(anterior))) confirmadosRede.set(chave,{...ack});
+                for (const item of modelos.filter(m=>String(m.id)===id)) {
+                    // Confirmacoes antigas de impressao continuam protegidas e visiveis
+                    // como pendentes. Uma decisao antiga Aguardando nao vence Impresso.
+                    if (!ack && !confirmadosRede.has(chave) && !emCorrecao(item) && (c.estado!=='manual' || c.dados.status==='Impresso')) {
+                        const jaImpresso=impresso(item);
+                        item.status_impressao='IMPRESSO'; item.impressao='Impresso';
+                        item._confirmacaoLocalPendente=!jaImpresso && c.estado!=='sincronizado';
+                    }
                 }
             }
         }
+        for (const item of modelos) {
+            const ack=confirmadosRede.get(chaveStatus(numero,item.id));
+            if (!ack) continue;
+            if (emCorrecao(item) && horaStatus(item)>=horaStatus(ack)) continue;
+            // O recibo local e uma acao explicita. Pode liberar Aguardando apenas
+            // se nao houver uma confirmacao mais recente de Impresso na rede.
+            if (impresso(ack) || !impresso(item) || horaStatus(ack)>horaStatus(item)) aplicarStatus(item,ack);
+        }
     }
-    window.PilotoOffline = {bootstrap,catalogo,carregarOrdens,conferencia,confirmar,aplicarConfirmacoes,aplicarCatalogos,iniciarDecisao,encerrarDecisao};
+    window.PilotoOffline = {bootstrap,catalogo,carregarOrdens,conferencia,confirmar,aplicarConfirmacoes,aplicarCatalogos,iniciarDecisao,encerrarDecisao,registrarStatusConfirmado};
 })();
