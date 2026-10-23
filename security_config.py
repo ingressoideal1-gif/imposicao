@@ -107,6 +107,7 @@ PAINEL_SYNC_BASE_URL = "https://imposicao.pages.dev"
 # estação e o `csv-editor.js` ficou três releases atrás sem ninguém notar.
 # `tests/test_painel_estacao.py` compara esta lista com o que o HTML pede.
 PAINEL_ARQUIVOS = [
+    'idgen-contexto.js', 'idgen-editor.js', 'idgen-pedidos.mjs', 'idgen.js',
     'entregas-avulsas.js',
     'gestao-estacoes.js',
     'pacotes-locais.js', 'antecipacao-pedidos.js', 'pacote-entrada.js',
