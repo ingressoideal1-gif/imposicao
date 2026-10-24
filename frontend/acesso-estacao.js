@@ -251,3 +251,39 @@ window.addEventListener('newprod-sessao-expirada', () => {
     window._acessoLocal = null;
     mostrarLoginLocal(window._liberarUIAposLoginLocal || (() => {}));
 });
+
+/* Barreira de novos trabalhos. Nao cancela requisicoes nem reinicia a estacao. */
+(function (root) {
+    'use strict';
+    const minima = '1.4.0';
+    const caminhos = new Set(['/api/impose', '/api/print/submit', '/api/hotfolder/drop',
+        '/api/print/experimental/submit', '/api/print/experimental/submit-lote',
+        '/api/pacotes-locais/entrada', '/api/pacotes-locais/antecipacao',
+        '/api/pacotes-locais/abrir-pedido-painel', '/api/pacotes-locais/preparar-pedido-painel',
+        '/api/pacotes-locais/selecionar-painel']);
+    function aceita(texto) {
+        const m = /^(?:NewProd\s+)?(\d+)\.(\d+)\.(\d+)(?:-piloto-local\.\d+)?$/.exec(String(texto || '').trim());
+        if (!m) return false;
+        const v = m.slice(1).map(Number), alvo = minima.split('.').map(Number);
+        return v[0] > alvo[0] || (v[0] === alvo[0] &&
+            (v[1] > alvo[1] || (v[1] === alvo[1] && v[2] >= alvo[2])));
+    }
+    root.NewProdVersaoMinima = { minima, aceita };
+    if (typeof root.fetch !== 'function') return;
+    const original = root.fetch.bind(root);
+    root.fetch = async function (entrada, opcoes) {
+        const endereco = new URL(typeof entrada === 'string' || entrada instanceof URL ? entrada : entrada.url, root.location.href);
+        const metodo = String(opcoes?.method || entrada?.method || 'GET').toUpperCase();
+        const local = ['localhost', '127.0.0.1', '[::1]'].includes(endereco.hostname) && ['9000', '9001'].includes(endereco.port);
+        if (local && metodo === 'POST' && caminhos.has(endereco.pathname.replace(/\/$/, ''))) {
+            const r = await original(endereco.origin + '/api/version', { cache: 'no-store', signal: opcoes?.signal });
+            const info = r.ok ? await r.json() : null;
+            if (!aceita(info?.version)) {
+                if (typeof root.showAgentUpdateWarning === 'function') root.showAgentUpdateWarning(endereco.origin, minima);
+                return new Response(JSON.stringify({ detail: `Atualização obrigatória: instale o NewProd ${minima} antes de iniciar novos trabalhos.` }),
+                    { status: 426, headers: { 'Content-Type': 'application/json' } });
+            }
+        }
+        return original(entrada, opcoes);
+    };
+})(globalThis);
