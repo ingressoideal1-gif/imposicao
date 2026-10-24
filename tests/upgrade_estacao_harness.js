@@ -5,7 +5,7 @@ const vm = require('node:vm');
 (async () => {
     const elements = new Map();
     const requests = [];
-    const context = { console, API_BASE_URL: 'http://localhost:9000',
+    const context = { console, URL, Request, Response, location: new URL('http://localhost:9000/app/'), API_BASE_URL: 'http://localhost:9000',
         window: { addEventListener: () => {} }, sessionStorage: { getItem: () => null, removeItem: () => {} },
         document: { getElementById: name => elements.get(name) },
         fetch: async (url, options = {}) => {
