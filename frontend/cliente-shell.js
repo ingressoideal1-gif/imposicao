@@ -427,12 +427,43 @@ function atualizarPainelDoPedido() {
     atualizarSinaisDasAbas();
 }
 
-/**
- * Liga a barra de abas e abre a seção certa.
- *
- * O hash existe para o cliente poder recarregar sem voltar ao começo — e para o
- * atendente poder mandar o link já na aba que interessa.
- */
+/** Copia o endereço da aba somente quando o cliente clica na barra. */
+async function copiarLinkDaAba(nome) {
+    if (!secaoValida(nome)) return;
+    const link = new URL(window.location.href);
+    link.hash = nome;
+    let copiado = false;
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(link.href);
+            copiado = true;
+        }
+    } catch (_) { /* Tenta a cópia compatível abaixo. */ }
+
+    if (!copiado) {
+        const foco = document.activeElement;
+        const campo = document.createElement('textarea');
+        campo.value = link.href;
+        campo.readOnly = true;
+        campo.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+        document.body.appendChild(campo);
+        try {
+            campo.select();
+            campo.setSelectionRange(0, campo.value.length);
+            copiado = document.execCommand('copy');
+        } catch (_) { /* A navegação continua mesmo se o navegador bloquear. */ }
+        finally {
+            campo.remove();
+            if (foco && typeof foco.focus === 'function') foco.focus({ preventScroll: true });
+        }
+    }
+    if (typeof toast === 'function') {
+        toast(copiado ? 'Link da aba copiado!' : 'Não foi possível copiar. Copie o link na barra de endereço.',
+            copiado ? 'success' : 'error');
+    }
+}
+
+/** Liga a barra de abas e abre a seção indicada pelo link ou pelo pedido. */
 function montarPortal(statusArte) {
     pintarSeloDoStatus(statusArte);
 
@@ -443,7 +474,11 @@ function montarPortal(statusArte) {
     if (typeof pintarIconesDaPagina === 'function') pintarIconesDaPagina();
 
     document.querySelectorAll('.portal-aba').forEach(botao => {
-        botao.addEventListener('click', () => abrirSecao(botao.dataset.abre));
+        botao.addEventListener('click', () => {
+            // Inicia a cópia durante o clique, antes de desenhar a seção.
+            void copiarLinkDaAba(botao.dataset.abre);
+            abrirSecao(botao.dataset.abre);
+        });
     });
 
     // A primeira visita segue a próxima etapa; F5 mantém a aba visitada nesta entrada.
