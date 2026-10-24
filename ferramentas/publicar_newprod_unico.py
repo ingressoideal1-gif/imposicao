@@ -1,4 +1,4 @@
-"""Publica o mesmo MSI nos aliases historicos e libera todas as estacoes."""
+"""Publica um canal explicito; teste nunca altera manifestos de producao."""
 import argparse
 import hashlib
 import json
@@ -13,19 +13,25 @@ from ferramentas.publicar_pacote_oficial import conferir_upload, requisicao
 from manifesto_oficial import BASE, validar
 
 
-def publicar(msi):
+def publicar(msi, *, canal):
+    if canal not in ('teste', 'producao'):
+        raise ValueError('Canal deve ser teste ou producao.')
     msi = Path(msi).resolve(strict=True)
-    versao = msi.stem.removeprefix('NewProdPiloto_Oficial_v')
+    prefixo = 'NewProdPiloto_Teste_v' if canal == 'teste' else 'NewProdPiloto_Oficial_v'
+    if not msi.name.startswith(prefixo) or msi.suffix != '.msi':
+        raise ValueError('Nome MSI diverge do canal escolhido.')
+    versao = msi.stem.removeprefix(prefixo)
     dados = msi.read_bytes()
     manifesto = dict(schema=1, produto='NewProdPilotoOficial', version=versao,
         url=BASE + msi.name, sha256=hashlib.sha256(dados).hexdigest(),
         bytes=len(dados), size=len(dados),
-        notes='Atualizador com validacao de espaco, download e instalacao; motivo obrigatorio ao selecionar Corrigir Arte, salvo nas observacoes do modelo. Preserva as correcoes publicadas ate 1.3.33.')
-    validar(manifesto)
+        notes='NewProd: publicacao no canal ' + canal + '.')
+    validar({**manifesto, 'url': BASE + 'NewProdPiloto_Oficial_v' + versao + '.msi'})
     teste = {**manifesto, 'produto': 'NewProdPilotoTeste',
         'url': BASE + 'NewProdPiloto_Teste_v' + versao + '.msi'}
-    destinos = {'newprod-piloto-oficial.json': manifesto, 'latest.json': manifesto,
-        'newprod-piloto-teste.json': teste}
+    destinos = ({'newprod-piloto-teste.json': teste} if canal == 'teste' else
+        {'newprod-piloto-oficial.json': manifesto, 'latest.json': manifesto})
+    pacote = teste if canal == 'teste' else manifesto
     anteriores = {}
     for nome in destinos:
         with requisicao(BASE + nome + '?t=' + str(time.time_ns())) as r:
@@ -44,12 +50,10 @@ def publicar(msi):
         with urllib.request.urlopen(req, timeout=30) as r:
             chaves = json.load(r)
         chave = next(c['api_key'] for c in chaves if c['name'] == 'service_role')
-    # Ambos os nomes apontam para bytes identicos. Nenhum manifesto e ativado
-    # antes dos dois downloads publicos completos passarem por hash e tamanho.
-    for item in (manifesto, teste):
-        conferir_upload(msi, item, dados, chave)
+    # Um unico objeto do canal selecionado; conferir antes de ativar.
+    conferir_upload(msi, pacote, dados, chave)
     (prova / 'downloads-conferidos.json').write_text(json.dumps(
-        {'oficial': manifesto, 'alias_legado': teste}, indent=2), encoding='utf8')
+        {canal: pacote}, indent=2), encoding='utf8')
     for nome, item in destinos.items():
         # Recusa sobrescrever uma publicacao concorrente.
         with requisicao(BASE + nome + '?t=' + str(time.time_ns())) as r:
@@ -71,5 +75,6 @@ def publicar(msi):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--msi', required=True)
+    parser.add_argument('--canal', choices=('teste', 'producao'), required=True)
     args = parser.parse_args()
-    publicar(args.msi)
+    publicar(args.msi, canal=args.canal)

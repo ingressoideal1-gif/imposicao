@@ -97,6 +97,12 @@ Não oculte erros nem repita verificações sem motivo. Informe falhas preexiste
 
 ### NewProd de producao e Piloto
 
+Decisao humana de 24/10/2026: builds de teste devem publicar somente
+`newprod-piloto-teste.json`. Nunca atualizar os manifestos de producao ao
+publicar um teste. `publicar_newprod_unico.py` exige `--canal teste|producao`;
+producao atualiza apenas o manifesto oficial e a ponte `latest.json`.
+Esta decisao substitui a publicacao simultanea descrita abaixo.
+
 Decisao humana de 14/10/2026: NewProd 1.3.1 e a versao unica para todas as
 estacoes. Nao manter releases operacionais divergentes de teste e producao.
 Leia docs/newprod-versao-unica-131.md: os manifestos antigos sao pontes para

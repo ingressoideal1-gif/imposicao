@@ -1,0 +1,22 @@
+{
+  "inicio": "2026-10-24T13:32:00Z",
+  "fim": "2026-10-24T13:34:00Z",
+  "pool": {
+    "result": [
+      {
+        "bytes": 1507328,
+        "requisicoes": 23,
+        "status": "206",
+        "tamanho": "65536"
+      }
+    ]
+  },
+  "lotes": {
+    "result": [
+      {
+        "requisicoes": 34,
+        "status": "200"
+      }
+    ]
+  }
+}

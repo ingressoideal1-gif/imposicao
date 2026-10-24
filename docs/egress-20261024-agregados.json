@@ -1,0 +1,194 @@
+[
+  {
+    "inicio": "2026-10-22T00:00:00Z",
+    "fim": "2026-10-23T00:00:00Z",
+    "resultado": {
+      "result": [
+        {
+          "agente": "Deno/2.1.4 (variant; SupabaseEdgeRuntime/1.77.7; ref=vwbtitjlpelrcnsytzqw)",
+          "bucket": "ideal-control-master",
+          "bytes": 130344000000,
+          "requisicoes": 5431,
+          "status": "200"
+        },
+        {
+          "agente": "NewProd Agent",
+          "bucket": "agent-releases",
+          "bytes": 12396806144,
+          "requisicoes": 63,
+          "status": "200"
+        },
+        {
+          "agente": "Python-urllib/3.14",
+          "bucket": "artes",
+          "bytes": 4516474766,
+          "requisicoes": 3366,
+          "status": "200"
+        },
+        {
+          "agente": "Python-urllib/3.14",
+          "bucket": "agent-releases",
+          "bytes": 2164652986,
+          "requisicoes": 357,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "bucket": "artes",
+          "bytes": 1010721145,
+          "requisicoes": 2095,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "bucket": "chat-ideal",
+          "bytes": 578624732,
+          "requisicoes": 398,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "bucket": "fontes",
+          "bytes": 533884742,
+          "requisicoes": 640,
+          "status": "200"
+        },
+        {
+          "agente": "node",
+          "bucket": "agent-releases",
+          "bytes": 393560064,
+          "requisicoes": 2,
+          "status": "200"
+        }
+      ]
+    }
+  },
+  {
+    "inicio": "2026-10-23T00:00:00Z",
+    "fim": "2026-10-24T00:00:00Z",
+    "resultado": {
+      "result": [
+        {
+          "agente": "Deno/2.1.4 (variant; SupabaseEdgeRuntime/1.77.7; ref=vwbtitjlpelrcnsytzqw)",
+          "bucket": "ideal-control-master",
+          "bytes": 231744000000,
+          "requisicoes": 9656,
+          "status": "200"
+        },
+        {
+          "agente": "NewProd Agent",
+          "bucket": "agent-releases",
+          "bytes": 3345367040,
+          "requisicoes": 17,
+          "status": "200"
+        },
+        {
+          "agente": "Python-urllib/3.14",
+          "bucket": "artes",
+          "bytes": 1295868014,
+          "requisicoes": 1047,
+          "status": "200"
+        },
+        {
+          "agente": "Python-urllib/3.14",
+          "bucket": "agent-releases",
+          "bytes": 787202140,
+          "requisicoes": 94,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "bucket": "artes",
+          "bytes": 588860565,
+          "requisicoes": 986,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "bucket": "fontes",
+          "bytes": 267954620,
+          "requisicoes": 330,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0",
+          "bucket": "artes",
+          "bytes": 266522848,
+          "requisicoes": 8,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "bucket": "chat-ideal",
+          "bytes": 207019181,
+          "requisicoes": 231,
+          "status": "200"
+        }
+      ]
+    }
+  },
+  {
+    "inicio": "2026-10-24T00:00:00Z",
+    "fim": "2026-10-24T13:22:21Z",
+    "resultado": {
+      "result": [
+        {
+          "agente": "Deno/2.1.4 (variant; SupabaseEdgeRuntime/1.77.7; ref=vwbtitjlpelrcnsytzqw)",
+          "bucket": "ideal-control-master",
+          "bytes": 136440000000,
+          "requisicoes": 5685,
+          "status": "200"
+        },
+        {
+          "agente": "NewProd Agent",
+          "bucket": "agent-releases",
+          "bytes": 1574338560,
+          "requisicoes": 8,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "bucket": "chat-ideal",
+          "bytes": 15342462,
+          "requisicoes": 37,
+          "status": "200"
+        },
+        {
+          "agente": "",
+          "bucket": "artes",
+          "bytes": 11448301,
+          "requisicoes": 29,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "bucket": "amostras_renderizadas",
+          "bytes": 2905698,
+          "requisicoes": 44,
+          "status": "200"
+        },
+        {
+          "agente": "NewProd Agent",
+          "bucket": "fontes",
+          "bytes": 2456000,
+          "requisicoes": 10,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "bucket": "amostras_renderizadas",
+          "bytes": 1035825,
+          "requisicoes": 15,
+          "status": "200"
+        },
+        {
+          "agente": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "bucket": "fontes",
+          "bytes": 980756,
+          "requisicoes": 1,
+          "status": "200"
+        }
+      ]
+    }
+  }
+]

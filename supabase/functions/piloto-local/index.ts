@@ -5,6 +5,7 @@ import { segredo } from '../_compartilhado/segredos.ts';
 import { iguaisEmTempoConstante } from '../_compartilhado/assinatura.ts';
 import { operarPilotoEstacao } from '../_compartilhado/piloto_estacao.ts';
 import { conferirPiloto } from '../_compartilhado/piloto_local.ts';
+import { exigirVersaoNewprod } from '../_compartilhado/newprod_versao.ts';
 
 async function conferirAgente(req: Request) {
   const esperado = await segredo('ACESSO_AGENTE_SEGREDO');
@@ -23,6 +24,7 @@ async function conferirSessao(req: Request) {
     headers: { Authorization:authorization, apikey:Deno.env.get('SUPABASE_ANON_KEY') || '' }
   });
   if (!resposta.ok) throw new Recusa(401, 'sessao invalida');
+  exigirVersaoNewprod(req);
   const usuario = await resposta.json();
   if (typeof usuario.id !== 'string' || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(usuario.id)) {
     throw new Recusa(401, 'sessao invalida');
@@ -52,7 +54,7 @@ export async function handler(req: Request): Promise<Response> {
   const permitido = !origin || /^http:\/\/(127\.0\.0\.1|localhost):9001$/.test(origin);
   const headers: Record<string,string> = {'Content-Type':'application/json', 'Cache-Control':'no-store', 'Vary':'Origin'};
   if (origin && permitido) headers['Access-Control-Allow-Origin'] = origin;
-  headers['Access-Control-Allow-Headers'] = 'authorization,apikey,content-type,x-agente-segredo';
+  headers['Access-Control-Allow-Headers'] = 'authorization,apikey,content-type,x-agente-segredo,x-newprod-versao';
   headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS';
   const resposta = (status:number,body:unknown) => new Response(JSON.stringify(body),{status,headers});
   if (!permitido) return resposta(403,{detail:'origem recusada'});

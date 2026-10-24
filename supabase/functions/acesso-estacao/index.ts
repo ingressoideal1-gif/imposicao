@@ -79,8 +79,7 @@ import {
 } from "./puro.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
-import { basePrivada } from "../_compartilhado/preparacao_nuvem.ts";
-import { conteudoDoIngresso } from "../_compartilhado/preparacao_codigos.ts";
+import { conteudoQrV2EmBlocos } from "../_compartilhado/qr_blocos.ts";
 import { hashCodigo } from "../_compartilhado/hash.ts";
 
 const SEGREDO_AGENTE = "ACESSO_AGENTE_SEGREDO";
@@ -124,12 +123,11 @@ async function gravarLote(pedidoIdInt: number, itens: unknown[]): Promise<number
   const contratos = await banco("POST", "rpc/producao_acesso_qr_contratos_obter", { p_pedido: pedidoIdInt });
   const v2 = contratos.filter((c: any) => c.versao === 2);
   if (v2.length) {
-    const pool = await basePrivada(2);
     for (const item of itens as any[]) {
       const c = v2.find((c: any) => c.modelo === Number(item.modelo_id));
       if (!c) continue;
       const plano = { ...c, setor: "", tipo: "QR_IDEAL", prefix: "", suffix: "", pad: 0, qr_contrato: c };
-      const esperado = await hashCodigo(conteudoDoIngresso(pool, pedidoIdInt, plano, item.numero - 1), linha.sal);
+      const esperado = await hashCodigo(await conteudoQrV2EmBlocos(pedidoIdInt, plano, item.numero - 1), linha.sal);
       if (item.hash !== esperado) throw new Recusa(409, "QR diverge do contrato; atualize a estação antes de imprimir");
     }
   }

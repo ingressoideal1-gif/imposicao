@@ -7,6 +7,7 @@ import { conferirPedidoPiloto } from './piloto_pedido.ts';
 import { catalogosOffline, confirmarOffline } from './piloto_offline.ts';
 import { listaOffline } from './piloto_lista.ts';
 import { fornecerBaseQrV2 } from './qr_provisionamento.ts';
+import { exigirVersaoNewprod } from './newprod_versao.ts';
 
 function mesmaEstacao(a: unknown, b: unknown): boolean {
   const valido = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(v);
@@ -41,6 +42,8 @@ export async function conferirVinculoPiloto(operador: Record<string, unknown>, e
 export async function operarPilotoEstacao(acao: string, req: Request,
   autenticar: (req: Request) => Promise<void>) {
   await autenticar(req);
+  if (['abrir-pedido', 'conferir-pedido', 'conferir', 'confirmar-offline'].includes(acao))
+    exigirVersaoNewprod(req);
   const estacaoLegada = Deno.env.get('PILOTO_LOCAL_ESTACAO');
   const codigo = Deno.env.get('PILOTO_LOCAL_OPERADOR');
   if (!estacaoLegada || !codigo) throw new Recusa(503, 'coleta autonoma nao habilitada');

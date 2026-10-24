@@ -5,9 +5,12 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+from datetime import datetime, timezone
 
 BLOQUEIOS = {'instalacao_falhou', 'instalacao_nao_confirmada',
              'reinicio_falhou', 'validacao_pendente'}
+FALHAS_TEMPORARIAS = {'download_falhou', 'sha_divergente', 'instalacao_nao_iniciada'}
+ESPERA_FALHA_S = 6 * 60 * 60
 
 
 class FalhaDownload(ValueError):
@@ -25,6 +28,16 @@ def baixar(abrir, req, destino, tamanho, sha256, instalacao):
     for pasta in (destino.parent, Path(instalacao)):
         if shutil.disk_usage(pasta).free < reserva:
             raise FalhaDownload('espaco_insuficiente')
+    # O nome nao comprova integridade: conferir os bytes a cada reutilizacao.
+    try:
+        with destino.open('rb') as existente:
+            tamanho_local = os.fstat(existente.fileno()).st_size
+            if (0 < tamanho_local <= limite and
+                    (tamanho is None or tamanho_local == tamanho) and
+                    hashlib.file_digest(existente, 'sha256').hexdigest() == sha256):
+                return
+    except FileNotFoundError:
+        pass
     parcial = None
     try:
         with abrir(req, timeout=600) as resposta:
@@ -54,7 +67,18 @@ def baixar(abrir, req, destino, tamanho, sha256, instalacao):
             Path(parcial).unlink(missing_ok=True)
 
 
-def exige_intervencao(registro, versao, forcado=False):
+def exige_intervencao(registro, versao, forcado=False, agora=None):
     """Mantem a evidencia da falha; nova versao ou tentativa humana libera."""
-    return (not forcado and registro.get('versao_alvo') == versao and
-            registro.get('etapa') in BLOQUEIOS)
+    if forcado or registro.get('versao_alvo') != versao:
+        return False
+    if registro.get('etapa') in BLOQUEIOS:
+        return True
+    if registro.get('etapa') not in FALHAS_TEMPORARIAS:
+        return False
+    try:
+        quando = datetime.fromisoformat(registro['quando'].replace('Z', '+00:00'))
+        if quando.tzinfo is None:
+            return True
+        return ((agora or datetime.now(timezone.utc)) - quando).total_seconds() < ESPERA_FALHA_S
+    except (KeyError, ValueError, TypeError, AttributeError):
+        return True  # Registro invalido exige tentativa explicita, nunca um loop.

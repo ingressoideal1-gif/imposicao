@@ -903,12 +903,17 @@ _ARQUIVO_UPDATE = os.path.join(_CONFIG_DIR, "ultimo_update.json")
 def _registrar_update(etapa: str, versao_alvo=None, erro=None):
     """Grava em que ponto a atualizacao parou, para o heartbeat reportar."""
     from agent_version import AGENT_VERSION
-    from download_atualizacao import BLOQUEIOS
+    from download_atualizacao import BLOQUEIOS, FALHAS_TEMPORARIAS
     anterior = ultimo_update()
+    if anterior.get('etapa') in FALHAS_TEMPORARIAS and etapa in (
+            'adiado_producao', 'manifesto_indisponivel', 'aguardando_liberacao', 'sem_atualizacao'):
+        return anterior
     if anterior.get('etapa') in BLOQUEIOS and etapa in (
             'adiado_producao', 'manifesto_indisponivel', 'aguardando_liberacao',
             'sem_atualizacao', 'url_bloqueada', 'sha_ausente', 'download_falhou', 'sha_divergente'):
-        return anterior
+        if not (etapa in FALHAS_TEMPORARIAS and versao_alvo and
+                versao_alvo != anterior.get('versao_alvo')):
+            return anterior
     registro = {
         "quando": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "versao_no_momento": AGENT_VERSION,

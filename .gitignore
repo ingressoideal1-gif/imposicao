@@ -140,3 +140,6 @@ design/*.html
 !design/*.dc.html
 design-montagem/*.html
 !design-montagem/*.dc.html
+
+# Fontes remotas e evidencias temporarias da investigacao de egress.
+.tmp-egress/

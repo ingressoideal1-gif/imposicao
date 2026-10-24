@@ -30,8 +30,10 @@ class ConferidorPiloto:
             raise ConferenciaIndisponivel('Sessão online necessária para conferir a origem.')
         corpo = {k: item[k] for k in ('empresa', 'modelo', 'fontes')}
         corpo['digest'] = item['observacao']['digest']
+        from agent_version import AGENT_VERSION
         req = urllib.request.Request(self.url, data=json.dumps(corpo).encode(), method='POST',
-            headers={'Content-Type': 'application/json', 'Authorization': authorization})
+            headers={'Content-Type': 'application/json', 'Authorization': authorization,
+                     'X-NewProd-Versao': AGENT_VERSION.split('-')[0]})
         try:
             with self.abrir(req, timeout=20) as resposta:
                 if getattr(resposta, 'status', 200) != 200:

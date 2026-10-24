@@ -1,0 +1,63 @@
+{
+  "pool_por_minuto": {
+    "result": [
+      {
+        "bytes": 786432,
+        "minuto": "2026-10-24T13:32:00",
+        "requisicoes": 12,
+        "status": "206",
+        "tamanho": "65536"
+      },
+      {
+        "bytes": 72000000,
+        "minuto": "2026-10-24T13:31:00",
+        "requisicoes": 3,
+        "status": "200",
+        "tamanho": "24000000"
+      },
+      {
+        "bytes": 216000000,
+        "minuto": "2026-10-24T13:30:00",
+        "requisicoes": 9,
+        "status": "200",
+        "tamanho": "24000000"
+      },
+      {
+        "bytes": 288000000,
+        "minuto": "2026-10-24T13:29:00",
+        "requisicoes": 12,
+        "status": "200",
+        "tamanho": "24000000"
+      }
+    ]
+  },
+  "lotes_por_minuto": {
+    "result": [
+      {
+        "minuto": "2026-10-24T13:32:00",
+        "requisicoes": 13,
+        "status": "200"
+      },
+      {
+        "minuto": "2026-10-24T13:31:00",
+        "requisicoes": 11,
+        "status": "200"
+      },
+      {
+        "minuto": "2026-10-24T13:30:00",
+        "requisicoes": 18,
+        "status": "200"
+      },
+      {
+        "minuto": "2026-10-24T13:29:00",
+        "requisicoes": 18,
+        "status": "200"
+      },
+      {
+        "minuto": "2026-10-24T13:28:00",
+        "requisicoes": 3,
+        "status": "200"
+      }
+    ]
+  }
+}
