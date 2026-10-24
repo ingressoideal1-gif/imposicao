@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
 const puppeteer = require('puppeteer');
 const XLSX = require('../frontend/vendor/sheetjs-0.20.3/xlsx.full.min.js');
 (async () => {
@@ -44,6 +45,44 @@ const XLSX = require('../frontend/vendor/sheetjs-0.20.3/xlsx.full.min.js');
         assert.equal(data.length, 2);
         assert.deepEqual(data[1].rows, [{ Código: '0007' }]);
         assert.equal(data[1].nome, 'pessoas - Segunda');
+        // Estacao antiga: somente script.js sincronizado; ambos os novos
+        // arquivos devem vir da origem web, sem acessar servicos reais.
+        const station = await browser.newPage();
+        const requests = [];
+        await station.setRequestInterception(true);
+        station.on('request', request => {
+            const url = new URL(request.url());
+            requests.push(url.href);
+            const file = url.pathname === '/banco-excel.js' ? 'banco-excel.js'
+                : url.pathname === '/vendor/sheetjs-0.20.3/xlsx.full.min.js' ? 'vendor/sheetjs-0.20.3/xlsx.full.min.js' : null;
+            request.respond({ status: 200, contentType: file ? 'application/javascript' : 'text/html',
+                body: file ? fs.readFileSync(path.resolve(__dirname, '../frontend', file)) : '<body></body>' });
+        });
+        await station.goto('http://127.0.0.1:9001/');
+        const source = fs.readFileSync(path.resolve(__dirname, '../frontend/script.js'), 'utf8');
+        await station.addScriptTag({ content: source.slice(source.indexOf('async function carregarImportadorExcel('), source.indexOf('\nwindow.importarExcelDoPedido')) });
+        await station.evaluate(bytes => {
+            window.avisos = [];
+            window.toast = (text, type) => avisos.push({ text, type });
+            window.idIntDoPedido = () => 123;
+            window.criarBancoDoPedido = async () => ({ nome: 'Teste' });
+            window.renderAmostrasOSItens = () => {};
+            HTMLInputElement.prototype.click = function () {
+                if (this.type !== 'file') return;
+                const dt = new DataTransfer();
+                dt.items.add(new File([new Uint8Array(bytes)], 'pessoas.xlsx'));
+                this.files = dt.files;
+                this.dispatchEvent(new Event('change'));
+            };
+            return importarExcelDoPedido('os-123');
+        }, bytes);
+        await station.waitForSelector('dialog[open]');
+        assert.ok(requests.some(url => url.startsWith('https://imposition.ai-ideal.com.br/banco-excel.js?')));
+        assert.ok(requests.includes('https://imposition.ai-ideal.com.br/vendor/sheetjs-0.20.3/xlsx.full.min.js'));
+        await station.click('dialog .btn-primary');
+        await station.waitForFunction(() => !document.querySelector('dialog'));
+        assert.equal(await station.evaluate(() => avisos.at(-1).type), 'success');
         console.log('Browser: prévia segura, escolha da aba, gravação explícita, falha e bloqueio durante envio OK.');
+        console.log('Browser: estacao sem arquivos novos carrega importador e biblioteca pela origem web OK.');
     } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

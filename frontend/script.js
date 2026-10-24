@@ -19268,10 +19268,30 @@ function subirBancoPeloBox(osId) {
 }
 window.subirBancoPeloBox = subirBancoPeloBox;
 
-function importarExcelDoPedido(osId) {
+async function carregarImportadorExcel() {
+    if (window.BancoExcel) return window.BancoExcel;
+    if (!window.bancoExcelCarregando) {
+        window.bancoExcelCarregando = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            // Agentes instalados sincronizam uma lista fixa. Os arquivos novos
+            // sao servidos pela origem web, sem exigir troca do executavel.
+            const local = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+            script.src = new URL('banco-excel.js?v=1106', local ? 'https://imposition.ai-ideal.com.br/' : location.href).href;
+            script.onload = () => window.BancoExcel ? resolve(window.BancoExcel) : reject(new Error('Leitor de Excel indisponível.'));
+            script.onerror = () => { script.remove(); reject(new Error('Não foi possível carregar o leitor de Excel. Confira a conexão e tente novamente.')); };
+            document.head.appendChild(script);
+        }).catch(error => { window.bancoExcelCarregando = null; throw error; });
+    }
+    return window.bancoExcelCarregando;
+}
+
+async function importarExcelDoPedido(osId) {
     const idInt = idIntDoPedido(osId);
     if (!idInt) { toast('Não sei de qual pedido é este banco.', 'error'); return; }
-    window.BancoExcel.abrir(async ({ nome, headers, rows, filename }) => {
+    let importador;
+    try { importador = await carregarImportadorExcel(); }
+    catch (error) { toast(error.message, 'error'); return; }
+    importador.abrir(async ({ nome, headers, rows, filename }) => {
         const banco = await criarBancoDoPedido(idInt, nome, headers, rows, filename);
         toast(`Banco "${banco.nome}" criado com ${rows.length} linha(s). Escolha-o no "Vem de:" dos modelos.`, 'success');
         renderAmostrasOSItens(osId);

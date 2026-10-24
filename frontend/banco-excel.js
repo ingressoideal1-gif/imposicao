@@ -1,12 +1,13 @@
 /* Importação local de Excel; a gravação usa o contrato existente do pedido. */
 (function (root) {
     'use strict';
+    const origemScript = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : '';
     let carregando;
     function biblioteca() {
         if (root.XLSX) return Promise.resolve(root.XLSX);
         if (!carregando) carregando = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'vendor/sheetjs-0.20.3/xlsx.full.min.js';
+            script.src = new URL('vendor/sheetjs-0.20.3/xlsx.full.min.js', origemScript || document.baseURI).href;
             script.onload = () => resolve(root.XLSX);
             script.onerror = () => { carregando = null; script.remove(); reject(new Error('Não foi possível carregar o leitor de Excel. Tente novamente.')); };
             document.head.appendChild(script);
