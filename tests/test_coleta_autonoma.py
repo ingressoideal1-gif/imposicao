@@ -109,6 +109,8 @@ def test_transporte_fixo_nao_persiste_segredo_e_valida_cursor():
     def abrir(req, timeout):
         chamadas.append(req)
         assert timeout == 20 and req.get_header('X-agente-segredo') == 'sintetico'
+        from agent_version import AGENT_VERSION
+        assert req.get_header('X-newprod-versao') == AGENT_VERSION.split('-')[0]
         assert req.full_url.startswith('https://test.invalid/functions/v1/piloto-local/')
         assert 'sintetico' not in req.data.decode()
         return io.BytesIO(json.dumps({'itens':[], 'proximo':0, 'fim':False}).encode())

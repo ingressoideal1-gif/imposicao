@@ -22,6 +22,8 @@ def test_encaminha_sessao_apenas_no_cabecalho():
     def abrir(req, timeout):
         assert timeout == 20
         assert req.get_header('Authorization') == 'Bearer sintetica'
+        from agent_version import AGENT_VERSION
+        assert req.get_header('X-newprod-versao') == AGENT_VERSION.split('-')[0]
         assert 'sintetica' not in req.data.decode()
         assert req.full_url == 'https://test.invalid/functions/v1/piloto-local/conferir-sessao'
         return io.BytesIO(json.dumps(recibo()).encode())

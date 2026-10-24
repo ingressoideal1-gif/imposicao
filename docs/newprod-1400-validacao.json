@@ -381,6 +381,157 @@
   ],
   "deno_passed": 373,
   "barreira_node": "passed",
-  "instalacao": "pendente",
-  "publicacao": "pendente"
+  "instalacao": {
+    "station": "PC-JR-HOME",
+    "version": "1.4.0",
+    "msi_exit": 0,
+    "exe_hash_matches": true,
+    "configurations_preserved": 6,
+    "spool_jobs_preserved": 4,
+    "coleta_retomada": true,
+    "backup_files": 11120,
+    "backup_restore_verified": true
+  },
+  "publicacao": {
+    "manifests": {
+      "newprod-piloto-teste.json": {
+        "schema": 1,
+        "produto": "NewProdPilotoTeste",
+        "version": "1.3.35",
+        "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.35.msi",
+        "sha256": "581b7723a1041bcaddf29b36295ad71cf8283658b7e749f9b7091999786c45aa",
+        "bytes": 196792320,
+        "size": 196792320,
+        "notes": "Atualizador com validacao de espaco, download e instalacao; motivo obrigatorio ao selecionar Corrigir Arte, salvo nas observacoes do modelo. Preserva as correcoes publicadas ate 1.3.33."
+      },
+      "newprod-piloto-oficial.json": {
+        "schema": 1,
+        "produto": "NewProdPilotoOficial",
+        "version": "1.4.0",
+        "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.0.msi",
+        "sha256": "1c70b2824e34a6d316e38e642da2a87cdc07dee87109eae511469daa3024b7ce",
+        "bytes": 196796416,
+        "size": 196796416,
+        "notes": "NewProd: publicacao no canal producao."
+      },
+      "latest.json": {
+        "schema": 1,
+        "produto": "NewProdPilotoOficial",
+        "version": "1.4.0",
+        "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.0.msi",
+        "sha256": "1c70b2824e34a6d316e38e642da2a87cdc07dee87109eae511469daa3024b7ce",
+        "bytes": 196796416,
+        "size": 196796416,
+        "notes": "NewProd: publicacao no canal producao."
+      }
+    },
+    "web": [
+      {
+        "host": "imposition.ai-ideal.com.br",
+        "file": "index.html",
+        "matches": true,
+        "sha256": "77e6982f3123ab591fe909bbd44df4e007c630f24ee4a028f9c59963db2aeee2"
+      },
+      {
+        "host": "imposition.ai-ideal.com.br",
+        "file": "acesso-estacao.js",
+        "matches": true,
+        "sha256": "45dffe89eb771c022cbe686a3562d2825eca1e6b572fa7a7eb7b27519b9294ef"
+      },
+      {
+        "host": "imposicao.pages.dev",
+        "file": "index.html",
+        "matches": true,
+        "sha256": "77e6982f3123ab591fe909bbd44df4e007c630f24ee4a028f9c59963db2aeee2"
+      },
+      {
+        "host": "imposicao.pages.dev",
+        "file": "acesso-estacao.js",
+        "matches": true,
+        "sha256": "45dffe89eb771c022cbe686a3562d2825eca1e6b572fa7a7eb7b27519b9294ef"
+      }
+    ],
+    "backend": [
+      {
+        "slug": "acesso-estacao",
+        "version": 265,
+        "status": "ACTIVE",
+        "updated_at": 1792848698469
+      },
+      {
+        "slug": "piloto-local",
+        "version": 25,
+        "status": "ACTIVE",
+        "updated_at": 1792852127193
+      }
+    ],
+    "policy_probe": [
+      {
+        "version": "1.3.35",
+        "status": 426,
+        "expected": 426
+      },
+      {
+        "version": "1.4.0",
+        "status": 422,
+        "expected": 422
+      }
+    ],
+    "pr": 201,
+    "merge": "476f9069b5bdff1d3656b72385fc4122d210809f"
+  },
+  "stations_after": [
+    {
+      "name": "ACABAMENTO-TEX",
+      "apelido": null,
+      "last_seen": "2026-10-24T14:28:49.922352+00:00",
+      "versao": "1.3.9",
+      "painel_versao": "1065",
+      "ultimo_update": {
+        "etapa": "instalacao_falhou",
+        "erro": "MSI 1603",
+        "versao_alvo": "1.3.35",
+        "quando": "2026-10-24T12:17:50.1260958Z"
+      }
+    },
+    {
+      "name": "TEX-02",
+      "apelido": null,
+      "last_seen": "2026-10-24T14:29:08.376355+00:00",
+      "versao": "1.3.21",
+      "painel_versao": "1316",
+      "ultimo_update": {
+        "etapa": "instalacao_falhou",
+        "erro": "MSI 1603",
+        "versao_alvo": "1.3.35",
+        "quando": "2026-10-24T09:21:16.1666672Z"
+      }
+    },
+    {
+      "name": "GUSTAVO-PROD",
+      "apelido": null,
+      "last_seen": "2026-10-24T14:28:56.611231+00:00",
+      "versao": "1.3.30",
+      "painel_versao": "1319",
+      "ultimo_update": {
+        "etapa": "instalacao_falhou",
+        "erro": "MSI 1603",
+        "versao_alvo": "1.3.35",
+        "quando": "2026-10-24T14:07:20.6652850Z"
+      }
+    },
+    {
+      "name": "PC-JR-HOME",
+      "apelido": null,
+      "last_seen": "2026-10-24T14:29:07.499844+00:00",
+      "versao": "1.4.0",
+      "painel_versao": "1335",
+      "ultimo_update": {
+        "etapa": "sem_atualizacao",
+        "erro": null,
+        "versao_alvo": "1.3.35",
+        "quando": "2026-10-24T10:43:45.816537+00:00"
+      }
+    }
+  ]
 }

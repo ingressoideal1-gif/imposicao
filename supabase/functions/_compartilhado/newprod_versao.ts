@@ -1,5 +1,8 @@
 import { Recusa } from './sessao.ts';
 
+// Politica publica versionada junto do deploy, sem depender de segredo remoto.
+export const VERSAO_MINIMA_PUBLICADA = '1.4.0';
+
 export function exigirVersaoNewprod(req: Request, minima = Deno.env.get('NEWPROD_VERSAO_MINIMA')) {
   if (!minima) return;
   const partes = (v: string) => /^\d+\.\d+\.\d+$/.test(v) ? v.split('.').map(Number) : null;

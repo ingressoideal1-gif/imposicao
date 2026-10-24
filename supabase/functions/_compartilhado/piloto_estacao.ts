@@ -40,10 +40,10 @@ export async function conferirVinculoPiloto(operador: Record<string, unknown>, e
 }
 
 export async function operarPilotoEstacao(acao: string, req: Request,
-  autenticar: (req: Request) => Promise<void>) {
+  autenticar: (req: Request) => Promise<void>, versaoMinima?: string) {
   await autenticar(req);
   if (['abrir-pedido', 'conferir-pedido', 'conferir', 'confirmar-offline'].includes(acao))
-    exigirVersaoNewprod(req);
+    exigirVersaoNewprod(req, versaoMinima);
   const estacaoLegada = Deno.env.get('PILOTO_LOCAL_ESTACAO');
   const codigo = Deno.env.get('PILOTO_LOCAL_OPERADOR');
   if (!estacaoLegada || !codigo) throw new Recusa(503, 'coleta autonoma nao habilitada');

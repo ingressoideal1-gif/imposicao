@@ -5,7 +5,7 @@ import { segredo } from '../_compartilhado/segredos.ts';
 import { iguaisEmTempoConstante } from '../_compartilhado/assinatura.ts';
 import { operarPilotoEstacao } from '../_compartilhado/piloto_estacao.ts';
 import { conferirPiloto } from '../_compartilhado/piloto_local.ts';
-import { exigirVersaoNewprod } from '../_compartilhado/newprod_versao.ts';
+import { exigirVersaoNewprod, VERSAO_MINIMA_PUBLICADA } from '../_compartilhado/newprod_versao.ts';
 
 async function conferirAgente(req: Request) {
   const esperado = await segredo('ACESSO_AGENTE_SEGREDO');
@@ -24,7 +24,7 @@ async function conferirSessao(req: Request) {
     headers: { Authorization:authorization, apikey:Deno.env.get('SUPABASE_ANON_KEY') || '' }
   });
   if (!resposta.ok) throw new Recusa(401, 'sessao invalida');
-  exigirVersaoNewprod(req);
+  exigirVersaoNewprod(req, VERSAO_MINIMA_PUBLICADA);
   const usuario = await resposta.json();
   if (typeof usuario.id !== 'string' || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(usuario.id)) {
     throw new Recusa(401, 'sessao invalida');
@@ -69,7 +69,7 @@ export async function handler(req: Request): Promise<Response> {
       if (!(resultado instanceof Response)) throw new Recusa(503, 'base QR indisponivel');
       return resultado;
     }
-    if (['listar','conferir','conferir-pedido','abrir-pedido','catalogos-offline', 'lista-offline','confirmar-offline'].includes(acao || '')) return resposta(200,await operarPilotoEstacao(acao!,req,conferirAgente));
+    if (['listar','conferir','conferir-pedido','abrir-pedido','catalogos-offline', 'lista-offline','confirmar-offline'].includes(acao || '')) return resposta(200,await operarPilotoEstacao(acao!,req,conferirAgente,VERSAO_MINIMA_PUBLICADA));
     if (acao==='conferir-sessao') return resposta(200,await conferirSessao(req));
     return resposta(404,{detail:'operacao inexistente'});
   } catch(e) {
