@@ -18919,7 +18919,7 @@ function desenharBoxDeBancos(osId) {
 
     if (!bancos.length) {
         alvo.innerHTML = `<div style="font-size:0.85rem; color:var(--text-dim); padding:4px 2px;">
-            Este pedido ainda não tem banco de dados. Crie colunas, suba um CSV ou busque de um
+            Este pedido ainda não tem banco de dados. Importe um Excel, crie colunas, suba um CSV ou busque de um
             link compartilhado — depois, escolha o banco no "Vem de:" de cada modelo.
         </div>`;
         return;
@@ -19267,6 +19267,17 @@ function subirBancoPeloBox(osId) {
     inp.click();
 }
 window.subirBancoPeloBox = subirBancoPeloBox;
+
+function importarExcelDoPedido(osId) {
+    const idInt = idIntDoPedido(osId);
+    if (!idInt) { toast('Não sei de qual pedido é este banco.', 'error'); return; }
+    window.BancoExcel.abrir(async ({ nome, headers, rows, filename }) => {
+        const banco = await criarBancoDoPedido(idInt, nome, headers, rows, filename);
+        toast(`Banco "${banco.nome}" criado com ${rows.length} linha(s). Escolha-o no "Vem de:" dos modelos.`, 'success');
+        renderAmostrasOSItens(osId);
+    });
+}
+window.importarExcelDoPedido = importarExcelDoPedido;
 
 /**
  * O modelo ficou sem nenhuma linha do banco? Devolve o que dizer, ou null.
@@ -36442,10 +36453,10 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                                 </div>
                             </div>
                             <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <button class="btn btn-sm btn-secondary" onclick="importarExcelDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco a partir de uma aba de arquivo .xlsx ou .xls">📊 Importar Excel</button>
                                 <button class="btn btn-sm btn-secondary" onclick="subirBancoPeloBox('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco deste pedido a partir de um arquivo CSV">📤 Subir CSV</button>
                                 <button class="btn btn-sm btn-secondary" onclick="abrirBancoDoPedidoPorLink('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar bancos a partir de uma planilha compartilhada por link — cada página vira um banco">🌐 Buscar de link</button>
                                 <button class="btn btn-sm btn-secondary" onclick="criarColunasDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco ou acrescentar colunas a um CSV deste pedido">➕ Criar colunas</button>
-                                <button class="btn btn-sm btn-secondary" onclick="abrirMapaTeatroDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;">🗺️ Mapa de Teatro</button>
                             </div>
                         </div>
                         <div class="card-body" style="padding: 12px 16px 16px 16px; display: flex; flex-direction: column; gap: 8px;" id="bancos-pedido-lista-${osId}"></div>
