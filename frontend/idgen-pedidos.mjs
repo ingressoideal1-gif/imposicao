@@ -1,13 +1,19 @@
 // Estado próprio: não usa state.ordens nem grava modelos/catálogos do ERP.
 export class PedidosIdGen {
-    constructor(enviar) { this.enviar = enviar; this.pedido = null; this.fila = Promise.resolve(); }
+    constructor(enviar) {
+        this.enviar = enviar; this.pedido = null; this.fila = Promise.resolve();
+        this.bloqueio = null; this.geracao = 0; this.rascunhoNaoConfirmado = null;
+    }
     abrir(id) {
+        // Nenhum salvamento enfileirado antes da reabertura pode usar a nova revisão.
+        this.geracao++;
         const trabalho = this.fila.then(async () => {
             const pedido = await this.enviar('abrir', { id });
             if (pedido?.id !== id || !Number.isInteger(pedido.revisao) || !Array.isArray(pedido.documento?.modelos)) {
                 throw new Error('O servidor não confirmou o pedido IdGen.');
             }
             this.pedido = structuredClone(pedido);
+            this.bloqueio = null;
             return structuredClone(pedido);
         });
         this.fila = trabalho.catch(() => {});
@@ -16,16 +22,29 @@ export class PedidosIdGen {
     alterar(mudar) {
         const id = this.pedido?.id;
         if (!id) return Promise.reject(new Error('Abra um pedido IdGen.'));
+        if (this.bloqueio) return Promise.reject(this.bloqueio);
+        const geracao = this.geracao;
         const executar = async () => {
+            if (this.bloqueio) throw this.bloqueio;
+            if (geracao !== this.geracao) throw new Error('Salvamento cancelado pela reabertura do pedido.');
             if (this.pedido?.id !== id) throw new Error('O pedido aberto mudou.');
             const rascunho = structuredClone(this.pedido.documento);
             mudar(rascunho);
             const documento = JSON.parse(JSON.stringify(rascunho));
             const revisao = this.pedido.revisao;
-            const salvo = await this.enviar('salvar', { id, revisao, documento });
-            if (salvo?.id !== id || salvo.revisao !== revisao + 1
-                || canonico(salvo.documento) !== canonico(documento)) {
-                throw new Error('O servidor não confirmou todos os dados. Reabra o pedido.');
+            let salvo;
+            try {
+                salvo = await this.enviar('salvar', { id, revisao, documento });
+                if (salvo?.id !== id || salvo.revisao !== revisao + 1
+                    || canonico(salvo.documento) !== canonico(documento)) {
+                    throw new Error('O servidor não confirmou todos os dados. Reabra o pedido.');
+                }
+            } catch (e) {
+                // Até uma falha de rede pode ocorrer depois da gravação: não repetir
+                // automaticamente com a mesma revisão nem escoar a fila pendente.
+                this.rascunhoNaoConfirmado = structuredClone({ id, revisao, documento });
+                this.bloqueio = new Error('Salvamentos suspensos. Reabra o pedido antes de continuar.');
+                throw e;
             }
             this.pedido = structuredClone(salvo);
             return structuredClone(salvo);
