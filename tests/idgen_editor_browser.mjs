@@ -113,6 +113,14 @@ try {
         catch { return state.osItens[IdGenEditor.chave][0].arte_escala_h === 110; }
     }, model), true);
     assert.equal(pedido.revisao, revisao);
+    const enviosAntes = writes.length;
+    const bloqueadas = await page.evaluate(async model => Promise.allSettled(
+        Array.from({ length: 30 }, () => saveAmostraToDB(model, IdGenEditor.chave, { arte_escala_h: 999 }))
+    ).then(rs => rs.every(r => r.status === 'rejected')), model);
+    assert.equal(bloqueadas, true);
+    assert.equal(writes.length, enviosAntes);
+    await page.reload({ waitUntil: 'networkidle2' });
+    await page.waitForSelector('#amostra-item-num-0');
     assert.equal(await page.evaluate(async () => {
         try { await IdGenEditor.arquivo(new Blob([new Uint8Array(5 * 1024 * 1024 + 1)]), 'grande.pdf'); return false; }
         catch (e) { return e.message.includes('5 MB'); }

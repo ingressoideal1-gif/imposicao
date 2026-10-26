@@ -312,7 +312,7 @@
     async function iniciar() {
         try {
             if (!contexto.valido) throw new Error('Identificador IdGen inválido.');
-            const { PedidosIdGen } = await import('./idgen-pedidos.mjs?v=1102');
+            const { PedidosIdGen } = await import('./idgen-pedidos.mjs?v=20261026');
             sessao = new PedidosIdGen(window.IdGen.pedir);
             await sessao.abrir(contexto.id); // O servidor valida sessão e papel antes de abrir.
             const tipos = ['formatos', 'cores', 'numeracoes', 'saidas'];
