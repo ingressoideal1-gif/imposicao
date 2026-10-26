@@ -77,7 +77,53 @@ test('falha ou confirmação incompleta não altera o documento confirmado', asy
     editor.enviar = async () => { throw new Error('Conflito de revisão'); };
     await assert.rejects(editor.salvarModelo('modelo-a', { nome: 'X' }), /Conflito/);
     assert.deepEqual(editor.pedido, antes);
+    editor.enviar = async () => structuredClone(antes);
+    await editor.abrir('pedido-a');
     editor.enviar = async () => ({ ...antes, revisao: 2 });
     await assert.rejects(editor.salvarModelo('modelo-a', { nome: 'X' }), /não confirmou/);
     assert.deepEqual(editor.pedido, antes);
+});
+
+test('conflito interrompe uma rajada de 100 salvamentos e exige reabertura confirmada', async () => {
+    const { editor } = ambiente(); await editor.abrir('pedido-a');
+    const antes = structuredClone(editor.pedido);
+    let envios = 0;
+    editor.enviar = async () => { envios++; throw Object.assign(new Error('Pedido mudou'), { status: 409 }); };
+    const resultados = await Promise.allSettled(Array.from({ length: 100 }, (_, i) => editor.salvarModelo('modelo-a', { nome: String(i) })));
+    assert.ok(resultados.every(r => r.status === 'rejected'));
+    assert.equal(envios, 1);
+    assert.deepEqual(editor.pedido, antes);
+    assert.equal(editor.rascunhoNaoConfirmado.documento.modelos[0].nome, '0');
+    await assert.rejects(editor.salvarModelo('modelo-a', { nome: 'novo' }), /suspensos/);
+    assert.equal(envios, 1);
+    await assert.rejects(editor.abrir('pedido-a'));
+    await assert.rejects(editor.salvarModelo('modelo-a', { nome: 'novo' }), /suspensos/);
+    editor.enviar = async (acao, dados) => acao === 'abrir' ? { ...antes, revisao: 7 }
+        : { ...antes, revisao: dados.revisao + 1, documento: dados.documento };
+    await editor.abrir('pedido-a');
+    await editor.salvarModelo('modelo-a', { nome: 'reconciliado' });
+    assert.equal(editor.pedido.revisao, 8);
+});
+
+test('resposta incompleta e falha de rede também bloqueiam a fila sem repetir envio', async () => {
+    for (const falha of ['rede', 'resposta']) {
+        const { editor } = ambiente(); await editor.abrir('pedido-a');
+        let envios = 0;
+        editor.enviar = async () => { envios++; if (falha === 'rede') throw new Error('timeout'); return {}; };
+        await Promise.allSettled([editor.salvarModelo('modelo-a', { nome: 'A' }), editor.salvarModelo('modelo-a', { nome: 'B' })]);
+        assert.equal(envios, 1);
+        await assert.rejects(editor.salvarModelo('modelo-a', { nome: 'C' }), /suspensos/);
+    }
+});
+
+test('reabrir invalida salvamentos antigos mesmo quando são executados depois da leitura', async () => {
+    const { editor, chamadas } = ambiente(); await editor.abrir('pedido-a');
+    const abrir = editor.abrir('pedido-a');
+    const antigo = editor.salvarModelo('modelo-a', { nome: 'antigo' });
+    const reabrir = editor.abrir('pedido-a');
+    const r = await Promise.allSettled([abrir, antigo, reabrir]);
+    assert.equal(r[1].status, 'rejected');
+    assert.equal(chamadas.filter(c => c.acao === 'salvar').length, 0);
+    await editor.salvarModelo('modelo-a', { nome: 'novo' });
+    assert.equal(editor.pedido.documento.modelos[0].nome, 'novo');
 });
