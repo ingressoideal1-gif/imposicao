@@ -694,8 +694,8 @@ function drawPedPreview() {
                 const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
                 if (fmtObj) saiId = fmtObj.default_saida_id;
             }
-            start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
-            end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
+            start = Number(faixaEfetivaDoModelo(item).inicio);
+            end = Number(faixaEfetivaDoModelo(item).fim);
             const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
             // A regra de paginação sai do campo "Regra de Paginação", não do formato:
             // é o campo que runPedImposition() manda no payload, e portanto é ele que
@@ -5479,7 +5479,8 @@ function renderPedOSQueue(opcoes = {}) {
                 ? `<option value="${numEscolhidaObj.id}" selected>${numEscolhidaObj.name || numEscolhidaObj.tipo}</option>`
                 : '';
 
-            const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
+            const faixaModelo = faixaEfetivaDoModelo(item);
+            const niVal = faixaModelo.inicio ?? '';
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
             const blocoVal = item.bloco !== undefined && item.bloco !== null ? item.bloco : '';
             const nomeDoModelo = item.produto || '--';
@@ -5491,8 +5492,8 @@ function renderPedOSQueue(opcoes = {}) {
                 && VersoDoModelo.normalizar(item.verso_tipo)
                 && !VersoDoModelo.compativel(item.verso_tipo, selectedNum.print_mode);
 
-            // Exibir o valor do modelo: calcular aqui esconderia um campo ausente.
-            const nfCalculado = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
+            // Exibir a mesma faixa efetiva usada na previa e no PDF.
+            const nfCalculado = faixaModelo.fim ?? '';
 
             // Detectar CAMAROTE
             const isCamarote = selectedNum && (selectedNum.tipo === 'CAMAROTE' || selectedNum.type === 'CAMAROTE');
@@ -6040,7 +6041,7 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
         _osId: s.osId,
         num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numIdReserva) : numIdReserva,
         num2_id: null,
-        start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
+        start: sItem ? Number(faixaEfetivaDoModelo(sItem).inicio) : 1,
         has_raw_file: false,
         is_selected: true,
         amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
@@ -6628,8 +6629,9 @@ async function executarPedImposition(mode, isRefazer) {
     if (!isMultiSelected && itemDoCsv && schema !== 'pdf_multiple' && schema !== 'multi_artes'
             && !payloadNumeracao?.csv_data?.length && !state.csvData?.length
             && !['CAMAROTE', 'TEATRO'].includes(payloadNumeracao?.tipo)) {
-        start = Number(itemDoCsv.num_inicial !== undefined ? itemDoCsv.num_inicial : itemDoCsv.numeracao_inicio);
-        end = Number(itemDoCsv.num_final !== undefined ? itemDoCsv.num_final : itemDoCsv.numeracao_fim);
+        const faixa = faixaEfetivaDoModelo(itemDoCsv);
+        start = Number(faixa.inicio);
+        end = Number(faixa.fim);
     }
 
     // A mesma conferencia final do script.js, sobre o payload pronto. Aqui o
