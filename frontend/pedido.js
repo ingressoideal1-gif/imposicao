@@ -7694,7 +7694,7 @@ async function pedQueueUpdateField(itemId, osId, field, value) {
     }
 
     if (field === 'status_impressao') {
-        const confirmado = await updateItemImpressao(itemId, osId, value);
+        const confirmado = await updateItemImpressao(itemId, osId, value, { permitirRetornoManual: true });
         renderPedOSQueue();
         updatePedImprimirButtonsVisibility();
         return confirmado;

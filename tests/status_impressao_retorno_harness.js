@@ -25,7 +25,7 @@ function ambiente(resposta, conectado = true) {
         supabaseClient: conectado ? {from(table) {
             assert.equal(table, 'pedidos_modelos');
             return {update(payload) { writes.push(payload); return query; }};
-        }} : null,
+        }, rpc(name, args) { writes.push({rpc: name, args}); return resposta; }} : null,
         findOSInState: () => ({numero: 999}),
         loadOSItens: async (...args) => { reads.push(args); },
         toast: (...args) => notices.push(args),
@@ -117,5 +117,26 @@ function ambiente(resposta, conectado = true) {
         await correcao.ctx[name](123, 'vibe_999', 'status_impressao', 'Corrigir Arte');
         assert.equal(chamadas, 1, 'Preservar o fluxo de correção de arte');
     }
-    console.log('OK: retorno/filtros, confirmação, zero linhas, falha de rede, registro divergente, offline e Corrigir Arte.');
+    for (const name of ['pedQueueUpdateField', 'impQueueUpdateField']) {
+        const horario = '2026-10-26T12:00:00Z';
+        const data = [{id:123,id_int:999,status_impressao:'Aguardando',status_impressao_em:horario,status_impressao_registrado_em:'2026-10-26T14:00:00Z'}];
+        for (const resposta of [{data,error:null},{data:[],error:null},{data:null,error:{message:'O status mudou'}}]) {
+            const a = ambiente(Promise.resolve(resposta));
+            Object.assign(a.item, {status_impressao:'Impresso',impressao:'Impresso',status_impressao_em:horario,status_impressao_registrado_em:horario});
+            const ok = await a.ctx[name](123,'vibe_999','status_impressao','Aguardando');
+            assert.equal(a.writes[0].rpc,'retornar_impressao_aguardando');
+            assert.equal(a.writes[0].args.p_status_registrado_em,horario);
+            assert.equal(a.writes[0].args.p_pedido_id,999);
+            assert.equal(a.writes[0].args.p_modelo_id,123);
+            assert.equal(ok, resposta.data?.length === 1);
+            assert.equal(a.item.status_impressao_em,horario);
+            assert.equal(a.item.status_impressao,ok?'Aguardando':'Impresso');
+        }
+    }
+    const automatico = ambiente(Promise.resolve({data:null,error:{message:'Retorno exige operador'}}));
+    automatico.item.status_impressao = 'Impresso';
+    assert.equal(await automatico.ctx.autoSaveOSItemField(123,'vibe_999','status_impressao','Aguardando'),false);
+    assert.equal(automatico.writes.some(w => w.rpc),false);
+    assert.equal(automatico.item.status_impressao,'Impresso');
+    console.log('OK: retorno manual/RPC, falha/conflito sem sucesso visual, autosave sem retorno manual, filtros, confirmação, rede e Corrigir Arte.');
 })().catch(e => { console.error(e); process.exitCode = 1; });
