@@ -1,7 +1,8 @@
 """Temporarios exclusivos do NewProd, com trava por trabalho e telemetria agregada.
 
 Importar este modulo nao cria pastas, inicia threads ou acessa a rede.
-Nunca exclui arquivos da pasta TEMP geral, caches ou pacotes _MEI.
+Nao limpa TEMP geral nem caches. Bundles _MEI identificados pelo runtime
+possuem manutencao separada em newprod_mei.
 """
 import copy
 import os
@@ -250,6 +251,7 @@ def coletar_diagnostico():
         "cache_fontes": medir_pasta(pasta_local() / "fonts_cache"),
         "cache_fotos": medir_pasta(local / "NewProd" / "cache" / "fotos"),
         "temp_geral_somente_leitura": True,
+        "mei_marcados_limpeza_automatica": True,
     }
 
 
@@ -269,17 +271,22 @@ def iniciar_manutencao():
             global _diagnostico
             proxima_limpeza = 0
             ultima_limpeza = None
+            ultima_limpeza_mei = None
             while True:
                 try:
                     if time.monotonic() >= proxima_limpeza:
                         ultima_limpeza = limpar_abandonados()
                         ultima_limpeza["executada_em"] = time.time()
+                        from newprod_mei import limpar_abandonados as limpar_mei
+                        ultima_limpeza_mei = limpar_mei()
                         proxima_limpeza = time.monotonic() + INTERVALO_LIMPEZA
                     novo = coletar_diagnostico()
                     novo["ultima_limpeza"] = ultima_limpeza
+                    novo["ultima_limpeza_mei"] = ultima_limpeza_mei
                 except Exception as exc:
                     novo = {"estado": "falha na coleta", "erro_tipo": type(exc).__name__,
-                            "coletado_em": time.time(), "ultima_limpeza": ultima_limpeza}
+                            "coletado_em": time.time(), "ultima_limpeza": ultima_limpeza,
+                            "ultima_limpeza_mei": ultima_limpeza_mei}
                 with _mutex:
                     _diagnostico = novo
                 time.sleep(INTERVALO_DIAGNOSTICO)

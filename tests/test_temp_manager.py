@@ -350,6 +350,8 @@ def test_diagnostico_carrega_no_heartbeat_sem_varrer_disco(monkeypatch, tmp_path
 
 
 def test_manutencao_coleta_em_fundo_e_falha_nao_vaza(monkeypatch):
+    import newprod_mei
+    monkeypatch.setattr(newprod_mei, "limpar_abandonados", lambda: {"pastas_removidas": 2})
     alvos = []
     class ThreadSimulada:
         def __init__(self, target, **kw): alvos.append(target)
@@ -369,6 +371,7 @@ def test_manutencao_coleta_em_fundo_e_falha_nao_vaza(monkeypatch):
     with pytest.raises(Parar): alvos[0]()
     d = tm.diagnostico()
     assert d["estado"] == "falha na coleta" and d["erro_tipo"] == "PermissionError"
+    assert d["ultima_limpeza_mei"]["pastas_removidas"] == 2
     assert "caminho que nao" not in json.dumps(d)
 
 

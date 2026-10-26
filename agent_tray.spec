@@ -200,7 +200,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['newprod_mei_runtime.py'],
     # 'cryptography' chegou a ser excluido daqui em 2026-08-09, para caber no
     # teto de 50 MB que o plano do Supabase impunha na epoca. O teto subiu
     # para 200 MB no bucket agent-releases no mesmo dia, entao a exclusao foi
