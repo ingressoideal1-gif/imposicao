@@ -56,6 +56,14 @@ try:
     """)
     sql((ROOT / 'sql/idgen_pedidos_editor.sql').read_text(encoding='utf-8'))
     sql((ROOT / 'sql/idgen_cliente_por_numero.sql').read_text(encoding='utf-8'))
+    before = sql("SELECT pg_get_functiondef('public.idgen_editor_operar(uuid,text,jsonb)'::regprocedure);")
+    acl_before = sql("SELECT proacl::text FROM pg_proc WHERE oid='public.idgen_editor_operar(uuid,text,jsonb)'::regprocedure;")
+    correction = (ROOT / 'sql/idgen_conflito_sem_retry_20261026.sql').read_text(encoding='utf-8')
+    sql(correction)
+    sql(correction)  # reexecutar não altera outras regras
+    after = sql("SELECT pg_get_functiondef('public.idgen_editor_operar(uuid,text,jsonb)'::regprocedure);")
+    assert after == before.replace("ERRCODE = '40001'", "ERRCODE = 'PT409'")
+    assert acl_before == sql("SELECT proacl::text FROM pg_proc WHERE oid='public.idgen_editor_operar(uuid,text,jsonb)'::regprocedure;")
     call('listar', {}, role='anon', error='42501')
     call('listar', {}, role='authenticated', error='42501')
     sql('SET ROLE service_role; SELECT * FROM idgen_app.pedidos_editor;', error='42501')
@@ -74,7 +82,7 @@ try:
     changed = call('salvar', {'id': order, 'revisao': 1, 'documento': doc})
     assert changed['revisao'] == 2 and changed['documento'] == doc
     call('salvar', {'id': order, 'revisao': 1, 'documento': {}}, error='22023')
-    call('salvar', {'id': order, 'revisao': 1, 'documento': doc}, error='40001')
+    call('salvar', {'id': order, 'revisao': 1, 'documento': doc}, error='PT409')
     assert call('abrir', {'id': order}) == changed
     sql(f"UPDATE public.imposition_user_permissions SET role='operador' WHERE user_id='{actor}';")
     call('listar', {}, error='42501')
