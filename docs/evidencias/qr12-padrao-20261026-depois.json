@@ -1,0 +1,21 @@
+{
+  "capacidade": 7700,
+  "contratos": 17,
+  "contratos_anteriores_md5": "1bae2753c6083cea9038754c0ccb3178",
+  "contratos_anteriores_qtd": 1313,
+  "controle": {
+    "ativo": true,
+    "corte": "2026-10-26T15:28:06.247851+00:00",
+    "id": true,
+    "pool_revisao": "ideal-qr12-1"
+  },
+  "credenciais": 0,
+  "fonte_md5": "d16cb2db57f2e4a01b9ecab265b55e43",
+  "funcao_corpo_md5": "ed3a607bf97b0df0e442fee4ccd5204f",
+  "gatilho_corpo_md5": "bef8663cbc96b4338ccaa0f2e4b3b8f3",
+  "permissao_anon": false,
+  "permissao_authenticated": false,
+  "preparacoes": 0,
+  "reservas": 17,
+  "sobreposicoes": 0
+}

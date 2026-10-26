@@ -1,0 +1,18 @@
+{
+  "autorizacoes_24191": 0,
+  "contratos_24191": 0,
+  "contratos_anteriores_md5": "1bae2753c6083cea9038754c0ccb3178",
+  "contratos_anteriores_qtd": 1313,
+  "controle": {
+    "ativo": true,
+    "corte": "infinity",
+    "id": true,
+    "pool_revisao": "ideal-qr12-1"
+  },
+  "credenciais_24191": 0,
+  "fonte_24191_md5": "d16cb2db57f2e4a01b9ecab265b55e43",
+  "funcao_md5": "b761376c347fcbdf16ccad83cd8761e7",
+  "gatilho_md5": "2e9a53d0483fb924ed1a1d97f63033ed",
+  "preparacoes_24191": 0,
+  "reservas_24191": 0
+}
