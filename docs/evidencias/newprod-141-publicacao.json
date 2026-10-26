@@ -1,0 +1,22 @@
+{
+  "newprod-piloto-oficial.json": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.4.1",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.1.msi",
+    "sha256": "2006f6737b548ae704936e5fe3e86cd8641b8cb498e569c4f42c140d6369c486",
+    "bytes": 196812800,
+    "size": 196812800,
+    "notes": "NewProd 1.4.1: limpeza automatica de bundles identificados; preserva processos ativos."
+  },
+  "latest.json": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.4.1",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.1.msi",
+    "sha256": "2006f6737b548ae704936e5fe3e86cd8641b8cb498e569c4f42c140d6369c486",
+    "bytes": 196812800,
+    "size": 196812800,
+    "notes": "NewProd 1.4.1: limpeza automatica de bundles identificados; preserva processos ativos."
+  }
+}

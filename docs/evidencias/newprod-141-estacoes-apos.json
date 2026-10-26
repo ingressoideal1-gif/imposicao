@@ -1,0 +1,85 @@
+{
+  "consultado_em": "2026-10-26T18:09:00.999930+00:00",
+  "estacoes": [
+    {
+      "nome": "GUSTAVO-PROD",
+      "versao": "1.4.0",
+      "painel": "1335",
+      "last_seen": "2026-10-26T18:08:57.241042+00:00",
+      "etapa_update": "instalacao_falhou",
+      "alvo_update": "1.4.0",
+      "erro_msi": "MSI 1603",
+      "limpeza_mei": null
+    },
+    {
+      "nome": "TEX-01",
+      "versao": "1.4.0",
+      "painel": "1335",
+      "last_seen": "2026-10-26T18:08:47.714835+00:00",
+      "etapa_update": "sem_atualizacao",
+      "alvo_update": "1.4.0",
+      "erro_msi": null,
+      "limpeza_mei": null
+    },
+    {
+      "nome": "LASER-02",
+      "versao": "1.4.0",
+      "painel": "1335",
+      "last_seen": "2026-10-26T18:08:47.618422+00:00",
+      "etapa_update": "instalacao_falhou",
+      "alvo_update": "1.4.0",
+      "erro_msi": "MSI 1603",
+      "limpeza_mei": null
+    },
+    {
+      "nome": "LASER-04",
+      "versao": "1.4.0",
+      "painel": "1335",
+      "last_seen": "2026-10-26T18:08:47.074696+00:00",
+      "etapa_update": "validado",
+      "alvo_update": "1.3.30",
+      "erro_msi": null,
+      "limpeza_mei": null
+    },
+    {
+      "nome": "PC-JR-HOME",
+      "versao": "1.2.323",
+      "painel": "883",
+      "last_seen": "2026-10-26T18:08:43.032252+00:00",
+      "etapa_update": "sem_atualizacao",
+      "alvo_update": "1.4.0",
+      "erro_msi": null,
+      "limpeza_mei": null
+    },
+    {
+      "nome": "TEX-02",
+      "versao": "1.3.21",
+      "painel": "1316",
+      "last_seen": "2026-10-26T18:08:41.186029+00:00",
+      "etapa_update": "instalacao_falhou",
+      "alvo_update": "1.4.0",
+      "erro_msi": "MSI 1603",
+      "limpeza_mei": null
+    },
+    {
+      "nome": "LASER-01",
+      "versao": "1.4.0",
+      "painel": "1335",
+      "last_seen": "2026-10-26T18:08:37.154757+00:00",
+      "etapa_update": "adiado_producao",
+      "alvo_update": null,
+      "erro_msi": null,
+      "limpeza_mei": null
+    },
+    {
+      "nome": "ACABAMENTO-TEX",
+      "versao": "1.3.9",
+      "painel": "1065",
+      "last_seen": "2026-10-26T18:08:26.406077+00:00",
+      "etapa_update": "instalacao_falhou",
+      "alvo_update": "1.4.0",
+      "erro_msi": "MSI 1603",
+      "limpeza_mei": null
+    }
+  ]
+}

@@ -39,3 +39,25 @@ A comparacao com o bundle local do release 1.4.0 nao encontrou modulos ou
 arquivos removidos; somente newprod_mei foi adicionado aos modulos Python.
 Avisos de empacotamento para imports opcionais/plataformas externas foram
 registrados; a auditoria publica e a comparacao de conteudo passaram.
+
+## Publicacao confirmada em 26/10/2026
+
+- PR 205 integrado em af127b1ceb39abd570d7dc87c75254a294e8cb0d,
+  apos todos os checks obrigatorios, inclusive seguranca/recuperacao Windows.
+- Cloudflare Pages do commit integrado confirmou sucesso; nao houve alteracao
+  de frontend nesta entrega e nenhuma copia do frontend do agente sobre a web.
+- MSI enviado imutavelmente, baixado integralmente e conferido por tamanho e
+  SHA-256 antes da ativacao. Recibo em evidencias/newprod-141-download-publico.json.
+- newprod-piloto-oficial.json e latest.json relidos publicamente em 1.4.1.
+  newprod-piloto-teste.json permaneceu identico, em 1.3.35.
+- Nenhuma instalacao ou reinicio foi executado nesta entrega. Consulta de
+  estacoes as 15h09 de Brasilia ainda nao confirmou adocao da 1.4.1.
+- A telemetria de PC-JR-HOME reportou 1.2.323/painel 883, enquanto o endpoint
+  local 9001 respondeu NewProd 1.4.0 e os processos apontavam para a instalacao
+  existente. Divergencia pendente de diagnostico; nenhuma alteracao foi feita
+  para tentar corrigi-la nesta publicacao.
+- TEX-02 e ACABAMENTO-TEX ainda reportavam MSI 1603 e versoes antigas. Publicar
+  um MSI novo nao confirma correcao desses instaladores nem impressao fisica.
+
+Recuperacao: manifestos anteriores preservados na evidencia. O atualizador
+nao faz downgrade automatico; eventual reversao do codigo exige versao maior.
