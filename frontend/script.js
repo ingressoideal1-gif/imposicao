@@ -32721,7 +32721,7 @@ function renderOSItens(osId) {
                 <td style="text-align: center;">${escapeHtml(item.num_final) || '--'}</td>
                 <td style="text-align: center;">${item.verso ? '✅' : '--'}</td>
                 <td style="text-align: center;" onclick="event.stopPropagation()">
-                    <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+                    <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value, { permitirRetornoManual: true })" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                         <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
                         <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
                         <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
@@ -32756,7 +32756,7 @@ function renderOSItens(osId) {
                 ` : ''}
             </td>
             <td>
-                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value)" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
+                <select class="form-control" style="font-size: 0.78rem; padding: 3px 6px; width: 110px;" onchange="updateItemImpressao('${escapeJsAttr(item.id)}', '${escapeJsAttr(osId)}', this.value, { permitirRetornoManual: true })" ${item.aprovacao !== 'APROVADA' && item.aprovacao !== 'PRONTA' && item.aprovacao !== 'LIBERADA' && item.aprovacao !== 'APROVADA_CLIENTE' ? 'disabled title="Aguardando aprovação"' : ''}>
                     <option value="Aguardando" ${normalizarStatusImpressao(item.impressao) === 'Aguardando' ? 'selected' : ''}>⏳ Aguardando</option>
                     <option value="Impresso" ${normalizarStatusImpressao(item.impressao) === 'Impresso' ? 'selected' : ''}>✅ Impresso</option>
                     <option value="Corrigir Arte" ${modeloEmCorrecaoDeArte(item) ? 'selected' : ''}>🎨 Corrigir Arte</option>
@@ -32916,7 +32916,7 @@ function formatDateTime(dateStr) {
 /**
  * Atualiza status de impressão de um item
  */
-async function updateItemImpressao(itemId, osId, novoStatus) {
+async function updateItemImpressao(itemId, osId, novoStatus, { permitirRetornoManual = false } = {}) {
     let horarioConfirmado = {};
     try {
         if (normalizarStatusImpressao(novoStatus) === STATUS_CORRIGIR_ARTE) {
@@ -32953,16 +32953,26 @@ async function updateItemImpressao(itemId, osId, novoStatus) {
                 && normalizarStatusImpressao(antes[0].status_impressao)===STATUS_CORRIGIR_ARTE) {
                 throw new Error('O modelo esta em Corrigir Arte. Atualize e confira o pedido antes de confirmar.');
             }
-            let query = supabaseClient.from('pedidos_modelos').update({ status_impressao: novoStatus });
-            for (const campo of ['status_impressao','status_impressao_registrado_em']) {
-                query = antes[0][campo] == null ? query.is(campo,null) : query.eq(campo,antes[0][campo]);
-            }
-            if (isNumericId) {
-                query = query.eq('id', parseInt(itemId, 10));
+            const itemAtual = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+            const retornoManual = permitirRetornoManual && itemAtual
+                && normalizarStatusImpressao(itemAtual.status_impressao || itemAtual.impressao) === 'Impresso'
+                && normalizarStatusImpressao(novoStatus) === 'Aguardando';
+            let resposta;
+            if (retornoManual) {
+                resposta = await supabaseClient.rpc('retornar_impressao_aguardando', {
+                    p_modelo_id: itemId,
+                    p_pedido_id: Number(numero),
+                    p_status_registrado_em: itemAtual.status_impressao_registrado_em || null
+                });
             } else {
-                query = query.eq('id', itemId);
+                let query = supabaseClient.from('pedidos_modelos').update({ status_impressao: novoStatus });
+                for (const campo of ['status_impressao','status_impressao_registrado_em']) {
+                    query = antes[0][campo] == null ? query.is(campo,null) : query.eq(campo,antes[0][campo]);
+                }
+                query = query.eq('id', isNumericId ? parseInt(itemId, 10) : itemId);
+                resposta = await query.eq('id_int', Number(numero)).select('id,id_int,status_impressao,status_impressao_em,status_impressao_registrado_em');
             }
-            const { data, error } = await query.eq('id_int', Number(numero)).select('id,id_int,status_impressao,status_impressao_em,status_impressao_registrado_em');
+            const { data, error } = resposta;
             if (error) throw error;
             if (!Array.isArray(data) || data.length !== 1
                 || String(data[0].id) !== String(itemId).trim()
@@ -34639,7 +34649,7 @@ async function impQueueUpdateField(itemId, osId, field, value) {
     }
 
     if (field === 'status_impressao') {
-        const confirmado = await updateItemImpressao(itemId, osId, value);
+        const confirmado = await updateItemImpressao(itemId, osId, value, { permitirRetornoManual: true });
         renderImpOSQueue();
         return confirmado;
     }

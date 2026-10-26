@@ -12,13 +12,22 @@ function ambiente(banco){
  findOSInState:()=>({id:'vibe_99',numero:99}),toast:(...a)=>avisos.push(a),renderOrdens(){},renderPedOSQueue(){},renderImpOSQueue(){},
  updatePedImprimirButtonsVisibility(){},CustomEvent:function(){},dispatchEvent(){},loadOSItens:async()=>{},
  loadOrdensFromVibecode:async()=>true,confirmarPopup:async()=>true,
- supabaseClient:{from(t){assert.equal(t,'pedidos_modelos');let payload=null,filters=[];
+ supabaseClient:{async rpc(name,args){
+ assert.equal(name,'retornar_impressao_aguardando');eventos.push('RPC');
+ if(semRede)return {data:null,error:{message:'Rede indisponivel'}};
+ const m=banco.find(m=>String(m.id)===String(args.p_modelo_id)&&Number(m.id_int)===Number(args.p_pedido_id));
+ if(!m||m.status_impressao.toUpperCase()!=='IMPRESSO'||m.status_impressao_registrado_em!==args.p_status_registrado_em)return {data:null,error:{message:'O status mudou'}};
+ m.status_impressao='Aguardando';m.status_impressao_registrado_em=new Date(Date.UTC(2026,9,23,12,0,++contador)).toISOString();
+ return {data:[clone(m)],error:null};
+ },from(t){assert.equal(t,'pedidos_modelos');let payload=null,filters=[];
  const q={select(){return q;},update(p){payload=p;return q;},eq(k,v){filters.push([k,v]);return q;},is(k,v){filters.push([k,v]);return q;},in(k,v){filters.push([k,v]);return q;},
  then(ok,bad){return Promise.resolve().then(()=>{
  if(semRede)throw Error('Rede indisponivel');
  let rows=banco.filter(m=>filters.every(([k,v])=>Array.isArray(v)?v.map(String).includes(String(m[k])):v==null?m[k]==null:String(m[k])===String(v)));
  eventos.push(payload?'PATCH':'GET');
- if(payload){if(zero)return {data:[],error:null};for(const m of rows)Object.assign(m,payload,{status_impressao_registrado_em:new Date(Date.UTC(2026,9,23,12,0,++contador)).toISOString()});}
+ if(payload){if(zero)return {data:[],error:null};
+ if(rows.some(m=>m.status_impressao.toUpperCase()==='IMPRESSO' && payload.status_impressao.toUpperCase()!=='IMPRESSO'))return {data:null,error:{message:'Retorno manual necessario'}};
+ for(const m of rows){Object.assign(m,payload,{status_impressao_registrado_em:new Date(Date.UTC(2026,9,23,12,0,++contador)).toISOString()});if(m.status_impressao.toUpperCase()==='IMPRESSO')m.status_impressao_em??=m.status_impressao_registrado_em;}}
  let r=clone(rows);if(!payload && divergencia && eventos.includes('PATCH'))r=r.map(m=>({...m,status_impressao:'Aguardando'}));
  return {data:r,error:null};}).then(ok,bad);}};return q;}},
  fetch:async(path,options)=>{
@@ -70,5 +79,23 @@ function ambiente(banco){
  assert.equal(corrida.ctx.state.modelosGlobais[99][0].status_impressao,'Impresso','resposta atrasada nao apaga gravacao posterior');
  const e=ambiente(banco);e.dados.confirmacoes=[{estado:'conflito',dados:{pedido:'99',modelos:['10'],revisao:'antiga'}}];e.rede(true);
  await e.ctx.PilotoOffline.carregarOrdens();assert.equal(e.ctx.state.modelosGlobais[99][0].status_impressao,'IMPRESSO');assert(e.ctx.state.modelosGlobais[99][0]._confirmacaoLocalPendente);
- console.log('OK: rede antes de sucesso; popup/seletor; duas estacoes; varios modelos; snapshot antigo; reinicio; retorno explicito; falha/zero/releitura divergente; Corrigir Arte; recibo legado preservado.');
+ const manualBanco=[{id:10,id_int:99,status_impressao:'Aguardando',status_impressao_registrado_em:'2026-10-23T10:00:00Z'}];
+ const manual=ambiente(manualBanco);
+ assert.equal(await manual.ctx.updateItemImpressao('10','vibe_99','Impresso'),true);
+ const primeiraHora=manualBanco[0].status_impressao_em;
+ const antesRetorno=clone(manualBanco[0]);
+ assert.equal(await manual.ctx.updateItemImpressao('10','vibe_99','Aguardando'),false,'gravacao comum bloqueada');
+ assert.equal(await manual.ctx.updateItemImpressao('10','vibe_99','Aguardando',{permitirRetornoManual:true}),true);
+ assert(manual.eventos.includes('RPC'));assert.equal(manualBanco[0].status_impressao_em,primeiraHora);
+ const recibo=manual.dados.confirmacoes.find(c=>c.dados.confirmado?.status_impressao==='Aguardando');
+ assert(recibo,'retorno confirmado persistido no recibo local');
+ assert.equal(recibo.dados.confirmado.status_impressao_em,primeiraHora);
+ manual.reiniciar();await manual.ctx.PilotoOffline.carregarOrdens();
+ assert.equal(manual.ctx.state.modelosGlobais[99][0].status_impressao,'Aguardando');
+ assert.equal(await manual.ctx.updateItemImpressao('10','vibe_99','Impresso'),true);
+ assert.equal(manualBanco[0].status_impressao_em,primeiraHora);
+ Object.assign(manual.ctx.state.osItens.vibe_99[0],antesRetorno);
+ assert.equal(await manual.ctx.updateItemImpressao('10','vibe_99','Aguardando',{permitirRetornoManual:true}),false,'tela antiga nao reabre nova confirmacao');
+ assert.equal(manualBanco[0].status_impressao,'Impresso');
+ console.log('OK: rede antes de sucesso; retorno manual via RPC/recibo; hora preservada; tela antiga recusada; duas estacoes; snapshot; reinicio; falha/zero/releitura; Corrigir Arte.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
