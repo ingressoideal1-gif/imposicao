@@ -1,0 +1,27 @@
+{
+  "quando_utc": "2026-10-26T15:28:56.463846+00:00",
+  "chamadas": [
+    {
+      "rota": "qr-status",
+      "http": 200,
+      "contratos": 17,
+      "capacidade": 7700,
+      "sha256_metadados": "830a2080258ab13d80cc23e19ae23c78e9be7411fe0a9e52664d614349952bf3"
+    },
+    {
+      "rota": "qr-contratos",
+      "http": 200,
+      "contratos": 17,
+      "capacidade": 7700,
+      "sha256_metadados": "830a2080258ab13d80cc23e19ae23c78e9be7411fe0a9e52664d614349952bf3"
+    },
+    {
+      "rota": "qr-contratos",
+      "http": 200,
+      "contratos": 17,
+      "capacidade": 7700,
+      "sha256_metadados": "830a2080258ab13d80cc23e19ae23c78e9be7411fe0a9e52664d614349952bf3"
+    }
+  ],
+  "contratos_estaveis": true
+}

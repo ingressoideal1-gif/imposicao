@@ -1,0 +1,12 @@
+{
+  "quando_utc": "2026-10-26T15:28:11.681680+00:00",
+  "sha256_sql": "73a58e223134b392dab953b9d294f5b8f209b5a62bfa33d77a1bdea69aeaced0",
+  "resultado": [
+    {
+      "capacidade": 7700,
+      "contratos": 17,
+      "versao_maxima": 2,
+      "versao_minima": 2
+    }
+  ]
+}
