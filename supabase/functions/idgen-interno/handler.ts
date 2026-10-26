@@ -40,7 +40,7 @@ export function handler(deps: Dependencias) {
       return responder(await deps.operar(usuario, body.acao, body.dados));
     } catch (e) {
       const code = (e as { code?: string }).code;
-      const status = code === '42501' ? 403 : code === '40001' || code === '23505' ? 409
+      const status = code === '42501' ? 403 : code === 'PT409' || code === '40001' || code === '23505' ? 409
         : code === 'P0002' ? 404 : code === '22023' || code === '22P02' || code === '23514' || code === '23502' ? 400
         : code === 'AUTH' ? 401 : 502;
       return responder({ erro: status === 409 ? 'O pedido mudou. Reabra antes de salvar.'

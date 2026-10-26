@@ -28,7 +28,7 @@ test('origem, ausência de sessão, método e formato inválidos não chegam ao 
     assert.equal(calls, 0);
 });
 test('papel negado, conflito e sessão vencida têm respostas distintas sem detalhes internos', async () => {
-    for (const [code, status] of [['42501', 403], ['40001', 409], ['P0002', 404], ['XX000', 502], ['AUTH', 401]]) {
+    for (const [code, status] of [['42501', 403], ['PT409', 409], ['40001', 409], ['P0002', 404], ['XX000', 502], ['AUTH', 401]]) {
         const app = handler({ usuario: async () => 'u', operar: async () => { throw Object.assign(new Error('SEGREDO-SINTETICO'), { code }); } });
         const res = await app(req({ acao: 'listar', dados: {} }));
         assert.equal(res.status, status); assert.ok(!(await res.text()).includes('SEGREDO-SINTETICO'));
