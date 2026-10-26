@@ -18,7 +18,7 @@ function func(nome, source = src) {
         browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
         await page.goto('http://127.0.0.1:' + server.address().port);
-        await page.addScriptTag({ content: func('preencherFaixaDoModelo', main) + '\n'
+        await page.addScriptTag({ content: func('faixaEfetivaDoModelo', main) + '\n' + func('preencherFaixaDoModelo', main) + '\n'
             + func('enviarParaPedido') + '\n' + func('carregarModeloParaPedido') + '\n' + func('executarPedImposition') });
         const resultado = await page.evaluate(async () => {
             const avisos = [];

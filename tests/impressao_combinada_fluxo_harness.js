@@ -50,6 +50,8 @@ function fixture(options={}) {
     vm.runInContext(main.slice(main.indexOf('function populateImpMapasTeatro('), main.indexOf('function onImpNumeracaoSelect()')), c);
     vm.runInContext(extract(pedido,'faceDeImpressaoDoPedido'),c);
     vm.runInContext(extract(pedido,'folha1DoPedido'),c);
+    const rotacaoInicio=pedido.indexOf('async function rotacionarPaginasParesDoPedido(');
+    vm.runInContext(pedido.slice(rotacaoInicio,pedido.indexOf('\n}',rotacaoInicio)+2),c);
     const faceStart = pedido.indexOf('async function selecionarFacesDoPdfDoPedido(');
     vm.runInContext(pedido.slice(faceStart,pedido.indexOf('\n}',faceStart)+2),c);
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/arte-de-impressao.js'), 'utf8'),c);

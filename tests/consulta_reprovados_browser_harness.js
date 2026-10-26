@@ -6,7 +6,7 @@ function fn(nome,s){const i=s.search(new RegExp('(?:async )?function '+nome+'\\(
  await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
  try{
   browser=await puppeteer.launch({headless:true});const page=await browser.newPage();await page.goto('http://127.0.0.1:'+server.address().port);
-  await page.addScriptTag({content: ['enviarParaPedido','carregarModeloParaPedido','executarPedImposition'].map(n=>fn(n,pedido)).join('\n')+'\n'+['preencherFaixaDoModelo','enviarParaImposicao','carregarModeloParaImposicao'].map(n=>fn(n,script)).join('\n')});
+  await page.addScriptTag({content: ['enviarParaPedido','carregarModeloParaPedido','executarPedImposition'].map(n=>fn(n,pedido)).join('\n')+'\n'+['faixaEfetivaDoModelo','preencherFaixaDoModelo','enviarParaImposicao','carregarModeloParaImposicao'].map(n=>fn(n,script)).join('\n')});
   await page.evaluate(()=>{
    const rows=[{id:1,id_int:99,status_arte:'REPROVADA_CLIENTE',arte_url:'https://synthetic.test/a.pdf',amostra_num_id:'n1'},{id:2,id_int:99,status_arte:'REPROVADA_CLIENTE',arte_url:'https://synthetic.test/b.pdf',amostra_num_id:'n2'}];
    window.snapshotTeste={modelos:rows,numeracoes:[{id:'n1',tipo:'CAMAROTE'},{id:'n2',tipo:'SEQUENCIAL'}],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]};

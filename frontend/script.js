@@ -11041,10 +11041,10 @@ function drawPreview() {
                 }
             }
             if (isNaN(parseInt(document.getElementById('imp-start')?.value, 10))) {
-                start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial, 10) : (parseInt(item.numeracao_inicio, 10) || 1);
+                start = Number(faixaEfetivaDoModelo(item).inicio);
             }
             if (isNaN(parseInt(document.getElementById('imp-end')?.value, 10))) {
-                end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final, 10) : (parseInt(item.numeracao_fim, 10) || 100);
+                end = Number(faixaEfetivaDoModelo(item).fim);
             }
             if (!document.getElementById('imp-schema')?.value) {
                 const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
@@ -13494,7 +13494,7 @@ window.runImposition = async function (mode, returnBlob = false) {
                 _osId: s.osId,
                 num1_id: sItem ? (sItem.amostra_num_id || sItem.numeracao_id || numId) : numId,
                 num2_id: null,
-                start: sItem ? parseInt(sItem.num_inicial !== undefined && sItem.num_inicial !== null ? sItem.num_inicial : (sItem.numeracao_inicio || 1)) : 1,
+                start: sItem ? Number(faixaEfetivaDoModelo(sItem).inicio) : 1,
                 has_raw_file: false,
                 is_selected: true,
                 amostra_cor_id: sItem ? sItem.amostra_cor_id : null,
@@ -13522,8 +13522,8 @@ window.runImposition = async function (mode, returnBlob = false) {
                 const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
                 if (fmtObj) saiId = fmtObj.default_saida_id;
             }
-            start = item.num_inicial !== undefined && item.num_inicial !== null ? parseInt(item.num_inicial) : (parseInt(item.numeracao_inicio) || 1);
-            end = item.num_final !== undefined && item.num_final !== null ? parseInt(item.num_final) : (parseInt(item.numeracao_fim) || 100);
+            start = Number(faixaEfetivaDoModelo(item).inicio);
+            end = Number(faixaEfetivaDoModelo(item).fim);
             const fmtObj = state.formatos.find(f => String(f.id) === String(fmtId));
             schema = fmtObj ? fmtObj.default_schema : 'sequential';
         }
@@ -28188,7 +28188,27 @@ window.aplicarRegraProdutoPrateleira = aplicarRegraProdutoPrateleira;
 window.sincronizarAprovacaoProdutosPrateleira = sincronizarAprovacaoProdutosPrateleira;
 window.repararProdutosPrateleiraDosItens = repararProdutosPrateleiraDosItens;
 
-// Apenas valida: campos ausentes devem ser corrigidos pelo operador, nunca presumidos.
+// Faixa vazia usa a quantidade do proprio modelo; nao grava nem altera o cadastro.
+function faixaEfetivaDoModelo(item) {
+    const valor = (principal, alternativo) => principal !== undefined ? principal : alternativo;
+    const vazio = v => v == null || (typeof v === 'string' && v.trim() === '');
+    let inicio = valor(item.num_inicial, item.numeracao_inicio);
+    let fim = valor(item.num_final, item.numeracao_fim);
+    if (vazio(inicio)) inicio = 1;
+    const qtd = valor(item.qtd, item.quantidade);
+    const numId = item.amostra_num_id || item.numeracao_id;
+    const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
+    const vias = num?.tipo === 'TICKET' ? num.ticket_qtd : 1;
+    const inteiro = (v, minimo) => !vazio(v) && typeof v !== 'boolean'
+        && Number.isSafeInteger(Number(v)) && Number(v) >= minimo;
+    if (vazio(fim) && inteiro(inicio, 0) && inteiro(qtd, 1) && inteiro(vias, 1)) {
+        const calculado = Number(inicio) + Number(qtd) * Number(vias) - 1;
+        if (Number.isSafeInteger(calculado)) fim = calculado;
+    }
+    return { inicio, fim };
+}
+
+// Valida a faixa efetiva e os demais campos, sem modificar o modelo.
 function camposPendentesDoModelo(item) {
     const faltam = [];
     const presente = v => v !== undefined && v !== null && String(v).trim() !== '';
@@ -28224,8 +28244,7 @@ function camposPendentesDoModelo(item) {
         if (!inteiro(item.bloco, 1)) faltam.push('Bloco');
         // PDF paginado e banco usam páginas/linhas; não uma faixa sequencial.
         if (!item.modo_pdf && !banco && num?.tipo !== 'TEATRO') {
-            const inicio = valor(item.num_inicial, item.numeracao_inicio);
-            const fim = valor(item.num_final, item.numeracao_fim);
+            const { inicio, fim } = faixaEfetivaDoModelo(item);
             if (!inteiro(inicio, 0)) faltam.push('Numeração inicial');
             if (!inteiro(fim, 0)) faltam.push('Numeração final');
             const vias = num?.tipo === 'TICKET' ? Number(num.ticket_qtd) : 1;
@@ -28256,8 +28275,9 @@ function preencherFaixaDoModelo(item, prefixo) {
     if (document.getElementById(prefixo + '-schema')?.value === 'pdf_multiple' || state.csvData) return;
     const inicio = document.getElementById(prefixo + '-start');
     const fim = document.getElementById(prefixo + '-end');
-    if (inicio) inicio.value = (item.num_inicial !== undefined ? item.num_inicial : item.numeracao_inicio) ?? '';
-    if (fim) fim.value = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
+    const faixa = faixaEfetivaDoModelo(item);
+    if (inicio) inicio.value = faixa.inicio ?? '';
+    if (fim) fim.value = faixa.fim ?? '';
 }
 
 /**
@@ -34391,14 +34411,15 @@ function renderImpOSQueue(opcoes = {}) {
                 return `<option value="${n.id}" ${sel}>${n.name || n.tipo}</option>`;
             }).join('');
 
-            const niVal = item.num_inicial !== undefined && item.num_inicial !== null ? item.num_inicial : (item.numeracao_inicio || '');
+            const faixaModelo = faixaEfetivaDoModelo(item);
+            const niVal = faixaModelo.inicio ?? '';
             const qtdVal = item.qtd !== undefined && item.qtd !== null ? item.qtd : (item.quantidade || '');
             const nomeDoModelo = item.produto || '--';
 
             const selectedNum = (state.numeracoes || []).find(n => String(n.id) === String(selectedNumId));
 
-            // Exibir o valor do modelo: calcular aqui esconderia um campo ausente.
-            const nfCalculado = (item.num_final !== undefined ? item.num_final : item.numeracao_fim) ?? '';
+            // Exibir a mesma faixa efetiva usada na previa e no PDF.
+            const nfCalculado = faixaModelo.fim ?? '';
 
             // Detectar CAMAROTE
             const isCamarote = selectedNum && (selectedNum.tipo === 'CAMAROTE' || selectedNum.type === 'CAMAROTE');
