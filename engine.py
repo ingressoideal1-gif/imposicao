@@ -1177,7 +1177,7 @@ class ImpositionConfig:
                  rotate_page: bool = False,
                  multi_artes: list[dict] | None = None,
                  cut_stack_mode: str = "independent",
-                 sheets_per_block: int = 5,
+                 sheets_per_block: int = 10,
                  block_depth: int = 1,
                  c_ini: int = 1,
                  q_cam: int = 0,
@@ -1195,7 +1195,8 @@ class ImpositionConfig:
                  arte_escala_h: float = 100.0,
                  arte_escala_v: float = 100.0,
                  base_file_verso: str = None,
-                 pdf_expected_items: int | None = None):
+                 pdf_expected_items: int | None = None,
+                 folha_a_folha: bool = False):
 
         _validar_numeracao_ticket(numeracao)
         _validar_numeracao_ticket(numeracao_2)
@@ -1230,7 +1231,7 @@ class ImpositionConfig:
                 raise ValueError("A combinação paginada exige PDF de frente e verso por modelo.")
         self.cut_stack_mode = cut_stack_mode
         # Zero explicito desativa o corte por lote em chamadas existentes.
-        self.sheets_per_block = 5 if sheets_per_block in (None, '') else sheets_per_block
+        self.sheets_per_block = 10 if sheets_per_block in (None, '') else sheets_per_block
         self.block_depth = block_depth
         # ENTREGAR ENQUANTO GERA (27/08/2026).
         #
@@ -1244,6 +1245,7 @@ class ImpositionConfig:
         # Ver `_folhas_por_lote`, que é quem decide se o corte vale para este
         # trabalho.
         self.entregar_por_bloco = bool(entregar_por_bloco)
+        self.folha_a_folha = bool(folha_a_folha)
 
         # QR Ideal: as duas chaves que dao o codigo de cada ingresso.
         # `pedido` e `pedidos_modelos.id_int` e `modelo` e `pedidos_modelos.id`.
@@ -1679,6 +1681,19 @@ class ImpositionEngine:
         if por_bloco <= 0:
             return 0
         return por_bloco * max(int(getattr(cfg, "block_depth", 1) or 1), 1)
+
+    def _entregar_folha(self, doc, cfg, total_sheets, is_duplex):
+        folhas = len(doc) // (2 if is_duplex else 1)
+        self.folhas_entregues += folhas
+        path = cfg.out_pdf.replace(".pdf", f"_folha{self.folhas_entregues:06d}.pdf")
+        _salvar_pdf(doc, path)
+        doc.close()
+        self.generated_files.append({
+            "type": "lote", "path": path, "name": os.path.basename(path),
+            "folhas": folhas, "folhas_entregues": self.folhas_entregues,
+            "folhas_no_trabalho": total_sheets,
+        })
+        return fitz.open()
 
     def _get_font_buffer(self, font_file: str) -> bytes:
         """Le o arquivo TTF do disco uma unica vez e cacheia os bytes em memoria."""
@@ -3623,6 +3638,10 @@ class ImpositionEngine:
                                 pos // cols, cols - 1 - (pos % cols), cfg, start_x, start_y
                             )
 
+                    if cfg.folha_a_folha:
+                        doc_out = self._entregar_folha(
+                            doc_out, cfg, math.ceil(len(itens) / poses_per_sheet), is_duplex)
+
                 if len(doc_out) > 0:
                     out_name = cfg.out_pdf.replace(".pdf", "_02_miolo.pdf")
                     _salvar_pdf(doc_out, out_name)
@@ -3701,6 +3720,9 @@ class ImpositionEngine:
                                     if item_data is not None:
                                         self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
                                         
+                        if cfg.folha_a_folha:
+                            doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex)
+
                     # 3. Salvar miolo para o layer (apenas se gerou alguma folha)
                     if len(doc_out) > 0:
                         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_02_miolo.pdf")
@@ -3748,7 +3770,7 @@ class ImpositionEngine:
                     continue
             
             if set_idx != set_idx_current:
-                if set_idx_current != -1 and doc_out:
+                if set_idx_current != -1 and doc_out is not None:
                     # Gravar o miolo do set que acabou NÃO depende do refazer: só a
                     # capa e a contracapa dependem. Antes as duas coisas estavam sob
                     # a mesma condição, e o miolo de um set completo era descartado
@@ -3778,6 +3800,8 @@ class ImpositionEngine:
                             "folhas": len(doc_out), "folhas_entregues": self.folhas_entregues,
                             "folhas_no_trabalho": total_sheets,
                         })
+                    if cfg.folha_a_folha and cfg.has_cover and not refazendo:
+                        self._generate_contracapa(set_idx_current, cfg, doc_base)
                     # Só esvazia o documento quando o set foi salvo acima.
                     # Sem capa/lote, todos os sets pertencem ao PDF único.
                     if cfg.has_cover or folhas_por_lote:
@@ -4208,8 +4232,13 @@ class ImpositionEngine:
                         _recortar_celula(out_page_back, inicio_celula,
                                          fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
 
+            if cfg.folha_a_folha:
+                doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex)
+
         print(f"[engine] loop done elapsed={_time.monotonic()-_t0:.1f}s, saving...")
         if cfg.has_cover:
+            if cfg.folha_a_folha and set_idx_current != -1 and not refazendo:
+                self._generate_contracapa(set_idx_current, cfg, doc_base)
             if set_idx_current != -1 and doc_out:
                 if len(doc_out) > 0:
                     out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")

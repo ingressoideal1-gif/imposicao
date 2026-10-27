@@ -8,7 +8,7 @@ function extrair(nome) {
     if (inicio < 0) return '';
     return src.slice(inicio, src.indexOf('\n}', inicio) + 2);
 }
-const codigo = ['mapVibecodeProdutoToOSItem', 'loadOrdensFromVibecode', 'loadOSItens', 'abrirImposicaoDoPedido'].map(extrair).join('\n');
+const codigo = ['blocagemDoModelo', 'mapVibecodeProdutoToOSItem', 'loadOrdensFromVibecode', 'loadOSItens', 'abrirImposicaoDoPedido'].map(extrair).join('\n');
 const produtos = [{id:71,id_int:99001,id_produto:1,nome_produto:'Cordão',qtd:12}, {id:72,id_int:99001,id_produto:2,nome_produto:'Crachá',qtd:12}];
 const modelos = [
     {id:101,id_int:99001,id_produto_proposta_origem:71,nome_modelo:'PADRÃO',quantidade:12,bloco:50},

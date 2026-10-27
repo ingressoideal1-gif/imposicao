@@ -1209,6 +1209,16 @@ def qr_ideal_contratos(pedido: int):
 
 # ─── IMPOSIÇÃO ────────────────────────────────────────────────────────────────
 
+@app.post("/api/impose/confirmar-entrega")
+async def confirmar_entrega_impose(request: Request):
+    from entrega_progressiva import entregas
+    dados = await request.json()
+    token = dados.get("token") if isinstance(dados, dict) else None
+    if not isinstance(token, str) or not entregas.confirmar(token):
+        raise HTTPException(status_code=404, detail="Entrega pendente nao encontrada.")
+    return {"ok": True}
+
+
 @app.post("/api/impose")
 async def impose_file(
     request: Request,
@@ -1590,7 +1600,7 @@ async def impose_file(
             rotate_page=data.get("rotate_page", False),
             multi_artes=multi_artes_list,
             cut_stack_mode=data.get("cut_stack_mode", "independent"),
-            sheets_per_block=data.get("sheets_per_block", 5),
+            sheets_per_block=data.get("sheets_per_block", 10),
             block_depth=data.get("block_depth", 1),
             c_ini=int(data.get("c_ini", 1) or 1),
             q_cam=int(data.get("q_cam", 0) or 0),
@@ -1616,6 +1626,7 @@ async def impose_file(
             # de la vai para a resposta em streaming e para o hotfolder ou a
             # impressora, sem esperar o trabalho terminar.
             entregar_por_bloco=bool(data.get("entregar_por_bloco", False)),
+            folha_a_folha=bool(data.get("folha_a_folha", False)),
             # ESCALA DA CAMADA DE ARTE (31/08/2026). Vem do modelo, em %, e o
             # padrao 100 e o tamanho natural do arquivo — o que o motor sempre
             # fez. Numa folha que combina modelos, cada arte traz a sua em
@@ -1634,6 +1645,8 @@ async def impose_file(
             from starlette.background import BackgroundTask
             loop = asyncio.get_running_loop()
             queue = asyncio.Queue()
+            from entrega_progressiva import entregas
+            confirmar_entrega = bool(data.get("confirmar_entrega", False))
 
             # QUANTOS LOTES O MOTOR PODE ESTAR NA FRENTE (27/08/2026)
             #
@@ -1667,7 +1680,7 @@ async def impose_file(
                 nonlocal arquivos_emitidos
                 import base64
                 if cliente_saiu.is_set():
-                    return
+                    raise RuntimeError("Entrega interrompida: conexao encerrada.")
                 path = file_info["path"]
                 name = file_info["name"]
                 ftype = file_info["type"]
@@ -1686,11 +1699,13 @@ async def impose_file(
                         b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
                     esperar_vaga()
                     if cliente_saiu.is_set():
-                        return
+                        raise RuntimeError("Entrega interrompida: conexao encerrada.")
                     import hashlib
                     arquivos_emitidos += 1
+                    token_entrega = entregas.registrar() if confirmar_entrega else None
                     loop.call_soon_threadsafe(queue.put_nowait, {
                         "type": "file",
+                        "token_entrega": token_entrega,
                         "index": arquivos_emitidos,
                         "job_id": data["integridade"]["job_id"],
                         "sha256": hashlib.sha256(base64.b64decode(b64_data)).hexdigest(),
@@ -1703,6 +1718,8 @@ async def impose_file(
                         "folhas_entregues": file_info.get("folhas_entregues"),
                         "folhas_no_trabalho": file_info.get("folhas_no_trabalho"),
                     })
+                    if token_entrega:
+                        entregas.esperar(token_entrega, cliente_saiu)
 
             engine = ImpositionEngine(config, on_file_generated=on_file_gen, resolver_recurso=resolver_local)
             print(f"[DIAG impose stream] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r}")
