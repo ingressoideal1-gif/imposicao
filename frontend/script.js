@@ -2351,7 +2351,7 @@ async function saveFmt() {
 
         default_cut_stack_mode: document.getElementById('fmt-def-cut-stack-mode').value,
 
-        default_sheets_per_block: parseInt(document.getElementById('fmt-def-sheets').value) || 5,
+        default_sheets_per_block: parseInt(document.getElementById('fmt-def-sheets').value) || 10,
 
         default_block_depth: parseInt(document.getElementById('fmt-def-depth').value) || 1,
 
@@ -2452,7 +2452,7 @@ function editFmt(id, contexto = {}) {
     
     document.getElementById('fmt-def-cut-stack-mode').value = f.default_cut_stack_mode || 'independent';
     
-    document.getElementById('fmt-def-sheets').value = f.default_sheets_per_block || 5;
+    document.getElementById('fmt-def-sheets').value = f.default_sheets_per_block || 10;
     
     document.getElementById('fmt-def-depth').value = f.default_block_depth || 1;
     
@@ -2526,7 +2526,7 @@ function cancelFmtEdit() {
     document.getElementById('fmt-def-schema').value = 'sequential';
     document.getElementById('fmt-def-saida').value = '';
     document.getElementById('fmt-def-cut-stack-mode').value = 'independent';
-    document.getElementById('fmt-def-sheets').value = '5';
+    document.getElementById('fmt-def-sheets').value = '10';
     document.getElementById('fmt-def-depth').value = '1';
     document.getElementById('fmt-def-rotate').value = '0';
     const cutStackOpts = document.getElementById('fmt-def-cut-stack-options');
@@ -3856,11 +3856,11 @@ function applyFormatoDefaults() {
         if (modeSel) modeSel.value = fmt.default_cut_stack_mode;
     }
     
-    // Sheets per block
-    if (fmt.default_sheets_per_block) {
-        const sheetsInp = document.getElementById('imp-sheets-per-block');
-        if (sheetsInp) sheetsInp.value = fmt.default_sheets_per_block;
-    }
+    // Modelo salvo > produto > padrao 10; formato somente na imposicao avulsa.
+    const modeloBloco = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    const sheetsInp = document.getElementById('imp-sheets-per-block');
+    if (sheetsInp) sheetsInp.value = modeloBloco
+        ? blocagemDoModelo(modeloBloco).folhas : (fmt.default_sheets_per_block || 10);
     
     // Block depth
     if (fmt.default_block_depth) {
@@ -11400,10 +11400,10 @@ function drawPreview() {
     }
 
     let is_strict_mode = false;
-    let stack_size = 5;
+    let stack_size = 10;
     if (schema === "cut_stack") {
         const cutstackMode = document.getElementById('imp-cutstack-mode')?.value || 'independent';
-        stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 5) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
+        stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 10) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
         if (cutstackMode === 'strict') {
             is_strict_mode = true;
             const itemsPerSet = stack_size * poses_per_sheet;
@@ -11872,7 +11872,7 @@ function drawPreview() {
                     const sheetsInput = document.getElementById('imp-sheets-per-block');
                     const sheetsPerBlock = (sheetsInput && sheetsInput.value) 
                         ? parseInt(sheetsInput.value) 
-                        : (parseInt(fmt.default_sheets_per_block) || 5);
+                        : (parseInt(fmt.default_sheets_per_block) || 10);
                         
                     const local_idx = (typeof item_local_index !== 'undefined') ? item_local_index : item_index;
                     const cell_stack_size = sheetsPerBlock;
@@ -13264,7 +13264,7 @@ function updateImpSummary() {
         sheets = sets.reduce((n, s) => n + s.num_sheets, 0);
     }
     if (schema === 'cut_stack') {
-        const stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 5) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
+        const stack_size = (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 10) * (parseInt(document.getElementById('imp-block-depth')?.value) || 1);
         if (cutstackMode === 'strict') {
             const itemsPerSet = stack_size * perSheet;
             const sets_needed = Math.ceil(total_impressions / itemsPerSet);
@@ -14096,7 +14096,7 @@ window.runImposition = async function (mode, returnBlob = false) {
         // mesmo 'strict_assembly' de sempre. Ver modoCutStackDaSelecao().
         cut_stack_mode: isMultiSelected ? modoCutStackDaSelecao() : ((state.activeOSItem) ? (document.getElementById('ped-cutstack-mode')?.value || 'independent') : (document.getElementById('imp-cutstack-mode')?.value || 'independent')),
 
-        sheets_per_block: isMultiSelected ? blocagemDaSelecao().folhas : ((state.activeOSItem && state.osItens[state.activeOSItem.osId] && state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId))?.bloco) ? parseInt(state.osItens[state.activeOSItem.osId].find(i => String(i.id) === String(state.activeOSItem.itemId)).bloco) : ((state.activeOSItem) ? (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 5) : (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 5))),
+        sheets_per_block: isMultiSelected ? blocagemDaSelecao().folhas : (itemAtivoDoPedido() ? blocagemDoModelo(itemAtivoDoPedido()).folhas : (parseInt(document.getElementById('imp-sheets-per-block')?.value) || 10)),
 
         block_depth: (isMultiSelected || state.activeOSItem) ? (parseInt(document.getElementById('ped-block-depth')?.value) || 1) : (parseInt(document.getElementById('imp-block-depth')?.value) || 1),
 
@@ -20728,7 +20728,7 @@ window.contaDaSoma = contaDaSoma;
 function modelosComBlocagemReal(itens) {
 
     const spb = parseInt(document.getElementById('ped-sheets-per-block')?.value
-                      || document.getElementById('imp-sheets-per-block')?.value) || 5;
+                      || document.getElementById('imp-sheets-per-block')?.value) || 10;
 
     return (itens || [])
 
@@ -20904,14 +20904,21 @@ window.modoDeImpressaoDoModelo = modoDeImpressaoDoModelo;
 
 /**
  * O modo de blocos e as folhas por bloco de um modelo. Preserva a configuração
- * salva e o bloco do ERP. Sem valor definido, usa cinco folhas para todos os
+ * salva e o bloco do ERP. Sem valor definido, usa a blocagem do produto ou dez folhas para todos os
  * produtos; o modo continua sendo montagem estrita.
  */
 function blocagemDoModelo(item) {
 
+    const produtoId = item && (item._vibe_id_produto || item.id_produto || item.produto_id);
+    const produto = produtoId == null ? null : (state.produtosGlobais || [])
+        .find(p => String(p.id_produto) === String(produtoId));
+    // Modelo salvo > cadastro do produto > padrao 10. Nao grava o fallback.
+    const folhas = [item && item.cutstack_folhas, item && item.bloco,
+                    produto && produto.tipo_blocagem]
+        .map(v => Number(v)).find(v => Number.isInteger(v) && v > 0) || 10;
     return {
         modo: window.TeatroBanco?.usa(numeracaoDoModelo(item)) ? 'strict_assembly' : (item && item.cutstack_modo) || 'strict_assembly',
-        folhas: parseInt(item && item.cutstack_folhas) || parseInt(item && item.bloco) || 5
+        folhas
     };
 
 }
@@ -20943,9 +20950,12 @@ function blocagemDaSelecao() {
 
     const itens = itensDaImposicao(true);
 
-    const comFolhas = itens.find(it => (parseInt(it.cutstack_folhas) || parseInt(it.bloco) || 0) > 0);
-
-    return blocagemDoModelo(comFolhas || itens[0] || null);
+    // Nao herdar 50 de outro modelo quando o primeiro tem padrao 10.
+    // A selecao deve passar pela mesma validacao da combinacao manual.
+    if (itens.some(it => blocagemDoModelo(it).folhas !== blocagemDoModelo(itens[0]).folhas)) {
+        throw new Error('Nao e permitido combinar modelos com blocagens diferentes.');
+    }
+    return blocagemDoModelo(itens[0] || null);
 
 }
 window.blocagemDaSelecao = blocagemDaSelecao;
@@ -21115,7 +21125,7 @@ window.setModoImpressaoDoModelo = async function(modo) {
 
     if (valor === 'blocado' && !item.cutstack_folhas) {
 
-        const folhas = parseInt(item.bloco) || 5;
+        const folhas = blocagemDoModelo(item).folhas;
 
         item.cutstack_folhas = folhas;
 
@@ -28071,10 +28081,7 @@ function mapVibecodeProdutoToOSItem(p, osId) {
             const impOverrides = JSON.parse(localStorage.getItem('vibe_item_impressao_overrides') || '{}');
             return impOverrides[`vibe_item_${p.id}`] || 'AGUARD.';
         })(),
-        sheets_per_block: p.bloco && parseInt(p.bloco) > 0 ? parseInt(p.bloco) : (() => {
-            const format = state.formatos.find(f => String(f.id) === String(p.formato_id));
-            return format ? (parseInt(format.default_sheets_per_block) || 5) : 5;
-        })(),
+        sheets_per_block: blocagemDoModelo(p).folhas,
         
         c_ini: p.C_INI || p.c_ini || 1,
         q_cam: p.Q_CAM || p.q_cam || p.qtd_locais || p.qtd_cam || 0,
@@ -28346,7 +28353,7 @@ function camposPendentesDoModelo(item) {
         if (!inteiro(item.l_cam ?? item.L_CAM ?? item.lotacao_cam, 1)) faltam.push('Lotação por local (L_CAM)');
         if (!inteiro(item.c_ini ?? item.C_INI, 1)) faltam.push('Início do local (C_INI)');
     } else {
-        if (!inteiro(item.bloco, 1)) faltam.push('Bloco');
+        if (presente(item.bloco) && !inteiro(item.bloco, 1)) faltam.push('Bloco');
         // PDF paginado e banco usam páginas/linhas; não uma faixa sequencial.
         if (!item.modo_pdf && !banco && num?.tipo !== 'TEATRO') {
             const { inicio, fim } = faixaEfetivaDoModelo(item);
