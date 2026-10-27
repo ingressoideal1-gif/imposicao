@@ -37699,8 +37699,21 @@ async function onItemArteUpload(idx, osId, itemId, face = 'frente') {
                 } else {
                     item.arte_url = publicUrl;
                 }
-                if (item.id) localStorage.setItem(`ideal_arte_url_${item.id}_${faceKey}`, publicUrl);
-                localStorage.setItem(`ideal_arte_url_${osId}_${idx}_${faceKey}`, publicUrl);
+                // Cache auxiliar: quota cheia nao pode impedir o vinculo no banco.
+                const cacheKeys = [
+                    ...(item.id ? [`ideal_arte_url_${item.id}_${faceKey}`] : []),
+                    `ideal_arte_url_${osId}_${idx}_${faceKey}`
+                ];
+                for (const key of cacheKeys) {
+                    try {
+                        localStorage.setItem(key, publicUrl);
+                    } catch (cacheError) {
+                        if (cacheError.name !== 'QuotaExceededError' && cacheError.name !== 'NS_ERROR_DOM_QUOTA_REACHED') throw cacheError;
+                        // Nao deixar uma URL antiga como alternativa para esta face.
+                        localStorage.removeItem(key);
+                        console.warn('[Arte] Cache local sem espaco; continuando o salvamento no banco.');
+                    }
+                }
 
                 // O arquivo enviado agora e a arte do modelo: a estrutura vetorial
                 // da edicao anterior nao vale mais e nao pode reaparecer no editor.
