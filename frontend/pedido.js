@@ -119,11 +119,11 @@ function applyPedFormatoDefaults() {
         if (modeSel) modeSel.value = fmt.default_cut_stack_mode;
     }
     
-    // Sheets per block
-    if (fmt.default_sheets_per_block) {
-        const sheetsInp = document.getElementById('ped-sheets-per-block');
-        if (sheetsInp) sheetsInp.value = fmt.default_sheets_per_block;
-    }
+    // Modelo salvo > produto > padrao 10; formato somente na imposicao avulsa.
+    const modeloBloco = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
+    const sheetsInp = document.getElementById('ped-sheets-per-block');
+    if (sheetsInp) sheetsInp.value = modeloBloco
+        ? blocagemDoModelo(modeloBloco).folhas : (fmt.default_sheets_per_block || 10);
     
     // Block depth
     if (fmt.default_block_depth) {
@@ -665,23 +665,13 @@ function drawPedPreview() {
         ? (state.osItens[activeItem.osId] || []).find(i => String(i.id) === String(activeItem.itemId))
         : null);
     
-    // Auto-preencher 'Folhas p/ Bloco' se disponivel na OS, para manter o Preview consistente
-    if (state.selectedOSItems && state.selectedOSItems.length > 0) {
-        const firstWithBloco = state.selectedOSItems.find(sel => {
-            const sItem = state.osItens[sel.osId]?.find(i => String(i.id) === String(sel.itemId));
-            return sItem && ((sItem.bloco && parseInt(sItem.bloco) > 0) || (sItem.blocos && sItem.blocos !== 'N'));
-        });
-        if (firstWithBloco) {
-            const blocItem = state.osItens[firstWithBloco.osId]?.find(i => String(i.id) === String(firstWithBloco.itemId));
-            const sheetsInp = document.getElementById('ped-sheets-per-block');
-            if (sheetsInp && blocItem?.bloco) sheetsInp.value = parseInt(blocItem.bloco);
-        }
-    } else if (activeItem) {
+    // A previa usa a mesma blocagem do payload, inclusive o padrao do produto.
+    const sheetsInp = document.getElementById('ped-sheets-per-block');
+    if (sheetsInp && state.selectedOSItems && state.selectedOSItems.length > 1) {
+        sheetsInp.value = blocagemDaSelecao().folhas;
+    } else if (sheetsInp && activeItem) {
         const sItem = state.osItens[activeItem.osId]?.find(i => String(i.id) === String(activeItem.itemId));
-        if (sItem && sItem.bloco) {
-            const sheetsInp = document.getElementById('ped-sheets-per-block');
-            if (sheetsInp) sheetsInp.value = parseInt(sItem.bloco);
-        }
+        if (sItem) sheetsInp.value = blocagemDoModelo(sItem).folhas;
     }
     if (activeItem) {
         const itens = state.osItens[activeItem.osId] || [];
@@ -834,7 +824,7 @@ function drawPedPreview() {
     }
 
     if (fmt.default_schema === 'cut_stack') {
-        if (!fmt.default_cut_stack_mode || !fmt.default_sheets_per_block) {
+        if (!fmt.default_cut_stack_mode) {
             canvas.width = 300;
             canvas.height = 200;
             ctx.fillStyle = '#1e293b';
@@ -1086,7 +1076,7 @@ function drawPedPreview() {
     }
 
     let is_strict_mode = false;
-    let stack_size = 5;
+    let stack_size = 10;
     let sets_needed = 1;
     // O PLANO DE MONTAGEM É ZERADO ANTES DE QUALQUER DECISÃO (02/09/2026).
     //
@@ -1103,7 +1093,7 @@ function drawPedPreview() {
     if (schema === "cut_stack" || schema === "multi_artes") {
         const cutstackMode = modoCutStack;
         const folhasDoBloco = blocagemCombinada ? blocagemCombinada.folhas
-            : (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 5);
+            : (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 10);
         stack_size = folhasDoBloco * (cutstackMode === 'strict_assembly' ? 1
             : (parseInt(document.getElementById('ped-block-depth')?.value) || 1));
         // A FOLHA SOMADA NÃO É PILHA (02/09/2026).
@@ -1960,7 +1950,7 @@ function drawPedPreview() {
                     const sheetsInput = document.getElementById('ped-sheets-per-block');
                     const sheetsPerBlock = item_bloco || ((sheetsInput && sheetsInput.value) 
                         ? parseInt(sheetsInput.value) 
-                        : (parseInt(fmt.default_sheets_per_block) || 5));
+                        : (parseInt(fmt.default_sheets_per_block) || 10));
                         
                     let item_ticket_qtd = 1;
                     if (multiArteItem) {
@@ -3645,7 +3635,7 @@ function updatePedSummary() {
 
     const cutstackMode = document.getElementById('ped-cutstack-mode')?.value;
     if (schema === 'cut_stack' || schema === 'multi_artes') {
-        const stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 5) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
+        const stack_size = (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 10) * (parseInt(document.getElementById('ped-block-depth')?.value) || 1);
         if (schema === 'multi_artes' || cutstackMode === 'strict_assembly') {
             if (typeof buildStrictAssemblySets === 'function') {
                 const artesList = schema === 'multi_artes' ? state.impMultiArtes : [];
@@ -6060,7 +6050,7 @@ function arteDoModeloParaFolha(s, numIdReserva, opcoes) {
         artHeight: state.multiArtesPdfTamanho[itemArteUrl]?.h,
         artVersoWidth: state.multiArtesPdfTamanho[itemArteVersoUrl]?.w,
         artVersoHeight: state.multiArtesPdfTamanho[itemArteVersoUrl]?.h,
-        bloco: sItem && sItem.bloco ? parseInt(sItem.bloco) : null,
+        bloco: sItem ? blocagemDoModelo(sItem).folhas : 10,
         // `pedidos_modelos.id` — o modelo desta arte. O QR Ideal tira uma
         // coluna do pool por modelo; sem isto o motor recusa a folha.
         modelo: s.itemId || (sItem ? sItem.id : null)
@@ -6729,7 +6719,8 @@ async function executarPedImposition(mode, isRefazer) {
 
         sheets_per_block: isMultiSelected && typeof blocagemDaSelecao === 'function'
             ? blocagemDaSelecao().folhas
-            : (document.getElementById('ped-sheets-per-block') ? parseInt(document.getElementById('ped-sheets-per-block').value) || 5 : 5),
+            : (itemAtivoDoPedido() ? blocagemDoModelo(itemAtivoDoPedido()).folhas
+                : (parseInt(document.getElementById('ped-sheets-per-block')?.value) || 10)),
 
         block_depth: document.getElementById('ped-block-depth') ? parseInt(document.getElementById('ped-block-depth').value) || 1 : 1,
 
@@ -6755,6 +6746,14 @@ async function executarPedImposition(mode, isRefazer) {
         // marcada, o motor devolve o arquivo único de sempre.
         entregar_por_bloco: document.getElementById('ped-entregar-por-bloco')?.checked === true
             && !(mode === 'print' && document.getElementById('ped-print-reverse')?.checked === true),
+
+        folha_a_folha: mode === 'print'
+            && document.getElementById('ped-print-sheet-by-sheet')?.checked === true
+            && document.getElementById('ped-print-reverse')?.checked !== true,
+        confirmar_entrega: mode === 'print'
+            && (document.getElementById('ped-print-sheet-by-sheet')?.checked === true
+                || document.getElementById('ped-entregar-por-bloco')?.checked === true)
+            && document.getElementById('ped-print-reverse')?.checked !== true,
 
         // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden ou fallback do item ativo)
         c_ini: (state.activeOSItem ? parseInt(state.activeOSItem.c_ini) : null) || parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
@@ -7220,7 +7219,18 @@ async function executarPedImposition(mode, isRefazer) {
                                     if (entrega) {
                                         await entrega.entregar([{ name: fileObj.name, blob: fBlob }]);
                                         if (entrega.cancelado) { cancelouNoMeio = true; break; }
+                                        if (entrega.falhas) throw new Error('Envio do lote falhou; geracao interrompida.');
+                                        if (fileObj.token_entrega) {
+                                            const confirmacao = await fetch(`${baseUrl}/api/impose/confirmar-entrega`, {
+                                                method: 'POST',
+                                                headers: { ...headers, 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ token: fileObj.token_entrega }),
+                                                signal: impositionAbortController.signal
+                                            });
+                                            if (!confirmacao.ok) throw new Error('Nao foi possivel confirmar o envio do lote.');
+                                        }
                                     } else {
+                                        if (fileObj.token_entrega) throw new Error('Atualize o painel para usar a entrega progressiva.');
                                         printBlobQueue.push({ name: fileObj.name, blob: fBlob });
                                         toast(`Arquivo gerado: ${fileObj.name}`, 'info');
                                     }

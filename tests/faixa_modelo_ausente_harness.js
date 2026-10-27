@@ -38,7 +38,7 @@ async function tests() {
         [x=>x.items[0].qtd=null,'Quantidade'],
         [x=>x.items[0].qtd=0,'Quantidade'],
         [x=>x.items[0].qtd='5x','Quantidade'],
-        [x=>x.items[0].bloco=null,'Bloco'],
+        [x=>x.items[0].bloco='Bloco A','Bloco'],
         [x=>x.items[0].amostra_cor_id=null,'Cor'],
         [x=>x.items[0].numeracao_id=null,'Numeração'],
         [x=>x.items[0].formato_id=null,'Formato'],
@@ -83,6 +83,15 @@ async function tests() {
         assert.equal(multi.calls.requests.length,1,JSON.stringify(multi.calls.notices));
         assert.equal(multi.calls.requests[0].multi_artes[1].numeracao.start,1);
         assert.equal(multi.calls.requests[0].multi_artes[1].qtd,4);
+    }
+    for (const vazio of [null, undefined, '', '  ']) {
+        const semBloco = single(); semBloco.items[0].bloco = vazio;
+        semBloco.items[0].cutstack_folhas = null;
+        const antes = JSON.stringify(semBloco.items[0]);
+        await semBloco.c.runPedImposition('pdf');
+        assert.equal(semBloco.calls.requests.length, 1, JSON.stringify(semBloco.calls.notices));
+        assert.equal(semBloco.calls.requests[0].sheets_per_block, 10);
+        assert.equal(JSON.stringify(semBloco.items[0]), antes);
     }
     const valid=single(), model=valid.items[0], num=valid.c.state.numeracoes[0];
     for(const tipo of [null,undefined,'','INDEFINIDO']) {

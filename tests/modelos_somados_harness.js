@@ -354,10 +354,10 @@ const apiSel = new Function('state', 'window',
 (function aBlocagemPadraoPreservaValoresDefinidos() {
     const nu = api.blocagemDoModelo(modelo('A', 10));
     ok(nu.modo === 'strict_assembly', 'sem nada salvo, o modo de blocos e o de sempre', nu);
-    ok(nu.folhas === 5, 'sem nada salvo e sem bloco no ERP, 5 folhas', nu);
+    ok(nu.folhas === 10, 'sem nada salvo e sem bloco no ERP, 10 folhas', nu);
     for (const vazio of [null, '', 0]) {
-        ok(api.blocagemDoModelo(modelo('A', 10, {bloco:vazio, cutstack_folhas:vazio})).folhas === 5,
-            'blocagem vazia ou zerada usa 5');
+        ok(api.blocagemDoModelo(modelo('A', 10, {bloco:vazio, cutstack_folhas:vazio})).folhas === 10,
+            'blocagem vazia ou zerada usa 10');
     }
     ok(api.blocagemDoModelo(modelo('A', 10, {bloco:50})).folhas === 50,
         '50 explicitamente definido continua 50');
