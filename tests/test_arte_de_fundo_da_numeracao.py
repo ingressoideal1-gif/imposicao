@@ -95,7 +95,7 @@ def test_a_barra_tem_onde_dizer_o_que_acontece():
     html = _ler(INDEX)
     assert 'id="bg-persistencia-aviso"' in html
     i = html.index('id="bg-persistencia-aviso"')
-    assert 'id="btn-remove-bg"' in html[i - 900:i], (
+    assert 'id="btn-remove-bg"' in html[html.rfind('class="canvas-toolbar"', 0, i):i], (
         "a frase fica na própria barra da Arte de Fundo, junto do que ela explica"
     )
 
@@ -103,12 +103,11 @@ def test_a_barra_tem_onde_dizer_o_que_acontece():
 def test_a_arte_guardada_vence_a_arte_da_cor():
     """Guardar sem carregar de volta não teria efeito nenhum."""
     fonte = _ler(SCRIPT)
-    i = fonte.index("if (n.bg_url) {")
+    i = fonte.index("if (n.bg_url || n.bg_verso_url) {")
     trecho = fonte[i:i + 400]
     assert "carregarBgSalvo(n)" in trecho, "a arte da numeração vem primeiro"
     assert "autoLoadCorBg" in trecho, (
-        "e a da cor continua sendo o caminho de quem não tem arte própria — "
-        "inclusive quando o carregamento da guardada falha"
+        "e a da cor continua sendo o caminho de quem não tem arte própria"
     )
 
 

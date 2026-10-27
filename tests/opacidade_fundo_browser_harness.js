@@ -30,7 +30,7 @@ function extrair(nome, atribuida = false) {
             <canvas id="numeracao-canvas-verso" width="400" height="200"></canvas>`);
         await page.addScriptTag({ content: `
             const state = { numElements: [], numHistory: [], numHistoryIndex: -1,
-                numElCounter: 1, selectedElIds: [], bgLoadToken: 0,
+                numElCounter: 1, selectedElIds: [], bgLoadToken: 0, bgManualTokens: { front: 0, back: 0 },
                 canvasScale: 4, numFormato: { width_mm: 100, height_mm: 50 } };
             window.testState = state;
             function isElSelected() { return false; }
@@ -38,7 +38,7 @@ function extrair(nome, atribuida = false) {
             ${['drawCanvasFace', 'drawCanvas', 'drawElement', 'elementoSoLayout',
                 'elementoMesclaComArte', 'elementosNaOrdemDeComposicao',
                 'drawImageContain', 'opacidadeDoElemento', 'drawArteDoElemento',
-                'avisoOpacidade', 'opacidadeDoFundoNoEditor', 'atualizarControlesDoFundo']
+                'avisoOpacidade', 'opacidadeDoFundoNoEditor', 'atualizarControlesDoFundo', 'atualizarControlesFundoVerso']
                 .map(n => extrair(n)).join('\n')}
             ${['clearBgImage', 'saveNumHistory', 'updateElOpacidade',
                 'updateBgEditorOpacity', 'toggleBgEditorVisibility']
