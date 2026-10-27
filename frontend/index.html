@@ -667,13 +667,19 @@
                         <div class="canvas-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                                 <label class="btn btn-sm btn-secondary canvas-bg-label" for="canvas-bg-file" style="margin: 0;" title="Carregar arte de fundo para visualização">
-                                    🖼️ Arte de Fundo
+                                    🖼️ Arte de Fundo — Frente
                                 </label>
                                 <input type="file" id="canvas-bg-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none">
                                 <span id="bg-file-name" style="font-size: 0.85rem; color: var(--blue); font-weight: 500; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
-                                <button class="btn btn-sm btn-danger" id="btn-remove-bg" style="display:none; padding: 4px 8px;" onclick="clearBgImage()" title="Remover arte de fundo">
+                                <button class="btn btn-sm btn-danger" id="btn-remove-bg" style="display:none; padding: 4px 8px;" onclick="clearBgImage('front')" title="Remover arte de fundo">
                                     ✕ Remover
                                 </button>
+                                <span id="bg-verso-controls" style="display:none; gap:8px; align-items:center; flex-wrap:wrap;">
+                                    <label class="btn btn-sm btn-secondary canvas-bg-label" for="canvas-bg-verso-file" style="margin:0;">🖼️ Arte de Fundo — Verso</label>
+                                    <input type="file" id="canvas-bg-verso-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="if (this.files[0]) loadBgImage(this.files[0], 'back'); this.value = '';">
+                                    <span id="bg-verso-file-name" style="font-size:0.85rem;"></span>
+                                    <button class="btn btn-sm btn-danger" id="btn-remove-bg-verso" style="display:none;" onclick="clearBgImage('back')">✕ Remover verso</button>
+                                </span>
                                 <!-- O que vai acontecer com este arquivo ao salvar. Escrito na
                                      tela porque o comportamento muda conforme a numeração: na
                                      do cliente ele fica guardado, no catálogo é só referência

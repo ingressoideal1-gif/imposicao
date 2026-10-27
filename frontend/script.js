@@ -90,6 +90,10 @@ const state = {
 
     bgImage: null,          // HTMLImageElement | null (arte de fundo no canvas)
 
+    bgFileVerso: null,
+    bgUrlVerso: '',
+    bgFilenameVerso: '',
+    bgManualTokens: { front: 0, back: 0 },
     bgImageVerso: null,     // HTMLImageElement | null (arte de fundo do verso, em duplex)
 
     bgEditorOpacity: 0.55,  // preferência temporária de visualização; não vai para o PDF
@@ -996,7 +1000,7 @@ const COLUNAS_DA_COR_NA_LISTA = 'id,empresa_id,name,hex,pdf_url,pdf_filename,cre
 // copia, que é a enumeração mais completa que o código tem.
 const COLUNAS_DA_NUMERACAO_NA_LISTA = 'id,empresa_id,name,formato_id,formato_ids,tipo,'
     + 'print_mode,ticket_qtd,ticket_logica,csv_filename,csv_headers,csv_url,'
-    + 'svg_content,svg_filename,pdf_content,pdf_filename,bg_url,bg_filename,'
+    + 'svg_content,svg_filename,pdf_content,pdf_filename,bg_url,bg_filename,bg_verso_url,bg_verso_filename,'
     + 'elements,preview_jpg,is_custom,os_item_id,id_gabarito,Cli_Num,'
     + 'created_at,updated_at';
 
@@ -1971,6 +1975,7 @@ async function apiSemConfirmacao(method, path, body = null) {
                     const match = (error.message || '').match(/Could not find the '(.*?)' column/);
                     if (match && match[1]) {
                         const missingCol = match[1];
+                        if (col === 'producao_numeracoes' && missingCol.startsWith('bg_verso_')) throw error;
                         console.warn(`[api] Coluna '${missingCol}' ausente na tabela '${col}'. Tratando graciosamente...`);
                         delete insertPayload[missingCol];
                         const retryRes = await supabaseClient.from(col).insert([insertPayload]).select().single();
@@ -2019,6 +2024,7 @@ async function apiSemConfirmacao(method, path, body = null) {
                     const match = (error.message || '').match(/Could not find the '(.*?)' column/);
                     if (match && match[1]) {
                         const missingCol = match[1];
+                        if (col === 'producao_numeracoes' && missingCol.startsWith('bg_verso_')) throw error;
                         console.warn(`[api] Coluna '${missingCol}' ausente na tabela '${col}'. Tratando graciosamente...`);
                         delete updateData[missingCol];
                         const retryRes = await supabaseClient.from(col).update(updateData).eq('id', docId);
@@ -4422,7 +4428,7 @@ async function editNumeracao(id, contexto = {}) {
     // A guardada na própria numeração vence a da cor do formato base — é o
     // ponto inteiro de guardá-la. Sem `bg_url`, nada muda: cai no
     // `autoLoadCorBg` de sempre.
-    if (n.bg_url) {
+    if (n.bg_url || n.bg_verso_url) {
         window.carregarBgSalvo(n).then(veio => {
             if (!veio) window.autoLoadCorBg(n.formato_id);
         });
@@ -4697,6 +4703,13 @@ async function clonarNumeracao(n, ajustes) {
                 toast('A cópia "' + clone.name + '" foi criada, mas a arte de fundo não '
                     + 'veio junto. Carregue o arquivo de novo nela.', 'warning');
             }
+        }
+
+        if (n.bg_verso_url && n.Cli_Num) {
+            if (!idDaCopia || !bancoGuardaFundoVerso()) throw new Error('Não foi possível preparar a cópia da arte do verso.');
+            clone.bg_verso_url = await duplicarFundoNoStorage(n.bg_verso_url, idDaCopia + '-verso', n.bg_verso_filename);
+            if (!clone.bg_verso_url) throw new Error('Não foi possível copiar a arte do verso.');
+            clone.bg_verso_filename = n.bg_verso_filename || '';
         }
 
         await api('POST', '/numeracoes', idDaCopia ? { id: idDaCopia, ...clone } : clone);
@@ -5200,7 +5213,7 @@ window.onFormatoSelect = function (clearElements = true) {
     // o formato depois deixe em paz o que já está na tela.
     const ehNumeracaoNova = !(document.getElementById('num-id')?.value || '');
 
-    if (ehNumeracaoNova && !state.bgImage) {
+    if (ehNumeracaoNova && !state.bgImage && !state.bgImageVerso) {
 
         window.autoLoadCorBg(fmtId);
 
@@ -5213,6 +5226,8 @@ window.onFormatoSelect = function (clearElements = true) {
 window.onNumPrintModeChange = function() {
     atualizarRestricaoModoVibe('num');
     const printMode = document.getElementById('num-print-mode')?.value || 'front';
+    const controlesVerso = document.getElementById('bg-verso-controls');
+    if (controlesVerso) controlesVerso.style.display = temVerso(printMode) ? 'inline-flex' : 'none';
     const containerVerso = document.getElementById('num-canvas-container-verso');
     const titleFrente = document.getElementById('num-canvas-title-frente');
 
@@ -7213,10 +7228,34 @@ window.toggleBgEditorVisibility = function () {
 
 
 
-window.clearBgImage = function () {
-
+window.clearBgImage = function (face) {
+    if (face) {
+        state.bgLoadToken++;
+        state.bgManualTokens[face]++;
+        const sufixo = face === 'back' ? 'Verso' : '';
+        state['bgImage' + sufixo] = null;
+        state['bgFile' + sufixo] = null;
+        state['bgUrl' + sufixo] = '';
+        state['bgFilename' + sufixo] = '';
+        atualizarControlesFundoVerso();
+        if (face === 'front') {
+            document.getElementById('bg-file-name').textContent = '';
+            document.getElementById('btn-remove-bg').style.display = 'none';
+            document.getElementById('canvas-bg-file').value = '';
+        }
+        atualizarAvisoDaArteDeFundo();
+        drawCanvas();
+        return;
+    }
     state.bgEditorOpacity = 0.55;
     state.bgEditorVisible = true;
+    state.bgManualTokens.front++;
+    state.bgManualTokens.back++;
+    state.bgFileVerso = null;
+    state.bgUrlVerso = '';
+    state.bgFilenameVerso = '';
+    state.bgImageVerso = null;
+    atualizarControlesFundoVerso();
 
     state.bgImage = null;
 
@@ -7385,6 +7424,18 @@ window.numeracaoDoEditorGuardaFundo = numeracaoDoEditorGuardaFundo;
  * numeração de cliente ele fica. Sem a frase, o operador aprenderia a
  * diferença perdendo trabalho.
  */
+function atualizarControlesFundoVerso() {
+    const nome = document.getElementById('bg-verso-file-name');
+    const remover = document.getElementById('btn-remove-bg-verso');
+    if (nome) nome.textContent = state.bgFilenameVerso || '';
+    if (remover) remover.style.display = state.bgImageVerso ? 'inline-flex' : 'none';
+}
+
+function bancoGuardaFundoVerso() {
+    const linha = (state.numeracoes || [])[0];
+    return !!linha && Object.prototype.hasOwnProperty.call(linha, 'bg_verso_url');
+}
+
 function atualizarAvisoDaArteDeFundo() {
     const el = document.getElementById('bg-persistencia-aviso');
     if (!el) return;
@@ -7401,10 +7452,15 @@ function atualizarAvisoDaArteDeFundo() {
         return;
     }
 
-    el.textContent = state.bgFile || state.bgUrl
+    if ((state.bgFileVerso || state.bgUrlVerso) && !bancoGuardaFundoVerso()) {
+        el.textContent = 'O salvamento do verso requer a atualização do banco.';
+        el.style.color = 'var(--amber)';
+        return;
+    }
+    el.textContent = state.bgFile || state.bgUrl || state.bgFileVerso || state.bgUrlVerso
         ? '📌 fica salva com esta numeração do cliente'
         : 'carregue um arquivo para guardá-lo com esta numeração do cliente';
-    el.style.color = state.bgFile || state.bgUrl ? 'var(--green)' : 'var(--text-faint)';
+    el.style.color = state.bgFile || state.bgUrl || state.bgFileVerso || state.bgUrlVerso ? 'var(--green)' : 'var(--text-faint)';
 }
 window.atualizarAvisoDaArteDeFundo = atualizarAvisoDaArteDeFundo;
 
@@ -7449,15 +7505,28 @@ window.duplicarFundoNoStorage = duplicarFundoNoStorage;
  * pela URL remota. Um `<img>` remoto sem CORS contamina o canvas, e o
  * `preview_jpg` — que é um `toDataURL` do mesmo canvas — passaria a estourar.
  */
-window.carregarBgSalvo = async function (numeracao) {
-    if (!numeracao || !numeracao.bg_url) return false;
+window.carregarBgSalvo = async function (numeracao, face = 'front') {
+    if (!numeracao) return false;
+    if (face === 'front' && numeracao.bg_verso_url) {
+        const tokenAntes = state.bgLoadToken;
+        const frente = numeracao.bg_url ? await window.carregarBgSalvo({ ...numeracao, bg_verso_url: '' }) : false;
+        if (state.bgLoadToken !== tokenAntes + (numeracao.bg_url ? 1 : 0)) return true;
+        const verso = await window.carregarBgSalvo({ bg_url: numeracao.bg_verso_url, bg_filename: numeracao.bg_verso_filename }, 'back');
+        return frente || verso;
+    }
+    if (!numeracao.bg_url) return false;
 
     const meuToken = ++state.bgLoadToken;
+    // Conservar a referencia persistida mesmo se o download falhar.
+    const sufixo = face === 'back' ? 'Verso' : '';
+    state['bgUrl' + sufixo] = numeracao.bg_url;
+    state['bgFilename' + sufixo] = numeracao.bg_filename || '';
+    state['bgFile' + sufixo] = null;
 
     try {
         const bytes = await fetchPdfBytes(numeracao.bg_url);
-        if (meuToken !== state.bgLoadToken) return false;
-        if (!bytes) return false;
+        if (meuToken !== state.bgLoadToken) return true;
+        if (!bytes) throw new Error('Arquivo indisponível');
 
         const nome = numeracao.bg_filename || numeracao.bg_url;
         const ehPdf = /\.pdf(\?|$)/i.test(nome) || /\.pdf(\?|$)/i.test(numeracao.bg_url);
@@ -7472,10 +7541,19 @@ window.carregarBgSalvo = async function (numeracao) {
             img.dpiValue = await getDpi(blob);
             await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
         }
-        if (meuToken !== state.bgLoadToken) return false;
+        if (meuToken !== state.bgLoadToken) return true;
 
+        if (face === 'back') {
+            state.bgImageVerso = img;
+            state.bgFileVerso = null;
+            state.bgUrlVerso = numeracao.bg_url;
+            state.bgFilenameVerso = numeracao.bg_filename || '';
+            atualizarControlesFundoVerso();
+            atualizarAvisoDaArteDeFundo();
+            drawCanvas();
+            return true;
+        }
         state.bgImage = img;
-        state.bgImageVerso = null;
         state.bgFile = null;                    // já está no Storage; nada a subir
         state.bgUrl = numeracao.bg_url;
         state.bgFilename = numeracao.bg_filename || '';
@@ -7490,8 +7568,9 @@ window.carregarBgSalvo = async function (numeracao) {
         return true;
 
     } catch (e) {
+        if (meuToken === state.bgLoadToken) toast('Não foi possível carregar a arte de fundo ' + (face === 'back' ? 'do verso' : 'da frente') + '.', 'error');
         console.warn('[Editor] Erro carregando a arte de fundo guardada:', e);
-        return false;
+        return true; // Nao substituir a referencia salva pela arte automatica da cor.
     }
 };
 
@@ -7539,6 +7618,11 @@ window.autoLoadCorBg = async function (formatoId) {
         // Esta arte é da COR, não da numeração: não se guarda em bg_url. Zerar
         // aqui é o que impede o save de copiar para dentro da numeração um
         // desenho que já tem dono em `producao_cores`.
+        state.bgImageVerso = null;
+        state.bgFileVerso = null;
+        state.bgUrlVerso = '';
+        state.bgFilenameVerso = '';
+        atualizarControlesFundoVerso();
         state.bgFile = null;
 
         state.bgUrl = '';
@@ -7580,6 +7664,7 @@ window.autoLoadCorBg = async function (formatoId) {
                     if (meuToken !== state.bgLoadToken) return false;
 
                     state.bgImageVerso = imgVerso;
+                    atualizarControlesFundoVerso();
 
                 }
 
@@ -7607,7 +7692,7 @@ window.autoLoadCorBg = async function (formatoId) {
 
 
 
-async function loadBgImage(file) {
+async function loadBgImage(file, face = 'front') {
 
     if (!state.numFormato) return;
 
@@ -7617,6 +7702,7 @@ async function loadBgImage(file) {
     // operador.
     state.bgLoadToken++;
 
+    const token = ++state.bgManualTokens[face];
     const ext = file.name.split('.').pop().toLowerCase();
 
     try {
@@ -7649,22 +7735,19 @@ async function loadBgImage(file) {
 
         }
 
-        state.bgImage = img;
-
-        // O arquivo ORIGINAL fica guardado para o save. Note que `img` já é a
-        // rasterização feita para o canvas: é ela que se desenha, e é o `file`
-        // que se grava. O que vai ao Storage é o PDF do cliente como ele veio.
-        state.bgFile = file;
-
-        state.bgFilename = file.name;
-
-        state.bgUrl = '';
-
-        // O botão governa só a frente: descartar o verso que tenha vindo de uma cor,
-
-        // senão o canvas duplex mostraria duas artes diferentes.
-
-        state.bgImageVerso = null;
+        if (token !== state.bgManualTokens[face]) return;
+        const sufixo = face === 'back' ? 'Verso' : '';
+        state['bgImage' + sufixo] = img;
+        state['bgFile' + sufixo] = file;
+        state['bgFilename' + sufixo] = file.name;
+        state['bgUrl' + sufixo] = '';
+        if (face === 'back') {
+            atualizarControlesFundoVerso();
+            atualizarAvisoDaArteDeFundo();
+            drawCanvas();
+            toast('Arte de fundo do verso carregada!', 'success');
+            return;
+        }
 
         const btn = document.getElementById('btn-remove-bg');
 
@@ -10033,6 +10116,10 @@ window.saveNumeracao = async function () {
 
 
 
+    if ((state.bgFileVerso || state.bgUrlVerso) && numeracaoDoEditorGuardaFundo() && !bancoGuardaFundoVerso()) {
+        return toast('Atualize o banco para salvar a arte do verso. O editor foi mantido aberto.', 'error');
+    }
+
     if (!name) return toast('Informe um nome para a numeração.', 'error');
 
     if (!fmtId) return toast('Selecione um formato.', 'error');
@@ -10529,6 +10616,24 @@ window.saveNumeracao = async function () {
         if (bancoGuardaArteDeFundo()) {
             data.bg_url = bgUrlFinal;
             data.bg_filename = bgNomeFinal;
+        }
+
+        if (bancoGuardaFundoVerso()) {
+            data.bg_verso_url = '';
+            data.bg_verso_filename = '';
+            if (cliNumFinal && state.bgFileVerso) {
+                const ext = state.bgFileVerso.name.split('.').pop().toLowerCase();
+                data.bg_verso_url = await uploadToStorage(state.bgFileVerso, state.bgFilenameVerso, 'fundos-numeracoes',
+                    { objectPath: `fundos-numeracoes/${numeracaoId}-verso.${ext}` });
+                if (!data.bg_verso_url) throw new Error('Não foi possível salvar a arte do verso.');
+                data.bg_verso_filename = state.bgFilenameVerso;
+            } else if (cliNumFinal && state.bgUrlVerso) {
+                data.bg_verso_url = copiandoPorNome
+                    ? await duplicarFundoNoStorage(state.bgUrlVerso, numeracaoId + '-verso', state.bgFilenameVerso)
+                    : state.bgUrlVerso;
+                if (!data.bg_verso_url) throw new Error('Não foi possível copiar a arte do verso.');
+                data.bg_verso_filename = state.bgFilenameVerso;
+            }
         }
 
         // O ID DE QUEM ACABOU DE SER GRAVADO.
