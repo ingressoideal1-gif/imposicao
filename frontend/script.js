@@ -10116,7 +10116,7 @@ window.saveNumeracao = async function () {
 
 
 
-    if (numeracaoDoEditorGuardaFundo() && (state.bgFileVerso || state.bgUrlVerso) && !bancoGuardaFundoVerso()) {
+    if ((state.bgFileVerso || state.bgUrlVerso) && numeracaoDoEditorGuardaFundo() && !bancoGuardaFundoVerso()) {
         return toast('Atualize o banco para salvar a arte do verso. O editor foi mantido aberto.', 'error');
     }
 
