@@ -158,6 +158,13 @@
             saida.numId,
             protegerPersonalizada
         );
+        // O nome legado pode continuar dizendo Só Frente depois de o Vibe
+        // exigir verso. Nunca substituir o vínculo por esse modo incompatível.
+        var candidata = _acharPorId(numeracoes, novaNum);
+        if (candidata && escopo.VersoDoModelo.doModo(candidata.print_mode)
+            && !escopo.VersoDoModelo.compativel(linha.verso_tipo, candidata.print_mode)) {
+            novaNum = null;
+        }
         if (novaNum) {
             saida.numId = novaNum;
             saida.numTrocada = true;

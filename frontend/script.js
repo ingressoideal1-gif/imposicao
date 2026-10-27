@@ -41507,7 +41507,8 @@ window.editImposicaoCustomNumeracao = async function(fieldId) {
 // Dados que não podem mudar entre a conferência e a gravação de PRONTO.
 function assinaturaDoPdfParaPronto(item) {
     return JSON.stringify([!!item?.modo_pdf, item?.arte_url, item?.qtd ?? item?.quantidade,
-        item ? numeracaoIdDoItem(item) : null, item ? modoDeVersoDoModelo(item) : null]);
+        item ? numeracaoIdDoItem(item) : null, item ? modoDeVersoDoModelo(item) : null,
+        item?.verso_tipo]);
 }
 
 // Confere o original no clique, inclusive em lote; o viewer pode estar fechado
@@ -41517,6 +41518,12 @@ async function validarPaginasDoPdfParaPronto(item) {
     const numeracaoId = numeracaoIdDoItem(item);
     if (numeracaoId && !(state.numeracoes || []).some(n => String(n.id) === String(numeracaoId))) {
         throw new Error('Não foi possível conferir o modo de impressão. Recarregue a numeração do modelo.');
+    }
+    const numeracao = (state.numeracoes || []).find(n => String(n.id) === String(numeracaoId));
+    if (numeracao && !VersoDoModelo.compativel(item.verso_tipo, numeracao.print_mode)) {
+        throw new Error('A numeração está incompatível com o pedido no Vibe ('
+            + VersoDoModelo.normalizar(item.verso_tipo)
+            + '). Selecione uma numeração compatível no modelo antes de marcar PRONTO.');
     }
     // Confira a configuração antes de dispensar os modelos convencionais:
     // Ímpar/Par exige Modo PDF mesmo quando o original tem páginas suficientes.

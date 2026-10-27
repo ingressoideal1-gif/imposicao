@@ -11,7 +11,8 @@ function extract(source, name) {
     return source.slice(start, source.indexOf('\n}', start) + 2);
 }
 function fixture(mode, pages, changes = {}) {
-    const item = { id: 1, modo_pdf: true, qtd: 7, amostra_num_id: 'n', arte_url: 'original.pdf', ...changes };
+    const item = { id: 1, modo_pdf: true, qtd: 7, amostra_num_id: 'n', arte_url: 'original.pdf',
+        verso_tipo: mode === 'front' ? 'SÓ FRENTE' : 'FRENTE E VERSO', ...changes };
     const calls = [], notices = [];
     const ctx = { state: { osItens: { os: [item] }, numeracoes: [{ id: 'n', print_mode: mode }] },
         document: { getElementById: () => null }, console: { error() {} },
@@ -36,6 +37,26 @@ function fixture(mode, pages, changes = {}) {
 }
 (async () => {
     let cases = 0;
+    for (const emLote of [false, true]) {
+        for (const [mode, verso_tipo] of [['front', 'FRENTE E VERSO'], ['duplex', 'SÓ FRENTE']]) {
+            const f = fixture(mode, 1, { modo_pdf: false, verso_tipo });
+            await f.ctx.decisionAmostraItem(1, 'os', 'PRONTO', { emLote });
+            assert(!f.calls.includes('save'));
+            assert(!f.calls.includes('snapshot'));
+            assert(f.notices.some(n => n.includes('Selecione uma numeração compatível')));
+            // A correção manual permite repetir a mesma ação.
+            f.ctx.state.numeracoes.push({ id: 'corrigida', print_mode: mode === 'front' ? 'duplex' : 'front' });
+            f.item.amostra_num_id = 'corrigida';
+            await f.ctx.decisionAmostraItem(1, 'os', 'PRONTO', { emLote });
+            assert(f.calls.includes('save'));
+            cases++;
+        }
+        const f = fixture('duplex', 1, { modo_pdf: false });
+        f.ctx.regenerarAmostraDoModelo = async () => { f.item.verso_tipo = 'SÓ FRENTE'; };
+        await f.ctx.decisionAmostraItem(1, 'os', 'PRONTO', { emLote });
+        assert(!f.calls.includes('save'), 'mudança de categoria durante a prévia bloqueia Pronto');
+        cases++;
+    }
     for (const [mode, expected] of [['front', 7], ['duplex_unico', 7], ['duplex', 14], ['pdf_odd_even', 14], ['pdf_duplicate_back', 7]]) {
         for (const pages of [expected - 1, expected, expected + 1]) {
             const f = fixture(mode, pages);
