@@ -47591,6 +47591,11 @@ async function importarPdfMultipage(event) {
         return;
     }
 
+    if (itens.every(modeloEstaAprovado)) {
+        toast('Todos os modelos estão aprovados. Nenhuma arte será importada.', 'info');
+        return;
+    }
+
     try {
         if (typeof window.PDFLib === 'undefined') {
             toast('Carregando biblioteca PDF...', 'info');
@@ -47615,12 +47620,17 @@ async function importarPdfMultipage(event) {
             if (modeloTemVerso(item)) requiredPages++; // Verso
         });
 
+        const modelosPreservados = itens.flatMap((item, idx) => modeloEstaAprovado(item) ? [idx + 1] : []);
+        const avisoAprovados = modelosPreservados.length
+            ? `\n\nModelos já aprovados que serão preservados: ${modelosPreservados.join(', ')}. As páginas correspondentes (frente e verso, quando houver) serão ignoradas. Mantenha essas páginas no PDF para preservar a ordem dos demais modelos.`
+            : '';
+
         if (totalPages !== requiredPages) {
-            if (!confirm(`Atenção: O PDF enviado possui ${totalPages} páginas, mas a soma de frentes e versos dos modelos do pedido requer exatamente ${requiredPages} páginas.\n\nDeseja continuar mesmo assim e fatiar apenas até onde for possível?`)) {
+            if (!confirm(`Atenção: O PDF enviado possui ${totalPages} páginas, mas a soma de frentes e versos dos modelos do pedido requer exatamente ${requiredPages} páginas.${avisoAprovados}\n\nDeseja continuar mesmo assim e fatiar apenas até onde for possível?`)) {
                 return;
             }
         } else {
-            if (!confirm(`Confirmar fatiamento de PDF de ${totalPages} páginas para os ${itens.length} modelos deste pedido?`)) {
+            if (!confirm(`Confirmar fatiamento de PDF de ${totalPages} páginas para os ${itens.length} modelos deste pedido?${avisoAprovados}`)) {
                 return;
             }
         }
@@ -47634,8 +47644,17 @@ async function importarPdfMultipage(event) {
         toast('Processando e fatiando PDF. Por favor, aguarde...', 'info');
 
         let currentPageIndex = 0;
+        const modelosIgnorados = [];
         for (let idx = 0; idx < itens.length; idx++) {
             const item = itens[idx];
+
+            // Consumir a posicao no PDF sem enviar arquivo nem alterar o aprovado.
+            // Filtrar a lista antes do loop deslocaria as artes dos proximos modelos.
+            if (modeloEstaAprovado(item)) {
+                currentPageIndex += modeloTemVerso(item) ? 2 : 1;
+                modelosIgnorados.push(idx + 1);
+                continue;
+            }
             
             // FRENTE
             if (currentPageIndex < totalPages) {
@@ -47702,7 +47721,9 @@ async function importarPdfMultipage(event) {
         renderAmostrasOSItens(osId);
         btn.innerHTML = originalHtml;
         btn.disabled = false;
-        toast('PDF fatiado e importado com sucesso!', 'success');
+        toast(modelosIgnorados.length
+            ? `PDF fatiado e importado com sucesso! Modelos aprovados preservados: ${modelosIgnorados.join(', ')}.`
+            : 'PDF fatiado e importado com sucesso!', 'success');
 
     } catch (e) {
         console.error('Erro ao processar PDF multi-páginas:', e);
