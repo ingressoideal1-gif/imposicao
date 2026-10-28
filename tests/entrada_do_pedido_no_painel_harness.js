@@ -107,7 +107,8 @@ const { pedidosJaNaGrafica, arteFoiLancada, pedidoEntraNoPainel } = regras;
     // Qualquer UM dos campos basta -- ninguem que trabalhou some da fila.
     const bastaUm = [
         { id_int: 7, status: 'EM ARTE' },
-        { id_int: 7, nome_evento: 'Rock in Rio 2026' },
+        { id_int: 7, status: 'AGUARDANDO', enviado_por_uid: 'usuario-sintetico' },
+        { id_int: 7, status: 'PENDENTE', enviado_por: 'Atendimento' },
         { id_int: 7, designer_nome: 'Cesar' },
         { id_int: 7, designer_uid: 'abc-123' },
         { id_int: 7, entrega_dados: 'APROVADO' },
@@ -237,6 +238,14 @@ const { pedidosJaNaGrafica, arteFoiLancada, pedidoEntraNoPainel } = regras;
     ok(temNasArtes && temNasArtes[0].indexOf('arteFoiLancada') !== -1,
        'o `temNasArtes` do modo local tambem', temNasArtes && temNasArtes[0]);
 })();
+
+for (const status of ['', 'PENDENTE', 'AGUARDANDO', 'NOVO']) {
+    ok(!arteFoiLancada({id_int: 7, status, nome_evento: 'Evento sem envio'}),
+        'cadastro inicial sem envio nao abre a fila: ' + status);
+    ok(!pedidoEntraNoPainel(7, [], [{id_int:7,status,nome_evento:'Evento sem envio'}], new Set()),
+        'pedido nao enviado fica fora dos paineis: ' + status);
+}
+
 
 if (falhas) {
     console.error('\n' + falhas + ' de ' + total + ' verificacoes falharam.');

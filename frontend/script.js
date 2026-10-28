@@ -27020,7 +27020,7 @@ async function carregarPedidoPesquisado(numero) {
         const temSessao = await lerDadosLista(temSessaoDoSupabase(), 'sessão');
         const [artes, modelos, produtos, links] = await Promise.all([
             lerDadosLista(supabaseClient.from('pedidos_artes')
-                .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados')
+                .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados, enviado_por, enviado_por_uid')
                 .eq('id_int', numero).order('created_at', { ascending: false }), 'artes do pedido'),
             carregarModelosGlobais(true, [numero]),
             lerDadosLista(vibeClient.from('produtos_proposta').select('*')
@@ -27416,7 +27416,7 @@ async function carregarArtesGlobais(exigirSucesso = false) {
     try {
         const { data, error } = await lerDadosLista(supabaseClient
             .from('pedidos_artes')
-            .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados')
+            .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados, enviado_por, enviado_por_uid')
             .order('created_at', { ascending: false }), 'artes');
         if (error) {
             if (error.code === '42P01') return; // tabela não existe
@@ -30920,49 +30920,26 @@ function pedidosJaNaGrafica(propostas) {
 }
 window.pedidosJaNaGrafica = pedidosJaNaGrafica;
 
-/**
- * A linha de `pedidos_artes` tem arte de verdade dentro dela?
- *
- * Ter linha na tabela não é a mesma coisa que ter arte lançada. O ERP cria a
- * linha sozinho, minutos depois da proposta nascer, e às vezes nunca põe nada
- * nela: fica com `status` vazio, `nome_evento` vazio, sem designer, sem
- * arquivo. Para o painel, essa linha é um fantasma — ela abre a porta de um
- * pedido em que ninguém nunca trabalhou.
- *
- * ## O pedido 18915 (01/09/2026)
- *
- * O usuário perguntou por que ele aparecia na Lista de Arte. É um orçamento
- * avulso de julho, `LIBERADO`, sem produto nenhum, com uma linha de arte criada
- * em 09/07/2026 às 18:39 — sete minutos depois da proposta — e vazia em todos
- * os campos. Ele passava pela porta só por ela existir, e como nenhum ramo da
- * classificação casava com status vazio, caía no padrão: **Em Arte**. O
- * designer via na fila um pedido em que não havia nada a fazer.
- *
- * Ele só apareceu naquele dia porque de manhã a lista passou a montar também o
- * pedido SEM produto (o resgate do 21347). Antes disso a falta de produto o
- * escondia por acidente — a linha fantasma já estava lá desde julho.
- *
- * ## Por que estes campos, e não uma lista maior
- *
- * São exatamente os que `carregarArtesGlobais` já traz, e eles bastam: das 74
- * linhas de `pedidos_artes` no dia, 73 têm status, nome de evento E designer.
- * As 32 que têm arquivo têm status junto — `arquivos` nunca vem sozinho. E
- * `nome_arquivo`/`storage_path` estão em ZERO linhas: o arquivo mora no
- * `arquivos`, então pedir essas duas colunas ao banco não protegeria nada.
- *
- * A régua é deliberadamente frouxa — basta UM campo com conteúdo. Quem tem
- * qualquer sinal de trabalho continua entrando; some só quem não tem nenhum.
- * Aplicada ao banco inteiro, ela tira um pedido: o 18915.
+/** Evidencia de envio ou trabalho de arte. Registros iniciais gerados pelo ERP
+ * com status PENDENTE/AGUARDANDO/NOVO, mesmo com nome de evento, nao comprovam
+ * encaminhamento. Preservar remetente, designer, entrega e estagios posteriores.
+ * A entrada de pedidos ja na grafica continua independente desta verificacao.
  */
 function arteFoiLancada(arte) {
     if (!arte) return false;
     const temConteudo = (v) => String(v === null || v === undefined ? '' : v).trim() !== '';
-    return temConteudo(arte.status)
-        || temConteudo(arte.nome_evento)
+    const status = String(arte.status || '').trim().toUpperCase();
+    // Linhas iniciais podem ser criadas pela sincronizacao dos modelos antes
+    // de o comercial enviar o pedido. Status inicial e nome de evento nao
+    // comprovam envio. Preservar envio registrado e trabalho ja iniciado.
+    return temConteudo(arte.enviado_por_uid)
+        || temConteudo(arte.enviado_por)
+        || (!!status && !['PENDENTE', 'AGUARDANDO', 'NOVO'].includes(status))
         || temConteudo(arte.designer_nome)
         || temConteudo(arte.designer_uid)
         || temConteudo(arte.entrega_dados);
 }
+
 window.arteFoiLancada = arteFoiLancada;
 
 /**
