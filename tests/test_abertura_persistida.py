@@ -34,6 +34,95 @@ def test_abertura_sem_modelos_no_request_e_reinicio_le_snapshot_local(tmp_path):
     assert e['downloads'] == 2 and e['consultas'] == 3
 
 
+@pytest.mark.parametrize('arte_no_gabarito', [False, True])
+def test_gabarito_sem_arte_base_prepara_manifesto_sem_download_e_revalida(tmp_path, monkeypatch, arte_no_gabarito):
+    import base64
+    import fitz
+    from engine import ImpositionConfig, ImpositionEngine
+    from motor_piloto import resolver_do_pedido
+    def sem_rede(*args, **kwargs):
+        pytest.fail('Geracao sintetica nao acessa rede')
+    monkeypatch.setattr('socket.create_connection', sem_rede)
+    s, e, itens, snapshot = ambiente_v2(tmp_path)
+    itens[:] = itens[:1]
+    snapshot['modelos'] = snapshot['modelos'][:1]
+    itens[0].update(fontes={}, versoes_fontes={}, gabarito_sem_arte_base=True)
+    p = SelecaoPiloto(s)
+    r = p.abrir_pedido({'pedido': '99'})
+    assert r['sem_arte'] == [] and len(r['pacotes']) == 1
+    pacote = r['pacotes'][0]
+    assert pacote['recursos'] == pacote['hashes'] == pacote['fontes'] == {}
+    assert pacote['origem'] == 'local' and pacote['execucao_offline'] is False
+    assert e['downloads'] == 0
+    assert s.local.consultar('teste', '10', pacote['revisao'])['estado'] == 'local_validado'
+    resolver = resolver_do_pedido(s, [{'modelo': '10', 'revisao': pacote['revisao']}])
+    elementos = [dict(type='TEXT', x_mm=50, y_mm=35, font_size=12, font_name='Helvetica')]
+    if arte_no_gabarito:
+        with fitz.open() as arte:
+            arte.new_page(width=283.46, height=141.73).insert_text((20, 20), 'ARTE INCLUSA')
+            conteudo = base64.b64encode(arte.tobytes()).decode()
+        elementos.insert(0, dict(type='PDF', x_mm=50, y_mm=25, width_mm=100, height_mm=50,
+                                pdf_content='data:application/pdf;base64,' + conteudo))
+    cfg = ImpositionConfig(base_file=None, out_pdf=str(tmp_path / 'numeracao.pdf'),
+        formato=dict(name='Sintetico', width_mm=100, height_mm=50, cols=2, rows=2,
+                     gap_h_mm=0, gap_v_mm=0, offset_h_mm=0, offset_v_mm=0, rotations={}),
+        saida=dict(name='Sintetico', width_mm=220, height_mm=120),
+        numeracao=dict(tipo='SEQUENCIAL', elements=elementos), seq_start=1, seq_end=200,
+        sheets_per_block=10)
+    motor = ImpositionEngine(cfg, resolver_recurso=resolver)
+    motor.process()
+    linhas = []
+    for gerado in motor.generated_files:
+        with fitz.open(gerado['path']) as pdf:
+            for pagina in pdf:
+                linhas.extend(pagina.get_text().splitlines())
+    assert sorted(int(linha) for linha in linhas if linha.isdecimal()) == list(range(1, 201))
+    assert ('ARTE INCLUSA' in linhas) == arte_no_gabarito
+    assert SelecaoPiloto(s).abrir_pedido({'pedido': '99'})['reutilizados'] == 1
+    e['revisao'] = 'e' * 64
+    itens[0]['observacao']['digest'] = 'f' * 64
+    novo = p.abrir_pedido({'pedido': '99'})['pacotes'][0]
+    assert novo['digest'] == 'f' * 64 and novo['revisao'] != pacote['revisao']
+    assert e['downloads'] == 0
+    e['sem_rede'] = True
+    with pytest.raises(ConferenciaIndisponivel):
+        p.abrir_pedido({'pedido': '99'})
+
+
+def test_sem_arte_sem_autorizacao_da_nuvem_continua_bloqueado(tmp_path):
+    s, _, itens, _ = ambiente_v2(tmp_path)
+    itens[0].update(fontes={}, versoes_fontes={})
+    r = SelecaoPiloto(s).abrir_pedido({'pedido': '99'})
+    assert r['sem_arte'] == ['10']
+    assert [p['modelo'] for p in r['pacotes']] == ['11']
+    itens[0]['gabarito_sem_arte_base'] = True
+    # A API generica nao aceita marcador injetado sem conferidor da selecao.
+    with pytest.raises(ValueError, match='Fontes'):
+        s.antecipar(itens[0])
+
+
+def test_cache_anterior_a_gabaritos_sem_base_renova_recibo(tmp_path):
+    import json
+    s, e, itens, _ = ambiente_v2(tmp_path)
+    p = SelecaoPiloto(s)
+    removido = itens.pop()
+    p.abrir_pedido({'pedido': '99'})
+    antigo = p._cache.obter('99')
+    antigo.pop('gabarito_sem_arte_base')
+    con = s._db()
+    try:
+        con.execute('UPDATE revisoes_pedidos_piloto SET conteudo=? WHERE pedido=?',
+                    (json.dumps(antigo), '99'))
+        con.commit()
+    finally:
+        con.close()
+    removido.update(fontes={}, versoes_fontes={}, gabarito_sem_arte_base=True)
+    itens.append(removido)
+    r = SelecaoPiloto(s).abrir_pedido({'pedido': '99'})
+    assert len(r['pacotes']) == 2 and r['sem_arte'] == []
+    assert r['revisao_pedido'] == antigo['revisao'] and e['downloads'] == 1
+
+
 def test_metadados_alterados_nao_baixam_arte_igual(tmp_path):
     s, e, itens, snapshot = ambiente_v2(tmp_path)
     p = SelecaoPiloto(s)
