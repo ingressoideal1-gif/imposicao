@@ -53,6 +53,7 @@ class CacheRevisaoPedido:
         registro['fontes_gabarito'] = 1
         registro['recursos_fotos'] = 1
         registro['conferido_em'] = datetime.now(timezone.utc).isoformat()
+        registro['gabarito_sem_arte_base'] = 1
         if snapshot is not None:
             registro.update(protocolo=2, snapshot=snapshot, offline_schema=1)
         con = self.servico._db()

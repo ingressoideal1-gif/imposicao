@@ -1,7 +1,7 @@
 /** Uma revisao por pedido; sem consultas por modelo nem escrita comercial. */
 import { banco } from './banco.ts';
 import { Recusa } from './sessao.ts';
-import { digestPiloto, fontesPiloto } from './piloto_local.ts';
+import { digestPiloto, fontesPiloto, gabaritoSemArteBase } from './piloto_local.ts';
 
 const normal = (v: unknown) => String(v ?? '').trim().toUpperCase();
 const aprovados = new Set(['APROVADO','APROVADA','APROVADA_CLIENTE','LIBERADA','ARTE_APROVADA','ARTE APROVADA']);
@@ -79,7 +79,8 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
     const produto = produtos.length === 1 ? produtos[0] : null;
     if (produto?.is_estoque === true) continue;
     const fontes = fontesPiloto(m,persistida ? [...nums,...d.bancos,...d.mapas] : nums,consumidores);
-    if (!fontes.frente) continue;
+    const semArteBase = !fontes.frente && gabaritoSemArteBase(m, nums);
+    if (!fontes.frente && !semArteBase) continue;
     const versoes_fontes:Record<string,any> = {};
     for (const [nome,url] of Object.entries(fontes)) {
       const registros = d.recursos.filter((r:any)=>r.url===url);
@@ -89,6 +90,7 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
         ? {revisao:await digestPiloto(objeto),etag:String(objeto.metadata.eTag)} : null;
     }
     itens.push({empresa,modelo:id,pedido:entrada.pedido,fontes,versoes_fontes,
+      ...(semArteBase ? {gabarito_sem_arte_base:true} : {}),
       setor:String(produto?.setor_pcp || ''),prazo_erp:d.prazos[0]?.data_termino || null,
       observacao:{digest:await digestPiloto([m,nums]),aprovacao:normal(m.status_arte)}});
   }

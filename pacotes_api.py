@@ -102,7 +102,10 @@ class ServicoPacotes:
         if not isinstance(modelo, str) or not modelo.isascii() or not modelo.isdecimal():
             raise ValueError('Modelo inválido.')
         fontes = item.get('fontes')
-        if not isinstance(fontes, dict) or not 1 <= len(fontes) <= 256:
+        # Pacote sem PDF continua com manifesto/digest. Apenas a selecao
+        # conferida na nuvem pode autorizar a ausencia intencional da arte.
+        minimo = 0 if item.get('gabarito_sem_arte_base') is True and _conferidor else 1
+        if not isinstance(fontes, dict) or not minimo <= len(fontes) <= 256:
             raise ValueError('Fontes ausentes ou excessivas.')
         for nome, url in fontes.items():
             if not re.fullmatch(r'frente|verso|recurso_\d+', nome):

@@ -63,6 +63,41 @@ Deno.test('pedido: permissoes e entrada recusadas antes de consultar',async()=>{
  await assert.rejects(a.chamar({empresa:'outra',pedido:'20',revisao:''}),{status:422});
  assert.equal(a.consultas.length,0);
 });
+Deno.test('pedido: qualquer gabarito com elementos pode preparar sem arte base', async () => {
+ for (const tipo of ['SEQUENCIAL', 'TICKET', 'TEATRO', 'QR', 'PERSONALIZADO']) {
+  const a=ambiente(); a.modelo.arte_url='';
+  Object.assign(a.modelo,{gabarito_operacional:'Gabarito livre '+tipo});
+  Object.assign(a.numero,{tipo,elements:[{type:'TEXT'},{type:'METADATA'}],csv_data:[]});
+  const antes=JSON.stringify(a.snapshot), r:any=await a.chamar();
+  assert.equal(r.itens.length,1); assert.equal(r.itens[0].gabarito_sem_arte_base,true);
+  assert.deepEqual(r.itens[0].fontes,{}); assert.deepEqual(r.itens[0].versoes_fontes,{});
+  assert.equal(r.itens[0].observacao.digest,await digestPiloto([a.modelo,[a.numero]]));
+  assert.equal(JSON.stringify(a.snapshot),antes);
+  a.modelo.status_arte='AGUARDANDO_CLIENTE';
+  assert.equal((await a.chamar() as any).itens.length,0);
+ }
+});
+Deno.test('pedido: arte inclusa na numeracao e fontes continuam no pacote sem base', async () => {
+ const a=ambiente(); a.modelo.arte_url='';
+ const fonte='https://test.supabase.co/storage/v1/object/public/fontes/f.ttf';
+ Object.assign(a.numero,{elements:[{type:'PDF',pdf_content:'data:application/pdf;base64,JVBERg=='},
+   {type:'TEXT',font_url:fonte}],csv_data:[]});
+ const r:any=await a.chamar();
+ assert.equal(r.itens[0].gabarito_sem_arte_base,true);
+ assert.deepEqual(Object.values(r.itens[0].fontes),[fonte]);
+ assert.equal(r.itens[0].fontes.frente,undefined);
+ a.modelo.status_impressao='Concluido';
+ assert.equal((await a.chamar() as any).itens.length,0);
+});
+Deno.test('pedido: ausencia de arte nao libera gabarito vazio, ausente ou URL invalida', async () => {
+ for (const caso of ['vazio','sem-id','url-invalida']) {
+  const a=ambiente(); a.modelo.arte_url='';
+  if(caso==='sem-id')a.modelo.amostra_num_id='';
+  if(caso==='vazio')Object.assign(a.numero,{elements:[{type:'METADATA'}]});
+  if(caso==='url-invalida')a.modelo.arte_url='arquivo-invalido';
+  assert.equal((await a.chamar() as any).itens.length,0);
+ }
+});
 Deno.test('pedido: banco ausente, outra empresa, duplicidade e pedido diferente bloqueiam',async()=>{
  for(const tipo of ['banco','empresa','duplicado','pedido']) {
    const a=ambiente();

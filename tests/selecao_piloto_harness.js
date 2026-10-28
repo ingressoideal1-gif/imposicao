@@ -69,6 +69,27 @@ function montar() {
     local.PilotoSelecao.validarTrabalho([{itemId:10,osId:'vibe_99'}]);
     assert.equal(local.PilotoSelecao.snapshotPedido('outro'),null);
 
+    // Manifesto sem arquivo de frente e valido: gabarito/numero e revisao
+    // continuam conferidos, inclusive depois de uma alteracao do modelo.
+    const semBase=montar(), rawSemBase={id:10,id_int:99,amostra_num_id:'num',status_arte:'APROVADO'};
+    const numSemBase={id:'num',elements:[{type:'TEXT',x_mm:10,y_mm:10}]};
+    semBase.getOSItens()[0]._modeloOnline=rawSemBase;
+    const canonSemBase=v=>Array.isArray(v)?v.map(canonSemBase):v&&typeof v==='object'
+        ?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonSemBase(v[k])])):v;
+    const digestSemBase=Buffer.from(await webcrypto.subtle.digest('SHA-256',
+        new TextEncoder().encode(JSON.stringify(canonSemBase([rawSemBase,[numSemBase]]))))).toString('hex');
+    semBase.fetch=async()=>({ok:true,json:async()=>({protocolo:2,pedido:'99',revisao_pedido:'c'.repeat(64),sem_arte:[],
+        snapshot:{modelos:[rawSemBase],numeracoes:[numSemBase],origens:[],produtos:[],bancos:[],vinculos:[],artes:[],mapas:[]},
+        pacotes:[{modelo:'10',digest:digestSemBase,revisao:'b'.repeat(64),origem:'local',fontes:{},recursos:{},hashes:{}}]})});
+    const contextoSemBase=semBase.PilotoSelecao.iniciarPedido('vibe_99');
+    await semBase.PilotoSelecao.carregarPedidoLocal('vibe_99',()=>true,contextoSemBase);
+    await semBase.PilotoSelecao.conferirPedido('vibe_99',()=>true,contextoSemBase);
+    const alvoSemBase={itemId:10,osId:'vibe_99'};
+    assert.equal((await semBase.PilotoSelecao.conferir(10,'vibe_99',()=>true)).modelo,'10');
+    assert.equal(semBase.PilotoSelecao.referencias([alvoSemBase])[0].revisao,'b'.repeat(64));
+    rawSemBase.quantidade=300;
+    assert.throws(()=>semBase.PilotoSelecao.validarTrabalho([alvoSemBase]),/Reabra/);
+
     // Pedido misto: produto de estoque em sem_arte nao e um impresso ausente.
     for (const comprovado of [true,false]) {
         const misto=montar(), impresso={id:10,id_int:99,status_arte:'APROVADO'};

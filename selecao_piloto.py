@@ -49,7 +49,7 @@ class SelecaoPiloto:
         cliente = s.coleta_autonoma.cliente
         if not item or item['observacao']['digest'] != dados['digest']:
             raise ConferenciaIndisponivel('O modelo mudou ou não está disponível. Selecione novamente.')
-        if not item['fontes'].get('frente'):
+        if not item['fontes'].get('frente') and item.get('gabarito_sem_arte_base') is not True:
             raise ConferenciaIndisponivel('Arte de frente ainda não disponível para preparação local.')
         resposta = s.antecipar(item, _conferidor=lambda i, _: conferido_em or cliente.conferir(i))
         entrada = next(i['manifesto'] for i in s.catalogo()
@@ -145,13 +145,15 @@ class SelecaoPiloto:
             raise ConferenciaIndisponivel('Outro pedido esta sendo preparado. Aguarde e reabra.')
         try:
             anterior = self._cache.obter(pedido)
-            # A mesma revisao comercial podia omitir modelos com PDF no gabarito.
+            # A mesma revisao comercial podia omitir gabaritos sem arte base
+            # ou com PDF incluido nos elementos.
             # Renovar uma vez pela nuvem, sem apagar arquivos nem aceitar recibo
             # compacto que preservaria a antiga classificacao "sem arte".
             # Fotos do Gerenciador eram omitidas dos recibos antigos. Uma
             # conferencia completa renova a lista sem apagar o cache anterior.
             if anterior and (anterior.get('fontes_gabarito') != 1
-                             or anterior.get('recursos_fotos') != 1):
+                             or anterior.get('recursos_fotos') != 1
+                             or anterior.get('gabarito_sem_arte_base') != 1):
                 anterior = None
             persistida = solicitados is None
             if persistida and (not anterior or anterior.get('protocolo') != 2 or anterior.get('offline_schema') != 1):
@@ -190,7 +192,9 @@ class SelecaoPiloto:
             for modelo, digest in solicitados.items():
                 if modelo in encontrados and encontrados[modelo]['observacao']['digest'] != digest:
                     raise ConferenciaIndisponivel('Pedido alterado. Reabra para conferir.')
-            sem_arte = [m for m in solicitados if m not in encontrados or not encontrados[m]['fontes'].get('frente')]
+            sem_arte = [m for m in solicitados if m not in encontrados
+                        or not encontrados[m]['fontes'].get('frente')
+                        and encontrados[m].get('gabarito_sem_arte_base') is not True]
             if persistida:
                 sem_arte.extend(str(m['id']) for m in snapshot['modelos'] if str(m['id']) not in solicitados)
             antigos_itens = {i['modelo']:i for i in anterior['itens']} if anterior else {}
