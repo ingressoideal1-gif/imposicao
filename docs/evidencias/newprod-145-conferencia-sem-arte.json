@@ -1,0 +1,101 @@
+{
+  "version": "1.4.5",
+  "source": "0f2af678",
+  "pr": "https://github.com/ingressoideal1-gif/imposicao/pull/216",
+  "testes_direcionados": 72,
+  "pytest_por_canal": 1215,
+  "skipped_por_canal": 2,
+  "canais": {
+    "producao": {
+      "etapas_aprovadas": 25,
+      "sucesso": true
+    },
+    "piloto": {
+      "etapas_aprovadas": 25,
+      "sucesso": true
+    },
+    "oficial": {
+      "etapas_aprovadas": 25,
+      "sucesso": true
+    }
+  },
+  "executavel": {
+    "version": "1.4.5",
+    "conferencia_local_corrigida": true,
+    "frontend_arquivos_identicos": 389
+  },
+  "msi": {
+    "version": "1.4.5",
+    "bytes": 196816896,
+    "sha256": "5ac849c6d8cafe10fc7dc26447acdaf211f8daabca30851049b80430f49efb5e"
+  },
+  "download_publico": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.4.5",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.5.msi",
+    "sha256": "5ac849c6d8cafe10fc7dc26447acdaf211f8daabca30851049b80430f49efb5e",
+    "bytes": 196816896,
+    "size": 196816896,
+    "notes": "NewProd: versao unica disponivel para todas as estacoes.",
+    "download_conferido": true,
+    "ativado": false,
+    "bootstrap_legado": false
+  },
+  "source_tag": "agente-v1.4.5",
+  "integracao": {
+    "merge": {
+      "sha": "8d54bb8498f73ab602df0437a5ffdf71adf562d9",
+      "merged": true,
+      "message": "Pull Request successfully merged"
+    },
+    "checks": [
+      {
+        "nome": "Windows - seguranca e recuperacao",
+        "resultado": "success"
+      },
+      {
+        "nome": "Cloudflare Pages",
+        "resultado": "success"
+      },
+      {
+        "nome": "NewProd e Piloto - piloto",
+        "resultado": "success"
+      },
+      {
+        "nome": "NewProd e Piloto - producao",
+        "resultado": "success"
+      },
+      {
+        "nome": "NewProd e Piloto - oficial",
+        "resultado": "success"
+      },
+      {
+        "nome": "Piloto - consulta autenticada sem escrita",
+        "resultado": "success"
+      }
+    ]
+  },
+  "publicacao": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.4.5",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.5.msi",
+    "sha256": "5ac849c6d8cafe10fc7dc26447acdaf211f8daabca30851049b80430f49efb5e",
+    "bytes": 196816896,
+    "size": 196816896,
+    "notes": "NewProd: versao unica disponivel para todas as estacoes.",
+    "download_conferido": true,
+    "ativado": true,
+    "bootstrap_legado": true
+  },
+  "estacao_local": {
+    "conferido_em": "2026-10-28T19:49:20.027828+00:00",
+    "estacao_local": {
+      "version": "NewProd 1.4.4",
+      "canal": "piloto"
+    }
+  },
+  "manifesto_teste_preservado": "1.3.35",
+  "impressao_fisica": "nao executada"
+}
