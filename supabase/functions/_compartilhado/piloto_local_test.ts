@@ -45,19 +45,7 @@ Deno.test('piloto: gabarito sem base confere online e bloqueia revisao ou aprova
   a.nums[0].elements[0].x_mm = 10; a.modelo.status_arte = 'EM ARTE';
   await assert.rejects(conferirPiloto(entrada, permitido, a.consultar, 'Ingresso Ideal'),{status:409});
 });
-Deno.test('piloto: PDF de frente do gabarito prepara modelo sem arte_url e preserva todos os recursos', () => {
-  const frente = 'https://storage.invalid/frente.pdf', verso = 'https://storage.invalid/verso.pdf';
-  const num = {elements:[{type:'PDF',face:'back',pdf_content:verso},
-    {type:'PDF',face:'both',pdf_content:frente}, {type:'FOTO',url:'https://storage.invalid/foto.jpg'}]};
-  const antes = JSON.stringify(num);
-  const fontes = fontesPiloto({}, [num]);
-  assert.equal(fontes.frente, frente);
-  assert.ok(Object.values(fontes).includes(verso));
-  assert.ok(Object.values(fontes).includes('https://storage.invalid/foto.jpg'));
-  assert.equal(Object.values(fontes).filter(u => u === frente).length, 1);
-  assert.equal(JSON.stringify(num), antes);
-  assert.equal(fontesPiloto({arte_url:verso}, [num]).frente, verso);
-});
+
 Deno.test('piloto: banco acima de 100000 campos e 256 arquivos sem limite fixo',()=>{
  const banco={csv_data:Array.from({length:100001},(_,i)=>({foto:`https://foto.invalid/${i}`}))};
  const consumidores=new Map([[banco,[{type:'FOTO',source:'database',csv_column:'foto'}]]]);

@@ -41,6 +41,9 @@ export function fontesPiloto(m: any, nums: any[], consumidores = new Map<any, an
       if (coluna) (tiposConteudo.has(el.type) ? conteudo : arquivos).add(coluna);
     }
     for (const [chave, valor] of Object.entries(registro)) {
+      // Nome identifica o banco/gabarito; pode conter a URL da planilha.
+      // Apenas o metadado superior e ignorado: csv_data.nome pode ser foto.
+      if (chave === 'nome') continue;
       // A origem da importacao nao e necessaria se as linhas ja vieram.
       if (chave === 'csv_url' && Array.isArray(registro.csv_data)) continue;
       if (chave === 'csv_data' && Array.isArray(valor)) {
