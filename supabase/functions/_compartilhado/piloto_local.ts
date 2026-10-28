@@ -4,6 +4,15 @@ import { Recusa } from './sessao.ts';
 
 const aprovados = new Set(['APROVADO', 'APROVADA', 'APROVADA_CLIENTE', 'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA']);
 const normal = (v: unknown) => String(v ?? '').trim().toUpperCase();
+// Qualquer gabarito pode imprimir sem PDF de base: somente numeracao ou
+// composicao com arte nos elementos. A aprovacao continua sendo obrigatoria.
+export function gabaritoSemArteBase(m: any, nums: any[]) {
+  const id = m.amostra_num_id || m.numeracao_id;
+  return !!id && nums.length === 1 && String(nums[0].id) === String(id)
+    && ![m.arte_url, m.url_arquivo_arte, m.url_arquivo].some(Boolean)
+    && Array.isArray(nums[0].elements)
+    && nums[0].elements.some((e: any) => typeof e?.type === 'string' && e.type !== 'METADATA' && e.type !== '');
+}
 export function fontesPiloto(m: any, nums: any[]) {
   const fontes: Record<string, string> = {}, extras = new Set<string>();
   // A arte pode ser composta no gabarito, sem arte_url no modelo. Apenas
@@ -103,6 +112,7 @@ export async function conferirPiloto(entrada: any, permissoes: any, consultar = 
   if (numero && nums.length !== 1) throw new Recusa(409, 'numeracao incompleta');
   if (await digestPiloto([m, nums]) !== entrada.digest) throw new Recusa(409, 'revisao mudou');
   const fontes = fontesPiloto(m, nums);
+  if (!fontes.frente && !gabaritoSemArteBase(m, nums)) throw new Recusa(409, 'arte de frente indisponivel');
   if (Object.keys(fontes).length > 256 || JSON.stringify(canonico(fontes)) !== JSON.stringify(canonico(entrada.fontes))) {
     throw new Recusa(409, 'fontes divergentes do cadastro');
   }

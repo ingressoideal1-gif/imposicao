@@ -17,6 +17,18 @@ Deno.test('piloto: origem de importacao nao vira recurso quando linhas estao no 
 });
 
 const permitido = { perm_producao_view: true, perm_imprimir: true };
+Deno.test('piloto: gabarito sem base confere online e bloqueia revisao ou aprovacao alterada', async () => {
+  const a = ambiente(); a.modelo.arte_url = null;
+  a.nums[0].elements = [{type:'TEXT',x_mm:10,y_mm:10}];
+  const entrada = {empresa:'Ingresso Ideal',modelo:'10',
+    digest:await digestPiloto([a.modelo,a.nums]),fontes:{}};
+  const r = await conferirPiloto(entrada, permitido, a.consultar, 'Ingresso Ideal');
+  assert.equal(r.execucao_offline,false);
+  a.nums[0].elements[0].x_mm = 20;
+  await assert.rejects(conferirPiloto(entrada, permitido, a.consultar, 'Ingresso Ideal'),{status:409});
+  a.nums[0].elements[0].x_mm = 10; a.modelo.status_arte = 'EM ARTE';
+  await assert.rejects(conferirPiloto(entrada, permitido, a.consultar, 'Ingresso Ideal'),{status:409});
+});
 Deno.test('piloto: PDF de frente do gabarito prepara modelo sem arte_url e preserva todos os recursos', () => {
   const frente = 'https://storage.invalid/frente.pdf', verso = 'https://storage.invalid/verso.pdf';
   const num = {elements:[{type:'PDF',face:'back',pdf_content:verso},
