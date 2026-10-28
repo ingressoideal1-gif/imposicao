@@ -27,7 +27,7 @@ TESTES = [
     'test_coleta_autonoma.py','test_coleta_telemetria.py','test_conferencia_piloto.py','test_auditoria_piloto.py',
     'test_diario_local.py','test_catalogo_revisoes.py','test_pacotes_api.py','test_selecao_piloto.py','test_revisao_pedido_piloto.py',
     'test_copia_local_recuperacao.py',
-    'test_abertura_persistida.py','test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
+    'test_abertura_persistida.py','test_conferencia_sem_arte_base.py','test_estatisticas_piloto.py','test_pacote_motor_local.py','test_recursos_motor_local.py']
 TESTES += ['test_engine_fonte_celulas_alternadas.py', 'test_pdf_duplex.py', 'test_pdf_duplex_unico.py', 'test_engine_entrega_por_bloco.py', 'test_engine_refazer_strict_assembly.py', 'test_engine_recorte_celula.py', 'test_multi_artes.py', 'test_multi_artes_capa.py', 'test_verso_individual.py', 'test_montagem_faces_pdf.py', 'test_print_service_escala.py', 'test_print_service_cores.py', 'test_gdi_sem_win32ui.py', 'test_o_javascript_do_frontend_compila.py', 'test_abertura_offline.py', 'test_offline_estacao.py', 'test_fonte_do_sistema_no_papel.py', 'test_print_experimental.py', 'test_impressao_destinos.py', 'test_impressao_plano.py']
 TESTES += ['test_capas_montagem_colunas.py', 'test_engine_capa_montagem.py', 'test_pdf_camadas.py']
 HARNESSES = ['estatisticas_piloto_harness.js', 'montagem_harness.js', 'montagem_local_harness.cjs', 'montagem_estacao_harness.cjs', 'historico_impressao_harness.js','gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',

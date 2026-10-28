@@ -8,6 +8,12 @@ from conferencia_piloto import ConferenciaIndisponivel, ConexaoPilotoIndisponive
 from revisao_pedido_piloto import CacheRevisaoPedido, validar_recibo, versoes_confiaveis
 
 
+def _tem_conteudo_preparavel(item):
+    # O marcador vem da conferencia da nuvem. A mesma classificacao deve
+    # valer na preparacao e na releitura local feita antes de gerar/imprimir.
+    return bool(item['fontes'].get('frente')) or item.get('gabarito_sem_arte_base') is True
+
+
 class SelecaoPiloto:
     def __init__(self, servico):
         self.servico = servico
@@ -49,7 +55,7 @@ class SelecaoPiloto:
         cliente = s.coleta_autonoma.cliente
         if not item or item['observacao']['digest'] != dados['digest']:
             raise ConferenciaIndisponivel('O modelo mudou ou não está disponível. Selecione novamente.')
-        if not item['fontes'].get('frente') and item.get('gabarito_sem_arte_base') is not True:
+        if not _tem_conteudo_preparavel(item):
             raise ConferenciaIndisponivel('Arte de frente ainda não disponível para preparação local.')
         resposta = s.antecipar(item, _conferidor=lambda i, _: conferido_em or cliente.conferir(i))
         entrada = next(i['manifesto'] for i in s.catalogo()
@@ -111,7 +117,7 @@ class SelecaoPiloto:
         if any(encontrados[m]['observacao']['digest'] != d
                for m, d in solicitados.items() if m in encontrados):
             raise ConferenciaIndisponivel('Pedido alterado. Reabra para conferir.')
-        indisponiveis = [m for m in solicitados if m not in encontrados or not encontrados[m]['fontes'].get('frente')]
+        indisponiveis = [m for m in solicitados if m not in encontrados or not _tem_conteudo_preparavel(encontrados[m])]
         aptos = [m for m in solicitados if m not in indisponiveis]
         if not self._lock.acquire(blocking=False):
             raise ConferenciaIndisponivel('Outro pedido está sendo preparado. Aguarde e reabra.')
@@ -192,9 +198,7 @@ class SelecaoPiloto:
             for modelo, digest in solicitados.items():
                 if modelo in encontrados and encontrados[modelo]['observacao']['digest'] != digest:
                     raise ConferenciaIndisponivel('Pedido alterado. Reabra para conferir.')
-            sem_arte = [m for m in solicitados if m not in encontrados
-                        or not encontrados[m]['fontes'].get('frente')
-                        and encontrados[m].get('gabarito_sem_arte_base') is not True]
+            sem_arte = [m for m in solicitados if m not in encontrados or not _tem_conteudo_preparavel(encontrados[m])]
             if persistida:
                 sem_arte.extend(str(m['id']) for m in snapshot['modelos'] if str(m['id']) not in solicitados)
             antigos_itens = {i['modelo']:i for i in anterior['itens']} if anterior else {}
@@ -268,7 +272,7 @@ class SelecaoPiloto:
             if (not set(itens) <= {str(m['id']) for m in snapshot['modelos']}
                     or any(str(m['id_int']) != pedido for m in snapshot['modelos'])):
                 raise ValueError()
-            sem_arte = [m for m,i in itens.items() if not i['fontes'].get('frente')]
+            sem_arte = [m for m,i in itens.items() if not _tem_conteudo_preparavel(i)]
             sem_arte.extend(str(m['id']) for m in snapshot['modelos'] if str(m['id']) not in itens)
             if set(pacotes) != set(itens) - set(sem_arte):
                 raise ValueError()

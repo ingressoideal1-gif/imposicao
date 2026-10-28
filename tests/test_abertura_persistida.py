@@ -55,6 +55,12 @@ def test_gabarito_sem_arte_base_prepara_manifesto_sem_download_e_revalida(tmp_pa
     assert pacote['origem'] == 'local' and pacote['execucao_offline'] is False
     assert e['downloads'] == 0
     assert s.local.consultar('teste', '10', pacote['revisao'])['estado'] == 'local_validado'
+    # O painel passa por esta segunda conferencia antes de chamar o motor.
+    from offline_estacao import OfflineEstacao
+    offline = OfflineEstacao(s, p)
+    offline.catalogos = lambda: {'formatos': [], 'saidas': []}
+    conferido = offline.conferir([{'pedido': '99', 'revisao': r['revisao_pedido']}])
+    assert conferido['pedidos'][0]['sem_arte'] == []
     resolver = resolver_do_pedido(s, [{'modelo': '10', 'revisao': pacote['revisao']}])
     elementos = [dict(type='TEXT', x_mm=50, y_mm=35, font_size=12, font_name='Helvetica')]
     if arte_no_gabarito:
