@@ -1,0 +1,235 @@
+{
+  "pedido_referencia": 24409,
+  "modelo_referencia": 1005206,
+  "pr": 215,
+  "merge": "f7a751eb8590aa9e9d8b6f904901898722dfa377",
+  "tag": "agente-v1.4.4",
+  "pacote": {
+    "version": "1.4.4",
+    "bytes": 196816896,
+    "sha256": "3b4f52cbe9e43b3d8d2e36667bd06d5167a52b3828cee321af4fb75fe645c926",
+    "modulos_corrigidos": 3,
+    "frontend_conferido": 389,
+    "source_commit": "f22940b6"
+  },
+  "publicacao": {
+    "schema": 1,
+    "produto": "NewProdPilotoOficial",
+    "version": "1.4.4",
+    "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.4.msi",
+    "sha256": "3b4f52cbe9e43b3d8d2e36667bd06d5167a52b3828cee321af4fb75fe645c926",
+    "bytes": 196816896,
+    "size": 196816896,
+    "notes": "NewProd: versao unica disponivel para todas as estacoes.",
+    "download_conferido": true,
+    "ativado": true,
+    "bootstrap_legado": true
+  },
+  "edge": {
+    "slug": "piloto-local",
+    "version": 27,
+    "status": "ACTIVE",
+    "verify_jwt": false,
+    "changed": [
+      "piloto_local.ts",
+      "piloto_pedido.ts"
+    ],
+    "hashes": {
+      "supabase\\functions\\piloto-local\\index.ts": "fdce5e21783f11f012361e18529bbe4bc2daebf34f923cb46ad5c6532e6831b4",
+      "supabase\\functions\\_compartilhado\\assinatura.ts": "643933bbfe42de7ddf73a8fd2af6cb85f4e78ee37e502d36a07d76a969f08f2b",
+      "supabase\\functions\\_compartilhado\\banco.ts": "26959dedb0e9947952b91748fdf2048f2aff279d5bf4d87eb537de453ed15eb5",
+      "supabase\\functions\\_compartilhado\\hash.ts": "d0e743a9e471d26681ec1f86800d04348e629c61a5429b6221d7029fa70dbacf",
+      "supabase\\functions\\_compartilhado\\newprod_versao.ts": "f85f172b34740ca23e4514201b52850ab27f114c82d6d83f957fba54f7215aa4",
+      "supabase\\functions\\_compartilhado\\piloto_catalogo.ts": "7269117fc361a1c984f5d860ff77586120fcfaefdac57340b17d8a8b20b1ac51",
+      "supabase\\functions\\_compartilhado\\piloto_estacao.ts": "95f3876e3796b616a080f76752b000cafc2439490ff570bcd40eefc775abff7e",
+      "supabase\\functions\\_compartilhado\\piloto_lista.ts": "f748df2a0c377cea1dee3c97463cb0ec5e2d78f8deff121ae67bff1c4cea9ac9",
+      "supabase\\functions\\_compartilhado\\piloto_local.ts": "96ac59b9c041a851341ad4f93ad323c56cfab172c4db2b7f0bdf01e2a86cb5a0",
+      "supabase\\functions\\_compartilhado\\piloto_offline.ts": "5f9e0f8edd5a5ce09218413bb0b320482cb985b2f5504c6ebe18a18af53a4c09",
+      "supabase\\functions\\_compartilhado\\piloto_pedido.ts": "3ddd0339871b157c232dd2e014e04b430b94311d3637014ce1865fa420f2868a",
+      "supabase\\functions\\_compartilhado\\preparacao_codigos.ts": "c577cd634a9b587fe7d2461dc3034911c86e770fa8f34677dfb10a6fd1831c16",
+      "supabase\\functions\\_compartilhado\\preparacao_nuvem.ts": "1f821704f48344527971dd4b99b96ecd42cb285f81e5913ca25106f73e6dd171",
+      "supabase\\functions\\_compartilhado\\propostas.ts": "aaf71117f4bc281d9b04c9e462d45af3dfef3488626379ef2f2fc07092d3de0e",
+      "supabase\\functions\\_compartilhado\\qr_provisionamento.ts": "87f44e6a301cde27cb7f4c9f47ba5bd8d53bc0a0ed9a7d720b60c59c1c9aa50f",
+      "supabase\\functions\\_compartilhado\\segredos.ts": "a3137143c71c4cd47a7ce08a92c8d1c70e2ed06f63676d9950ca067cd90fb03a",
+      "supabase\\functions\\_compartilhado\\sessao.ts": "af601545f1d7468031e448560ae81e1cd613d7e1b16f3dfb899e23de25251853"
+    },
+    "sem_auth": 401
+  },
+  "testes": {
+    "producao": {
+      "passed": 1208,
+      "skipped": 2
+    },
+    "piloto": {
+      "passed": 1208,
+      "skipped": 2
+    },
+    "oficial": {
+      "passed": 1208,
+      "skipped": 2
+    },
+    "edge_publicada": 29,
+    "harnesses_tres_canais": "todos passaram"
+  },
+  "estacoes": {
+    "consultado_em": "2026-10-28T19:25:17.915436+00:00",
+    "estacoes": [
+      {
+        "name": "LASER-01",
+        "last_seen": "2026-10-28T19:25:11.958037+00:00",
+        "versao": "1.4.2",
+        "painel_versao": "1335",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": "agente_ainda_executando"
+        }
+      },
+      {
+        "name": "TEX-02",
+        "last_seen": "2026-10-28T19:25:08.177939+00:00",
+        "versao": "1.3.21",
+        "painel_versao": "1316",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": "MSI 1603"
+        }
+      },
+      {
+        "name": "TEX-01",
+        "last_seen": "2026-10-28T19:25:03.215065+00:00",
+        "versao": "1.4.3",
+        "painel_versao": "1335",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": null
+        }
+      },
+      {
+        "name": "LASER-04",
+        "last_seen": "2026-10-28T19:25:02.142868+00:00",
+        "versao": "1.4.3",
+        "painel_versao": "1335",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": null
+        }
+      },
+      {
+        "name": "LASER-02",
+        "last_seen": "2026-10-28T19:25:01.548637+00:00",
+        "versao": "1.4.3",
+        "painel_versao": "1335",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": "sem_confirmacao_apos_reinicio"
+        }
+      },
+      {
+        "name": "LAPTOP-9BSK81S0",
+        "last_seen": "2026-10-28T19:24:49.78055+00:00",
+        "versao": "1.4.3",
+        "painel_versao": "1335",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": "sem_confirmacao_apos_reinicio"
+        }
+      },
+      {
+        "name": "PC-JR-HOME",
+        "last_seen": "2026-10-28T19:24:48.538084+00:00",
+        "versao": "1.4.3",
+        "painel_versao": "1335",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": null
+        }
+      },
+      {
+        "name": "GUSTAVO-PROD",
+        "last_seen": "2026-10-28T19:24:48.159138+00:00",
+        "versao": "1.4.3",
+        "painel_versao": "1335",
+        "update": {
+          "versao_alvo": "1.4.3",
+          "erro": "sem_confirmacao_apos_reinicio"
+        }
+      },
+      {
+        "name": "CESAR-CPD",
+        "last_seen": "2026-10-27T15:43:20.462476+00:00",
+        "versao": null,
+        "painel_versao": null,
+        "update": {}
+      },
+      {
+        "name": "ACABAMENTO-TEX",
+        "last_seen": "2026-10-27T11:28:42.023995+00:00",
+        "versao": "1.3.9",
+        "painel_versao": "1065",
+        "update": {
+          "versao_alvo": "1.4.2",
+          "erro": "MSI 1603"
+        }
+      },
+      {
+        "name": "FLEXO",
+        "last_seen": "2026-10-08T12:14:18.970407+00:00",
+        "versao": "1.2.371",
+        "painel_versao": "1021",
+        "update": {
+          "versao_alvo": "1.2.371",
+          "erro": null
+        }
+      },
+      {
+        "name": "DESKTOP-PM6TG1B",
+        "last_seen": "2026-10-08T11:46:46.175025+00:00",
+        "versao": "1.2.233",
+        "painel_versao": "883",
+        "update": {
+          "versao_alvo": "1.2.371",
+          "erro": null
+        }
+      },
+      {
+        "name": "ACABAMENTO",
+        "last_seen": "2026-10-08T11:14:59.523236+00:00",
+        "versao": "1.2.363",
+        "painel_versao": "1021",
+        "update": {
+          "versao_alvo": null,
+          "erro": null
+        }
+      },
+      {
+        "name": "LASER-01 [Piloto]",
+        "last_seen": "2026-10-07T21:22:29.207095+00:00",
+        "versao": "1.2.363-piloto-local.30",
+        "painel_versao": "1021",
+        "update": {}
+      },
+      {
+        "name": "PC-JR-HOME [Piloto]",
+        "last_seen": "2026-10-07T16:03:29.915304+00:00",
+        "versao": "1.2.363-piloto-local.29",
+        "painel_versao": "1021",
+        "update": {}
+      },
+      {
+        "name": "Agente Ideal",
+        "last_seen": "2026-09-05T23:28:20.66668+00:00",
+        "versao": "1.2.323",
+        "painel_versao": "833",
+        "update": {}
+      },
+      {
+        "name": "PRD-ACABAMENTO",
+        "last_seen": "2026-08-20T17:03:38.217753+00:00",
+        "versao": null,
+        "painel_versao": null,
+        "update": {}
+      }
+    ]
+  },
+  "impressao_fisica_confirmada": false
+}

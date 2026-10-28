@@ -24,3 +24,26 @@ aprovação revogada, fonte externa, manifesto vazio, reabertura e cache antigo.
 As verificações de canal, compilação, publicação e adoção são registradas
 separadamente em dist/ durante a entrega. PDF sintético e aceite do servidor
 não comprovam impressão física.
+
+## Entrega em 28/10/2026
+
+- PR #215 integrado por merge protegido f7a751eb, com todas as verificações
+  obrigatórias aprovadas. Tag agente-v1.4.4 aponta para f22940b6.
+- Produção, Piloto e Oficial: 1.208 testes aprovados e 2 ignorados em cada
+  canal, além de todos os harnesses previstos. Os 29 testes dos módulos
+  preparados sobre a função ativa passaram sem rede.
+- piloto-local publicada na versão 27, ACTIVE. Os 17 módulos baixados após
+  a publicação coincidem com a preparação. Autenticação preservada; requisição
+  sem credencial devolveu 401.
+- MSI 1.4.4: 196816896 bytes, SHA-256
+  `3b4f52cbe9e43b3d8d2e36667bd06d5167a52b3828cee321af4fb75fe645c926`.
+  Download público integral conferido antes de ativar os manifestos oficial
+  e latest.json. Manifesto de teste preservado em 1.3.35.
+- Auditoria confirmou ausência de arquivos privados, os três módulos Python
+  corrigidos no executável e igualdade dos 389 arquivos do painel.
+- Consulta às 16:25 BRT ainda não mostrou estação em 1.4.4. LASER-01 mantinha
+  1.4.2 com registro anterior de agente executando; TEX-02 mantinha 1.3.21
+  com MSI 1603. Nenhuma estação foi reiniciada à força. Adoção e impressão
+  física permanecem pendentes; após atualizar, reabrir o pedido 24409.
+
+Evidência: [resultado da entrega](evidencias/newprod-144-gabaritos.json).
