@@ -156,6 +156,8 @@ function abrirSecao(nome, opcoes = {}) {
 
     // A rolagem volta ao topo: a aba nova começa do começo.
     if (window.scrollTo) window.scrollTo(0, 0);
+    const pagina = document.getElementById('cliente-page');
+    if (pagina && typeof pagina.scrollTo === 'function') pagina.scrollTo(0, 0);
 
     // A trilha marca em azul a etapa que está aberta, então ela se redesenha a
     // cada troca de aba — depois do desenho da seção, para já ler o que a seção
@@ -320,6 +322,20 @@ function desenharTrilha() {
 
     const etapas = etapasDoPedido();
     const feitas = etapas.filter(e => e.feito).length;
+    const c = window.portalConfirmacoes || {};
+    const proxima = etapas.find(e => !e.feito);
+    const finalizado = !!clienteState.pedidoFinalizado && feitas === 3;
+    const correcao = c.entrega === false || c.faturamento === false;
+    const orientacao = finalizado && feitas === 3
+        ? (correcao ? 'Solicitação de correção recebida. Aguarde seu atendimento.' : 'Todas as confirmações foram concluídas.')
+        : proxima
+            ? (proxima.secao === 'arte' ? 'Primeiro aprove as amostras. Depois confirme a entrega e os dados da nota.'
+                : proxima.secao === 'entrega' ? 'Sua arte já está aprovada. Falta confirmar a entrega' + (c.faturamento == null ? ' e conferir os dados da nota.' : '.')
+                    : 'Falta conferir e confirmar os dados da nota fiscal.')
+            : 'Conferências registradas. Falta finalizar o pedido.';
+    const destino = proxima ? proxima.secao : 'faturamento';
+    const chamada = proxima ? (proxima.secao === 'arte' ? 'Conferir amostras'
+        : proxima.secao === 'entrega' ? 'Continuar para entrega' : 'Continuar para nota') : 'Revisar e finalizar';
     const icone = (nome, px) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px) : '');
 
     // AMBAR para o que falta, verde para o que foi feito -- e a aba aberta e
@@ -344,19 +360,22 @@ function desenharTrilha() {
 
     caixa.innerHTML =
         '<div class="portal-trilha-topo">'
-        + '<span class="portal-trilha-rotulo">Para fechar o pedido</span>'
+        + '<span class="portal-trilha-rotulo">' + (proxima ? 'Etapa ' + (etapas.indexOf(proxima) + 1) + ' de 3' : 'Conferência do pedido') + '</span>'
         + '<span class="portal-trilha-conta' + (feitas < etapas.length ? ' falta' : '') + '">'
         + feitas + ' de 3 concluídas</span>'
         + '</div>'
         + '<div class="portal-trilha-barra">'
         + '<div class="portal-trilha-fill" style="width: ' + Math.round((feitas / 3) * 100) + '%;"></div>'
         + '</div>'
-        + '<div class="portal-trilha-passos">' + passos + '</div>';
+        + '<div class="portal-trilha-passos">' + passos + '</div>'
+        + '<p class="portal-proxima-orientacao" role="status">' + orientacao + '</p>'
+        + (!finalizado && destino !== secaoAtual
+            ? '<button type="button" class="portal-botao portal-proxima-acao" data-abre="' + destino + '">' + chamada + '</button>' : '');
 
     // Cada etapa leva à aba dela: a trilha diz o que falta E é o caminho até
     // lá. Trilha que só informa obrigaria o cliente a traduzir "Nota" na aba
     // certa lá embaixo.
-    caixa.querySelectorAll('.portal-passo').forEach(botao => {
+    caixa.querySelectorAll('[data-abre]').forEach(botao => {
         botao.addEventListener('click', () => abrirSecao(botao.dataset.abre));
     });
 

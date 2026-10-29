@@ -177,24 +177,24 @@ function cartaoDeDecisao(qual, bloqueio) {
     // entregar, e o pacote voltaria — com frete.
     //
     // O ALTERAR continua vivo, porque é por ele que se sai da trava.
+    const rotuloConfirmar = qual === 'entrega' ? 'Confirmar entrega' : 'Confirmar dados da nota';
     const confirmar = bloqueio
-        ? '<button type="button" class="portal-botao" disabled>' + icone('check', 17) + 'Confirmar</button>'
+        ? '<button type="button" class="portal-botao" disabled>' + icone('check', 17) + rotuloConfirmar + '</button>'
         : '<button type="button" class="portal-botao' + (decidido === true ? ' principal' : '') + '" aria-pressed="' + (decidido === true) + '" '
             + (gravando ? 'disabled ' : '') + 'onclick="decidirDados(\'' + qual + '\', true)">'
-            + icone('check', 17) + (decidido === true ? 'Confirmado' : gravando === qual ? 'Salvando...' : 'Confirmar') + '</button>';
+            + icone('check', 17) + (decidido === true ? 'Confirmado' : gravando === qual ? 'Salvando...' : rotuloConfirmar) + '</button>';
     const motivo = bloqueio
         ? '<div class="portal-vazio" style="margin-top: 10px;">' + escapeHtml(bloqueio) + '</div>'
         : '';
 
-    return '<div class="portal-cartao">'
+    return '<div class="portal-cartao portal-decisao" data-pendente="' + (decidido == null) + '">'
         + '<h2>' + escapeHtml(ROTULO_DA_ABA[qual].titulo) + '</h2>'
         + estado
-        + (window.portalErroConfirmacao[qual]
-            ? '<div class="portal-aviso atencao" role="alert">Não conseguimos salvar. Tente novamente.</div>' : '')
         + '<div class="portal-par-de-botoes">'
         + confirmar
         + '<button type="button" class="portal-botao" ' + (gravando ? 'disabled ' : '')
             + 'onclick="decidirDados(\'' + qual + '\', false)">' + icone('lapis', 17) + 'Alterar</button>'
+        + (window.portalErroConfirmacao[qual] ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '')
         + '</div>'
         + motivo
         + caixa

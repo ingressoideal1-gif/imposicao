@@ -141,14 +141,13 @@ function cartaoDeDecisaoFaturamento() {
     const confirmado = window.portalConfirmacoes.faturamento === true;
     const gravando = window.portalGravandoConfirmacao;
     const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
-    return '<div class="portal-cartao"><h2>Estes dados para a nota fiscal estão corretos?</h2>'
+    return '<div class="portal-cartao portal-decisao" data-pendente="' + (window.portalConfirmacoes.faturamento == null) + '"><h2>Estes dados para a nota fiscal estão corretos?</h2>'
         + (confirmado ? '<div class="portal-aviso ok">' + icone('check', 16, '#22c55e') + ' Dados confirmados.</div>' : '')
-        + (window.portalErroConfirmacao.faturamento ? '<div class="portal-aviso atencao" role="alert">Não conseguimos salvar. Tente novamente.</div>' : '')
         + '<div class="portal-par-de-botoes"><button type="button" class="portal-botao' + (confirmado ? ' principal' : '') + '" '
         + (gravando || confirmado ? 'disabled ' : '') + 'onclick="decidirDados(\'faturamento\',true)">'
-        + icone('check', 17) + (gravando === 'faturamento' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar') + '</button>'
+        + icone('check', 17) + (gravando === 'faturamento' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar dados da nota') + '</button>'
         + '<button type="button" class="portal-botao" ' + (gravando ? 'disabled ' : '') + 'onclick="abrirMeusDados()">'
-        + icone('pessoa', 17) + 'Meus Dados</button></div></div>' + modalMeusDados();
+        + icone('pessoa', 17) + 'Meus Dados</button>' + (window.portalErroConfirmacao.faturamento ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '') + '</div></div>' + modalMeusDados();
 }
 
 function abrirMeusDados() { const m = document.getElementById('portal-modal-faturamento'); if (m && m.showModal) m.showModal(); }

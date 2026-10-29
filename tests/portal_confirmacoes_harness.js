@@ -483,7 +483,7 @@ const linhasDoEnvio = new Function(
     // Confirmar DESLIGADO quando a nota e de empresa e ninguem informou quem
     // recebe.
     ok(/portal-botao" disabled>/.test(cartao), 'com o botao desabilitado');
-    ok(/'Confirmar<\/button>'/.test(cartao), 'e o desligado e o Confirmar');
+    ok(/disabled>.*rotuloConfirmar/.test(cartao), 'o botão bloqueado mantém o rótulo da confirmação');
     ok((cartao.match(/decidirDados\('" \+ qual \+ "', false\)/g) || []).length >= 0,
         'e o ALTERAR nunca e desligado');
     ok(cartao.indexOf("'Alterar</button>'") > 0, 'o Alterar continua na tela');
