@@ -4092,7 +4092,50 @@ input[type=number] {
 }
 
 .portal-par-de-botoes { display: flex; gap: 10px; margin-top: 14px; }
+.portal-decisao .portal-par-de-botoes { flex-wrap: wrap; }
+.portal-erro-confirmacao { order: -1; flex-basis: 100%; color: #fbbf24; line-height: 1.4; }
 .portal-par-de-botoes .portal-botao { flex: 1; }
+
+/* As ações usam os mesmos botões e validações dos cartões. A reserva permite
+   rolar o último campo acima delas, inclusive nas telas menores. */
+.portal-decisao[data-pendente="true"] .portal-par-de-botoes {
+    position: fixed;
+    z-index: 510;
+    left: 12px;
+    right: 12px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    margin: 0 auto;
+    max-width: 852px;
+    padding: 12px;
+    background: #17202e;
+    border: 1px solid var(--blue);
+    border-radius: 14px;
+    box-shadow: 0 -4px 24px #0005;
+}
+.portal-decisao[data-pendente="true"] .portal-par-de-botoes .portal-botao {
+    min-width: 0;
+    width: auto;
+    padding: 12px 8px;
+}
+.portal-decisao[data-pendente="true"] .portal-par-de-botoes .portal-botao:first-child {
+    background: #2563eb;
+    border-color: #60a5fa;
+    color: #fff;
+    flex: 1.5;
+}
+.cliente-page:has(.portal-secao:not([hidden]) .portal-decisao[data-pendente="true"]) .cliente-container {
+    padding-bottom: calc(220px + env(safe-area-inset-bottom, 0px));
+}
+.portal-proxima-orientacao { margin: 14px 0 0; line-height: 1.5; color: var(--text); }
+.portal-proxima-acao { margin-top: 12px; border-color: var(--blue); background: #2563eb; color: #fff; }
+@media (min-width: 900px) {
+    .portal-decisao[data-pendente="true"] .portal-par-de-botoes { bottom: 16px; }
+}
+/* Ao digitar, libera espaço para o teclado virtual. */
+body:has(input:focus, textarea:focus, select:focus) .portal-decisao .portal-par-de-botoes {
+    position: static;
+    margin-top: 14px;
+}
 
 .portal-modal-enderecos {
     width: min(560px, calc(100vw - 32px));

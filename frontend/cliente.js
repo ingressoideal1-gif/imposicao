@@ -1936,7 +1936,7 @@ function mostrarProximaEtapaAposArte() {
         + '<p id="portal-artes-aprovadas-texto" style="line-height:1.6;margin:0 0 24px"></p>'
         + '<button type="button" class="portal-botao principal" style="width:100%;min-height:48px" autofocus></button>';
     popup.querySelector('p').textContent = faltaEntrega
-        ? 'Falta a aprovação dos dados de entrega. Confira a entrega para continuar seu pedido.'
+        ? 'Falta a aprovação dos dados de entrega. Confira a entrega para continuar seu pedido. Depois, confirme os dados da nota fiscal.'
         : faltaNota ? 'Falta a aprovação dos dados da nota. Confira a nota para continuar seu pedido.'
         : 'Os dados já foram conferidos. Continue para revisar e finalizar seu pedido.';
     const botao = popup.querySelector('button');

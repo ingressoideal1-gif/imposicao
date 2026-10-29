@@ -423,15 +423,14 @@ function cartaoDeDecisaoEntrega() {
     const confirmado = window.portalConfirmacoes.entrega === true;
     const gravando = window.portalGravandoConfirmacao;
     const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
-    return '<div class="portal-cartao"><h2>Este endereço de entrega está correto?</h2>'
+    return '<div class="portal-cartao portal-decisao" data-pendente="' + (window.portalConfirmacoes.entrega == null) + '"><h2>Este endereço de entrega está correto?</h2>'
         + (confirmado ? '<div class="portal-aviso ok">' + icone('check', 16, '#22c55e') + ' Endereço confirmado.</div>' : '')
-        + (window.portalErroConfirmacao.entrega ? '<div class="portal-aviso atencao" role="alert">Não conseguimos salvar. Tente novamente.</div>' : '')
         + '<div class="portal-par-de-botoes">'
         + '<button type="button" class="portal-botao' + (confirmado ? ' principal' : '') + '" '
         + (gravando || confirmado ? 'disabled ' : '') + 'onclick="decidirDados(\'entrega\', true)">'
-        + icone('check', 17) + (gravando === 'entrega' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar') + '</button>'
+        + icone('check', 17) + (gravando === 'entrega' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar entrega') + '</button>'
         + '<button type="button" class="portal-botao" ' + (gravando ? 'disabled ' : '')
-        + 'onclick="abrirEnderecosEntrega()">' + icone('pin', 17) + 'Meus Endereços</button></div>'
+        + 'onclick="abrirEnderecosEntrega()">' + icone('pin', 17) + 'Meus Endereços</button>' + (window.portalErroConfirmacao.entrega ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '') + '</div>'
         + '</div>' + modalEnderecosEntrega();
 }
 
