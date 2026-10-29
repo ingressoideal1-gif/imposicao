@@ -22,7 +22,8 @@ def elemento(tmp_path_factory):
 
 
 def desenhar(elemento, linha, **opcoes):
-    el = dict(elemento, _x=200, _y=150, max_width_mm=0, prefix="ID: ", suffix=" VIP", pad=4)
+    el = dict(elemento, _x=200, _y=150, max_width_mm=0, prefix="ID: ", suffix=" VIP", pad=4,
+              text_stroke_mm=0)
     el.update(opcoes)
     doc = fitz.open()
     page = doc.new_page(width=400, height=300)
@@ -92,6 +93,16 @@ def test_contorno_colorido_no_pdf_com_ajuste_e_rotacao(elemento, modo, rotacao):
         assert larguras
         assert all(float(w) == pytest.approx(0.4 * MM2PT, abs=0.0001) for w in larguras)
         traces = page.get_texttrace()
+        tipos = [t["type"] for t in traces]
+        assert tipos == sorted(tipos, reverse=True), "Todo fio deve preceder todo preenchimento"
+        contornos = [t for t in traces if t["type"] == 1]
+        preenchimentos = [t for t in traces if t["type"] == 0]
+        assert len(contornos) == len(preenchimentos)
+        if modo == "wrap":
+            assert len(preenchimentos) > 1
+        for fio, texto in zip(contornos, preenchimentos):
+            assert fio["bbox"] == pytest.approx(texto["bbox"])
+            assert fio["chars"] == texto["chars"]
         assert any(t["type"] == 0 and t["color"] == pytest.approx((0, 0, 1)) for t in traces)
         assert any(t["type"] == 1 and t["color"] == pytest.approx((1, 0, 0)) for t in traces)
         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
@@ -125,3 +136,26 @@ def test_contorno_limita_espessura_e_cor_invalida(elemento):
         assert any(t["type"] == 1 and t["color"] == (0, 0, 0) for t in page.get_texttrace())
     finally:
         doc.close()
+
+
+@pytest.mark.parametrize("modo", ["shrink", "wrap", "condense"])
+@pytest.mark.parametrize("rotacao", [0, 37, 90])
+@pytest.mark.parametrize("espessura", [0.4, 10])
+def test_fio_nao_cobre_interior_das_letras(elemento, modo, rotacao, espessura):
+    opcoes = dict(color="#0000ff", font_size=24, max_width_mm=35,
+                  overflow=modo, rotation=rotacao, text_stroke_color="#ff0000")
+    base, pagina_base = desenhar(elemento, {"NOME": "MARIA DA SILVA E COSTA"}, **opcoes)
+    fio, pagina_fio = desenhar(elemento, {"NOME": "MARIA DA SILVA E COSTA"},
+                              text_stroke_mm=espessura, **opcoes)
+    try:
+        pixels_base = pagina_base.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).samples
+        pixels_fio = pagina_fio.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).samples
+        interiores = [i for i in range(0, len(pixels_base), 3)
+                      if pixels_base[i:i + 3] == bytes((0, 0, 255))]
+        assert interiores, "A amostra deve conter preenchimento azul solido"
+        # Composicao e antialiasing podem variar um nivel de cor no rasterizador.
+        assert all(pixels_fio[i] <= 2 and pixels_fio[i + 1] <= 2
+                   and pixels_fio[i + 2] >= 253 for i in interiores)
+    finally:
+        base.close()
+        fio.close()

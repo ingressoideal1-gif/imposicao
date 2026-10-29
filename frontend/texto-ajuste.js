@@ -150,29 +150,27 @@
         const x = xTexto / esc;
         const fioMm = el && el.type === 'TEXT' && el.database_text
             ? Math.min(10, Math.max(0, Number(el.text_stroke_mm) || 0)) : 0;
-        const pintarLinha = function (linha, y) {
-            // PDF render_mode=2: preenchimento seguido do contorno.
-            ctx.fillText(linha, x, y);
-            if (fioMm > 0 && linha) {
-                ctx.save();
-                ctx.strokeStyle = /^#[0-9a-f]{6}$/i.test(el.text_stroke_color || '')
-                    ? el.text_stroke_color : '#000000';
-                ctx.lineWidth = fioMm * pxPorMm;
-                ctx.lineJoin = 'miter';
-                ctx.miterLimit = 1;
-                ctx.strokeText(linha, x, y);
-                ctx.restore();
-            }
-        };
-        if (aj.linhas.length > 1) {
-            const totalH = aj.linhas.length * lineHeight;
-            const blockTop = -totalH / 2;
-            aj.linhas.forEach(function (linha, i) {
-                pintarLinha(linha, blockTop + i * lineHeight + lineHeight / 2);
+        const totalH = aj.linhas.length * lineHeight;
+        const posicoes = aj.linhas.map(function (linha, i) {
+            return { linha, y: -totalH / 2 + i * lineHeight + lineHeight / 2 };
+        });
+        // Primeiro todos os contornos: uma linha nunca cobre o preenchimento
+        // da vizinha. Mantem a largura configurada, sem duplicar o fio externo.
+        if (fioMm > 0) {
+            ctx.save();
+            ctx.strokeStyle = /^#[0-9a-f]{6}$/i.test(el.text_stroke_color || '')
+                ? el.text_stroke_color : '#000000';
+            ctx.lineWidth = fioMm * pxPorMm;
+            ctx.lineJoin = 'miter';
+            ctx.miterLimit = 1;
+            posicoes.forEach(function (item) {
+                if (item.linha) ctx.strokeText(item.linha, x, item.y);
             });
-        } else {
-            pintarLinha(aj.linhas[0], 0);
+            ctx.restore();
         }
+        posicoes.forEach(function (item) {
+            ctx.fillText(item.linha, x, item.y);
+        });
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
