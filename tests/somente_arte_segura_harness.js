@@ -27,7 +27,7 @@ function extract(name) {
             toast: (message, type) => messages.push({ message, type }) };
         ctx.window = ctx; vm.createContext(ctx);
         vm.runInContext(fs.readFileSync(require.resolve('pdf-lib/dist/pdf-lib.js'), 'utf8'), ctx);
-        vm.runInContext(['arteParaImpor', 'arrayBufferHeaderIsPdf', 'adicionarArteOriginalAoPdf', 'formatoDoProduto', 'formatoDoModelo', 'exportarPdfSomenteArte'].map(extract).join('\n'), ctx);
+        vm.runInContext(['arteParaImpor', 'arrayBufferHeaderIsPdf', 'preservarPerfilArtePdf', 'adicionarArteOriginalAoPdf', 'formatoDoProduto', 'formatoDoModelo', 'exportarPdfSomenteArte'].map(extract).join('\n'), ctx);
         await ctx.exportarPdfSomenteArte();
         assert.equal(btn.disabled, false);
         assert.equal(btn.innerHTML, 'Exportar');

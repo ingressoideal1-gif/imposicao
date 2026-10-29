@@ -47433,6 +47433,53 @@ function arrayBufferHeaderIsPdf(buffer) {
     return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
 }
 
+// O perfil pertence ao PDF de origem. Em lotes mistos cada pagina conserva
+// seu perfil por DefaultColorSpace; nao aplicar o perfil de um modelo a outro.
+function preservarPerfilArtePdf(pdfDoc, original, page) {
+    const { PDFName, PDFArray, PDFDict, PDFObjectCopier, decodePDFRawStream } = window.PDFLib;
+    const state = pdfDoc._impositionPerfisArte || (pdfDoc._impositionPerfisArte = { compatible: true, bytes: null });
+    const intents = original && original.catalog.lookupMaybe(PDFName.of('OutputIntents'), PDFArray);
+    if (!intents || !intents.size()) {
+        state.compatible = false;
+        pdfDoc.catalog.delete(PDFName.of('OutputIntents'));
+        return;
+    }
+    if (intents.size() !== 1) throw new Error('Mais de um perfil de saída na arte; revisar os perfis antes de reunir');
+    const intent = original.context.lookup(intents.get(0), PDFDict);
+    const profile = original.context.lookup(intent.get(PDFName.of('DestOutputProfile')));
+    if (!profile) throw new Error('Perfil de saída ausente no PDF original');
+    const channels = profile.dict.lookup(PDFName.of('N')).asNumber();
+    const defaultName = { 1: 'DefaultGray', 3: 'DefaultRGB', 4: 'DefaultCMYK' }[channels];
+    if (!defaultName) throw new Error('Perfil de saída não suportado');
+    const bytes = decodePDFRawStream(profile).decode();
+    const copier = PDFObjectCopier.for(original.context, pdfDoc.context);
+    const copiedProfile = copier.copy(intent.get(PDFName.of('DestOutputProfile')));
+    const visited = new Set();
+    function bind(resources) {
+        if (!resources || visited.has(resources)) return;
+        visited.add(resources);
+        let colors = resources.lookupMaybe(PDFName.of('ColorSpace'), PDFDict);
+        if (!colors) { colors = pdfDoc.context.obj({}); resources.set(PDFName.of('ColorSpace'), colors); }
+        if (!colors.has(PDFName.of(defaultName))) colors.set(PDFName.of(defaultName), pdfDoc.context.obj([PDFName.of('ICCBased'), copiedProfile]));
+        for (const category of ['XObject', 'Pattern']) {
+            const objects = resources.lookupMaybe(PDFName.of(category), PDFDict);
+            if (objects) for (const [, ref] of objects.entries()) {
+                const object = pdfDoc.context.lookup(ref);
+                const nested = object && object.dict && object.dict.lookupMaybe(PDFName.of('Resources'), PDFDict);
+                if (nested) bind(nested);
+            }
+        }
+    }
+    let resources = page.node.Resources();
+    if (!resources) { resources = pdfDoc.context.obj({}); page.node.set(PDFName.of('Resources'), resources); }
+    bind(resources);
+    if (state.bytes && (state.bytes.length !== bytes.length || state.bytes.some((v, i) => v !== bytes[i]))) state.compatible = false;
+    if (!state.bytes) state.bytes = bytes;
+    if (state.compatible) pdfDoc.catalog.set(PDFName.of('OutputIntents'), copier.copy(intents));
+    else pdfDoc.catalog.delete(PDFName.of('OutputIntents'));
+    // Nao copiar declaracao PDF/X: reunir paginas nao comprova conformidade.
+}
+
 // Uma falha no original interrompe o download completo; não substitui por amostra.
 async function adicionarArteOriginalAoPdf(pdfDoc, url, ptW, ptH, modelo, face) {
     if (!url) {
@@ -47447,9 +47494,11 @@ async function adicionarArteOriginalAoPdf(pdfDoc, url, ptW, ptH, modelo, face) {
             const original = await window.PDFLib.PDFDocument.load(bytes);
             const [page] = await pdfDoc.copyPages(original, [0]);
             if (!page) throw new Error('PDF sem página');
+            preservarPerfilArtePdf(pdfDoc, original, page);
             page.setSize(ptW, ptH);
             pdfDoc.addPage(page);
         } else {
+            preservarPerfilArtePdf(pdfDoc, null, null);
             const header = new Uint8Array(bytes);
             const png = [137, 80, 78, 71, 13, 10, 26, 10].every((value, i) => header[i] === value);
             const image = png ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
