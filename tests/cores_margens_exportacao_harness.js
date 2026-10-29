@@ -33,7 +33,7 @@ function extract(name) {
                 addImage() {} save() { downloads.push('download'); } } },
             toast: (message, type) => messages.push({ message, type }) };
         ctx.window = ctx; vm.createContext(ctx);
-        vm.runInContext(['arteParaImpor', 'adicionarArteOriginalAoPdf', 'formatoDoProduto', 'formatoDoModelo', name].map(extract).join('\n'), ctx);
+        vm.runInContext(['arteParaImpor', 'preservarPerfilArtePdf', 'adicionarArteOriginalAoPdf', 'formatoDoProduto', 'formatoDoModelo', name].map(extract).join('\n'), ctx);
         await ctx[name]();
         assert(!messages.some(m => m.type === 'error'), JSON.stringify(messages));
         assert.equal(downloads.length, 1, name + ' conclui');
