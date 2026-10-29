@@ -36254,7 +36254,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                                     </select>
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
+                            <div data-tracedraw-toolbar style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
                                     ${item.verso ? `
                                     <div style="display: flex; flex-direction: column; gap: 4px;">
                                         <label style="display: flex; align-items: center; height: 22px; margin: 0; color: #60a5fa; text-transform: uppercase; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.06em;">Frente</label>
@@ -36854,6 +36854,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
 
     if (opcoes.atualizarDados) {
         atualizarDadosDosCardsAmostra(targetOSId, container, finalHtml, itens);
+        window.ImpositionTraceDraw?.mount(container, osNum, itens, targetOSId);
         return;
     }
     container.innerHTML = entregaCardHtml + finalHtml;
@@ -36861,6 +36862,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
 
     // Modelo aprovado pelo cliente não se altera (regra do usuário, 19/08/2026).
     travarCardsDeModelosAprovados(container);
+    window.ImpositionTraceDraw?.mount(container, osNum, itens, targetOSId);
 
     // A caixa fechada também fica amarela quando o que está escolhido é uma
     // numeração exclusiva deste cliente.
@@ -37195,6 +37197,10 @@ window.marcarPendenteInformacao = marcarPendenteInformacao;
  */
 async function voltarParaAtendimento() {
     const osId = state.amostrasOSAtivo;
+    if(osId&&window.aguardarBackupTraceDraw) {
+        try { await window.aguardarBackupTraceDraw(osId); }
+        catch(error) { toast(error.message,'warning');return; }
+    }
     if (!osId) {
         toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
         return;
@@ -37888,7 +37894,7 @@ async function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     const confirmou = await confirmarNaTela({
         titulo: '✕ Excluir a arte deste modelo?',
         mensagem: `A arte da ${face === 'verso' ? 'face de verso' : 'frente'} será removida do modelo `
-            + 'e do banco de dados.\n\nNão será possível reverter a ação.',
+            + 'e do banco de dados.\n\nSe houver um documento TraceDraw vinculado, a arte das páginas correspondentes também será limpa, preservando as outras páginas e as referências.',
         textoConfirmar: 'Excluir arte',
     });
     if (!confirmou) return;
@@ -37965,7 +37971,10 @@ async function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     };
 
     saveAmostraToDB(itemId, osId, payload)
-        .then(() => toast('Arte removida do banco com sucesso!', 'success'))
+        .then(async () => {
+            toast('Arte removida do banco com sucesso!', 'success');
+            await window.ImpositionTraceDraw?.artRemoved(osId,itemId);
+        })
         .catch((err) => toast('Falha ao remover arte: ' + (err.message || err), 'error'));
 }
 
@@ -41564,6 +41573,10 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
     // também passa por aqui, e travar o cliente seria travar justamente quem
     // não tem como consertar a numeração.
     if (status === 'PRONTO' && state.amostrasContainerId !== 'cliente-amostras-itens-container') {
+        if(window.aguardarBackupTraceDraw) {
+            try { await window.aguardarBackupTraceDraw(osId,itemId); }
+            catch(error) { toast(error.message,'warning');return false; }
+        }
         const itens = state.osItens[osId] || [];
         const idxAlvo = itens.findIndex(i => String(i.id) === String(itemId));
         const itemAlvo = idxAlvo >= 0 ? itens[idxAlvo] : null;
