@@ -116,6 +116,7 @@ PAINEL_ARQUIVOS = [
     'mapa-teatro-revisao.js', 'mapas-teatro-logo.js', 'mapas-teatro-pdf-storage.js',
     'mapas-teatro-pdf.js', 'navegacao-painel.js', 'origem-aprovacao.js',
     'pedido-colunas.css', 'pedido-colunas.js', 'teatro-banco.js', 'teatro-snapshot.js',
+    'ponte-download.js', 'ponte-download.json',
     'vendor/quill-2.0.3/quill.core.css', 'vendor/quill-2.0.3/quill.js',
     "painel-protocolo.json",
     "acesso-estacao.js",
