@@ -2518,6 +2518,7 @@ class ImpositionEngine:
             # Contorno exclusivo do Texto — Banco de Dados. A largura fica em
             # mm mesmo quando shrink reduz o corpo; PyMuPDF multiplica
             # border_width pelo fontsize ao escrever a espessura no PDF.
+            contorno_kwargs = None
             if t == "TEXT" and el.get("database_text"):
                 try:
                     fio_mm = min(10.0, max(0.0, float(el.get("text_stroke_mm") or 0)))
@@ -2528,8 +2529,8 @@ class ImpositionEngine:
                     if (len(cor_fio) != 7 or not cor_fio.startswith("#")
                             or any(c not in "0123456789abcdefABCDEF" for c in cor_fio[1:])):
                         cor_fio = "#000000"
-                    insert_kwargs.update(
-                        render_mode=2, fill=rgb, color=_hex_to_rgb(cor_fio),
+                    contorno_kwargs = dict(
+                        insert_kwargs, render_mode=1, color=_hex_to_rgb(cor_fio),
                         border_width=fio_mm * MM2PT / font_size, miter_limit=1,
                     )
 
@@ -2568,6 +2569,7 @@ class ImpositionEngine:
             total_height = len(lines_to_draw) * line_height
             block_top = cy - total_height / 2.0
 
+            linhas_posicionadas = []
             for i, line_str in enumerate(lines_to_draw):
                 text_width = _largura_do_texto(line_str, font_file, font_name, font_size)
 
@@ -2593,24 +2595,20 @@ class ImpositionEngine:
                 # Baseline = centro visual + offset (textBaseline='middle' → PDF baseline)
                 origin_y = cy_line + baseline_offset
 
+                argumentos_linha = {}
                 if angle != 0 or _escala_x != 1.0:
-                    # Um morph so para as duas transformacoes, no mesmo pivot:
-                    # comprime primeiro (no eixo do texto) e depois gira.
-                    origin = fitz.Point(origin_x, origin_y)
+                    # Mesma transformacao nas duas passagens.
                     pivot = fitz.Point(cx, cy)
                     matriz = fitz.Matrix(_escala_x, 1) * fitz.Matrix(-angle)
-                    page.insert_text(
-                        origin,
-                        line_str,
-                        morph=(pivot, matriz),
-                        **insert_kwargs
-                    )
-                else:
-                    page.insert_text(
-                        (origin_x, origin_y),
-                        line_str,
-                        **insert_kwargs
-                    )
+                    argumentos_linha["morph"] = (pivot, matriz)
+                linhas_posicionadas.append(((origin_x, origin_y), line_str, argumentos_linha))
+
+            # Todos os fios atras de todos os preenchimentos, inclusive no wrap.
+            # O fio mantem a largura original; sua metade interna sera coberta.
+            passagens = [contorno_kwargs, insert_kwargs] if contorno_kwargs else [insert_kwargs]
+            for argumentos in passagens:
+                for origin, line_str, argumentos_linha in linhas_posicionadas:
+                    page.insert_text(origin, line_str, **argumentos_linha, **argumentos)
 
 
         elif t == "QR":

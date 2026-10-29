@@ -69,6 +69,38 @@ function extrair(nome, atribuida = false, codigo = fonte) {
                 'saveNumHistory', 'duplicateSelectedElements', 'toggleElLock', 'moverElOrdem']
                 .map(nome => extrair(nome, true)).join('\n')}
         ` });
+        // Ordem global das passagens, coordenadas identicas e largura preservada.
+        const passagens = await page.evaluate(() => {
+            const resultados = [];
+            for (const overflow of ['shrink', 'wrap', 'condense']) {
+                for (const fio of [0, 0.4, 10]) {
+                    const ctx = document.createElement('canvas').getContext('2d');
+                    const chamadas = [];
+                    ctx.strokeText = (texto, x, y) => chamadas.push({ tipo: 'fio', texto, x, y, largura: ctx.lineWidth });
+                    ctx.fillText = (texto, x, y) => chamadas.push({ tipo: 'texto', texto, x, y });
+                    const ajuste = desenharTextoAjustado(ctx, {
+                        type: 'TEXT', database_text: true, max_width_mm: 35,
+                        overflow, text_stroke_mm: fio, text_stroke_color: '#ff0000'
+                    }, 'MARIA DA SILVA E COSTA', 48, 2, fs => `${fs}px Arial`);
+                    resultados.push({ overflow, fio, chamadas, linhas: ajuste.linhas.length });
+                }
+            }
+            return resultados;
+        });
+        for (const { overflow, fio, chamadas, linhas } of passagens) {
+            const contornos = chamadas.filter(c => c.tipo === 'fio');
+            const textos = chamadas.filter(c => c.tipo === 'texto');
+            assert.equal(textos.length, linhas);
+            assert.equal(contornos.length, fio ? linhas : 0);
+            if (overflow === 'wrap') assert.ok(linhas > 1);
+            assert.deepEqual(chamadas.map(c => c.tipo), [
+                ...contornos.map(() => 'fio'), ...textos.map(() => 'texto')
+            ]);
+            contornos.forEach((c, i) => {
+                assert.ok(Math.abs(c.largura - fio * 2) < 1e-6);
+                assert.deepEqual([c.texto, c.x, c.y], [textos[i].texto, textos[i].x, textos[i].y]);
+            });
+        }
         await page.click('button[onclick="addDatabaseTextElement()"]');
         await page.waitForSelector('.font-picker-trigger');
         const novo = await page.evaluate(() => state.numElements[0]);
