@@ -37,6 +37,7 @@ import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado
 import { excluirFonte, salvarFonte } from "../_compartilhado/fontes.ts";
 import { conferirSenha, senhaAtual } from "../_compartilhado/senha_liberacao.ts";
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
+import { operarGabaritos } from "../_compartilhado/gabaritos.ts";
 import { operarEmailArtes } from "../_compartilhado/email_artes.ts";
 import { operarFundo } from "../_compartilhado/fundo.ts";
 import { exigirOperadorPropostas, operarPropostas } from "../_compartilhado/propostas.ts";
@@ -285,6 +286,12 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
     const quem = await quemChama(req);
     return ok(await operarBancosPedido(p[1], await corpoJson(), quem.permissoes));
+  }
+
+  if (p[0] === "gabaritos" && p.length === 2) {
+    if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
+    const quem = await quemChama(req);
+    return ok(await operarGabaritos(p[1], await corpoJson(), quem));
   }
 
   if (p[0] === "email" && p.length === 2) {
