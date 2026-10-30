@@ -14,7 +14,7 @@
   function refresh() {
     for (const [host, b] of mounted) {
       if (!host.isConnected) {mounted.delete(host);continue;}
-      b.open.disabled = b.update.disabled = busy || !adapter.canEdit();
+      b.gab.disabled = b.open.disabled = b.update.disabled = busy || !adapter.canEdit();
       b.badge.textContent = label(b.entry);
       b.badge.hidden = !b.badge.textContent;
     }
@@ -27,6 +27,7 @@
     try {
       const identity = {order:Number(binding.order), model:Number(binding.model),editor:'coreldraw'};
       if(editor)identity.editor=editor;
+      if(name==='open'&&binding.gab.checked)identity.gabarito=true;
       let result;
       if (name === 'update') {
         const draft = await adapter.request('prepare', identity);
@@ -117,21 +118,25 @@
       if (old) {old.controls.remove();mounted.delete(host);}
       const controls=document.createElement('span');
       controls.dataset.tracedrawControls='producao';
-      controls.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;margin-left:auto;flex:1 1 200px;min-width:200px;padding-top:26px;align-self:flex-start';
+      controls.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;margin-left:auto;flex:1 1 200px;min-width:200px;padding-top:26px;align-self:flex-start';
       const open=document.createElement('button'),update=document.createElement('button');
       for (const button of [open,update]) {button.type='button';button.className='btn btn-sm btn-secondary';}
-      open.style.cssText='grid-column:2;height:36px;white-space:nowrap';
-      update.style.cssText='grid-column:3;height:36px;white-space:nowrap';
+      open.style.cssText='grid-column:3;height:36px;white-space:nowrap';
+      update.style.cssText='grid-column:4;height:36px;white-space:nowrap';
       open.textContent='CorelDRAW';update.textContent='Atualizar';
       update.title='Atualiza o documento do editor escolhido pelo Imposition. Salve suas edições antes de atualizar.';
+      const gab=document.createElement('input'),gabLabel=document.createElement('label');
+      gab.type='checkbox';gab.checked=false;gabLabel.style.cssText='grid-column:2;white-space:nowrap';
+      gabLabel.title='Adicionar gabarito editável às páginas deste modelo. Desmarcar não remove elementos já inseridos.';
+      gabLabel.append(gab,document.createTextNode(' Gab.'));
       const badge=document.createElement('span'), feedback=document.createElement('span');
       badge.className='badge badge-teal';feedback.setAttribute('role','status');
       badge.style.cssText='grid-column:1 / -1;justify-self:end';
       feedback.style.cssText='grid-column:1 / -1;text-align:right;overflow-wrap:anywhere;min-width:0';
-      const binding={order:String(order),model:String(item.id),osId,index:i,open,update,badge,feedback,controls,entry:null};
+      const binding={order:String(order),model:String(item.id),osId,index:i,gab,open,update,badge,feedback,controls,entry:null};
       open.onclick=()=>action(binding,'open','coreldraw');update.onclick=()=>action(binding,'update');
       const toolbar=host.closest?.('[data-tracedraw-toolbar]')||host;
-      controls.append(open,update,badge,feedback);toolbar.append(controls);mounted.set(host,binding);
+      controls.append(gabLabel,open,update,badge,feedback);toolbar.append(controls);mounted.set(host,binding);
       if (typeof adapter.status==='function') {
         const poll=()=>adapter.status(binding).then(entry=>{binding.entry=entry;refresh();
           if(entry.backup_pending&&host.isConnected)setTimeout(poll,5000);

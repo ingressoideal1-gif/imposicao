@@ -13,7 +13,9 @@ async function scenario(mode='ok') {
    return {ok:mode!=='denied',json:async()=>({message:mode==='denied'?'Acesso recusado':'aberto'})};
   }
  });
- if(mode==='ok') {
+ if(mode==='gabarito') {
+  await assert.rejects(adapter.request('open',{gabarito:true}),/Atualize.*Gab/);assert.equal(calls.length,1);
+ } else if(mode==='ok') {
   assert.equal((await adapter.request('open',{order:123,model:7})).message,'aberto');
   assert.equal((await adapter.request('open',{order:123,model:8})).message,'aberto');
   assert.equal(calls.length,4);
@@ -22,4 +24,4 @@ async function scenario(mode='ok') {
   assert.equal(calls.length,mode==='denied'?2:1);
  }
 }
-(async()=>{for(const mode of ['ok','session','old','offline','denied'])await scenario(mode);console.log('Transporte direto: sem janelas, sem cookies, sem retry de escrita e com recusas preservadas OK');})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{for(const mode of ['ok','session','old','offline','denied','gabarito'])await scenario(mode);console.log('Transporte direto: sem janelas, sem cookies, sem retry de escrita e com recusas preservadas OK');})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -23367,6 +23367,7 @@ function applyPermissions(perms) {
     perms.perm_ideal_control_view =
         PAPEIS_DO_IDEAL_CONTROL.includes(String(perms.role || '').toLowerCase());
     window._currentPerms = perms;
+    window.Gabaritos?.atualizarAcesso();
     window.FretesAdm?.atualizarAcesso();
 
     for (const [permKey, navIds] of Object.entries(PERM_NAV_MAP)) {
@@ -23816,6 +23817,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         window._currentPerms = perms;
+    window.Gabaritos?.atualizarAcesso();
 
         // Aplicar permissões na UI
         applyPermissions(perms);
