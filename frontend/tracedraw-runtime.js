@@ -36,6 +36,7 @@
     const health=await healthResponse.json();
     if(health.application!=='Ponte Imposition'||health.protocol!==1||health.direct_transport!==true)
       throw Error('Atualize a Ponte Imposition para a versão 1.3.0 ou superior.');
+    if(data.gabarito&&!health.features?.includes('gabaritos'))throw Error('Atualize a Ponte Imposition para utilizar Gab.');
     if(!health.ready)throw Error(health.message||'A ponte precisa de atenção.');
     if(data.editor==='coreldraw'&&!health.editors?.includes('coreldraw'))
       throw Error('CorelDRAW indisponível na ponte. Confira a instalação do programa e atualize a Ponte Imposition.');
