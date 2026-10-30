@@ -28,8 +28,11 @@ class Element {
  assert.match(feedback.textContent,/incompleta/);assert.equal(badge.hidden,false);
  composeFails=false;confirmed=false;await update.onclick();assert.equal(reloads,1);assert.match(feedback.textContent,/não confirmada/);
  legacy=true;calls=[];await update.onclick();assert.deepEqual(calls.map(c=>c.action),['prepare']);assert.match(feedback.textContent,/versão antiga/);
- assert.equal(host.children[2].children.length,4,'Somente dois botoes, selo e mensagem; sem restauracao individual');
+ assert.equal(host.children[2].children.length,4,'CorelDRAW e Atualizar, selo e mensagem');
  const other=new Element();api.mount({id:'cliente-amostras-itens-container',querySelector:()=>({parentElement:other})},123,[{id:7}]);
  assert.equal(other.children.length,0);
- console.log('TraceDraw: dois botoes, abrir, preparar, compor, publicar, erros e portal OK');
+ await open.onclick();assert.equal(calls.at(-1).data.editor,'coreldraw');
+ assert.match(api.label({art_origin:'tracedraw',art_revision:2,manifesto:{editor:'coreldraw'}}),/CorelDRAW/);
+ assert(calls.every(c=>c.data.editor==='coreldraw'));
+ console.log('CorelDRAW: abrir, preparar, compor, publicar, erros e portal OK');
 })().catch(error=>{console.error(error);process.exitCode=1;});

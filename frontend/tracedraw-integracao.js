@@ -4,7 +4,7 @@
   let adapter = null, busy = false;
   const mounted = new Map();
   const label = entry => entry?.art_origin === 'tracedraw' && Number.isInteger(entry.art_revision)
-    ? `Arte gerada pelo TraceDraw · revisão ${entry.art_revision} · ${(entry.backup_pending??Boolean(entry.manifesto?.backup_job_id))?'backup no Drive pendente':'backup confirmado'}` : '';
+    ? `Arte gerada pelo ${entry.manifesto?.editor==='coreldraw'?'CorelDRAW':'TraceDraw'} · revisão ${entry.art_revision} · ${(entry.backup_pending??Boolean(entry.manifesto?.backup_job_id))?'backup no Drive pendente':'backup confirmado'}` : '';
   function configure(value) {
     if (adapter || !['request', 'compose', 'reload', 'canEdit'].every(k => typeof value?.[k] === 'function')) {
       throw Error('Adaptador de produção inválido.');
@@ -19,13 +19,14 @@
       b.badge.hidden = !b.badge.textContent;
     }
   }
-  async function action(binding, name) {
+  async function action(binding, name, editor) {
     if (busy || !adapter.canEdit()) return;
     const started=Date.now();
     busy = true; refresh();
-    binding.feedback.textContent = name === 'open' ? 'Abrindo no TraceDraw…' : 'Preparando…';
+    binding.feedback.textContent = name === 'open' ? `Abrindo no ${editor==='coreldraw'?'CorelDRAW':'TraceDraw'}…` : 'Preparando…';
     try {
-      const identity = {order:Number(binding.order), model:Number(binding.model)};
+      const identity = {order:Number(binding.order), model:Number(binding.model),editor:'coreldraw'};
+      if(editor)identity.editor=editor;
       let result;
       if (name === 'update') {
         const draft = await adapter.request('prepare', identity);
@@ -68,7 +69,7 @@
             } else {
             for(const {part,member,samples} of prepared) {
               binding.feedback.textContent=`Atualizando modelo ${completed.length+1}/${prepared.length}…`;
-              const receipt=await adapter.request('publish',{order:identity.order,model:Number(part.model),operation:part.operation,samples});
+              const receipt=await adapter.request('publish',{...identity,model:Number(part.model),operation:part.operation,samples});
               collectTimes(receipt.performance);
               if(receipt.confirmed!==true||Number(receipt.modelo)!==Number(part.model)||Number(receipt.pedido)!==identity.order)
                 throw Error('Persistência não confirmada.');
@@ -116,19 +117,19 @@
       if (old) {old.controls.remove();mounted.delete(host);}
       const controls=document.createElement('span');
       controls.dataset.tracedrawControls='producao';
-      controls.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;margin-left:auto;flex:1 1 180px;min-width:180px;padding-top:26px;align-self:flex-start';
+      controls.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;margin-left:auto;flex:1 1 200px;min-width:200px;padding-top:26px;align-self:flex-start';
       const open=document.createElement('button'),update=document.createElement('button');
       for (const button of [open,update]) {button.type='button';button.className='btn btn-sm btn-secondary';}
       open.style.cssText='grid-column:2;height:36px;white-space:nowrap';
       update.style.cssText='grid-column:3;height:36px;white-space:nowrap';
-      open.textContent='TraceDraw';update.textContent='Atualizar';
-      update.title='Salve no TraceDraw antes de atualizar o PDF oficial.';
+      open.textContent='CorelDRAW';update.textContent='Atualizar';
+      update.title='Atualiza o documento do editor escolhido pelo Imposition. Salve suas edições antes de atualizar.';
       const badge=document.createElement('span'), feedback=document.createElement('span');
       badge.className='badge badge-teal';feedback.setAttribute('role','status');
       badge.style.cssText='grid-column:1 / -1;justify-self:end';
       feedback.style.cssText='grid-column:1 / -1;text-align:right;overflow-wrap:anywhere;min-width:0';
       const binding={order:String(order),model:String(item.id),osId,index:i,open,update,badge,feedback,controls,entry:null};
-      open.onclick=()=>action(binding,'open');update.onclick=()=>action(binding,'update');
+      open.onclick=()=>action(binding,'open','coreldraw');update.onclick=()=>action(binding,'update');
       const toolbar=host.closest?.('[data-tracedraw-toolbar]')||host;
       controls.append(open,update,badge,feedback);toolbar.append(controls);mounted.set(host,binding);
       if (typeof adapter.status==='function') {
@@ -144,7 +145,7 @@
     const binding=[...mounted.values()].find(b=>b.osId===osId&&b.model===String(model)&&b.controls.isConnected);
     if(!binding)return;
     binding.entry=null;
-    if(busy){binding.feedback.textContent='PDF excluído. Limpeza no TraceDraw pendente; aguarde e clique em TraceDraw.';return;}
+    if(busy){binding.feedback.textContent='PDF excluído. Limpeza no CorelDRAW pendente; aguarde e clique em CorelDRAW.';return;}
     await action(binding,'clear');
   }
   window.ImpositionTraceDraw=Object.freeze({configure,mount,refresh,label,artRemoved});

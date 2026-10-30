@@ -16,12 +16,12 @@
       const dialog=document.createElement('dialog');
       dialog.style.cssText='max-width:480px;padding:24px;border:1px solid #64748b;border-radius:12px;background:#1e293b;color:#f8fafc';
       const title=document.createElement('h3');title.textContent='Arquivo foi alterado';
-      const text=document.createElement('p');text.textContent='Abrir do disco ou do Drive? A arte salva será preservada. Mudanças de cadastro serão conferidas antes de atualizar o modelo.';
+      const text=document.createElement('p');text.textContent=result.message||'Abrir do disco ou do Drive? A arte salva será preservada.';
       const actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px;flex-wrap:wrap';
       dialog.append(title,text,actions);
       let finished=false;
       const finish=value=>{if(finished)return;finished=true;dialog.close();dialog.remove();resolve(value);};
-      for(const [label,value,enabled] of [['Abrir do disco','disk',result.disk_available],['Abrir do Drive','drive',result.drive_available],['Cancelar',null,true]]) {
+      for(const [label,value,enabled] of [['Abrir do disco','disk',result.disk_available],['Abrir do Drive','drive',result.drive_available],...(result.pdf_available?[['Criar do PDF atual','pdf',true]]:[]),['Cancelar',null,true]]) {
         const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=!enabled;
         button.className='btn btn-primary';button.style.cssText='padding:9px 14px;border-radius:6px;cursor:pointer';
         button.addEventListener('click',()=>finish(value));actions.append(button);
@@ -37,6 +37,8 @@
     if(health.application!=='Ponte Imposition'||health.protocol!==1||health.direct_transport!==true)
       throw Error('Atualize a Ponte Imposition para a versão 1.3.0 ou superior.');
     if(!health.ready)throw Error(health.message||'A ponte precisa de atenção.');
+    if(data.editor==='coreldraw'&&!health.editors?.includes('coreldraw'))
+      throw Error('CorelDRAW indisponível na ponte. Confira a instalação do programa e atualize a Ponte Imposition.');
     const {data:auth,error}=await supabaseClient.auth.getSession();
     if(error||!auth?.session?.access_token)throw Error('Entre novamente no Imposition.');
     const response=await localFetch('/api/editor/producao/'+action,{method:'POST',
@@ -55,7 +57,7 @@
     if(!original||String(original.id)!==binding.model)throw Error('Modelo mudou de posiÃ§Ã£o. Reabra o pedido.');
     const container=document.getElementById('amostras-itens-container');
     for(const prefix of ['amostra-item-arte-','amostra-item-arte-verso-']) {
-      if(container.querySelector('#'+prefix+binding.index)?.files?.length)throw Error('Existe upload manual selecionado. Conclua ou remova essa seleÃ§Ã£o antes do TraceDraw.');
+      if(container.querySelector('#'+prefix+binding.index)?.files?.length)throw Error('Existe upload manual selecionado. Conclua ou remova essa seleÃ§Ã£o antes do CorelDRAW.');
     }
     const item={...original,arte_url:draft.files.front,verso_arte_url:draft.files.back||null,_dbLoaded:true,_needsSnapshot:false};
     delete item._snapshotTimer;delete item._cacheArteAmostra;
