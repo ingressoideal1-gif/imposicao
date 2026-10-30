@@ -11,7 +11,7 @@ const puppeteer=require('puppeteer');
    window._currentPerms={role:'atendimento',perm_lista_arte_view:true};
    window.fetch=async()=>({ok:true,json:async()=>({produtos:[{id_produto:1,nomeReal:'Pulseira <script>não executar</script>'},{id_produto:2,nomeReal:'Credencial'}],gabaritos:[{produto:2,revisao:'r1'}]})});
   });
-  await page.addScriptTag({path:'frontend/gabaritos.js'});
+  await page.addScriptTag({path:'frontend/tracedraw-integracao.js'});
   assert.equal(await page.$eval('#card-gabaritos-arte',e=>e.hidden),false);
   await page.evaluate(()=>Gabaritos.abrir());
   assert.equal(await page.$$eval('tbody tr',r=>r.length),2);

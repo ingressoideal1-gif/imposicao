@@ -53,3 +53,5 @@ Arquivo Drive: `1NPpDiuIsx1ccnt7NxsXNSbV5xnU7CQUo`; revisão `0B5eKrKA9HYFtTnR1c
 Build preservado em `../ponte-build-corel-20261030-12`; fontes alteradas copiadas em `source-review` com SHA-256. Autoteste do executável: ready/icc/node/engine verdadeiros.
 
 Após a migração: zero gabaritos e revisões, duas tabelas com RLS, bucket público=false, uma política restritiva; authenticated sem execute na RPC. Endpoint sem credencial responde 401. Não houve upload de gabarito de teste em produto real nem alteração de pedido.
+
+A biblioteca web está incorporada em `frontend/tracedraw-integracao.js`, arquivo já sincronizado pelas estações. A primeira validação detectou a ausência do novo asset na lista de sincronismo; a distribuição foi ajustada antes de publicar, sem dispensar o teste.
