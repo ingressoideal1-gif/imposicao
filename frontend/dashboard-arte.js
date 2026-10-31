@@ -401,6 +401,9 @@
     }
 
     function renderDashboardArte() {
+        // Filtros e cliques também chegam aqui durante a atualização automática.
+        // Manter a última tela completa até todas as fontes terminarem.
+        if (typeof _cargaOrdensEmAndamento !== 'undefined' && _cargaOrdensEmAndamento) return;
         const raiz = document.getElementById('dashboard-arte-conteudo');
         if (!raiz || typeof state === 'undefined') return;
         const filtroDesigner = document.getElementById('os-filter-designer')?.value || '';

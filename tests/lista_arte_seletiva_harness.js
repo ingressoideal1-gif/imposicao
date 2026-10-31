@@ -35,6 +35,7 @@ function environment() {
         aplicarNomesPreferenciaisDasPropostas: async () => {}, carregarHorasDosPrazos: async () => ({}),
         lerStatusOverride: () => null, nomePreferencialDaProposta: p => 'Cliente ' + p?.id_int,
         mapVibecodeProdutoToOSItem: p => ({ id: p.id }), aplicarRegraProdutoPrateleira() {},
+        blocagemDoModelo: () => ({ folhas: 1 }),
         conferirColunasQrIdealDosPedidos() {}, iniciarComplementoLista() {},
         mostrarEstadoCargaLista() {}, conferirNovosPedidosDoUsuario() {}, toast() {},
         renderOrdens() { paints.push({ ids: c.state.ordens.map(o => o.numero), partial: c.state.listaArteSomenteAtivos }); },
@@ -317,5 +318,48 @@ const tick = () => new Promise(r => setImmediate(r));
         ok(await f.c.loadOrdens(), 'pedido fechado pode atualizar');
         ok(f.c.state.osItens.vibe_1[0].id === 'vibe_item_1', 'resumo ERP continua atualizando pedido fora de uso');
     }
-    console.log(JSON.stringify({ checks, syntheticCompletedProposals: 4744, selectiveCalls, completeCalls }));
+    const dashboard = environment();
+    await dashboard.c.setFiltroFilaArte('concluidos');
+    const historico = JSON.stringify(dashboard.c.state.ordens.map(({prazo_entrega, codigo_rastreamento, ...os}) => os));
+    const consultasHistorico = dashboard.logs.length;
+    dashboard.logs.length = 0;
+    let consultasHoras = 0;
+    dashboard.c.carregarHorasDosPrazos = async () => { consultasHoras++; throw Error('prazo indisponivel'); };
+    await dashboard.c.setFiltroFilaArte('dashboard');
+    ok(dashboard.c.state.recorteOrdensCarregado === 'dashboard-arte', 'dashboard tem recorte proprio');
+    ok(!dashboard.logs.some(l => l.table === 'propostas_os') && consultasHoras === 0,
+        'dashboard nao depende de prazos, rastreamento ou horarios');
+    ok(JSON.stringify(dashboard.c.state.ordens.map(({prazo_entrega, codigo_rastreamento, ...os}) => os)) === historico,
+        'dashboard preserva todos os pedidos e campos das metricas do historico');
+    ok(dashboard.c.state.ordens.find(o => o.numero === 4843).prazo_entrega === '2026-10-01',
+        'carga analitica preserva prazo conhecido sem inventar outro');
+    const consultasDashboard = dashboard.logs.length;
+    ok(consultasDashboard < consultasHistorico, 'carga do dashboard elimina consultas operacionais');
+    dashboard.logs.length = 0;
+    await dashboard.c.setFiltroFilaArte('dashboard');
+    ok(dashboard.logs.length === 0, 'novo clique no dashboard pronto reutiliza dados');
+    dashboard.c.failModels = true;
+    const ordensAntesDoErro = dashboard.c.state.ordens;
+    ok(await dashboard.c.loadOrdens() === false && dashboard.c.state.ordens === ordensAntesDoErro,
+        'falha de atualizacao preserva resultado anterior');
+    dashboard.c.failModels = false; dashboard.logs.length = 0;
+    await dashboard.c.setFiltroFilaArte('dashboard');
+    ok(dashboard.logs.length > 0 && dashboard.c.state.recorteOrdensCarregado === 'dashboard-arte',
+        'clique depois de erro permite tentar novamente');
+    dashboard.logs.length = 0;
+    dashboard.c.carregarHorasDosPrazos = async () => { consultasHoras++; return {}; };
+    await dashboard.c.setFiltroFilaArte('concluidos');
+    ok(dashboard.logs.some(l => l.table === 'propostas_os') && consultasHoras > 0,
+        'sair do dashboard busca os dados operacionais normalmente');
+    const trocando = environment();
+    let liberarCarga;
+    trocando.c.holdProducts = new Promise(r => { liberarCarga = r; });
+    const cargaInicial = trocando.c.loadOrdens();
+    const abrirDashboard = trocando.c.setFiltroFilaArte('dashboard');
+    liberarCarga(); await Promise.all([cargaInicial, abrirDashboard]);
+    ok(trocando.c.state.recorteOrdensCarregado === 'dashboard-arte'
+        && trocando.c.state.ordens.some(o => o.numero === 4843),
+        'abrir durante carga ativa termina com historico inteiro do dashboard');
+    console.log(JSON.stringify({ checks, syntheticCompletedProposals: 4744, selectiveCalls, completeCalls,
+        consultasHistorico, consultasDashboard }));
 })().catch(e => { console.error(e); process.exitCode = 1; });
