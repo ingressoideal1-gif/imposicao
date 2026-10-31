@@ -50,6 +50,7 @@ function ambiente() {
         }
     };
     const c = vm.createContext({
+        crypto: require("node:crypto").webcrypto,
         console: { log() {}, warn() {}, error() {} },
         supabaseClient: banco, vibeClient: banco,
         state: { osItens: { vibe_123: [modelo] }, amostrasContainerId: 'cliente-amostras-itens-container' },
@@ -190,6 +191,7 @@ async function executar() {
         assert.equal(gravacoes[0].tabela, 'pedidos_modelos');
         assert.equal(gravacoes[0].payload.observacao_arte, 'Ajustar o texto');
         assert.equal(gravacoes[0].payload.status_arte, 'REPROVADA_CLIENTE');
+        assert.match(gravacoes[0].payload.reprovacao_acao, /^[0-9a-f-]{36}$/);
         assert.equal(a.modelo.amostra_obs, 'Ajustar o texto');
     });
     await teste('status consolidado recusa retorno vazio ou divergente e aceita todas as linhas confirmadas', async () => {

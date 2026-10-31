@@ -19,7 +19,7 @@ function constante(nome) {
     assert(inicio >= 0, nome);
     return fonte.slice(inicio, fonte.indexOf(';', inicio) + 1);
 }
-const nomes = ['calcularStatusConsolidadoPedidoArte', 'sincronizarStatusConsolidadoPedidoArte',
+const nomes = ['assinaturaDoPdfParaPronto', 'validarPaginasDoPdfParaPronto', 'carregarArtesParaReconciliacao', 'calcularStatusConsolidadoPedidoArte', 'sincronizarStatusConsolidadoPedidoArte',
     'atualizarPedidoArteConfirmado', 'marcarEstagioDaArteNoErp', 'devolverArteParaAlteracao',
     'buscarModeloPersistidoDaDecisao', 'salvarSaidaCorrecaoArteConfirmada', 'decisionAmostraItem',
     'promoverPedidoSeTodosProntos', 'reconciliarStatusPersistidosDaListaArte',
@@ -47,7 +47,7 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         assert(banco[tabela], 'tabela simulada: ' + tabela);
         const filtros = []; let payload;
         const executar = unico => {
-            const linhas = banco[tabela].filter(linha => filtros.every(([k, v]) => String(linha[k]) === String(v)));
+            const linhas = banco[tabela].filter(linha => filtros.every(([k, v]) => (Array.isArray(v) ? v.map(String).includes(String(linha[k])) : String(linha[k]) === String(v))));
             if (payload && tabela === 'pedidos_artes' && falharConsolidado) {
                 return { data: null, error: { message: 'falha simulada no consolidado' } };
             }
@@ -59,6 +59,7 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         };
         return {
             select() { return this; }, update(p) { payload = p; return this; },
+            in(k, v) { filtros.push([k, v]); return this; }, range() { return this; },
             eq(k, v) { filtros.push([k, v]); return this; }, order() { return this; },
             single() { return Promise.resolve(executar(true)); },
             maybeSingle() { return Promise.resolve(executar(true)); },
@@ -77,6 +78,8 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         state.todasArtes = structuredClone(banco.pedidos_artes);
     };
     const contexto = {
+        crypto: require("node:crypto").webcrypto,
+        numeracaoIdDoItem: () => null, modoDeVersoDoModelo: () => 'simplex', pdfImparFrenteVersoParDoModelo: () => false,
         window: {}, state, supabaseClient: cliente, vibeClient: cliente,
         document: { getElementById: () => null }, ESCALA_DA_AMOSTRA: 1,
         console: { warn: (...a) => log.erros.push(a), error: (...a) => log.erros.push(a), log() {} },

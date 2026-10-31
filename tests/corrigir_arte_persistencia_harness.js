@@ -45,7 +45,7 @@ function clienteQueResponde(resposta, chamadas) {
                                     return {
                                         select(colunas) {
                                             chamadas.select = colunas;
-                                            return Promise.resolve(resposta);
+                                            return Promise.resolve({ ...resposta, data: resposta.data?.map(linha => ({...linha, reprovacao_acao: payload.reprovacao_acao})) });
                                         }
                                     };
                                 }
