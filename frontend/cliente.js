@@ -2494,7 +2494,8 @@ async function decisionAmostraItem(itemId, osId, status) {
     
     state.portalGravandoArte = true;
     try {
-        await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs });
+        await saveAmostraToDB(itemId, osId, { amostra_status: status, amostra_obs: obs,
+            ...(status === 'REPROVADA' ? { reprovacao_acao: crypto.randomUUID() } : {}) });
         
         // Se for na página do cliente, vamos notificar no chat do pedido!
         const isClientePage = (state.amostrasContainerId === 'cliente-amostras-itens-container');

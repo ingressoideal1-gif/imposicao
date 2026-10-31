@@ -1,7 +1,6 @@
 (function (global) {
     'use strict';
 
-    const SLA_SEGUNDOS = 2 * 60 * 60;
     const CORES_FLUXO = {
         fila: '#3b82f6',
         pendente: '#ef4444',
@@ -18,9 +17,6 @@
     };
 
     let periodoDias = 7;
-    let paginaArtesProntas = 1;
-    let assinaturaArtesProntas = '';
-    const ARTES_PRONTAS_POR_PAGINA = 50;
     const STATUS_DE_ARTE_PRONTA = new Set([
         'ENVIAR ARTE', 'ARTE PRONTA',
         'EM APROVAÇÃO', 'EM APROVACAO', 'AGUARDANDO_APROVACAO',
@@ -32,18 +28,6 @@
     function numero(valor) {
         const n = Number(valor);
         return Number.isFinite(n) ? n : 0;
-    }
-
-    function media(valores) {
-        const validos = (valores || []).filter(v => Number.isFinite(v) && v >= 0);
-        return validos.length ? validos.reduce((soma, v) => soma + v, 0) / validos.length : null;
-    }
-
-    function mediana(valores) {
-        const validos = (valores || []).filter(v => Number.isFinite(v) && v >= 0).sort((a, b) => a - b);
-        if (!validos.length) return null;
-        const meio = Math.floor(validos.length / 2);
-        return validos.length % 2 ? validos[meio] : (validos[meio - 1] + validos[meio]) / 2;
     }
 
     function inicioDoDia(data) {
@@ -72,13 +56,6 @@
         return atribuido || os.vendedor || 'Não atribuído';
     }
 
-    function segundosEmArteAgora(registro, agoraMs) {
-        if (!registro || registro.card !== 'fila' || !registro.desde) return null;
-        const desde = new Date(registro.desde).getTime();
-        if (!Number.isFinite(desde)) return null;
-        return Math.max(0, Math.floor((agoraMs - desde) / 1000) + numero(registro.credito_segundos));
-    }
-
     function pedidoTemArtePronta(pedido) {
         if (!pedido || pedido.cancelado) return false;
         if (pedido.fila === 'concluidos' || pedido.fila === 'aprovados') return true;
@@ -88,7 +65,6 @@
 
     function calcularMetricasDashboardArte(entrada) {
         const agora = new Date(entrada.agora || Date.now());
-        const agoraMs = agora.getTime();
         const dias = Math.max(1, parseInt(entrada.dias, 10) || 7);
         const inicio = inicioDoDia(agora);
         inicio.setDate(inicio.getDate() - (dias - 1));
@@ -113,8 +89,12 @@
             if (!artesPorPedido[chave] || arte.designer_nome) artesPorPedido[chave] = arte;
         });
 
+        const pedidosVistos = new Set();
         const pedidos = (entrada.ordens || []).filter(os => {
             if (!os || os.ignorado) return false;
+            const identidade = String(os.numero ?? os.id);
+            if (pedidosVistos.has(identidade)) return false;
+            pedidosVistos.add(identidade);
             const designer = nomeDesigner(os, artesPorPedido, entrada.obterDesigner);
             const atendente = nomeAtendente(os, entrada.obterAtendente);
             return (!filtroDesigner || designer === filtroDesigner)
@@ -134,7 +114,9 @@
                 designer: nomeDesigner(os, artesPorPedido, entrada.obterDesigner),
                 atendente: nomeAtendente(os, entrada.obterAtendente),
                 produtos: listaProdutos,
-                tempoAtual: segundosEmArteAgora(reg, agoraMs)
+                // Conta identidades, não passagens por Pronto/Reprovado.
+                modelos: new Set((entrada.modelos?.[chave] || [])
+                    .filter(modelo => modelo?.id != null).map(modelo => String(modelo.id))).size
             };
             // `arte_pronta_em` é o carimbo persistido quando a versão da arte
             // fica pronta. O relógio de Em Arte é a alternativa para pedidos
@@ -145,11 +127,6 @@
             const prontoEm = pedidoTemArtePronta(pedido) && carimboPronto
                 ? new Date(carimboPronto) : null;
             pedido.prontoEm = prontoEm && Number.isFinite(prontoEm.getTime()) ? prontoEm : null;
-            // O carimbo persistido do link cobre o volume real. Duração só é
-            // exibida quando o relógio também observou a transição, evitando
-            // transformar snapshots históricos em tempos iguais a zero.
-            pedido.duracao = pedido.prontoEm && reg && reg.saiu_da_fila_em
-                ? numero(reg.credito_segundos) : null;
             return pedido;
         });
 
@@ -157,10 +134,7 @@
         const noAnterior = data => data && data >= inicioAnterior && data < fimAnterior;
         const prontosNoPeriodo = pedidos.filter(p => dentro(p.prontoEm));
         const prontosNoPeriodoAnterior = pedidos.filter(p => noAnterior(p.prontoEm));
-        const duracoes = prontosNoPeriodo.map(p => p.duracao).filter(v => v !== null);
         const ativos = pedidos.filter(p => p.fila === 'fila');
-        const temposAtivos = ativos.map(p => p.tempoAtual).filter(v => v !== null);
-        const dentroSla = duracoes.filter(v => v <= SLA_SEGUNDOS).length;
         const recebidos = pedidos.filter(p => {
             const data = new Date(p.os.created_at || p.os.data_liberacao || '');
             return Number.isFinite(data.getTime()) && dentro(data);
@@ -198,6 +172,18 @@
             cor: CORES_FLUXO[fila]
         }));
 
+        const historico = entrada.reprovacoes || {};
+        const eventosVistos = new Set();
+        const reprovacoes = historico.disponivel ? (historico.eventos || []).filter(e => {
+            const chave = JSON.stringify([String(e.pedido), e.acao]);
+            if (eventosVistos.has(chave)) return false;
+            eventosVistos.add(chave);
+            return dentro(new Date(e.ocorrido_em))
+                && new Date(e.ocorrido_em) >= new Date(historico.inicio)
+                && (!filtroDesigner || e.designer === filtroDesigner)
+                && (!filtroAtendente || e.atendente === filtroAtendente);
+        }) : [];
+
         const porDesigner = {};
         pedidos.forEach(p => {
             if (p.cancelado) return;
@@ -207,18 +193,22 @@
             const cargaAtual = ['fila', 'pendente', 'aprovacao'].includes(p.fila);
             if (pedidoTemArtePronta(p) && !cargaAtual && !dentro(p.prontoEm)) return;
             if (!porDesigner[p.designer]) {
-                porDesigner[p.designer] = { designer: p.designer, prontos: 0, duracoes: [], ativos: 0, alteracoes: 0, aprovacao: 0, produtos: 0 };
+                porDesigner[p.designer] = { designer: p.designer, prontos: 0, ativos: 0, alteracoes: 0, aprovacao: 0, produtos: 0, modelos: 0 };
             }
             const item = porDesigner[p.designer];
             if (p.fila === 'fila') item.ativos++;
             if (p.fila === 'aprovacao') item.aprovacao++;
-            if (String(p.os.status_calculado || '').toUpperCase() === 'EM ALTERAÇÃO') item.alteracoes++;
             if (dentro(p.prontoEm)) {
                 item.prontos++;
                 item.produtos += p.produtos.length;
-                if (p.duracao !== null) item.duracoes.push(p.duracao);
+                item.modelos += p.modelos;
             }
         });
+        reprovacoes.forEach(e => {
+            const item = porDesigner[e.designer] ||= { designer: e.designer, prontos: 0, ativos: 0, alteracoes: 0, aprovacao: 0, produtos: 0, modelos: 0 };
+            item.alteracoes++;
+        });
+        if (!historico.disponivel) Object.values(porDesigner).forEach(item => { item.alteracoes = '--'; });
         const designers = Object.values(porDesigner).map(item => ({
             designer: item.designer,
             prontos: item.prontos,
@@ -226,11 +216,8 @@
             alteracoes: item.alteracoes,
             aprovacao: item.aprovacao,
             produtos: item.produtos,
-            media: media(item.duracoes),
-            mediana: mediana(item.duracoes),
-            sla: item.duracoes.length ? item.duracoes.filter(v => v <= SLA_SEGUNDOS).length / item.duracoes.length * 100 : null,
-            cobertura: item.duracoes.length
-        })).sort((a, b) => b.prontos - a.prontos || (a.media ?? Infinity) - (b.media ?? Infinity) || a.designer.localeCompare(b.designer));
+            modelos: item.modelos,
+        })).sort((a, b) => b.prontos - a.prontos || a.designer.localeCompare(b.designer));
 
         const porAtendente = {};
         pedidos.forEach(p => {
@@ -238,7 +225,7 @@
             const cargaAtual = ['fila', 'pendente', 'aprovacao'].includes(p.fila);
             if (pedidoTemArtePronta(p) && !cargaAtual && !dentro(p.prontoEm)) return;
             if (!porAtendente[p.atendente]) {
-                porAtendente[p.atendente] = { atendente: p.atendente, prontos: 0, duracoes: [], ativos: 0, pendentes: 0, aprovacao: 0, produtos: 0 };
+                porAtendente[p.atendente] = { atendente: p.atendente, prontos: 0, ativos: 0, pendentes: 0, alteracoes: 0, aprovacao: 0, produtos: 0 };
             }
             const item = porAtendente[p.atendente];
             if (p.fila === 'fila') item.ativos++;
@@ -247,33 +234,34 @@
             if (dentro(p.prontoEm)) {
                 item.prontos++;
                 item.produtos += p.produtos.length;
-                if (p.duracao !== null) item.duracoes.push(p.duracao);
             }
         });
+        reprovacoes.forEach(e => {
+            const item = porAtendente[e.atendente] ||= { atendente: e.atendente, prontos: 0, ativos: 0, pendentes: 0, alteracoes: 0, aprovacao: 0, produtos: 0 };
+            item.alteracoes++;
+        });
+        if (!historico.disponivel) Object.values(porAtendente).forEach(item => { item.alteracoes = '--'; });
         const atendentes = Object.values(porAtendente).map(item => ({
             atendente: item.atendente,
             prontos: item.prontos,
             ativos: item.ativos,
             pendentes: item.pendentes,
+            alteracoes: item.alteracoes,
             aprovacao: item.aprovacao,
             produtos: item.produtos,
-            media: media(item.duracoes),
-            mediana: mediana(item.duracoes),
-            sla: item.duracoes.length ? item.duracoes.filter(v => v <= SLA_SEGUNDOS).length / item.duracoes.length * 100 : null
-        })).sort((a, b) => b.prontos - a.prontos || (a.media ?? Infinity) - (b.media ?? Infinity) || a.atendente.localeCompare(b.atendente));
+        })).sort((a, b) => b.prontos - a.prontos || a.atendente.localeCompare(b.atendente));
 
         const porProduto = {};
         prontosNoPeriodo.forEach(p => {
             const nomesNoPedido = new Set((p.produtos || []).map(produto => String(produto.nome_produto || '').trim() || 'Sem produto informado'));
             if (!nomesNoPedido.size) nomesNoPedido.add('Sem produto informado');
             nomesNoPedido.forEach(nome => {
-                if (!porProduto[nome]) porProduto[nome] = { produto: nome, pedidos: 0, itens: 0, quantidade: 0, duracoes: [] };
+                if (!porProduto[nome]) porProduto[nome] = { produto: nome, pedidos: 0, itens: 0, quantidade: 0 };
                 const item = porProduto[nome];
                 const produtosDoNome = (p.produtos || []).filter(produto => (String(produto.nome_produto || '').trim() || 'Sem produto informado') === nome);
                 item.pedidos++;
                 item.itens += produtosDoNome.length || 1;
                 item.quantidade += produtosDoNome.reduce((soma, produto) => soma + numero(produto.qtd), 0);
-                if (p.duracao !== null) item.duracoes.push(p.duracao);
             });
         });
         const produtosResumo = Object.values(porProduto).map(item => ({
@@ -281,8 +269,6 @@
             pedidos: item.pedidos,
             itens: item.itens,
             quantidade: item.quantidade,
-            media: media(item.duracoes),
-            cobertura: item.duracoes.length
         })).sort((a, b) => b.pedidos - a.pedidos || b.quantidade - a.quantidade || a.produto.localeCompare(b.produto)).slice(0, 12);
 
         return {
@@ -297,11 +283,6 @@
             alteracoes: pedidos.filter(p => String(p.os.status_calculado || '').toUpperCase() === 'EM ALTERAÇÃO').length,
             emAprovacao: pedidos.filter(p => p.fila === 'aprovacao').length,
             artesProntas,
-            media: media(duracoes),
-            mediana: mediana(duracoes),
-            mediaBacklog: media(temposAtivos),
-            sla: duracoes.length ? dentroSla / duracoes.length * 100 : null,
-            cobertura: duracoes.length,
             pontos,
             fluxo,
             designers,
@@ -312,18 +293,6 @@
 
     function escapar(valor) {
         return String(valor ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
-    }
-
-    function tempo(segundos) {
-        if (segundos === null || segundos === undefined || !Number.isFinite(segundos)) return '--';
-        const totalMin = Math.round(segundos / 60);
-        const horas = Math.floor(totalMin / 60);
-        const minutos = totalMin % 60;
-        return horas ? `${horas}h ${String(minutos).padStart(2, '0')}min` : `${minutos}min`;
-    }
-
-    function percentual(valor) {
-        return valor === null || valor === undefined ? '--' : `${Math.round(valor)}%`;
     }
 
     function variacao(atual, anterior) {
@@ -343,61 +312,31 @@
     function tabelaDesigners(itens) {
         if (!itens.length) return '<div class="dashboard-arte-vazio">Nenhum designer atribuído no recorte atual.</div>';
         return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
-            <thead><tr><th>Designer</th><th>Prontos/aprovados</th><th>Produtos</th><th>Tempo médio</th><th>Mediana</th><th>Até 2h</th><th>Em arte</th><th>Alteração</th><th>Aprovação</th></tr></thead>
+            <thead><tr><th>Designer</th><th>Prontos/aprovados</th><th>Produtos</th><th title="Modelos cadastrados nos pedidos prontos/aprovados do período">Modelos</th><th>Em arte</th><th title="Reprovações por ação e pedido no período, desde o início do registro">Alteração</th><th>Aprovação</th></tr></thead>
             <tbody>${itens.map((item, indice) => `<tr>
                 <td><span class="dashboard-arte-posicao">${indice + 1}</span><strong>${escapar(item.designer)}</strong></td>
-                <td>${item.prontos}</td><td>${item.produtos}</td><td>${tempo(item.media)}</td><td>${tempo(item.mediana)}</td>
-                <td>${percentual(item.sla)}</td><td>${item.ativos}</td><td>${item.alteracoes}</td><td>${item.aprovacao}</td>
+                <td>${item.prontos}</td><td>${item.produtos}</td><td>${item.modelos}</td>
+                <td>${item.ativos}</td><td>${item.alteracoes}</td><td>${item.aprovacao}</td>
             </tr>`).join('')}</tbody></table></div>`;
     }
 
     function tabelaProdutos(itens) {
         if (!itens.length) return '<div class="dashboard-arte-vazio">Ainda não há produtos com arte pronta/aprovada e data confiável neste período.</div>';
         return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
-            <thead><tr><th>Produto</th><th>Pedidos</th><th>Itens</th><th>Quantidade</th><th>Tempo médio do pedido</th></tr></thead>
-            <tbody>${itens.map(item => `<tr><td><strong>${escapar(item.produto)}</strong></td><td>${item.pedidos}</td><td>${item.itens}</td><td>${item.quantidade.toLocaleString('pt-BR')}</td><td>${tempo(item.media)}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>Produto</th><th>Pedidos</th><th>Itens</th><th>Quantidade</th></tr></thead>
+            <tbody>${itens.map(item => `<tr><td><strong>${escapar(item.produto)}</strong></td><td>${item.pedidos}</td><td>${item.itens}</td><td>${item.quantidade.toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody>
         </table></div>`;
     }
 
     function tabelaAtendentes(itens) {
         if (!itens.length) return '<div class="dashboard-arte-vazio">Nenhum atendente atribuído no recorte atual.</div>';
         return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
-            <thead><tr><th>Atendente</th><th>Prontos/aprovados</th><th>Produtos</th><th>Tempo médio</th><th>Mediana</th><th>Até 2h</th><th>Em arte</th><th>Pendências</th><th>Aprovação</th></tr></thead>
+            <thead><tr><th>Atendente</th><th>Prontos/aprovados</th><th>Produtos</th><th>Em arte</th><th>Pendências</th><th title="Reprovações por ação e pedido no período, desde o início do registro">Alteração</th><th>Aprovação</th></tr></thead>
             <tbody>${itens.map((item, indice) => `<tr>
                 <td><span class="dashboard-arte-posicao">${indice + 1}</span><strong>${escapar(item.atendente)}</strong></td>
-                <td>${item.prontos}</td><td>${item.produtos}</td><td>${tempo(item.media)}</td><td>${tempo(item.mediana)}</td>
-                <td>${percentual(item.sla)}</td><td>${item.ativos}</td><td>${item.pendentes}</td><td>${item.aprovacao}</td>
+                <td>${item.prontos}</td><td>${item.produtos}</td>
+                <td>${item.ativos}</td><td>${item.pendentes}</td><td>${item.alteracoes}</td><td>${item.aprovacao}</td>
             </tr>`).join('')}</tbody></table></div>`;
-    }
-
-    function statusDaArtePronta(pedido) {
-        if (pedido.fila === 'concluidos') return 'Concluído';
-        if (pedido.fila === 'aprovados') return 'Aprovado';
-        return pedido.os.status_calculado || pedido.os.status || 'Arte pronta';
-    }
-
-    function tabelaArtesProntas(itens, total, pagina, totalPaginas) {
-        if (!itens.length) return '<div class="dashboard-arte-vazio">Nenhum pedido com arte pronta encontrado neste recorte.</div>';
-        const linhas = itens.map(pedido => {
-            const produtos = [...new Set((pedido.produtos || []).map(produto => String(produto.nome_produto || '').trim()).filter(Boolean))];
-            return `<tr>
-                <td><strong>#${escapar(pedido.os.numero)}</strong></td>
-                <td>${escapar(pedido.os.cliente || pedido.os.cliente_nome || '--')}</td>
-                <td>${escapar(produtos.join(', ') || '--')}</td>
-                <td>${escapar(pedido.designer)}</td>
-                <td>${escapar(pedido.atendente)}</td>
-                <td><span class="badge">${escapar(statusDaArtePronta(pedido))}</span></td>
-            </tr>`;
-        }).join('');
-        const anterior = pagina > 1
-            ? `<button type="button" class="btn btn-sm btn-ghost" onclick="irParaPaginaArtesProntas(${pagina - 1})">← Anteriores</button>` : '';
-        const proxima = pagina < totalPaginas
-            ? `<button type="button" class="btn btn-sm btn-ghost" onclick="irParaPaginaArtesProntas(${pagina + 1})">Próximos →</button>` : '';
-        return `<div class="dashboard-arte-tabela-wrap"><table class="dashboard-arte-tabela">
-            <thead><tr><th>Pedido</th><th>Cliente</th><th>Produto</th><th>Designer</th><th>Atendente</th><th>Status</th></tr></thead>
-            <tbody>${linhas}</tbody>
-        </table></div>
-        <div class="dashboard-arte-paginacao">${anterior}<span>Página <strong>${pagina}</strong> de <strong>${totalPaginas}</strong> · ${total} pedido(s)</span>${proxima}</div>`;
     }
 
     function renderDashboardArte() {
@@ -416,6 +355,8 @@
             ordens,
             artes: state.todasArtes || [],
             produtos: state.produtosPropostaGlobais || [],
+            modelos: state.modelosGlobais || {},
+            reprovacoes: state.reprovacoesArte,
             tempos: state.temposNoCard || {},
             links: state.linksClienteData || {},
             dias: periodoDias,
@@ -442,22 +383,10 @@
         const maiorPonto = Math.max(1, ...metricas.pontos.map(p => p.valor));
         const maiorFluxo = Math.max(1, ...metricas.fluxo.map(p => p.valor));
         const colunas = Math.min(metricas.pontos.length, 30);
-        const novaAssinatura = JSON.stringify([filtroDesigner, filtroAtendente, buscaArtePronta]);
-        if (assinaturaArtesProntas !== novaAssinatura) {
-            assinaturaArtesProntas = novaAssinatura;
-            paginaArtesProntas = 1;
-        }
-        const totalPaginasArtesProntas = Math.max(1, Math.ceil(metricas.artesProntas.length / ARTES_PRONTAS_POR_PAGINA));
-        paginaArtesProntas = Math.min(Math.max(1, paginaArtesProntas), totalPaginasArtesProntas);
-        const inicioArtesProntas = (paginaArtesProntas - 1) * ARTES_PRONTAS_POR_PAGINA;
-        const artesProntasNaPagina = metricas.artesProntas.slice(inicioArtesProntas, inicioArtesProntas + ARTES_PRONTAS_POR_PAGINA);
         raiz.innerHTML = `
             <div class="dashboard-arte-kpis">
                 ${kpi('Artes prontas/aprovadas', metricas.prontosNoPeriodo.length, variacao(metricas.prontosNoPeriodo.length, metricas.prontosNoPeriodoAnterior.length), true)}
-                ${kpi('Tempo médio por pedido', tempo(metricas.media), `${metricas.cobertura} pedido(s) com duração registrada`)}
-                ${kpi('Mediana de produção', tempo(metricas.mediana), 'reduz o efeito de casos muito longos')}
-                ${kpi('Prontos em até 2h', percentual(metricas.sla), 'SLA operacional sugerido')}
-                ${kpi('Pedidos em Arte agora', metricas.ativos.length, `tempo médio em fila: ${tempo(metricas.mediaBacklog)}`)}
+                ${kpi('Pedidos em Arte agora', metricas.ativos.length, 'Carga atual')}
                 ${kpi('Em alteração agora', metricas.alteracoes, `${metricas.emAprovacao} aguardando aprovação`)}
             </div>
 
@@ -484,13 +413,16 @@
 
             <article class="dashboard-arte-painel" style="margin-top:14px">
                 <h3>Desempenho por designer</h3>
-                <p class="dashboard-arte-painel-sub">Artes prontas/aprovadas no período e carga atual. A posição prioriza volume produzido; tempo só desempata.</p>
+                <p class="dashboard-arte-painel-sub">Artes prontas/aprovadas no período e carga atual. A posição prioriza o volume de pedidos prontos/aprovados.</p>
                 ${tabelaDesigners(metricas.designers)}
             </article>
 
             <article class="dashboard-arte-painel" style="margin-top:14px">
                 <h3>Desempenho por atendente</h3>
                 <p class="dashboard-arte-painel-sub">Produção vinculada ao atendente e situação atual dos pedidos sob sua responsabilidade.</p>
+                <p class="dashboard-arte-painel-sub">${state.reprovacoesArte?.disponivel
+                    ? `Alteração: cada reprovação do pedido no período, pelo responsável na ocasião. Vários modelos na mesma ação contam uma vez. Registro iniciado em ${escapar(new Date(state.reprovacoesArte.inicio).toLocaleString('pt-BR'))}; datas anteriores não têm contagem.`
+                    : 'Contagem de reprovações indisponível. A coluna Alteração mostra -- até a leitura do registro iniciado na implantação.'}</p>
                 ${tabelaAtendentes(metricas.atendentes)}
             </article>
 
@@ -500,14 +432,7 @@
                 ${tabelaProdutos(metricas.produtos)}
             </article>
 
-            <article class="dashboard-arte-painel" id="dashboard-arte-pedidos-prontos" style="margin-top:14px">
-                <h3>Pedidos com arte pronta</h3>
-                <p class="dashboard-arte-painel-sub">${metricas.artesProntas.length} pedido(s), independentemente do período selecionado e incluindo os que já foram concluídos.</p>
-                ${tabelaArtesProntas(artesProntasNaPagina, metricas.artesProntas.length, paginaArtesProntas, totalPaginasArtesProntas)}
-            </article>
-
-            <div class="dashboard-arte-cobertura"><span>ℹ️</span><span><strong>Cobertura dos tempos: ${metricas.cobertura} de ${metricas.prontosNoPeriodo.length} arte(s) pronta(s)/aprovada(s).</strong>
-                O dashboard contabiliza a transição observada saindo de “Em Arte”, quando o pedido é marcado como pronto para aprovação. Pedidos históricos já prontos sem esse carimbo continuam na lista completa, mas não viram produção do dia. “Em alteração” é a carga atual; uma taxa histórica de retrabalho exigirá registrar cada transição.</span></div>`;
+`;
     }
 
     function setPeriodoDashboardArte(dias) {
@@ -515,16 +440,9 @@
         renderDashboardArte();
     }
 
-    function irParaPaginaArtesProntas(pagina) {
-        paginaArtesProntas = Math.max(1, parseInt(pagina, 10) || 1);
-        renderDashboardArte();
-        document.getElementById('dashboard-arte-pedidos-prontos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    global.DashboardArte = { calcularMetricasDashboardArte, segundosEmArteAgora, pedidoTemArtePronta, media, mediana };
+    global.DashboardArte = { calcularMetricasDashboardArte, pedidoTemArtePronta };
     global.renderDashboardArte = renderDashboardArte;
     global.setPeriodoDashboardArte = setPeriodoDashboardArte;
-    global.irParaPaginaArtesProntas = irParaPaginaArtesProntas;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 // DASHBOARD_PRODUCAO_INICIO

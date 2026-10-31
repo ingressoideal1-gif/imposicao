@@ -50,6 +50,9 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
                     {id_int:2,nome_produto:'Credencial',qtd:80},{id_int:3,nome_produto:'Pulseira',qtd:1000},
                     {id_int:4,nome_produto:'Ingresso',qtd:300},{id_int:5,nome_produto:'Credencial',qtd:120}
                 ],
+                modelosGlobais: {
+                    1:[{id:101},{id:102},{id:103}],2:[{id:201}],3:[{id:301}],5:[{id:501},{id:502}]
+                },
                 linksClienteData: {
                     '5': {arte_pronta_em:iso(2,2),status_arte:'Em Aprovação'}
                 },
@@ -70,13 +73,33 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
             renderDashboardArte();
         });
 
-        assert.equal(await page.$$eval('.dashboard-arte-kpi', els => els.length), 6, 'seis indicadores principais');
+        assert.equal(await page.$$eval('.dashboard-arte-kpi', els => els.length), 3, 'três indicadores sem tempos');
         assert.equal(await page.$eval('.dashboard-arte-kpi:first-child .dashboard-arte-kpi-label', el => el.textContent), 'Artes prontas/aprovadas');
         assert.equal(await page.$eval('.dashboard-arte-kpi:first-child .dashboard-arte-kpi-valor', el => el.textContent), '3', 'inclui pronto para aprovação sem exigir conclusão');
-        assert.equal(await page.$$eval('.dashboard-arte-tabela', els => els.length), 4, 'inclui tabela de todos os pedidos com arte pronta');
-        assert.equal(await page.$$eval('#dashboard-arte-pedidos-prontos tbody tr', els => els.length), 3, 'lista prontos e concluídos');
+        assert.equal(await page.$$eval('.dashboard-arte-tabela', els => els.length), 3, 'mantém tabelas de designers, atendentes e produtos');
+        assert.doesNotMatch(await page.$eval('#dashboard-arte-conteudo', el => el.textContent), /Tempo médio|Mediana|Até 2h|até 2h|Cobertura dos tempos/);
+        const colunaModelos = await page.evaluate(() => {
+            const tabela = [...document.querySelectorAll('.dashboard-arte-tabela')].find(t => t.querySelector('th')?.textContent === 'Designer');
+            const indice = [...tabela.querySelectorAll('thead th')].findIndex(th => th.textContent === 'Modelos');
+            return {indice,valor:tabela.querySelector('tbody tr').children[indice].textContent};
+        });
+        assert.deepEqual(colunaModelos, {indice:3,valor:'5'}, 'modelos reais do estado aparecem após Produtos');
+        assert.equal(await page.$('#dashboard-arte-pedidos-prontos'), null, 'quadro de pedidos com arte pronta removido');
         assert.ok(await page.$$eval('.dashboard-arte-barra-col', els => els.length) >= 7, 'série diária desenhada');
         assert.match(await page.$eval('#dashboard-arte-periodo-texto', el => el.textContent), /Toda a equipe/);
+
+        assert.match(await page.$eval('#dashboard-arte-conteudo', el => el.textContent), /Contagem de reprovações indisponível/);
+        await page.evaluate(() => {
+            state.reprovacoesArte = {disponivel:true,inicio:new Date().toISOString(),eventos:[]};
+            renderDashboardArte();
+        });
+        assert.match(await page.$eval('#dashboard-arte-conteudo', el => el.textContent), /Registro iniciado em/);
+        const alteracoesAtendente = await page.evaluate(() => {
+            const tabela = [...document.querySelectorAll('.dashboard-arte-tabela')].find(t => t.querySelector('th')?.textContent === 'Atendente');
+            const indice = [...tabela.querySelectorAll('thead th')].findIndex(th => th.textContent === 'Alteração');
+            return tabela.querySelector('tbody tr').children[indice].textContent;
+        });
+        assert.equal(alteracoesAtendente, '0', 'zero somente com registro disponível');
 
         await page.select('#os-filter-designer', 'Ana');
         await page.evaluate(() => renderDashboardArte());
@@ -85,7 +108,7 @@ const dashboardHtml = htmlCompleto.match(/<section id="dashboard-arte"[\s\S]*?<\
         await page.select('#os-filter-atendente', 'Carla');
         await page.evaluate(() => renderDashboardArte());
         assert.match(await page.$eval('#dashboard-arte-periodo-texto', el => el.textContent), /Ana · Carla/);
-        assert.equal(await page.$$eval('#dashboard-arte-pedidos-prontos tbody tr', els => els.length), 2, 'filtros também recortam artes prontas');
+        assert.equal(await page.$('#dashboard-arte-pedidos-prontos'), null, 'filtros não recriam o quadro removido');
 
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         const largura = await page.$eval('#dashboard-arte', el => ({ scroll: el.scrollWidth, client: el.clientWidth }));

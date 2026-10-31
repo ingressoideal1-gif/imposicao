@@ -26,6 +26,7 @@ const textarea = source.slice(textareaStart, source.indexOf('</textarea>', texta
                 eq() { return this; },
                 select() { return Promise.resolve({ data: [{ id: 11, ...this.payload }] }); }
             }; } };
+            crypto.randomUUID = () => '11111111-1111-4111-8111-111111111111';
             window.devolver = new Function(fn + '\nreturn devolverArteParaAlteracao;')();
             document.getElementById('corrigir').onclick = async () => {
                 window.resultado = await window.devolver(11, 'vibe_1');

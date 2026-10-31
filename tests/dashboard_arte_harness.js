@@ -46,12 +46,7 @@ const links = {
 const metricas = calcular({ ordens, tempos, links, artes, produtos, dias: 1, agora });
 assert.deepStrictEqual(metricas.prontosNoPeriodo.map(item => item.chave), ['100', '104', '105'],
     'conta as transições observadas para pronto, aprovação e aprovado sem esperar a conclusão');
-assert.strictEqual(metricas.media, 6300, 'usa apenas durações observadas pelo relógio de Em Arte');
-assert.strictEqual(metricas.mediana, 6300);
-assert.strictEqual(metricas.cobertura, 2, 'o carimbo do link cobre o volume sem inventar duração');
-assert.strictEqual(Math.round(metricas.sla), 100, 'artes de até 2 horas cumprem o SLA sugerido');
 assert.strictEqual(metricas.ativos.length, 1);
-assert.strictEqual(metricas.mediaBacklog, 9000, 'idade atual inclui crédito anterior e trecho corrente');
 assert.strictEqual(metricas.alteracoes, 1);
 assert.strictEqual(metricas.pontos[0].valor, 3);
 const ingresso = metricas.produtos.find(item => item.produto === 'Ingresso');
@@ -63,7 +58,6 @@ assert.ok(!metricas.artesProntas.some(item => item.chave === '103'), 'cancelamen
 
 const ana = metricas.designers.find(item => item.designer === 'Ana');
 assert.strictEqual(ana.prontos, 2);
-assert.strictEqual(ana.media, 5400);
 const carla = metricas.atendentes.find(item => item.atendente === 'Carla');
 assert.strictEqual(carla.prontos, 2);
 assert.strictEqual(carla.produtos, 3);
@@ -81,4 +75,64 @@ const buscaHistorico = calcular({ ordens, tempos, links, artes, produtos, dias: 
 assert.deepStrictEqual(buscaHistorico.artesProntas.map(item => item.chave), ['101'],
     'busca encontra concluído histórico fora das métricas do período');
 
+const modelos = {
+    100: [{id:1,quantidade:1000},{id:2,quantidade:500},{id:3,quantidade:200}],
+    101: [{id:4}], // sem data válida no período
+    102: [{id:5}], // ainda em arte
+    103: [{id:6}], // cancelado
+    104: [{id:7},{id:8}]
+};
+const comModelos = calcular({ordens,tempos,links,artes,produtos,modelos,dias:1,agora});
+const anaModelos = comModelos.designers.find(item => item.designer === 'Ana');
+assert.strictEqual(anaModelos.modelos, 5, 'conta modelos dos dois pedidos do período, sem somar tiragem');
+assert.strictEqual(anaModelos.prontos, 2);
+assert.strictEqual(anaModelos.produtos, 3, 'coluna Produtos mantém itens comerciais');
+assert.strictEqual(comModelos.designers.find(item => item.designer === 'Bia').modelos, 0,
+    'sem modelos cadastrados não estima pela quantidade de produtos');
+const modelosFiltrados = calcular({ordens,tempos,links,artes,produtos,modelos,dias:1,agora,filtroDesigner:'Bia'});
+assert.strictEqual(modelosFiltrados.designers.length, 1);
+assert.strictEqual(modelosFiltrados.designers[0].modelos, 0, 'exclui modelos de outros designers, em arte e cancelados');
+assert.strictEqual(ana.modelos, 0, 'entrada sem modelos é compatível');
+const repetidos = calcular({
+    ordens:[...ordens,{...ordens[0],numero:'100'},ordens[4]],tempos,links,artes,produtos,
+    modelos:{...modelos,100:[...modelos[100],{id:'1',status_arte:'REPROVADO'},{id:1,status_arte:'PRONTO'}]},
+    dias:1,agora
+});
+assert.strictEqual(repetidos.prontosNoPeriodo.length, comModelos.prontosNoPeriodo.length,
+    'mesmo pedido repetido não aumenta o total do período');
+assert.strictEqual(repetidos.designers.find(item => item.designer === 'Ana').modelos, 5,
+    'mesmo modelo reprovado e pronto novamente conta uma vez, inclusive ID numérico/texto');
+assert.strictEqual(repetidos.designers.find(item => item.designer === 'Ana').prontos, 2);
+assert.strictEqual(repetidos.atendentes.find(item => item.atendente === 'Carla').prontos, 2);
+assert.strictEqual(repetidos.pontos.reduce((total,ponto)=>total+ponto.valor,0),comModelos.prontosNoPeriodo.length,
+    'série diária preserva o total de pedidos únicos');
+const ciclo = {id:'ciclo',numero:900,status_calculado:'Enviar Arte',_fila_arte:'aprovacao'};
+const entradaCiclo = {ordens:[ciclo],modelos:{900:[{id:9001}]},dias:7,agora,
+    links:{ciclo:{arte_pronta_em:'2026-09-18T10:00:00-03:00'}}};
+assert.strictEqual(calcular(entradaCiclo).prontosNoPeriodo.length,1);
+ciclo.status_calculado='REPROVADO'; ciclo._fila_arte='fila';
+calcular(entradaCiclo);
+ciclo.status_calculado='Enviar Arte'; ciclo._fila_arte='aprovacao';
+entradaCiclo.links.ciclo.arte_pronta_em='2026-09-20T10:00:00-03:00';
+const prontoNovamente=calcular(entradaCiclo);
+assert.strictEqual(prontoNovamente.prontosNoPeriodo.length,1,'segunda conclusão não acumula pedido');
+assert.strictEqual(prontoNovamente.designers[0].modelos,1,'segunda conclusão não acumula modelo');
+for (const campo of ['media','mediana','sla','cobertura','mediaBacklog']) {
+    assert.ok(!(campo in metricas), 'cálculo de tempo removido: ' + campo);
+    assert.ok(!(campo in ana), 'tempo do designer removido: ' + campo);
+}
 console.log('dashboard_arte_harness: ok');
+
+const evento = {pedido:100,acao:'acao-1',ocorrido_em:agora,designer:'Ana',atendente:'Carla'};
+const historico = {disponivel:true,inicio:'2020-01-01T00:00:00Z',eventos:[evento,{...evento},
+    {...evento,acao:'acao-2'}, {...evento,pedido:999,acao:'acao-3',atendente:'Antiga carteira'},
+    {...evento,acao:'fora',ocorrido_em:'2000-01-01T00:00:00Z'}]};
+const comReprovacoes = calcular({ordens,tempos,links,artes,produtos,modelos,dias:7,agora,reprovacoes:historico});
+assert.equal(comReprovacoes.designers.find(i=>i.designer==='Ana').alteracoes,3);
+assert.equal(comReprovacoes.atendentes.find(i=>i.atendente==='Carla').alteracoes,2);
+assert.equal(comReprovacoes.atendentes.find(i=>i.atendente==='Antiga carteira').alteracoes,1,
+    'evento continua contado mesmo sem pedido na carga atual');
+assert.equal(calcular({ordens,dias:7,agora,reprovacoes:historico,filtroAtendente:'Carla'}).designers[0].alteracoes,2);
+assert.equal(calcular({ordens,dias:7,agora}).designers[0].alteracoes,'--','indisponivel nao e zero');
+assert.equal(calcular({ordens,dias:7,agora,reprovacoes:{...historico,eventos:[]}}).designers[0].alteracoes,0);
+console.log('OK: reprovacoes por acao/pedido, filtros, historico e indisponibilidade.');

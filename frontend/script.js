@@ -27136,7 +27136,7 @@ async function carregarOrdensDados(opcoes = {}) {
     const anteriores = { ordens: state.ordens, ordensDashboardProducao: state.ordensDashboardProducao, osItens: state.osItens,
         modelosGlobais: state.modelosGlobais, produtosPropostaGlobais: state.produtosPropostaGlobais,
         todasArtes: state.todasArtes, linksCliente: state.linksCliente, linksClienteData: state.linksClienteData,
-        temposNoCard: state.temposNoCard, temposNoCardAtivo: state.temposNoCardAtivo,
+        temposNoCard: state.temposNoCard, temposNoCardAtivo: state.temposNoCardAtivo, reprovacoesArte: state.reprovacoesArte,
         listaArteSomenteAtivos: state.listaArteSomenteAtivos };
     try {
         // Deixar pedidosComerciais fixo vazio já que a tabela 'pedidos' não existe no banco.
@@ -27150,6 +27150,7 @@ async function carregarOrdensDados(opcoes = {}) {
             carregarLinksExistentes(true),
             // O desenho registra transições: precisa da fotografia atual dos relógios.
             carregarTemposNoCard(),
+            opcoes.dashboardArte ? carregarReprovacoesDashboardArte() : Promise.resolve(),
             loadUsuarios(true)
         ];
         
@@ -29031,6 +29032,7 @@ async function devolverArteParaAlteracao(itemId, osId) {
 
     let statusRegistradoEm = null;
     try {
+        const reprovacaoAcao = crypto.randomUUID();
         // Os dois estados e o motivo do retrabalho são uma gravação só:
         // a impressão fica travada e a arte aprovada fica editável. Até a v872
         // elas viajavam separadas, sem confirmação de linha, e a tela podia
@@ -29041,11 +29043,12 @@ async function devolverArteParaAlteracao(itemId, osId) {
             .update({
                 status_impressao: STATUS_CORRIGIR_ARTE,
                 status_arte: 'REPROVADA_CLIENTE',
+                reprovacao_acao: reprovacaoAcao,
                 observacao_arte: observacaoArte
             })
             .eq('id', idBanco)
             .eq('id_int', numOs)
-            .select('id, status_impressao, status_arte, status_impressao_registrado_em, observacao_arte');
+            .select('id, status_impressao, status_arte, status_impressao_registrado_em, observacao_arte, reprovacao_acao');
 
         if (error) throw error;
         if (!data || data.length !== 1) {
@@ -29053,7 +29056,7 @@ async function devolverArteParaAlteracao(itemId, osId) {
         }
         if (normalizarStatusImpressao(data[0].status_impressao) !== STATUS_CORRIGIR_ARTE ||
                 String(data[0].status_arte || '').trim().toUpperCase() !== 'REPROVADA_CLIENTE' ||
-                data[0].observacao_arte !== observacaoArte) {
+                data[0].observacao_arte !== observacaoArte || data[0].reprovacao_acao !== reprovacaoAcao) {
             throw new Error('o banco devolveu um estado diferente do solicitado');
         }
         statusRegistradoEm = data[0].status_impressao_registrado_em || null;
@@ -31111,7 +31114,7 @@ async function atualizarPedidoArteConfirmado(numero, payload) {
         .from('pedidos_artes')
         .update(payload)
         .eq('id_int', numInt)
-        .select('id, status, entrega_dados, observacoes');
+        .select(['id', 'status', 'entrega_dados', 'observacoes', ...Object.keys(payload)].filter((v, i, a) => a.indexOf(v) === i).join(', '));
     if (error) throw error;
     if (!data || data.length === 0) throw new Error('o banco não confirmou nenhuma linha de pedidos_artes');
     const divergente = data.some(linha => Object.entries(payload).some(([campo, valor]) => {
@@ -31445,6 +31448,36 @@ window.pedidoEstaEmArte = pedidoEstaEmArte;
 const TEMPO_AZUL_SEG = 1 * 3600;
 const TEMPO_LARANJA_SEG = 2 * 3600;
 const TEMPO_VERMELHO_SEG = 3 * 3600;
+
+// Histórico por ação, carregado somente no recorte do dashboard.
+async function carregarReprovacoesDashboardArte() {
+    try {
+        const { data: config, error: erroInicio } = await lerDadosLista(supabaseClient
+            .from('imposition_reprovacoes_inicio').select('iniciado_em').eq('id', true).single(), 'início das reprovações');
+        if (erroInicio || !config?.iniciado_em) throw erroInicio || new Error('Registro ainda não implantado');
+        const inicio = new Date();
+        inicio.setHours(0, 0, 0, 0);
+        inicio.setDate(inicio.getDate() - 29);
+        const fim = new Date().toISOString();
+        const eventos = [];
+        let ultimoId = 0;
+        for (;;) {
+            const { data, error } = await lerDadosLista(supabaseClient.from('imposition_reprovacoes_arte')
+                .select('id, pedido, acao, ocorrido_em, atendente, designer')
+                .gte('ocorrido_em', inicio.toISOString()).lte('ocorrido_em', fim)
+                .gt('id', ultimoId).order('id').limit(500), 'reprovações de arte');
+            if (error || !Array.isArray(data)) throw error || new Error('Resposta inválida');
+            eventos.push(...data);
+            if (data.length < 500) break;
+            ultimoId = data[data.length - 1].id;
+        }
+        state.reprovacoesArte = { inicio: config.iniciado_em, eventos, disponivel: true };
+    } catch (e) {
+        // Indisponível nunca significa zero e não publica uma página parcial.
+        state.reprovacoesArte = { disponivel: false, eventos: [] };
+        console.warn('[Dashboard Arte] Histórico de reprovações indisponível:', e.message || e);
+    }
+}
 
 /**
  * Lê os marcadores registrados pelo servidor. Sem sessão ou sem registro
@@ -37469,7 +37502,7 @@ window.reprovarArteAdmin = async function(osId) {
             const numero = parseInt(os && (os.numero || os.id_int));
             const linhaExiste = await garantirLinhaDePedidoArte(numero);
             if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
-            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
+            await atualizarPedidoArteConfirmado(numero, { status: novoStatus, reprovacao_acao: crypto.randomUUID() });
         }
 
         // 1. Atualizar localStorage
@@ -41721,6 +41754,7 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
     
     try {
         const gravar = { amostra_status: status, amostra_obs: obs };
+        if (status === 'REPROVADA') gravar.reprovacao_acao = opts?.reprovacaoAcao || crypto.randomUUID();
 
         // O PRONTO DO DESIGNER LIBERA A IMPRESSÃO (02/09/2026).
         //
@@ -41985,10 +42019,11 @@ window.acaoEmLoteNoPedido = async function(osId, acao) {
     let feitos = 0;
     let falhas = 0;
     const n = plano.aplicar.length;
+    const reprovacaoAcao = acao === 'REPROVADA' ? crypto.randomUUID() : null;
     for (let i = 0; i < n; i++) {
         const item = plano.aplicar[i];
         toast('⏳ ' + (i + 1) + '/' + n + ' — ' + nomeDoModeloParaLista(item), 'info');
-        const opts = { emLote: true };
+        const opts = { emLote: true, reprovacaoAcao };
         if (acao === 'REPROVADA') {
             const atual = String(item.amostra_obs || '').trim();
             opts.obs = atual ? atual + '\n' + textoDaAlteracao : textoDaAlteracao;
@@ -43554,10 +43589,18 @@ async function setStatusArteAtual(novoStatus) {
             
         if (error) throw error;
         
-        await supabaseClient.from('pedidos_modelos')
-            .update({ status_arte: novoStatus })
+        const decisao = { status_arte: novoStatus };
+        if (novoStatus === 'REPROVADA_CLIENTE') decisao.reprovacao_acao = crypto.randomUUID();
+        const { data: modelosDecididos, error: erroDecisao } = await supabaseClient.from('pedidos_modelos')
+            .update(decisao)
             .eq('id', artesModalState.itemId)
-            .catch(e => console.warn('Sem sync modelo:', e));
+            .select(['id', ...Object.keys(decisao)].join(', '));
+        if (erroDecisao) throw erroDecisao;
+        if (!Array.isArray(modelosDecididos) || modelosDecididos.length !== 1
+            || String(modelosDecididos[0].id) !== String(artesModalState.itemId)
+            || Object.entries(decisao).some(([k, v]) => modelosDecididos[0][k] !== v)) {
+            throw new Error('O banco não confirmou a decisão do modelo.');
+        }
             
         // Atualizar estado local
         const item = (state.osItens[artesModalState.osId] || []).find(i => String(i.id) === String(artesModalState.itemId));

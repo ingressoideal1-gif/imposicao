@@ -24,3 +24,11 @@ def test_dashboard_arte_paginacao():
     )
     assert resultado.returncode == 0, resultado.stdout + resultado.stderr
     assert "OK: quatro fontes acima de 1000" in resultado.stdout
+
+
+def test_dashboard_reprovacoes():
+    resultado = subprocess.run(
+        ["node", "tests/dashboard_reprovacoes_harness.js"], cwd=ROOT,
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr

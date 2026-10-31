@@ -21,6 +21,7 @@ function ambiente() {
         console: {log(){},warn(){},error(){}}, setTimeout,clearTimeout,AbortController,
         CLIENTE_BASE_URL:'https://exemplo.invalid', temSessaoDoSupabase:async()=>true,
         recorteDaCargaDeOrdens:()=> 'dashboard-arte',
+        carregarReprovacoesDashboardArte:async()=>{},
         carregarTemposNoCard:async()=>{c.state.temposNoCard={novo:true};},loadUsuarios:async()=>{},
         carregarDadosDoRecorteGrafica:()=>{throw Error('recorte inesperado');},
         loadOrdensFromVibecode:async(_pedidos,produtos)=>{
