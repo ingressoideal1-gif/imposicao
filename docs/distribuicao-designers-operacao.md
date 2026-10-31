@@ -15,8 +15,9 @@ validação operacional. Ver [revisão](revisao-distribuicao-gatilhos-2026-10-31
 - `sql/distribuicao_designers.sql`: instalação transacional, inicialmente desativada.
   O esquema privado `arte_fila` guarda configuração, responsáveis, disponibilidades
   e eventos. RPCs públicas validam a sessão e o papel; tabelas privadas não têm acesso direto.
-- `frontend/distribuicao-designers.js`: consulta, controles e calendário útil.
-- `frontend/script.js`, `index.html`, `producao.html`: integração com a lista existente.
+- `frontend/script.js`: módulo ARTE_DISTRIBUICAO com consulta, controles, calendário
+  útil e integração à lista. O protótipo separado foi incorporado ao asset já
+  sincronizado nas estações; `index.html` e `producao.html` recebem o cache atualizado.
 - `tests/distribuicao_designers_*`: testes sintéticos de painel, navegador e SQL.
 
 A carga é uma linha por `id_int`, mesmo com várias artes/modelos. O classificador
@@ -219,3 +220,11 @@ e encerra o servidor ao final. Não aceita DSN remoto e não reutiliza banco ope
 
 Novas regressões incluídas nos harnesses SQL e JavaScript. Nenhuma migração
 já aplicada foi alterada: o SQL de instalação continua exclusivamente local.
+
+
+## Pacote web preparado para publicação
+
+O procedimento e as adaptações à base atual estão em
+[entrega-distribuicao-designers-2026-10-31.md](entrega-distribuicao-designers-2026-10-31.md).
+Escopo confirmado: publicar web e deixar SQL preparado, sem instalar nem ativar.
+O módulo não depende de um novo arquivo na lista de sincronismo do NewProd.
