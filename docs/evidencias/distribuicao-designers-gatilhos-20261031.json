@@ -1,0 +1,399 @@
+{
+  "data": "2026-10-31",
+  "producao": "consultas READ ONLY; nenhuma instalacao ou alteracao",
+  "postgres_remoto": "17.4",
+  "postgres_teste": "17.11",
+  "sha256_sql_revisado": "dbe29263e393c735996b029830386f894f9a01ab800547c2c87ba08d946eab43",
+  "gatilhos_fontes": [
+    {
+      "ddl": "CREATE CONSTRAINT TRIGGER etapa_arte_por_status AFTER INSERT OR DELETE OR UPDATE ON pedidos_artes DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION imposition_etapa_arte_evento()",
+      "nome": "etapa_arte_por_status",
+      "ativo": "O",
+      "tabela": "pedidos_artes"
+    },
+    {
+      "ddl": "CREATE TRIGGER imposition_reprovacao_pedido AFTER INSERT OR UPDATE OF reprovacao_acao ON pedidos_artes FOR EACH ROW EXECUTE FUNCTION imposition_capturar_reprovacao()",
+      "nome": "imposition_reprovacao_pedido",
+      "ativo": "O",
+      "tabela": "pedidos_artes"
+    },
+    {
+      "ddl": "CREATE TRIGGER origem_aprovacao_dados AFTER INSERT OR DELETE OR UPDATE ON pedidos_artes FOR EACH ROW EXECUTE FUNCTION ideal_aprovacao.capturar_dados()",
+      "nome": "origem_aprovacao_dados",
+      "ativo": "O",
+      "tabela": "pedidos_artes"
+    },
+    {
+      "ddl": "CREATE TRIGGER piloto_revisao_v2 AFTER INSERT OR DELETE OR UPDATE ON pedidos_artes FOR EACH ROW EXECUTE FUNCTION piloto_invalidar_pedido_v2()",
+      "nome": "piloto_revisao_v2",
+      "ativo": "O",
+      "tabela": "pedidos_artes"
+    },
+    {
+      "ddl": "CREATE TRIGGER tracedraw_backup_atendimento BEFORE UPDATE OF status ON pedidos_artes FOR EACH ROW EXECUTE FUNCTION tracedraw_backup_bloquear_passagem()",
+      "nome": "tracedraw_backup_atendimento",
+      "ativo": "O",
+      "tabela": "pedidos_artes"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_pedidos_artes_status_alterado AFTER INSERT OR UPDATE OF status ON pedidos_artes FOR EACH ROW EXECUTE FUNCTION pedidos_artes__registrar_status_alterado()",
+      "nome": "trg_pedidos_artes_status_alterado",
+      "ativo": "O",
+      "tabela": "pedidos_artes"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_sync_artes_to_proposta AFTER UPDATE OF status ON pedidos_artes FOR EACH ROW EXECUTE FUNCTION trg_sync_artes_to_proposta_func()",
+      "nome": "trg_sync_artes_to_proposta",
+      "ativo": "O",
+      "tabela": "pedidos_artes"
+    },
+    {
+      "ddl": "CREATE CONSTRAINT TRIGGER etapa_arte_por_link AFTER INSERT OR DELETE OR UPDATE ON pedidos_links_cliente DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION imposition_etapa_arte_evento()",
+      "nome": "etapa_arte_por_link",
+      "ativo": "O",
+      "tabela": "pedidos_links_cliente"
+    },
+    {
+      "ddl": "CREATE CONSTRAINT TRIGGER etapa_arte_por_modelo AFTER INSERT OR DELETE OR UPDATE ON pedidos_modelos DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION imposition_etapa_arte_evento()",
+      "nome": "etapa_arte_por_modelo",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER imposition_modelo_categoria_vibe_20261006 BEFORE INSERT OR UPDATE OF verso_tipo, frente_verso, amostra_num_id ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION imposition_modelo_categoria_vibe_20261006()",
+      "nome": "imposition_modelo_categoria_vibe_20261006",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER imposition_modelo_verso_canonico_20261006 BEFORE INSERT OR UPDATE OF amostra_num_id, verso_tipo, frente_verso ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION imposition_modelo_verso_canonico_20261006()",
+      "nome": "imposition_modelo_verso_canonico_20261006",
+      "ativo": "D",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER imposition_reprovacao_modelo AFTER INSERT OR UPDATE OF reprovacao_acao ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION imposition_capturar_reprovacao()",
+      "nome": "imposition_reprovacao_modelo",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER origem_aprovacao_modelo AFTER INSERT OR DELETE OR UPDATE ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION ideal_aprovacao.capturar_modelo()",
+      "nome": "origem_aprovacao_modelo",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER piloto_revisao_v2 AFTER INSERT OR DELETE OR UPDATE ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION piloto_invalidar_pedido_v2()",
+      "nome": "piloto_revisao_v2",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER tracedraw_backup_pronto BEFORE UPDATE OF status_arte ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION tracedraw_backup_bloquear_passagem()",
+      "nome": "tracedraw_backup_pronto",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_bloquear_status_arte_impresso AFTER UPDATE ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION bloquear_status_arte_impresso()",
+      "nome": "trg_bloquear_status_arte_impresso",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_carimba_acabamento_pronto_em BEFORE INSERT OR UPDATE OF acabamento_status ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION carimba_acabamento_pronto_em()",
+      "nome": "trg_carimba_acabamento_pronto_em",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_carimba_status_dos_paineis BEFORE INSERT OR UPDATE ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION carimba_status_dos_paineis()",
+      "nome": "trg_carimba_status_dos_paineis",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_carimba_status_impressao_em BEFORE INSERT OR DELETE OR UPDATE ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION carimba_status_impressao_em()",
+      "nome": "trg_carimba_status_impressao_em",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_sync_arte_pendente AFTER INSERT OR DELETE OR UPDATE OF status_arte, id_int ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION atualiza_flag_arte_proposta()",
+      "nome": "trg_sync_arte_pendente",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_sync_modelos_to_artes AFTER INSERT OR DELETE OR UPDATE OF status_arte, id_int ON pedidos_modelos FOR EACH ROW EXECUTE FUNCTION sync_status_arte_to_briefing()",
+      "nome": "trg_sync_modelos_to_artes",
+      "ativo": "O",
+      "tabela": "pedidos_modelos"
+    },
+    {
+      "ddl": "CREATE TRIGGER piloto_revisao_v2 AFTER INSERT OR DELETE OR UPDATE ON produtos_proposta FOR EACH ROW EXECUTE FUNCTION piloto_invalidar_pedido_v2()",
+      "nome": "piloto_revisao_v2",
+      "ativo": "O",
+      "tabela": "produtos_proposta"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_calcular_valor_sub_total BEFORE INSERT OR UPDATE ON produtos_proposta FOR EACH ROW EXECUTE FUNCTION calcular_valor_sub_total()",
+      "nome": "trg_calcular_valor_sub_total",
+      "ativo": "O",
+      "tabela": "produtos_proposta"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_produto_sync_financeiro AFTER INSERT OR DELETE OR UPDATE ON produtos_proposta FOR EACH ROW EXECUTE FUNCTION tg_recalc_financeiro_por_produto()",
+      "nome": "trg_produto_sync_financeiro",
+      "ativo": "O",
+      "tabela": "produtos_proposta"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_recalc_proposta_v4 AFTER INSERT OR DELETE OR UPDATE ON produtos_proposta FOR EACH ROW EXECUTE FUNCTION recalcular_proposta_v4_trigger()",
+      "nome": "trg_recalc_proposta_v4",
+      "ativo": "O",
+      "tabela": "produtos_proposta"
+    },
+    {
+      "ddl": "CREATE CONSTRAINT TRIGGER etapa_arte_por_proposta AFTER INSERT OR DELETE OR UPDATE ON propostas DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION imposition_etapa_arte_evento()",
+      "nome": "etapa_arte_por_proposta",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER piloto_revisao_v2 AFTER INSERT OR DELETE OR UPDATE ON propostas FOR EACH ROW EXECUTE FUNCTION piloto_invalidar_pedido_v2()",
+      "nome": "piloto_revisao_v2",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER propostas_set_timestamp BEFORE UPDATE ON propostas FOR EACH ROW EXECUTE FUNCTION set_timestamp_updated_at()",
+      "nome": "propostas_set_timestamp",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER tg_propostas_valor_total_avulsa BEFORE INSERT OR UPDATE ON propostas FOR EACH ROW EXECUTE FUNCTION propostas_preencher_valor_total_avulsa()",
+      "nome": "tg_propostas_valor_total_avulsa",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER tg_registrar_paid_at BEFORE UPDATE ON propostas FOR EACH ROW EXECUTE FUNCTION registrar_paid_at()",
+      "nome": "tg_registrar_paid_at",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_audit_propostas AFTER INSERT OR DELETE OR UPDATE ON propostas FOR EACH ROW EXECUTE FUNCTION audit.log_row_changes_v2()",
+      "nome": "trg_audit_propostas",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_propostas_status_alterado AFTER INSERT OR UPDATE OF status_interno ON propostas FOR EACH ROW EXECUTE FUNCTION propostas__registrar_status_alterado()",
+      "nome": "trg_propostas_status_alterado",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON propostas FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+      "nome": "trg_set_updated_at",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_sync_cliente_idcliente_pagamentos AFTER UPDATE OF cliente, id_cliente ON propostas FOR EACH ROW EXECUTE FUNCTION sync_cliente_e_id_cliente_propostas_pagamentos()",
+      "nome": "trg_sync_cliente_idcliente_pagamentos",
+      "ativo": "O",
+      "tabela": "propostas"
+    },
+    {
+      "ddl": "CREATE TRIGGER trg_audit_usuarios AFTER INSERT OR DELETE OR UPDATE ON usuarios FOR EACH ROW EXECUTE FUNCTION audit.log_row_changes_v2()",
+      "nome": "trg_audit_usuarios",
+      "ativo": "O",
+      "tabela": "usuarios"
+    }
+  ],
+  "funcoes": [
+    {
+      "nome": "public.set_timestamp_updated_at",
+      "md5_catalogo": "ee1ba7bf4e937e7f8a3394146a65ae86"
+    },
+    {
+      "nome": "public.set_updated_at",
+      "md5_catalogo": "6013b0c8d40ac030d35124e5f07637c5"
+    },
+    {
+      "nome": "public.registrar_paid_at",
+      "md5_catalogo": "82f82cfa08e8466ee2703824faf24f02"
+    },
+    {
+      "nome": "public.sync_cliente_e_id_cliente_propostas_pagamentos",
+      "md5_catalogo": "4522a623bbe4696dd4c961d070214d49"
+    },
+    {
+      "nome": "public.calcular_valor_sub_total",
+      "md5_catalogo": "47bfe44515c3d652da3258842202ec74"
+    },
+    {
+      "nome": "public.recalcular_proposta_v4_trigger",
+      "md5_catalogo": "36aabb8d4882679ee98737ade70969f5"
+    },
+    {
+      "nome": "public.tg_recalc_financeiro_por_produto",
+      "md5_catalogo": "77b561779082382fb45a320907c0e87f"
+    },
+    {
+      "nome": "audit.log_row_changes_v2",
+      "md5_catalogo": "da66a36fd8941a20e57adaeaa797f6c9"
+    },
+    {
+      "nome": "public.atualiza_flag_arte_proposta",
+      "md5_catalogo": "6daa3f2eb00224cf24d01db6ec1a9ba9"
+    },
+    {
+      "nome": "public.sync_status_arte_to_briefing",
+      "md5_catalogo": "36b7057d797f11d3c3420827cf5dcdfb"
+    },
+    {
+      "nome": "public.trg_sync_artes_to_proposta_func",
+      "md5_catalogo": "dc42e097ffb3f704ff92411e0b84bd68"
+    },
+    {
+      "nome": "public.propostas_preencher_valor_total_avulsa",
+      "md5_catalogo": "33f2328b960012c88b68ad445df58493"
+    },
+    {
+      "nome": "public.carimba_status_impressao_em",
+      "md5_catalogo": "8628bf023a3eb120e8913acda3f3c315"
+    },
+    {
+      "nome": "public.carimba_acabamento_pronto_em",
+      "md5_catalogo": "dd4e20d3f38174eedc81b890fa60515a"
+    },
+    {
+      "nome": "ideal_aprovacao.capturar_modelo",
+      "md5_catalogo": "a511f195b82e4cdd390452ae260ad761"
+    },
+    {
+      "nome": "ideal_aprovacao.capturar_dados",
+      "md5_catalogo": "56305ea6eb141c7acd4374776a2e1a42"
+    },
+    {
+      "nome": "public.propostas__registrar_status_alterado",
+      "md5_catalogo": "fd951078193b14868871758cc039f581"
+    },
+    {
+      "nome": "public.pedidos_artes__registrar_status_alterado",
+      "md5_catalogo": "cf6165f0aa2bf457874d16c0622e73c8"
+    },
+    {
+      "nome": "public.imposition_etapa_arte_evento",
+      "md5_catalogo": "a9c774139c9f6e61b7c8fa61f6410354"
+    },
+    {
+      "nome": "public.imposition_modelo_verso_canonico_20261006",
+      "md5_catalogo": "a91f94f747e70e7260677571f3e50d50"
+    },
+    {
+      "nome": "public.imposition_modelo_categoria_vibe_20261006",
+      "md5_catalogo": "778ebd792b969c7f9e7424e18f977109"
+    },
+    {
+      "nome": "public.piloto_invalidar_pedido_v2",
+      "md5_catalogo": "a696edfd762b3f9c68fdea489f2d9069"
+    },
+    {
+      "nome": "public.bloquear_status_arte_impresso",
+      "md5_catalogo": "08c0fb427270c643a5e6de0454f4bf0d"
+    },
+    {
+      "nome": "public.carimba_status_dos_paineis",
+      "md5_catalogo": "5679100a0fc266e39eb2472d4346060b"
+    },
+    {
+      "nome": "public.tracedraw_backup_bloquear_passagem",
+      "md5_catalogo": "1fded866caab2408d1a030a53cba72a9"
+    },
+    {
+      "nome": "public.imposition_capturar_reprovacao",
+      "md5_catalogo": "fc05d913df196e279e9440d7ff01ae0a"
+    }
+  ],
+  "dependencias": [
+    {
+      "nome": "public.recalcular_proposta_v4",
+      "md5_catalogo": "630560f54334d710d44ca317cb61a0ea"
+    },
+    {
+      "nome": "public.piloto_marcar_pedidos_v2",
+      "md5_catalogo": "f17005544cc0d03bb3b0f49c5a4ec7e3"
+    },
+    {
+      "nome": "public.imposition_numeracao_verso_canonico_20261006",
+      "md5_catalogo": "4012827c3b7474aa4fee11609aaf2974"
+    },
+    {
+      "nome": "public.imposition_numeracao_categoria_vibe_20261006",
+      "md5_catalogo": "549538fd615e2775ac9f238ed0924511"
+    },
+    {
+      "nome": "public.atualizar_status_financeiro_proposta",
+      "md5_catalogo": "9f3f48f4c447a698e82adb8de343c34e"
+    },
+    {
+      "nome": "public.atualizar_status_financeiro_proposta",
+      "md5_catalogo": "8d3ca4be2cd48708373b3798ad71ab3d"
+    },
+    {
+      "nome": "public.check_and_promote_proposta",
+      "md5_catalogo": "7db4e6994cbf799d3f2d303ec7e6c769"
+    },
+    {
+      "nome": "public.recalcular_status_arte_briefing",
+      "md5_catalogo": "b9657ee6b05e6b01e7416e1e14fa1c37"
+    },
+    {
+      "nome": "public.imposition_etapa_arte_registrar",
+      "md5_catalogo": "8bffd169d51dcdeb5ed1f50233c85a7e"
+    },
+    {
+      "nome": "public.imposition_etapa_arte_evento",
+      "md5_catalogo": "a9c774139c9f6e61b7c8fa61f6410354"
+    }
+  ],
+  "reproducao": {
+    "instalacao_aprovada": false,
+    "deadlock_SQLSTATE": "40P01",
+    "deadlock_com_distribuicao_ativa": false,
+    "cenario_deadlock": "catalogo segura trava de numeracao e aguarda trava global; modelo segura trava global e aguarda numeracao",
+    "aninhado": {
+      "caminho": "pagamentos_v2 -> propostas -> arte_fila",
+      "em_arte_persistido": false,
+      "em_arte_recalculado": true
+    },
+    "divergencias": [
+      {
+        "caso": "IGNORAR",
+        "card_existente": null,
+        "nova_carga": true
+      },
+      {
+        "caso": "PENDENTE INFORMAÇÃO",
+        "card_existente": "pendente",
+        "nova_carga": true
+      },
+      {
+        "caso": "CORRIGIR_ARTE",
+        "card_existente": "fila",
+        "nova_carga": false
+      }
+    ],
+    "aprovacao_direta_converge": true,
+    "atribuicao_preserva_status": true,
+    "atribuicao_invalida_cache_piloto": true
+  },
+  "limites": "Funcoes reais selecionadas, dados e dependencias auxiliares sinteticos; nao replica todos os gatilhos e politicas de producao."
+}

@@ -1,0 +1,672 @@
+{
+  "previa": {
+    "colunas": [
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "imposition_user_permissions",
+        "column_name": "id",
+        "is_nullable": "NO",
+        "column_default": "gen_random_uuid()"
+      },
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "imposition_user_permissions",
+        "column_name": "user_id",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "imposition_user_permissions",
+        "column_name": "role",
+        "is_nullable": "NO",
+        "column_default": "'visualizador'::text"
+      },
+      {
+        "udt_name": "bool",
+        "data_type": "boolean",
+        "table_name": "imposition_user_permissions",
+        "column_name": "perm_lista_arte_view",
+        "is_nullable": "YES",
+        "column_default": "false"
+      },
+      {
+        "udt_name": "bool",
+        "data_type": "boolean",
+        "table_name": "imposition_user_permissions",
+        "column_name": "perm_lista_arte_edit",
+        "is_nullable": "YES",
+        "column_default": "false"
+      },
+      {
+        "udt_name": "timestamptz",
+        "data_type": "timestamp with time zone",
+        "table_name": "imposition_user_permissions",
+        "column_name": "created_at",
+        "is_nullable": "YES",
+        "column_default": "now()"
+      },
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "pedidos_artes",
+        "column_name": "id",
+        "is_nullable": "NO",
+        "column_default": "gen_random_uuid()"
+      },
+      {
+        "udt_name": "int4",
+        "data_type": "integer",
+        "table_name": "pedidos_artes",
+        "column_name": "id_int",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_artes",
+        "column_name": "status",
+        "is_nullable": "NO",
+        "column_default": "'PENDENTE'::text"
+      },
+      {
+        "udt_name": "timestamptz",
+        "data_type": "timestamp with time zone",
+        "table_name": "pedidos_artes",
+        "column_name": "created_at",
+        "is_nullable": "NO",
+        "column_default": "now()"
+      },
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "pedidos_artes",
+        "column_name": "designer_uid",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_artes",
+        "column_name": "designer_nome",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_artes",
+        "column_name": "entrega_dados",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_artes",
+        "column_name": "setor",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "id",
+        "is_nullable": "NO",
+        "column_default": "gen_random_uuid()"
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "os_id",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "numero_pedido",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "varchar",
+        "data_type": "character varying",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "token",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "id_int",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "timestamptz",
+        "data_type": "timestamp with time zone",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "created_at",
+        "is_nullable": "YES",
+        "column_default": "now()"
+      },
+      {
+        "udt_name": "bool",
+        "data_type": "boolean",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "ativo",
+        "is_nullable": "YES",
+        "column_default": "true"
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "status_arte",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "timestamptz",
+        "data_type": "timestamp with time zone",
+        "table_name": "pedidos_links_cliente",
+        "column_name": "cliente_abriu_em",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "int4",
+        "data_type": "integer",
+        "table_name": "pedidos_modelos",
+        "column_name": "id_int",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_modelos",
+        "column_name": "nome_modelo",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_modelos",
+        "column_name": "status_arte",
+        "is_nullable": "NO",
+        "column_default": "'PENDENTE'::text"
+      },
+      {
+        "udt_name": "timestamptz",
+        "data_type": "timestamp with time zone",
+        "table_name": "pedidos_modelos",
+        "column_name": "created_at",
+        "is_nullable": "NO",
+        "column_default": "now()"
+      },
+      {
+        "udt_name": "int8",
+        "data_type": "bigint",
+        "table_name": "pedidos_modelos",
+        "column_name": "id",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_modelos",
+        "column_name": "status_impressao",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "pedidos_modelos",
+        "column_name": "setor",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "int8",
+        "data_type": "bigint",
+        "table_name": "produtos_proposta",
+        "column_name": "id",
+        "is_nullable": "NO",
+        "column_default": "nextval('produtos_proposta_id_seq'::regclass)"
+      },
+      {
+        "udt_name": "int4",
+        "data_type": "integer",
+        "table_name": "produtos_proposta",
+        "column_name": "id_int",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "produtos_proposta",
+        "column_name": "nome_produto",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "timestamptz",
+        "data_type": "timestamp with time zone",
+        "table_name": "produtos_proposta",
+        "column_name": "created_at",
+        "is_nullable": "YES",
+        "column_default": "now()"
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "produtos_proposta",
+        "column_name": "amostra_status",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "propostas",
+        "column_name": "id",
+        "is_nullable": "NO",
+        "column_default": "gen_random_uuid()"
+      },
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "propostas",
+        "column_name": "user_id",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "propostas",
+        "column_name": "proposta",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "timestamptz",
+        "data_type": "timestamp with time zone",
+        "table_name": "propostas",
+        "column_name": "created_at",
+        "is_nullable": "YES",
+        "column_default": "now()"
+      },
+      {
+        "udt_name": "int8",
+        "data_type": "bigint",
+        "table_name": "propostas",
+        "column_name": "id_int",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "propostas",
+        "column_name": "status_interno",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "uuid",
+        "data_type": "uuid",
+        "table_name": "usuarios",
+        "column_name": "user_id",
+        "is_nullable": "NO",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "usuarios",
+        "column_name": "nome_usuario",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "int8",
+        "data_type": "bigint",
+        "table_name": "usuarios",
+        "column_name": "id_empresa",
+        "is_nullable": "YES",
+        "column_default": null
+      },
+      {
+        "udt_name": "text",
+        "data_type": "text",
+        "table_name": "usuarios",
+        "column_name": "setor",
+        "is_nullable": "YES",
+        "column_default": null
+      }
+    ],
+    "indices": [
+      {
+        "indexdef": "CREATE UNIQUE INDEX pedidos_artes_id_int_setor_uidx ON public.pedidos_artes USING btree (id_int, setor) WHERE (setor IS NOT NULL)",
+        "indexname": "pedidos_artes_id_int_setor_uidx",
+        "tablename": "pedidos_artes"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX pedidos_artes_pkey ON public.pedidos_artes USING btree (id)",
+        "indexname": "pedidos_artes_pkey",
+        "tablename": "pedidos_artes"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_pedidos_artes_id_int ON public.pedidos_artes USING btree (id_int)",
+        "indexname": "idx_pedidos_artes_id_int",
+        "tablename": "pedidos_artes"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_pedidos_artes_status ON public.pedidos_artes USING btree (status)",
+        "indexname": "idx_pedidos_artes_status",
+        "tablename": "pedidos_artes"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_pedidos_artes_storage_path ON public.pedidos_artes USING btree (storage_path)",
+        "indexname": "idx_pedidos_artes_storage_path",
+        "tablename": "pedidos_artes"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_pedidos_artes_designer_uid ON public.pedidos_artes USING btree (designer_uid)",
+        "indexname": "idx_pedidos_artes_designer_uid",
+        "tablename": "pedidos_artes"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX pedidos_links_cliente_pkey ON public.pedidos_links_cliente USING btree (id)",
+        "indexname": "pedidos_links_cliente_pkey",
+        "tablename": "pedidos_links_cliente"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX pedidos_links_cliente_os_id_key ON public.pedidos_links_cliente USING btree (os_id)",
+        "indexname": "pedidos_links_cliente_os_id_key",
+        "tablename": "pedidos_links_cliente"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_link_cliente_token ON public.pedidos_links_cliente USING btree (numero_pedido, token)",
+        "indexname": "idx_link_cliente_token",
+        "tablename": "pedidos_links_cliente"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_pedidos_modelos_id_int ON public.pedidos_modelos USING btree (id_int)",
+        "indexname": "idx_pedidos_modelos_id_int",
+        "tablename": "pedidos_modelos"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_pedidos_modelos_id_origem ON public.pedidos_modelos USING btree (id_produto_proposta_origem)",
+        "indexname": "idx_pedidos_modelos_id_origem",
+        "tablename": "pedidos_modelos"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX pedidos_modelos_pkey ON public.pedidos_modelos USING btree (id)",
+        "indexname": "pedidos_modelos_pkey",
+        "tablename": "pedidos_modelos"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX produtos_proposta_pkey ON public.produtos_proposta USING btree (id)",
+        "indexname": "produtos_proposta_pkey",
+        "tablename": "produtos_proposta"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX propostas_pkey ON public.propostas USING btree (id)",
+        "indexname": "propostas_pkey",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_propostas_user_id ON public.propostas USING btree (user_id)",
+        "indexname": "idx_propostas_user_id",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_propostas_created_at ON public.propostas USING btree (created_at DESC)",
+        "indexname": "idx_propostas_created_at",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_propostas_id_conversa ON public.propostas USING btree (id_conversa)",
+        "indexname": "idx_propostas_id_conversa",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX propostas_id_int_key ON public.propostas USING btree (id_int)",
+        "indexname": "propostas_id_int_key",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE INDEX propostas_user_id_idx ON public.propostas USING btree (user_id)",
+        "indexname": "propostas_user_id_idx",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE INDEX propostas_created_idx ON public.propostas USING btree (created_at)",
+        "indexname": "propostas_created_idx",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE INDEX propostas_vendedor_idx ON public.propostas USING btree (vendedor)",
+        "indexname": "propostas_vendedor_idx",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE INDEX propostas_id_int_pedido_principal_idx ON public.propostas USING btree (id_int_pedido_principal) WHERE (id_int_pedido_principal IS NOT NULL)",
+        "indexname": "propostas_id_int_pedido_principal_idx",
+        "tablename": "propostas"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX usuarios_pkey ON public.usuarios USING btree (user_id)",
+        "indexname": "usuarios_pkey",
+        "tablename": "usuarios"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX usuarios_telefone_key ON public.usuarios USING btree (telefone)",
+        "indexname": "usuarios_telefone_key",
+        "tablename": "usuarios"
+      },
+      {
+        "indexdef": "CREATE INDEX idx_usuarios_id_perfil ON public.usuarios USING btree (id_perfil)",
+        "indexname": "idx_usuarios_id_perfil",
+        "tablename": "usuarios"
+      }
+    ],
+    "gatilhos": [
+      {
+        "funcao": "imposition_etapa_arte_evento",
+        "tabela": "pedidos_artes",
+        "gatilho": "etapa_arte_por_status"
+      },
+      {
+        "funcao": "imposition_capturar_reprovacao",
+        "tabela": "pedidos_artes",
+        "gatilho": "imposition_reprovacao_pedido"
+      },
+      {
+        "funcao": "capturar_dados",
+        "tabela": "pedidos_artes",
+        "gatilho": "origem_aprovacao_dados"
+      },
+      {
+        "funcao": "piloto_invalidar_pedido_v2",
+        "tabela": "pedidos_artes",
+        "gatilho": "piloto_revisao_v2"
+      },
+      {
+        "funcao": "tracedraw_backup_bloquear_passagem",
+        "tabela": "pedidos_artes",
+        "gatilho": "tracedraw_backup_atendimento"
+      },
+      {
+        "funcao": "pedidos_artes__registrar_status_alterado",
+        "tabela": "pedidos_artes",
+        "gatilho": "trg_pedidos_artes_status_alterado"
+      },
+      {
+        "funcao": "trg_sync_artes_to_proposta_func",
+        "tabela": "pedidos_artes",
+        "gatilho": "trg_sync_artes_to_proposta"
+      },
+      {
+        "funcao": "imposition_etapa_arte_evento",
+        "tabela": "pedidos_links_cliente",
+        "gatilho": "etapa_arte_por_link"
+      },
+      {
+        "funcao": "imposition_etapa_arte_evento",
+        "tabela": "pedidos_modelos",
+        "gatilho": "etapa_arte_por_modelo"
+      },
+      {
+        "funcao": "imposition_modelo_categoria_vibe_20261006",
+        "tabela": "pedidos_modelos",
+        "gatilho": "imposition_modelo_categoria_vibe_20261006"
+      },
+      {
+        "funcao": "imposition_modelo_verso_canonico_20261006",
+        "tabela": "pedidos_modelos",
+        "gatilho": "imposition_modelo_verso_canonico_20261006"
+      },
+      {
+        "funcao": "imposition_capturar_reprovacao",
+        "tabela": "pedidos_modelos",
+        "gatilho": "imposition_reprovacao_modelo"
+      },
+      {
+        "funcao": "capturar_modelo",
+        "tabela": "pedidos_modelos",
+        "gatilho": "origem_aprovacao_modelo"
+      },
+      {
+        "funcao": "piloto_invalidar_pedido_v2",
+        "tabela": "pedidos_modelos",
+        "gatilho": "piloto_revisao_v2"
+      },
+      {
+        "funcao": "tracedraw_backup_bloquear_passagem",
+        "tabela": "pedidos_modelos",
+        "gatilho": "tracedraw_backup_pronto"
+      },
+      {
+        "funcao": "bloquear_status_arte_impresso",
+        "tabela": "pedidos_modelos",
+        "gatilho": "trg_bloquear_status_arte_impresso"
+      },
+      {
+        "funcao": "carimba_acabamento_pronto_em",
+        "tabela": "pedidos_modelos",
+        "gatilho": "trg_carimba_acabamento_pronto_em"
+      },
+      {
+        "funcao": "carimba_status_dos_paineis",
+        "tabela": "pedidos_modelos",
+        "gatilho": "trg_carimba_status_dos_paineis"
+      },
+      {
+        "funcao": "carimba_status_impressao_em",
+        "tabela": "pedidos_modelos",
+        "gatilho": "trg_carimba_status_impressao_em"
+      },
+      {
+        "funcao": "atualiza_flag_arte_proposta",
+        "tabela": "pedidos_modelos",
+        "gatilho": "trg_sync_arte_pendente"
+      },
+      {
+        "funcao": "sync_status_arte_to_briefing",
+        "tabela": "pedidos_modelos",
+        "gatilho": "trg_sync_modelos_to_artes"
+      },
+      {
+        "funcao": "piloto_invalidar_pedido_v2",
+        "tabela": "produtos_proposta",
+        "gatilho": "piloto_revisao_v2"
+      },
+      {
+        "funcao": "calcular_valor_sub_total",
+        "tabela": "produtos_proposta",
+        "gatilho": "trg_calcular_valor_sub_total"
+      },
+      {
+        "funcao": "tg_recalc_financeiro_por_produto",
+        "tabela": "produtos_proposta",
+        "gatilho": "trg_produto_sync_financeiro"
+      },
+      {
+        "funcao": "recalcular_proposta_v4_trigger",
+        "tabela": "produtos_proposta",
+        "gatilho": "trg_recalc_proposta_v4"
+      },
+      {
+        "funcao": "imposition_etapa_arte_evento",
+        "tabela": "propostas",
+        "gatilho": "etapa_arte_por_proposta"
+      },
+      {
+        "funcao": "piloto_invalidar_pedido_v2",
+        "tabela": "propostas",
+        "gatilho": "piloto_revisao_v2"
+      },
+      {
+        "funcao": "set_timestamp_updated_at",
+        "tabela": "propostas",
+        "gatilho": "propostas_set_timestamp"
+      },
+      {
+        "funcao": "propostas_preencher_valor_total_avulsa",
+        "tabela": "propostas",
+        "gatilho": "tg_propostas_valor_total_avulsa"
+      },
+      {
+        "funcao": "registrar_paid_at",
+        "tabela": "propostas",
+        "gatilho": "tg_registrar_paid_at"
+      },
+      {
+        "funcao": "log_row_changes_v2",
+        "tabela": "propostas",
+        "gatilho": "trg_audit_propostas"
+      },
+      {
+        "funcao": "propostas__registrar_status_alterado",
+        "tabela": "propostas",
+        "gatilho": "trg_propostas_status_alterado"
+      },
+      {
+        "funcao": "set_updated_at",
+        "tabela": "propostas",
+        "gatilho": "trg_set_updated_at"
+      },
+      {
+        "funcao": "sync_cliente_e_id_cliente_propostas_pagamentos",
+        "tabela": "propostas",
+        "gatilho": "trg_sync_cliente_idcliente_pagamentos"
+      },
+      {
+        "funcao": "log_row_changes_v2",
+        "tabela": "usuarios",
+        "gatilho": "trg_audit_usuarios"
+      }
+    ],
+    "postgres": "17.4",
+    "fila_instalada": false
+  }
+}
