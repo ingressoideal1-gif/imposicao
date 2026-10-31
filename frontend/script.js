@@ -2,6 +2,211 @@
 
 'use strict';
 
+// BEGIN ARTE_DISTRIBUICAO
+/* Distribuição persistida: o navegador consulta e opera; o banco decide a fila. */
+(function (root) {
+    'use strict';
+    const fuso = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    });
+    function partes(ms) {
+        return Object.fromEntries(fuso.formatToParts(new Date(ms)).filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]));
+    }
+    function instanteLocal(diaUTC, hora) {
+        const tentativa = diaUTC + hora * 3600000;
+        const p = partes(tentativa);
+        const localComoUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+        return tentativa + (tentativa - localComoUTC);
+    }
+    function segundosUteis(inicio, fim) {
+        const a = new Date(inicio).getTime(), b = new Date(fim).getTime();
+        if (inicio == null || fim == null || !Number.isFinite(a) || !Number.isFinite(b) || b <= a) return 0;
+        const p = partes(a), q = partes(b);
+        const ultimo = Date.UTC(q.year, q.month - 1, q.day);
+        let ms = 0;
+        for (let dia = Date.UTC(p.year, p.month - 1, p.day); dia <= ultimo; dia += 86400000) {
+            const semana = new Date(dia).getUTCDay();
+            if (semana === 0 || semana === 6) continue;
+            ms += Math.max(0, Math.min(b, instanteLocal(dia, 18)) - Math.max(a, instanteLocal(dia, 8)));
+        }
+        return Math.floor(ms / 1000);
+    }
+    let dados = null, carregando = null, erro = '', sequencia = 0, operando = false, instalado = false;
+    let legadoConfirmado = false;
+    const pedidos = new Map();
+    const html = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    const papel = () => typeof root.papelAtual === 'function' ? root.papelAtual() : '';
+    const podeFixar = () => ['admin', 'atendimento'].includes(papel());
+    const ativo = () => !!(dados && dados.ativo);
+    function registro(numero) { return pedidos.get(String(numero)) || null; }
+    function aplicar(novo) {
+        if (!novo || !Array.isArray(novo.pedidos) || !Array.isArray(novo.designers)) throw new Error('Resposta inválida da distribuição');
+        dados = novo;
+        legadoConfirmado = !novo.ativo;
+        instalado = true;
+        pedidos.clear();
+        novo.pedidos.forEach(p => pedidos.set(String(p.id_int), p));
+        erro = '';
+        desenhar();
+    }
+    async function rpc(nome, args = {}) {
+        if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Conexão indisponível');
+        const r = await supabaseClient.rpc(nome, args);
+        if (r.error) throw r.error;
+        return r.data;
+    }
+    async function carregar() {
+        if (carregando) return carregando;
+        const versao = sequencia;
+        carregando = (async () => {
+            try {
+                const novo = await rpc('arte_distribuicao_estado');
+                if (versao === sequencia) aplicar(novo);
+            } catch (e) {
+                legadoConfirmado = false;
+                // Apenas ausência confirmada da RPC permite o fluxo anterior.
+                if (!instalado && ['PGRST202', '42883'].includes(e.code)) {
+                    dados = { ativo: false, designers: [], pedidos: [] };
+                    legadoConfirmado = true;
+                }
+                erro = 'Distribuição não disponível. Atualize a lista antes de atribuir pedidos.';
+                desenhar();
+            } finally { carregando = null; }
+        })();
+        return carregando;
+    }
+    async function operar(nome, args) {
+        if (operando) return;
+        operando = true;
+        sequencia++;
+        try {
+            aplicar(await rpc(nome, args));
+            if (typeof root.renderOrdens === 'function') root.renderOrdens();
+            if (root.document && typeof root.renderDesignersBoxHTML === 'function') {
+                document.querySelectorAll('.distribuicao-pedido[data-pedido]').forEach(el => {
+                    const numero = el.dataset.pedido;
+                    const container = el.parentElement;
+                    if (container.id.startsWith('designers-box-container-')) {
+                        container.innerHTML = root.renderDesignersBoxHTML(container.id.replace('designers-box-container-', ''), numero);
+                    }
+                });
+            }
+            root.toast('Distribuição atualizada.', 'success');
+        } catch (e) {
+            root.toast(e.message || 'Não foi possível confirmar a alteração.', 'error');
+        } finally { operando = false; }
+    }
+    async function atribuir(numero, uid, nome, fixado = true) {
+        await carregar();
+        if (legadoConfirmado) return false;
+        if (!dados || erro) { root.toast(erro || 'Aguarde o carregamento da distribuição.', 'warning'); return true; }
+        if (!podeFixar()) { root.toast('Somente ADM e Atendimento podem fixar pedidos.', 'warning'); return true; }
+        const candidatos = dados.designers.filter(d => d.uid === String(uid) || (!uid && d.nome === nome));
+        if (candidatos.length !== 1) { root.toast('Selecione um designer cadastrado.', 'warning'); return true; }
+        const motivo = root.prompt(fixado ? 'Motivo da atribuição/fixação deste pedido:' : 'Motivo para retirar a fixação:');
+        if (!motivo || motivo.trim().length < 3) return true;
+        await operar('arte_distribuicao_fixar', { p_num: Number(numero), p_uid: candidatos[0].uid, p_fixado: fixado, p_motivo: motivo.trim() });
+        return true;
+    }
+    function nome(numero) {
+        if (!ativo()) return undefined;
+        const p = registro(numero);
+        return p ? (p.nome || '') : '';
+    }
+    function tempo(numero, agora = Date.now()) {
+        const p = registro(numero);
+        if (!ativo() || !p) return undefined;
+        if (!p.responsavel_uid || !p.original_uid) return null;
+        if (!p.em_arte) return undefined;
+        return (Number(p.credito_segundos) || 0) + segundosUteis(p.desde, agora);
+    }
+    function controlesPedido(numero) {
+        if (!ativo()) return '';
+        const p = registro(numero);
+        if (!p) return '';
+        const situacao = p.motivo_espera || (p.fixado ? 'Designer fixado' : 'Distribuição automática');
+        return `<div style="margin-top:8px" class="distribuicao-pedido" data-pedido="${html(numero)}">
+            <small>${html(situacao)}</small>
+            ${podeFixar() && p.responsavel_uid ? `<button type="button" class="btn btn-sm" data-fila-acao="fixar" data-fixado="${!p.fixado}">${p.fixado ? 'Retirar fixação' : 'Fixar designer'}</button>` : ''}
+            ${podeFixar() ? '<button type="button" class="btn btn-sm" data-fila-acao="historico">Histórico</button>' : ''}
+        </div>`;
+    }
+    function desenhar() {
+        if (!root.document) return;
+        let caixa = document.getElementById('distribuicao-designers');
+        if (!caixa) {
+            const tabela = document.getElementById('table-arte');
+            if (!tabela) return;
+            caixa = document.createElement('section');
+            caixa.id = 'distribuicao-designers';
+            caixa.setAttribute('aria-label', 'Distribuição de pedidos');
+            tabela.parentElement.before(caixa);
+        }
+        if (!dados || !dados.ativo) {
+            caixa.textContent = papel() === 'admin' ? (erro || 'Distribuição automática desativada. Ativação disponível após validar o banco.') : '';
+            if (papel() === 'admin' && instalado && !erro) {
+                const ativar = document.createElement('button');
+                ativar.type = 'button'; ativar.className = 'btn btn-sm';
+                ativar.dataset.filaAcao = 'ativar'; ativar.textContent = 'Ativar distribuição';
+                caixa.append(ativar);
+            }
+            return;
+        }
+        const semOriginal = dados.pedidos.filter(p => p.em_arte && !p.original_uid).length;
+        const esperando = dados.pedidos.filter(p => p.em_arte && p.aguardando).length;
+        const aberto = caixa.querySelector('details')?.open;
+        caixa.innerHTML = `<details${aberto ? ' open' : ''}><summary>Distribuição de designers · ${esperando} aguardando vaga · ${semOriginal} sem designer original</summary>
+            <p>Tempo útil: segunda a sexta, 08h às 18h · Brasília.</p>
+            ${Number(dados.pendentes) > 0 ? `<p role="status">${Number(dados.pendentes)} pedido(s) aguardando atualização da distribuição.</p>` : ''}
+            ${erro ? `<p role="alert">${html(erro)}</p>` : ''}
+            <div style="display:flex;flex-wrap:wrap;gap:12px;padding:8px 0">${dados.designers.map(d => `<div style="padding:12px;border:1px solid var(--border);border-radius:8px">
+                <strong>${html(d.nome)}</strong> · ${d.carga} pedidos<br>
+                <span>${({ ativo:'Disponível', segurado:'Fila segurada', ausente:'Ausente / indisponível' })[d.modo]}</span>
+                ${papel() === 'admin' ? `<div>${['ativo','segurado','ausente'].filter(m => m !== d.modo).map(m => `<button type="button" class="btn btn-sm" data-fila-acao="modo" data-uid="${html(d.uid)}" data-modo="${m}">${({ ativo:'Liberar fila', segurado:'Segurar fila', ausente:'Ausente e redistribuir' })[m]}</button>`).join('')}</div>` : ''}
+            </div>`).join('')}</div></details>`;
+    }
+    async function clique(evento) {
+        const botao = evento.target.closest('[data-fila-acao]');
+        if (!botao) return;
+        evento.stopPropagation();
+        const acao = botao.dataset.filaAcao;
+        if (acao === 'ativar' && papel() === 'admin') {
+            if (root.confirm('Ativar a distribuição automática? Os responsáveis existentes serão preservados como base inicial. Novas entradas seguirão as regras aprovadas.')) {
+                await operar('arte_distribuicao_ativar', { p_ativo: true });
+            }
+        } else if (acao === 'modo' && papel() === 'admin') {
+            const d = dados.designers.find(x => x.uid === botao.dataset.uid);
+            if (!d) return;
+            const modo = botao.dataset.modo;
+            if (modo === 'ausente' && !root.confirm(`Marcar ${d.nome} como ausente e redistribuir TODOS os seus pedidos em Em Arte, incluindo fixados, alterações e iniciados?`)) return;
+            const motivo = root.prompt('Motivo da mudança de disponibilidade:');
+            if (motivo && motivo.trim().length >= 3) await operar('arte_distribuicao_disponibilidade', { p_uid:d.uid, p_modo:modo, p_motivo:motivo.trim() });
+        } else {
+            const numero = botao.closest('[data-pedido]')?.dataset.pedido;
+            const p = registro(numero);
+            if (!p || !podeFixar()) return;
+            if (acao === 'fixar') await atribuir(numero,p.responsavel_uid,p.nome,botao.dataset.fixado === 'true');
+            if (acao === 'historico') {
+                try {
+                    const h = await rpc('arte_distribuicao_historico',{ p_num:Number(numero) });
+                    const dialogo = document.createElement('dialog');
+                    const nomes = uid => dados.designers.find(d => d.uid === uid)?.nome || uid || 'Sem responsável';
+                    dialogo.innerHTML = `<h3>Histórico do pedido ${html(numero)}</h3><div style="max-height:60vh;overflow:auto">${h.map(x => `<p>${html(new Date(x.criado_em).toLocaleString('pt-BR',{ timeZone:'America/Sao_Paulo' }))} · ${html(x.evento)}<br>${html(nomes(x.anterior_uid))} → ${html(nomes(x.novo_uid))}<br>${html(x.motivo)}<br><small>Responsável pela ação: ${html(x.autor || 'Automático')}</small></p>`).join('') || '<p>Sem eventos.</p>'}</div><form method="dialog"><button class="btn">Fechar</button></form>`;
+                    dialogo.addEventListener('close', () => dialogo.remove());
+                    document.body.append(dialogo); dialogo.showModal();
+                } catch (e) { root.toast(e.message || 'Erro ao consultar histórico.', 'error'); }
+            }
+        }
+    }
+    root.ArteDistribuicao = { carregar, ativo, legado: () => legadoConfirmado, registro, nome, tempo, segundosUteis, atribuir, controlesPedido, desenhar };
+    if (root.document) document.addEventListener('click', clique);
+    if (typeof module !== 'undefined') module.exports = root.ArteDistribuicao;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+// END ARTE_DISTRIBUICAO
+
+
 
 
 // - Utility -- Parse Decimal BR (aceita vírgula como separador) -
@@ -27107,7 +27312,7 @@ function loadOrdens(opcoes = {}) {
             ? carregarPedidoPesquisado(Number(recorte.slice(7)))
             : carregarOrdensDados({ somenteArteAtiva: recorte === 'arte', dashboardArte: recorte === 'dashboard-arte',
                 recorteGrafica: ['producao', 'acabamento', 'expedicao'].includes(recorte) ? recorte : null });
-        _cargaOrdensEmAndamento = leitura.then(ok => {
+        _cargaOrdensEmAndamento = Promise.all([leitura, window.ArteDistribuicao?.carregar()]).then(([ok]) => {
             if (ok) {
                 if (!recorte.startsWith('pedido:')) state.recorteOrdensCarregado = recorte;
                 mostrarEstadoCargaLista('');
@@ -29411,6 +29616,11 @@ async function loadUsuarios(exigirSucesso = false) {
  * Obtém o designer atribuído a uma OS (salvo em localStorage)
  */
 function getOSDesigner(osId, osNumero) {
+    if (window.ArteDistribuicao?.ativo()) {
+        const osFila = (state.ordens || []).find(o => o.id === osId);
+        const nomeFila = window.ArteDistribuicao.nome(osNumero || osFila?.numero || osId);
+        if (nomeFila !== undefined) return nomeFila;
+    }
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     if (osId && overrides[osId]) return overrides[osId];
     if (osNumero && overrides[osNumero]) return overrides[osNumero];
@@ -29451,15 +29661,23 @@ function getOSDesigner(osId, osNumero) {
 /**
  * Define o designer responsável por uma OS (salva em localStorage)
  */
-function setOSDesigner(osId, designerName, osNumero) {
-    // Quem define o designer é o atendimento (regra do usuário, 19/08/2026).
-    // A conferência vem também aqui, e não só no select: este atalho grava no
-    // localStorage da máquina e vence tudo o que vier do banco em
-    // `getOSDesigner`. Sem a trava, a regra valeria até alguém achar o atalho.
+function setOSDesigner(osId, designerName, osNumero, filaConferida = false) {
     if (!podeDefinirDesigner()) {
         toast('Só o atendimento ou o administrador define o designer de um pedido.', 'warning');
         return;
     }
+    if (window.ArteDistribuicao && !filaConferida) {
+        const osFila = (state.ordens || []).find(o => o.id === osId);
+        const numeroFila = osNumero || osFila?.numero || osId;
+        window.ArteDistribuicao.atribuir(numeroFila, null, designerName).then(tratado => {
+            if (!tratado) setOSDesigner(osId, designerName, osNumero, true);
+        });
+        return;
+    }
+    // Quem define o designer é o atendimento (regra do usuário, 19/08/2026).
+    // A conferência vem também aqui, e não só no select: este atalho grava no
+    // localStorage da máquina e vence tudo o que vier do banco em
+    // `getOSDesigner`. Sem a trava, a regra valeria até alguém achar o atalho.
     const overrides = JSON.parse(localStorage.getItem('vibe_designer_overrides') || '{}');
     if (designerName) {
         if (osId) overrides[osId] = designerName;
@@ -29793,7 +30011,7 @@ function renderDesignersBoxHTML(osId, osNum) {
                 </div>
             </div>
         `;
-    }).join('');
+    }).join('') + (window.ArteDistribuicao?.controlesPedido(osNum) || '');
 }
 
 async function confirmAndSelectDesigner(osId, osNum, uid, nome) {
@@ -29802,6 +30020,8 @@ async function confirmAndSelectDesigner(osId, osNum, uid, nome) {
         toast('Só o atendimento ou o administrador define o designer de um pedido.', 'warning');
         return;
     }
+
+    if (window.ArteDistribuicao && await window.ArteDistribuicao.atribuir(osNum, uid, nome)) return;
 
     const currentAssigned = getOSDesigner(osId, osNum);
     
@@ -31519,6 +31739,14 @@ async function carregarTemposNoCard() {
  * O relógio de outra etapa não é exibido enquanto a leitura não acompanhar a troca.
  */
 function inicioDoTempoNoCard(os) {
+    if (typeof window !== 'undefined' && window.ArteDistribuicao?.ativo()) {
+        const fila = window.ArteDistribuicao.registro(os.numero);
+        if (!fila?.responsavel_uid) return null;
+        if (fila.em_arte && (!os._fila_arte || os._fila_arte === 'fila')) {
+            const tempoFila = window.ArteDistribuicao.tempo(os.numero);
+            return tempoFila == null ? null : Date.now() - tempoFila * 1000;
+        }
+    }
     const reg = state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
     if (!reg || !reg.desde || (os._fila_arte && reg.card !== os._fila_arte)) return null;
     const desde = new Date(reg.desde).getTime();
@@ -31765,24 +31993,27 @@ function celulaDeTempoHtml(os) {
     }
 
     // Concluído não tem relógio: tem hora de entrada na produção.
-    const registro = state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
+    const filaDistribuida = window.ArteDistribuicao?.ativo() ? window.ArteDistribuicao.registro(os.numero) : null;
+    const registro = filaDistribuida?.em_arte && (!os._fila_arte || os._fila_arte === 'fila')
+        ? { card: 'fila', desde: filaDistribuida.desde }
+        : state.temposNoCard && state.temposNoCard[parseInt(os.numero)];
     if (registro && registro.card === 'concluidos' && inicioDoTempoNoCard(os) !== null) {
         return celulaDeEntradaEmProducaoHtml(os, registro, datas);
     }
 
     const inicio = inicioDoTempoNoCard(os);
     if (inicio === null) {
-        const semRelogio = datas.concat(['Horário de entrada nesta etapa não disponível.']).join('  •  ');
+        const semRelogio = datas.concat([window.ArteDistribuicao?.ativo() && !filaDistribuida?.responsavel_uid ? 'Aguardando atribuição de designer; tempo pausado' : 'Horário de entrada nesta etapa não disponível.']).join('  •  ');
         return `<td style="text-align: center; vertical-align: middle; font-size: 0.82rem; color: var(--text-dim);" title="${escapeHtml(semRelogio)}">--</td>`;
     }
 
-    const reg = state.temposNoCard[parseInt(os.numero)];
+    const reg = registro;
     const segundos = Math.max(0, Math.floor((Date.now() - inicio) / 1000));
     const titulo = datas.concat([
         'Em "' + (NOME_DO_CARD[reg.card] || reg.card) + '" desde ' + formatDateTime(reg.desde),
     ]).join('  •  ');
 
-    return `<td class="celula-tempo" data-tempo-inicio="${inicio}"
+    return `<td class="celula-tempo" data-tempo-inicio="${inicio}" data-tempo-pedido="${escapeHtml(String(os.numero))}"
                 style="text-align: center; vertical-align: middle; white-space: nowrap; font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; color: ${corDoTempoNoCard(segundos)};"
                 title="${escapeHtml(titulo)}">${formatarTempoNoCard(segundos)}</td>`;
 }
@@ -31796,7 +32027,10 @@ function celulaDeTempoHtml(os) {
  */
 function atualizarRelogiosDaLista() {
     document.querySelectorAll('td.celula-tempo[data-tempo-inicio]').forEach(el => {
-        const inicio = parseInt(el.getAttribute('data-tempo-inicio'), 10);
+        const numero = el.getAttribute('data-tempo-pedido');
+        const inicio = window.ArteDistribuicao?.ativo() && numero
+            ? inicioDoTempoNoCard({ numero }) : parseInt(el.getAttribute('data-tempo-inicio'), 10);
+        if (inicio === null) { el.textContent = '--'; return; }
         if (!isFinite(inicio)) return;
         const segundos = Math.max(0, Math.floor((Date.now() - inicio) / 1000));
         el.textContent = formatarTempoNoCard(segundos);
@@ -31966,6 +32200,10 @@ function ligarRelogioDaLista() {
     // precisa ser relido, senão o pedido que foi para a expedição fica na tela
     // até alguém recarregar a página.
     setInterval(ressincronizarStatusInterno, 60000);
+    if (window.ArteDistribuicao) setInterval(async () => {
+        await window.ArteDistribuicao.carregar();
+        renderOrdens();
+    }, 60000);
 }
 
 // ---- O preview da arte de um pedido -------------------------------------
@@ -32057,6 +32295,7 @@ window.previewDaArteDoPedidoHtml = previewDaArteDoPedidoHtml;
 
 function renderOrdens() {
     if (typeof _cargaOrdensEmAndamento !== 'undefined' && _cargaOrdensEmAndamento) return;
+    if (window.ArteDistribuicao) window.ArteDistribuicao.desenhar();
     if (document.getElementById('view-dashboard-producao')?.classList.contains('active')) {
         if (typeof window.renderDashboardProducao === 'function') window.renderDashboardProducao();
         return;
@@ -43171,6 +43410,8 @@ async function selectDesigner(osIntId, uid, nome) {
         toast('Só o atendimento ou o administrador define o designer de um pedido.', 'warning');
         return;
     }
+
+    if (window.ArteDistribuicao && await window.ArteDistribuicao.atribuir(osIntId, uid, nome)) return;
 
     if (!state.pedidosArtesData) state.pedidosArtesData = {};
     if (!state.pedidosArtesData[osIntId]) state.pedidosArtesData[osIntId] = {};
