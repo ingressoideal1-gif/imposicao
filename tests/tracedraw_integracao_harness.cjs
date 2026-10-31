@@ -10,12 +10,12 @@ class Element {
  vm.runInNewContext(fs.readFileSync('frontend/tracedraw-integracao.js','utf8'),{window,document});
  const api=window.ImpositionTraceDraw,host=new Element(),anchor=new Element(),original=new Element();host.append(original,anchor);
  const container={id:'amostras-itens-container',querySelector:()=>anchor};
- let calls=[],reloads=0,composeFails=false,confirmed=true,legacy=false,entry={art_origin:'tracedraw',art_revision:1,operation:'rev1',restorable:true};
+ let calls=[],reloads=0,composeFails=false,confirmed=true,legacy=false,waitOpen=null,entry={art_origin:'tracedraw',art_revision:1,operation:'rev1',restorable:true};
  api.configure({canEdit:()=>true,compose:async()=>{if(composeFails)throw Error('Composição incompleta');return {front:'sample'};},
    reload:async()=>{reloads++;},request:async(action,data)=>{
     calls.push({action,data});
     if(action==='prepare')return legacy?{operation:'draft',files:{front:'pdf'}}:{drafts:[{model:7,operation:'draft',files:{front:'pdf'}}]};
-    if(action==='open')return {message:'aberto'};
+    if(action==='open'){if(waitOpen)await waitOpen;return {message:'aberto'};}
     return {confirmed,pedido:123,modelo:7,state:action==='restore'?{restorable:false}:entry};
    }});
  api.mount(container,123,[{id:7}],'vibe_123');api.mount(container,123,[{id:7}],'vibe_123');
@@ -35,5 +35,15 @@ class Element {
  await open.onclick();assert.equal(calls.at(-1).data.editor,'coreldraw');
  assert.match(api.label({art_origin:'tracedraw',art_revision:2,manifesto:{editor:'coreldraw'}}),/CorelDRAW/);
  assert(calls.every(c=>c.data.editor==='coreldraw'));
+ await api.artRemoved('vibe_123',7,'verso');
+ assert.equal(calls.at(-1).action,'clear');assert.equal(calls.at(-1).data.face,'back');
+ await api.artRemoved('vibe_123',7,'frente');
+ assert.equal(calls.at(-1).data.face,'front');
+ let release;waitOpen=new Promise(resolve=>{release=resolve;});
+ const opening=open.onclick();
+ await api.artRemoved('vibe_123',7,'verso');
+ assert.equal(calls.at(-1).action,'open','limpeza aguarda a operacao atual');
+ release();await opening;
+ assert.equal(calls.at(-1).action,'clear');assert.equal(calls.at(-1).data.face,'back');
  console.log('CorelDRAW: abrir, preparar, compor, publicar, erros e portal OK');
 })().catch(error=>{console.error(error);process.exitCode=1;});

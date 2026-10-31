@@ -37975,7 +37975,7 @@ async function onItemArteRemove(idx, osId, itemId, face = 'frente') {
     saveAmostraToDB(itemId, osId, payload)
         .then(async () => {
             toast('Arte removida do banco com sucesso!', 'success');
-            await window.ImpositionTraceDraw?.artRemoved(osId,itemId);
+            await window.ImpositionTraceDraw?.artRemoved(osId,itemId,face);
         })
         .catch((err) => toast('Falha ao remover arte: ' + (err.message || err), 'error'));
 }
