@@ -108,10 +108,10 @@ function ambiente() {
 
     // Caminho principal: pagamentos pendentes não prendem as próximas leituras.
     const vibe = ambiente();
-    vibe.ctx.vibeClient = { from: () => ({ select: () => ({ order: async () => {
+    vibe.ctx.vibeClient = { from: () => ({ select() { return this; }, order() { return this; }, range: async () => {
         vibe.chamadas.produtos++;
         return { data: [{ id: 1, id_int: 123 }] };
-    } }) }) };
+    } }) };
     vibe.ctx.loadOrdensFromVibecode = async () => {
         vibe.ctx.state.ordens = [{ id: 'vibe_123', numero: 123 }];
         return true;

@@ -26954,7 +26954,8 @@ function recorteDaCargaDeOrdens() {
     }
     const lista = typeof document !== 'undefined' && document.getElementById('view-lista-arte');
     if (!lista?.classList?.contains('active')) return 'completo';
-    if (['concluidos', 'dashboard'].includes(state.filtroFilaTipo)) return 'completo';
+    if (state.filtroFilaTipo === 'dashboard') return 'dashboard-arte';
+    if (state.filtroFilaTipo === 'concluidos') return 'completo';
     const busca = document.getElementById('os-search-arte')?.value.trim() || '';
     if (/^\d{1,9}$/.test(busca) && Number(busca) > 0) return `pedido:${Number(busca)}`;
     if (busca) return 'completo';
@@ -26966,6 +26967,10 @@ function pesquisarPedidosNaListaArte() {
     clearTimeout(pesquisarPedidosNaListaArte.timer);
     pesquisarPedidosNaListaArte.timer = setTimeout(() => {
         if (!document.getElementById('view-lista-arte')?.classList.contains('active')) return;
+        if (recorteDaCargaDeOrdens() === 'dashboard-arte') {
+            solicitarRecorteDoPainel();
+            return;
+        }
         const precisaHistorico = recorteDaCargaDeOrdens() === 'completo';
         if (precisaHistorico && state.listaArteSomenteAtivos === false && !_cargaOrdensEmAndamento) return;
         loadOrdens();
@@ -27100,13 +27105,17 @@ function loadOrdens(opcoes = {}) {
             : 'Carregando pedidos…');
         const leitura = recorte.startsWith('pedido:')
             ? carregarPedidoPesquisado(Number(recorte.slice(7)))
-            : carregarOrdensDados({ somenteArteAtiva: recorte === 'arte',
+            : carregarOrdensDados({ somenteArteAtiva: recorte === 'arte', dashboardArte: recorte === 'dashboard-arte',
                 recorteGrafica: ['producao', 'acabamento', 'expedicao'].includes(recorte) ? recorte : null });
         _cargaOrdensEmAndamento = leitura.then(ok => {
             if (ok) {
                 if (!recorte.startsWith('pedido:')) state.recorteOrdensCarregado = recorte;
                 mostrarEstadoCargaLista('');
                 conferirNovosPedidosDoUsuario();
+            } else {
+                // Não reutilizar o recorte anterior depois de uma atualização
+                // com erro: o próximo clique precisa permitir nova tentativa.
+                state.recorteOrdensCarregado = null;
             }
             return ok;
         }).finally(() => {
@@ -27115,8 +27124,9 @@ function loadOrdens(opcoes = {}) {
                 clearTimeout(iniciarComplementoLista.relogioRedesenho);
                 iniciarComplementoLista.relogioRedesenho = null;
                 iniciarComplementoLista.redesenhoPendente = false;
-                renderOrdens();
             }
+            // Só publicar o conjunto terminado (ou restaurado após erro).
+            renderOrdens();
         });
     }
     return _cargaOrdensEmAndamento;
@@ -27126,6 +27136,7 @@ async function carregarOrdensDados(opcoes = {}) {
     const anteriores = { ordens: state.ordens, ordensDashboardProducao: state.ordensDashboardProducao, osItens: state.osItens,
         modelosGlobais: state.modelosGlobais, produtosPropostaGlobais: state.produtosPropostaGlobais,
         todasArtes: state.todasArtes, linksCliente: state.linksCliente, linksClienteData: state.linksClienteData,
+        temposNoCard: state.temposNoCard, temposNoCardAtivo: state.temposNoCardAtivo,
         listaArteSomenteAtivos: state.listaArteSomenteAtivos };
     try {
         // Deixar pedidosComerciais fixo vazio já que a tabela 'pedidos' não existe no banco.
@@ -27145,11 +27156,20 @@ async function carregarOrdensDados(opcoes = {}) {
         // Se o Vibecode estiver ativo, carregamos os produtos em paralelo (excluindo campos de imagem base64 pesados que causavam travamentos)
         let vibeProdutosPromise = null;
         if (typeof vibeClient !== 'undefined' && vibeClient) {
-            vibeProdutosPromise = opcoes.recorteGrafica ? carregarDadosDoRecorteGrafica(opcoes.recorteGrafica) : vibeClient
-                .from('produtos_proposta')
-                .select('id, id_int, id_produto, nome_produto, modelo_descri, qtd, created_at, updated_at, amostra_cor_id, amostra_num_id, amostra_status, amostra_obs, amostra_arte_base64, arte_url')
-                .order('created_at', { ascending: false });
-            promises.push(opcoes.recorteGrafica ? vibeProdutosPromise : lerDadosLista(vibeProdutosPromise, 'produtos'));
+            vibeProdutosPromise = opcoes.recorteGrafica ? carregarDadosDoRecorteGrafica(opcoes.recorteGrafica) : (async () => {
+                const produtos = [];
+                for (let inicio = 0; ; inicio += 500) {
+                    const { data, error } = await lerDadosLista(vibeClient.from('produtos_proposta')
+                        .select('id, id_int, id_produto, nome_produto, modelo_descri, qtd, created_at, updated_at, amostra_cor_id, amostra_num_id, amostra_status, amostra_obs, amostra_arte_base64, arte_url')
+                        .order('created_at', { ascending: false }).order('id', { ascending: false })
+                        .range(inicio, inicio + 499), 'produtos');
+                    if (error) throw error;
+                    produtos.push(...(data || []));
+                    if ((data || []).length < 500) break;
+                }
+                return { data: produtos };
+            })();
+            promises.push(vibeProdutosPromise);
         }
         
         // Espera todas encerrarem antes de liberar retry; nenhum escritor de estado fica órfão.
@@ -27384,13 +27404,17 @@ async function carregarLinksExistentes(exigirSucesso = false) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     try {
         if (!await lerDadosLista(temSessaoDoSupabase(), 'sessão')) return;
-        const { data, error } = await lerDadosLista(supabaseClient
-            .from('pedidos_links_cliente')
-            .select('os_id, numero_pedido, token, status_arte, arte_pronta_em, cliente_abriu_em')
-            .eq('ativo', true), 'links');
-        if (error) {
-            if (error.code === '42P01') return; // tabela ainda não existe
-            throw error;
+        const data = [];
+        for (let inicio = 0; ; inicio += 500) {
+            const pagina = await lerDadosLista(supabaseClient.from('pedidos_links_cliente')
+                .select('os_id, numero_pedido, token, status_arte, arte_pronta_em, cliente_abriu_em')
+                .eq('ativo', true).order('id').range(inicio, inicio + 499), 'links');
+            if (pagina.error) {
+                if (pagina.error.code === '42P01' && inicio === 0) return;
+                throw pagina.error;
+            }
+            data.push(...(pagina.data || []));
+            if ((pagina.data || []).length < 500) break;
         }
         // A leitura bem-sucedida é a fotografia completa dos links ativos. Não
         // preserve URL antiga em memória: ela impediria a recriação automática
@@ -27416,13 +27440,18 @@ async function carregarLinksExistentes(exigirSucesso = false) {
 async function carregarArtesGlobais(exigirSucesso = false) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
     try {
-        const { data, error } = await lerDadosLista(supabaseClient
-            .from('pedidos_artes')
-            .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados, enviado_por, enviado_por_uid')
-            .order('created_at', { ascending: false }), 'artes');
-        if (error) {
-            if (error.code === '42P01') return; // tabela não existe
-            throw error;
+        const data = [];
+        for (let inicio = 0; ; inicio += 500) {
+            const pagina = await lerDadosLista(supabaseClient.from('pedidos_artes')
+                .select('id_int, status, nome_evento, designer_nome, designer_uid, entrega_dados, enviado_por, enviado_por_uid')
+                .order('created_at', { ascending: false }).order('id', { ascending: false })
+                .range(inicio, inicio + 499), 'artes');
+            if (pagina.error) {
+                if (pagina.error.code === '42P01' && inicio === 0) return;
+                throw pagina.error;
+            }
+            data.push(...(pagina.data || []));
+            if ((pagina.data || []).length < 500) break;
         }
         state.todasArtes = data || [];
         console.log(`[Artes] ${state.todasArtes.length} registros de arte carregados globalmente.`);
@@ -27547,12 +27576,16 @@ async function carregarModelosGlobais(exigirSucesso = false, numerosDaPesquisa =
                 const inicio = proximo;
                 proximo += chunkSize;
                 const chunk = todosNumeros.slice(inicio, inicio + chunkSize);
-                const { data, error } = await lerDadosLista(supabaseClient
-                    .from('pedidos_modelos')
-                    .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_impressao_registrado_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
-                    .in('id_int', chunk), 'modelos');
-                if (error) throw error;
-                lotes[inicio / chunkSize] = data || [];
+                const modelos = [];
+                for (let offset = 0; ; offset += 500) {
+                    const { data, error } = await lerDadosLista(supabaseClient.from('pedidos_modelos')
+                        .select('id, id_int, id_produto_proposta_origem, status_arte, status_impressao, status_impressao_em, status_impressao_registrado_em, status_producao, quantidade, ordem, nome_modelo, amostra_num_id, amostra_arte_base64, arte_url')
+                        .in('id_int', chunk).order('id').range(offset, offset + 499), 'modelos');
+                    if (error) throw error;
+                    modelos.push(...(data || []));
+                    if ((data || []).length < 500) break;
+                }
+                lotes[inicio / chunkSize] = modelos;
             }
         };
         // Limite pequeno: não disparar uma consulta por pedido nem saturar a rede.
@@ -27836,7 +27869,10 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         // para um campo de treze caracteres seria desperdício num painel que
         // abre com milhares de pedidos.
         let rastreioPorPedido = {};
-        try {
+        // O dashboard precisa do histórico inteiro para suas métricas, mas não
+        // exibe prazo ou rastreio. Seu recorte separado impede reutilizar esta
+        // carga como se fosse a lista operacional completa ao sair do dashboard.
+        if (!opcoes.dashboardArte) try {
             // Os mesmos pedidos da consulta de propostas acima — inclusive os
             // que não têm produto. Sem isso o pedido sem produto entraria na
             // lista sem prazo e sem código de rastreio, que é justamente a
@@ -27864,7 +27900,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         }
 
         // A data e a hora são campos distintos no ERP. Sem hora, manter só a data.
-        try {
+        if (!opcoes.dashboardArte) try {
             // Na estacao, cada hora exige uma ida autenticada ao ERP. Completar
             // depois do primeiro desenho; uma hora lenta nao invalida a lista.
             const horasPorPedido = typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false && !opcoes.numeroPedido
@@ -27891,6 +27927,16 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         // criação, porque é o único campo dele que a OS usa — e é por isso que
         // um pedido sem produto nenhum consegue nascer aqui do mesmo jeito,
         // com a data da própria proposta no lugar.
+        // Preserva a primeira correspondência e os tipos usados pelo find,
+        // sem percorrer todas as propostas novamente para cada pedido.
+        const propostasPorChave = new Map();
+        propostas.forEach(pr => {
+            for (const chave of [pr.id_int, pr.id, pr.numero]) {
+                if (!propostasPorChave.has(chave)) propostasPorChave.set(chave, pr);
+            }
+        });
+        const ordensAnteriores = opcoes.dashboardArte
+            ? new Map((state.ordens || []).map(os => [os.id, os])) : null;
         const criarOS = (key, createdAt) => {
             const osId = `vibe_${key}`;
             const linksDaConsulta = opcoes.links || state.linksClienteData;
@@ -27898,7 +27944,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             const savedStatus = lerStatusOverride(osId) || dbStatusArte;
 
             // Buscar dados reais da proposta
-            const propReal = propostas.find(pr => pr.id_int === key || pr.id === key || pr.numero === key);
+            const propReal = propostasPorChave.get(key);
 
             // Buscar dados do pedido comercial
             const pedidoReal = pedidosComerciais.find(ped => String(ped.id_int) === String(key));
@@ -27908,7 +27954,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
             const vendedor = propReal?.vendedor || propReal?.vendedor_nome || '';
             const nascimento = createdAt || propReal?.created_at || null;
             const dataLiberacao = propReal?.data_liberacao || propReal?.data_libera || nascimento;
-            const prazoEntrega = prazosPorPedido[String(key)] || null;
+            const prazoEntrega = opcoes.dashboardArte
+                ? ordensAnteriores.get(osId)?.prazo_entrega || null
+                : prazosPorPedido[String(key)] || null;
 
             // Dados comerciais reais
             const dataPedido = pedidoReal?.data_pedido || null;
@@ -27935,7 +27983,9 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 prazo_entrega: prazoEntrega,
                 // O número do conhecimento, quando o pedido já foi postado.
                 // Quem o mostra é a coluna Frete do Painel do Acabamento.
-                codigo_rastreamento: rastreioPorPedido[String(key)] || null,
+                codigo_rastreamento: opcoes.dashboardArte
+                    ? ordensAnteriores.get(osId)?.codigo_rastreamento || null
+                    : rastreioPorPedido[String(key)] || null,
                 frete_escolhido: propReal?.frete_escolhido || null,
                 observacoes: `Proposta #${key} -- Vibecode`,
                 criado_por: null,
@@ -28024,7 +28074,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         });
 
         console.log(`[Vibecode] ${state.ordens.length} OS carregadas, ${produtos.length} itens totais`);
-        if (typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
+        if (!opcoes.dashboardArte && typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
             completarHorasDaLista(state.ordens, prazosPorPedido);
         }
         return true;
@@ -29907,10 +29957,11 @@ async function setFiltroFilaArte(tipo) {
     console.log('[Lista Arte] Filtrar por card:', tipo);
     state.filtroFilaTipo = tipo;
     state.filtroStatusArte = '';
-    // Acende o card e troca a lista imediatamente; depois consulta novamente as
-    // fontes da tela. `loadOrdens` já reúne cliques concorrentes na mesma carga.
+    // O dashboard reaproveita seu recorte; Atualizar e o relógio continuam
+    // consultando as fontes. Os demais cards mantêm sua atualização ao clicar.
     renderOrdens();
-    await loadOrdens();
+    if (tipo === 'dashboard') await solicitarRecorteDoPainel();
+    else await loadOrdens();
 }
 window.setFiltroFilaArte = setFiltroFilaArte;
 
@@ -31972,6 +32023,7 @@ function previewDaArteDoPedidoHtml(os, modelo = null) {
 window.previewDaArteDoPedidoHtml = previewDaArteDoPedidoHtml;
 
 function renderOrdens() {
+    if (typeof _cargaOrdensEmAndamento !== 'undefined' && _cargaOrdensEmAndamento) return;
     if (document.getElementById('view-dashboard-producao')?.classList.contains('active')) {
         if (typeof window.renderDashboardProducao === 'function') window.renderDashboardProducao();
         return;

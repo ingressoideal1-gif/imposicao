@@ -36,7 +36,7 @@ function ambiente() {
         from: tabela => {
         c.leituras.push(tabela);
         const q = {
-            select() { return this; }, order() { return this; }, in() { return this; }, eq() { return this; },
+            select() { return this; }, order() { return this; }, in() { return this; }, eq() { return this; }, range() { return this; },
             abortSignal(signal) { this.signal = signal; return this; },
             then(resolve, reject) {
                 if (c.negarUsuarios && ['usuarios', 'producao_usuarios'].includes(tabela)) {
