@@ -1,0 +1,73 @@
+{
+  "tres_regressoes_aprovadas": true,
+  "antes_correcao_com_captura": {
+    "deadlocks": 1,
+    "retornos": [
+      3,
+      0
+    ]
+  },
+  "antes_correcao_sem_distribuicao": {
+    "deadlocks": 1,
+    "retornos": [
+      3,
+      0
+    ]
+  },
+  "corrigido_com_fila_ativa": {
+    "deadlocks": 0,
+    "retornos": [
+      0,
+      0
+    ]
+  },
+  "corrigido_sem_distribuicao": {
+    "deadlocks": 0,
+    "retornos": [
+      0,
+      0
+    ]
+  },
+  "ordem_inversa_e_propagacao_verso": true,
+  "trava_distribuicao_ausente_nas_origens": true,
+  "atualizacao_aninhada_reconciliada": {
+    "persistido": true,
+    "recalculado": true
+  },
+  "paridade_classificador": [
+    {
+      "caso": "IGNORAR",
+      "card_existente": null,
+      "nova_carga": false
+    },
+    {
+      "caso": "PENDENTE INFORMAÇÃO",
+      "card_existente": "pendente",
+      "nova_carga": false
+    },
+    {
+      "caso": "CORRIGIR_ARTE",
+      "card_existente": "fila",
+      "nova_carga": true
+    }
+  ],
+  "aprovacao_direta_converge": true,
+  "atribuicao_preserva_status": true,
+  "atribuicao_invalida_cache_piloto": true,
+  "revisao": "Correção das três falhas da segunda revisão",
+  "producao_alterada": false,
+  "verificacoes": {
+    "sql": 87,
+    "painel_calendario_integracao": 40,
+    "lista_arte": 134,
+    "navegador": "OK"
+  },
+  "cluster_encerrado": true,
+  "arquivos_sha256": {
+    "sql/distribuicao_designers.sql": "f743a3432597bd4ff8cc5db62d50fb0b98f3083559702688591353d7dec445d9",
+    "sql/ordenar_travas_catalogo_modelos.sql": "43fdabf02f4b968f55133a614adb0487a81dccbce6ddc577d3bec16cbdf53757",
+    "frontend/distribuicao-designers.js": "b1c6805a6b0cedd97958ab0263f84a146bc13d0d97d07b6d846c5e48c9661e86",
+    "tests/distribuicao_designers_sql_harness.mjs": "febe2dc60f719ea2ea7b9cf13a199629a9fe5af5d1c94cfadf68c5c4ef24857e",
+    "tests/distribuicao_designers_harness.js": "21983e26178e23e46f053096f91f3862dfc1df4d2590b4736ac2f8c0dc3b0a1c"
+  }
+}
