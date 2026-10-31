@@ -1,0 +1,66 @@
+{
+  "tres_regressoes_aprovadas": true,
+  "antes_correcao_com_captura": {
+    "deadlocks": 1,
+    "retornos": [
+      3,
+      0
+    ]
+  },
+  "antes_correcao_sem_distribuicao": {
+    "deadlocks": 1,
+    "retornos": [
+      3,
+      0
+    ]
+  },
+  "corrigido_com_fila_ativa": {
+    "deadlocks": 0,
+    "retornos": [
+      0,
+      0
+    ]
+  },
+  "corrigido_sem_distribuicao": {
+    "deadlocks": 0,
+    "retornos": [
+      0,
+      0
+    ]
+  },
+  "ordem_inversa_e_propagacao_verso": true,
+  "trava_distribuicao_ausente_nas_origens": true,
+  "atualizacao_aninhada_reconciliada": {
+    "persistido": true,
+    "recalculado": true
+  },
+  "paridade_classificador": [
+    {
+      "caso": "IGNORAR",
+      "card_existente": null,
+      "nova_carga": false
+    },
+    {
+      "caso": "PENDENTE INFORMAÇÃO",
+      "card_existente": "pendente",
+      "nova_carga": false
+    },
+    {
+      "caso": "CORRIGIR_ARTE",
+      "card_existente": "fila",
+      "nova_carga": true
+    }
+  ],
+  "aprovacao_direta_converge": true,
+  "atribuicao_preserva_status": true,
+  "atribuicao_invalida_cache_piloto": true,
+  "ambiente": "PostgreSQL 17.11 temporário, loopback, dados sintéticos",
+  "producao_alterada": false,
+  "cron_local": "dublê; consumidor chamado explicitamente",
+  "cron_remoto_consultado": "pg_cron 1.6; somente metadados",
+  "arquivos_sha256": {
+    "sql\\distribuicao_designers.sql": "9458291e5cd37ae30dffc405571473bebc4e7e4d0d4db7e76d41e665cc72addd",
+    "sql\\ordenar_travas_catalogo_modelos.sql": "43fdabf02f4b968f55133a614adb0487a81dccbce6ddc577d3bec16cbdf53757",
+    "tests\\distribuicao_designers_interacoes.py": "810debad5e2a867bec798d05b8633c8fba03999c15fbe586c9f5512505e48b5e"
+  }
+}
