@@ -15,7 +15,7 @@
     return new Promise(resolve=>{
       const dialog=document.createElement('dialog');
       dialog.style.cssText='max-width:480px;padding:24px;border:1px solid #64748b;border-radius:12px;background:#1e293b;color:#f8fafc';
-      const title=document.createElement('h3');title.textContent='Arquivo foi alterado';
+      const title=document.createElement('h3');title.textContent=result.selection_title||'Escolher origem do documento';
       const text=document.createElement('p');text.textContent=result.message||'Abrir do disco ou do Drive? A arte salva será preservada.';
       const actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px;flex-wrap:wrap';
       dialog.append(title,text,actions);

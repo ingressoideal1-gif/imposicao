@@ -3,6 +3,7 @@
 (() => {
   let adapter = null, busy = false;
   const mounted = new Map();
+  const pendingClears = [];
   const label = entry => entry?.art_origin === 'tracedraw' && Number.isInteger(entry.art_revision)
     ? `Arte gerada pelo ${entry.manifesto?.editor==='coreldraw'?'CorelDRAW':'TraceDraw'} · revisão ${entry.art_revision} · ${(entry.backup_pending??Boolean(entry.manifesto?.backup_job_id))?'backup no Drive pendente':'backup confirmado'}` : '';
   function configure(value) {
@@ -19,13 +20,14 @@
       b.badge.hidden = !b.badge.textContent;
     }
   }
-  async function action(binding, name, editor) {
+  async function action(binding, name, editor, face) {
     if (busy || !adapter.canEdit()) return;
     const started=Date.now();
     busy = true; refresh();
     binding.feedback.textContent = name === 'open' ? `Abrindo no ${editor==='coreldraw'?'CorelDRAW':'TraceDraw'}…` : 'Preparando…';
     try {
       const identity = {order:Number(binding.order), model:Number(binding.model),editor:'coreldraw'};
+      if(name==='clear')identity.face=face;
       if(editor)identity.editor=editor;
       if(name==='open'&&binding.gab.checked)identity.gabarito=true;
       let result;
@@ -106,7 +108,11 @@
       binding.feedback.textContent = error.message || 'Operação não concluída; confira a revisão vigente.';
       for(const member of mounted.values())if(member.order===binding.order&&member.model===binding.model)
         member.feedback.textContent=binding.feedback.textContent;
-    } finally {busy = false;refresh();}
+    } finally {
+      busy = false;refresh();
+      const next=pendingClears.shift();
+      if(next)await action(next.binding,'clear','coreldraw',next.face);
+    }
   }
   function mount(container, order, items, osId) {
     if (!adapter || container.id !== 'amostras-itens-container' || !adapter.canEdit()) return;
@@ -146,14 +152,81 @@
     }
     refresh();
   }
-  async function artRemoved(osId,model) {
+  async function artRemoved(osId,model,face) {
     const binding=[...mounted.values()].find(b=>b.osId===osId&&b.model===String(model)&&b.controls.isConnected);
     if(!binding)return;
     binding.entry=null;
-    if(busy){binding.feedback.textContent='PDF excluído. Limpeza no CorelDRAW pendente; aguarde e clique em CorelDRAW.';return;}
-    await action(binding,'clear');
+    const nativeFace=face==='verso'?'back':'front';
+    if(busy){pendingClears.push({binding,face:nativeFace});binding.feedback.textContent='PDF excluído. A limpeza do CDR será iniciada ao terminar a operação atual.';return;}
+    await action(binding,'clear','coreldraw',nativeFace);
   }
   window.ImpositionTraceDraw=Object.freeze({configure,mount,refresh,label,artRemoved});
+})();
+
+// Biblioteca privada de fontes, no modulo ja sincronizado pelas estacoes.
+(() => {
+  let dialog, rows, status, search, files, license, note, upload, busy=false, catalog=[];
+  const el=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
+  const canEdit=()=>window._currentPerms?.perm_fontes_edit===true;
+  async function api(action,body={}) {
+    const {data,error}=await supabaseClient.auth.getSession();
+    if(error||!data?.session?.access_token)throw Error('Entre novamente no Imposition.');
+    const response=await fetch(API_PAINEL+'/api/fontes-corel/'+action,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.session.access_token},body:JSON.stringify(body)});
+    const result=await response.json();if(!response.ok)throw Error(result.message||result.error||'Biblioteca indisponível.');return result;
+  }
+  async function load() {
+    const result=[];
+    for(let offset=0;;offset+=200){const data=await api('listar',{offset});if(!Array.isArray(data.fontes))throw Error('Catálogo inválido.');result.push(...data.fontes);if(data.fontes.length<200)break;}
+    catalog=result;
+  }
+  function render() {
+    upload.disabled=busy||!canEdit();files.disabled=busy||!canEdit();rows.replaceChildren();
+    const term=search.value.trim().toLocaleLowerCase('pt-BR');
+    for(const f of catalog.filter(f=>[f.nome,f.familia,f.estilo,f.versao].join(' ').toLocaleLowerCase('pt-BR').includes(term))) {
+      const tr=el('tr'),info=el('td'),actions=el('td'),download=el('button','Baixar');download.type='button';download.className='btn btn-secondary btn-sm';download.disabled=busy;
+      info.append(el('strong',f.nome),el('div',`${f.estilo} · ${f.versao||'Versão não informada'}`),el('small',`SHA-256: ${f.sha256}`));
+      download.onclick=()=>run(async()=>{
+        const meta=await api('baixar',{sha256:f.sha256}),r=await fetch(meta.url);if(!r.ok)throw Error('Download indisponível.');
+        const data=await r.arrayBuffer(),hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),b=>b.toString(16).padStart(2,'0')).join('');
+        if(hash!==f.sha256||data.byteLength!==f.tamanho)throw Error('Arquivo recebido incompleto. Tente novamente.');
+        const url=URL.createObjectURL(new Blob([data])),a=el('a');a.href=url;a.download=f.sha256+'.'+f.extensao;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);status.textContent='Download verificado.';
+      });actions.append(download);tr.append(info,actions);rows.append(tr);
+    }
+  }
+  async function run(work){if(busy)return;busy=true;render();status.textContent='Aguarde…';try{await work();}catch(e){status.textContent=e.message;}finally{busy=false;render();}}
+  async function save() {
+    const selected=Array.from(files.files||[]);
+    await run(async()=>{
+      if(!license.checked)throw Error('Confirme que a licença permite distribuir as fontes entre as estações.');
+      if(!selected.length)throw Error('Selecione arquivos TTF/OTF.');
+      const errors=[];let saved=0,duplicates=0;
+      for(const file of selected) {
+        try {
+          if(!/\.(ttf|otf)$/i.test(file.name)||!file.size||file.size>10*1024*1024)throw Error('Use TTF/OTF até 10 MiB.');
+          const data=new Uint8Array(await file.arrayBuffer());let raw='';for(let i=0;i<data.length;i+=8192)raw+=String.fromCharCode(...data.subarray(i,i+8192));
+          const result=await api('salvar',{arquivo:btoa(raw),licenca_confirmada:true,licenca_nota:note.value});
+          if(result.inalterado)duplicates++;else saved++;
+        } catch(e){errors.push(file.name+': '+e.message);}
+      }
+      files.value='';license.checked=false;await load();status.textContent=`${saved} cadastrada(s); ${duplicates} já existente(s). ${errors.join(' ')}`;
+    });
+  }
+  async function abrir() {
+    if(!dialog){
+      dialog=el('dialog');dialog.setAttribute('aria-label','Fontes internas CorelDRAW');dialog.style.cssText='width:min(960px,94vw);max-height:85vh;overflow:auto;background:var(--bg-card,#1e293b);color:inherit;border:1px solid #64748b;border-radius:12px;padding:24px';
+      const close=el('button','Fechar');close.type='button';close.className='btn btn-secondary';close.onclick=()=>dialog.close();
+      files=el('input');files.type='file';files.multiple=true;files.accept='.ttf,.otf';files.setAttribute('aria-label','Arquivos de fonte TTF ou OTF');
+      license=el('input');license.type='checkbox';const label=el('label');label.append(license,document.createTextNode(' Confirmo que a licença permite compartilhar estas fontes entre as estações da empresa.'));
+      note=el('input');note.type='text';note.maxLength=1000;note.placeholder='Origem ou licença (opcional)';note.setAttribute('aria-label','Origem ou licença');
+      upload=el('button','Carregar fontes');upload.type='button';upload.className='btn btn-primary';upload.onclick=save;
+      search=el('input');search.type='search';search.placeholder='Pesquisar nome, estilo ou versão';search.setAttribute('aria-label','Pesquisar fontes');search.oninput=render;
+      for(const input of [files,note,search])input.style.cssText='display:block;width:100%;margin:12px 0';
+      status=el('p');status.setAttribute('role','status');const table=el('table');table.style.width='100%';rows=el('tbody');table.append(rows);
+      dialog.append(el('h2','Fontes internas — CorelDRAW'),el('p','Arquivos privados, até 10 MiB por fonte. Versões de mesmo nome são mantidas separadas. O catálogo web continua independente.'),close,files,label,note,upload,search,status,table);document.body.append(dialog);
+    }
+    dialog.showModal();await run(async()=>{await load();status.textContent='Biblioteca carregada.';});
+  }
+  window.FontesCorel=Object.freeze({abrir});
 })();
 
 // Biblioteca de gabaritos distribuida no modulo ja sincronizado pelas estacoes.
