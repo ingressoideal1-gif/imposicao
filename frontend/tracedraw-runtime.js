@@ -30,6 +30,36 @@
       document.body.append(dialog);dialog.showModal();
     });
   }
+  function choosePdfFonts(result) {
+    return new Promise(resolve=>{
+      const dialog=document.createElement('dialog');
+      dialog.style.cssText='max-width:560px;padding:24px;border:1px solid #64748b;border-radius:12px;background:#1e293b;color:#f8fafc';
+      const title=document.createElement('h3');title.textContent='Como abrir o PDF no CorelDRAW?';
+      const text=document.createElement('p');text.textContent=result.message;
+      const detail=document.createElement('p');
+      detail.textContent='Abrir em curvas mantém os desenhos das letras incorporadas no PDF. O texto passa a ser editado como formas.';
+      const fonts=document.createElement('p');
+      fonts.textContent=result.library_fonts?.length
+        ? 'Disponíveis na biblioteca interna: '+result.library_fonts.join(', ')+'. Disponibilize as fontes no Corel Font Manager e verifique novamente para editar o texto.'
+        : result.missing_fonts?.length ? 'Disponibilize as fontes ausentes no Corel Font Manager e verifique novamente para editar o texto.' : '';
+      const limitation=document.createElement('p');
+      limitation.textContent=result.curves_available?'':
+        'Curvas indisponíveis: confira se todas as fontes estão incorporadas no PDF e se a Ponte está atualizada. Nenhuma fonte será presumida.';
+      const actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px;flex-wrap:wrap';
+      dialog.append(title,text,detail,fonts,limitation,actions);
+      let finished=false;
+      const finish=value=>{if(finished)return;finished=true;dialog.close();dialog.remove();resolve(value);};
+      for(const [label,value,enabled] of [
+        ['Abrir como texto editável','text',result.text_available],
+        ['Abrir em curvas','curves',result.curves_available],
+        ['Verificar fontes novamente','retry',true],['Cancelar',null,true]]) {
+        const button=document.createElement('button');button.type='button';button.textContent=label;
+        button.disabled=!enabled;button.className='btn btn-primary';button.addEventListener('click',()=>finish(value));actions.append(button);
+      }
+      dialog.addEventListener('cancel',event=>{event.preventDefault();finish(null);});
+      document.body.append(dialog);dialog.showModal();
+    });
+  }
   async function request(action,data) {
     const healthResponse=await localFetch('/health',{},5000);
     if(!healthResponse.ok)throw Error('Ponte local indisponível.');
@@ -46,6 +76,12 @@
       headers:{'Content-Type':'application/json'},body:JSON.stringify({data,token:auth.session.access_token})});
     const result=await response.json();
     if(!response.ok)throw Error(result.message||'Operação não confirmada.');
+    if(action==='open'&&result.requires_font_selection===true) {
+      const mode=await choosePdfFonts(result);
+      if(!mode)throw Error('Abertura cancelada; arquivos preservados.');
+      return request(action,{...data,origin:result.origin||data.origin,
+        pdf_font_mode:mode==='retry'?null:mode,pdf_font_signature:result.pdf_font_signature});
+    }
     if(action==='open'&&result.requires_selection===true) {
       const origin=await chooseFile(result);
       if(!origin)throw Error('Abertura cancelada; arquivos preservados.');
