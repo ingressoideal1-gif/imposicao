@@ -100,7 +100,7 @@ As RPCs requerem sessão Supabase: não aceitam um papel informado pelo navegado
 
 Após validar o banco e publicar os arquivos do frontend pelo fluxo protegido:
 
-1. ADM autenticado abre Lista de Arte e clica **Ativar distribuição**.
+1. ADM autenticado abre **ADM → Configurações Gerais → Designers** e clica **Ativar distribuição**.
 2. Conferir resposta persistida da RPC `arte_distribuicao_estado`: `ativo=true`,
    designers corretos, carga inicial e nenhuma transferência inesperada.
 3. Num cenário autorizado, conferir três pedidos com o original e o quarto com
@@ -111,7 +111,8 @@ Após validar o banco e publicar os arquivos do frontend pelo fluxo protegido:
    perda de atualização e contagens acima/abaixo do resultado esperado.
 
 O botão de fixação e o histórico aparecem na caixa de designers do pedido.
-ADM controla disponibilidade no bloco **Distribuição de designers**, acima da tabela.
+ADM controla disponibilidade na aba **Designers** de **ADM — Configurações Gerais**.
+A aba consulta o estado ao abrir; abrir a aba não ativa nem redistribui pedidos.
 Atendimento não altera disponibilidade. Negativas explícitas de edição continuam valendo no banco.
 
 ## Recuperação

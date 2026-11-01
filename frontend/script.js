@@ -134,15 +134,9 @@
     }
     function desenhar() {
         if (!root.document) return;
-        let caixa = document.getElementById('distribuicao-designers');
-        if (!caixa) {
-            const tabela = document.getElementById('table-arte');
-            if (!tabela) return;
-            caixa = document.createElement('section');
-            caixa.id = 'distribuicao-designers';
-            caixa.setAttribute('aria-label', 'Distribuição de pedidos');
-            tabela.parentElement.before(caixa);
-        }
+        const caixa = document.getElementById('distribuicao-designers');
+        if (!caixa) return;
+        if (papel() !== 'admin') { caixa.textContent = ''; return; }
         if (!dados || !dados.ativo) {
             caixa.textContent = papel() === 'admin' ? (erro || 'Distribuição automática desativada. Ativação disponível após validar o banco.') : '';
             if (papel() === 'admin' && instalado && !erro) {
@@ -155,7 +149,7 @@
         }
         const semOriginal = dados.pedidos.filter(p => p.em_arte && !p.original_uid).length;
         const esperando = dados.pedidos.filter(p => p.em_arte && p.aguardando).length;
-        const aberto = caixa.querySelector('details')?.open;
+        const aberto = caixa.querySelector('details')?.open ?? true;
         caixa.innerHTML = `<details${aberto ? ' open' : ''}><summary>Distribuição de designers · ${esperando} aguardando vaga · ${semOriginal} sem designer original</summary>
             <p>Tempo útil: segunda a sexta, 08h às 18h · Brasília.</p>
             ${Number(dados.pendentes) > 0 ? `<p role="status">${Number(dados.pendentes)} pedido(s) aguardando atualização da distribuição.</p>` : ''}
@@ -42763,7 +42757,7 @@ async function loadAnexosPedido(osId, osNum) {
             return;
         }
 
-        const itemsHtml = visibleList.map(anx => {
+        const itemsHtml = visibleList.map((anx, anexoIndex) => {
             const ext = (anx.nome.split('.').pop() || '').toLowerCase();
             const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext);
             const isPdf = ['pdf'].includes(ext);
@@ -42828,6 +42822,7 @@ async function loadAnexosPedido(osId, osNum) {
                                 🙈 Ocultar
                             </button>
                         `}
+                        <button type="button" data-corel-anexo="${anexoIndex}" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.75rem;" title="Inserir na página ativa do CorelDRAW">Corel</button>
                         <button onclick="openAnexoLightbox('${anx.url}', '${anx.nome}')" class="btn btn-sm" style="padding: 4px 8px; font-size: 0.75rem; background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); border-radius: 6px;" title="Visualizar Preview">
                             👁️ Preview
                         </button>
@@ -42840,6 +42835,16 @@ async function loadAnexosPedido(osId, osNum) {
         }).join('');
 
         container.innerHTML = selectAllBar + itemsHtml;
+        container.querySelectorAll('[data-corel-anexo]').forEach(button => {
+            const anexo = visibleList[Number(button.dataset.corelAnexo)];
+            button.addEventListener('click', () => {
+                if (typeof window.importarAnexoCorel !== 'function') {
+                    toast('Recarregue o Imposition para usar o botão Corel.', 'warning');
+                    return;
+                }
+                window.importarAnexoCorel({ order: numInt, attachment_url: anexo.url }, button);
+            });
+        });
         updateAnexoSelectionCount(osId, osNum);
 
     } catch (e) {
@@ -48793,6 +48798,10 @@ window.switchAdmTab = function(tabId) {
         btn.style.borderBottom = '2.5px solid var(--blue)';
     }
     // Carregar dados se necessário
+    if (tabId === 'designers') {
+        window.ArteDistribuicao?.desenhar();
+        if (papelAtual() === 'admin') window.ArteDistribuicao?.carregar();
+    }
     if (tabId === 'imagens') loadAdmImages();
     if (tabId === 'aproveitamento' && typeof renderAdmAproveitamento === 'function') renderAdmAproveitamento();
     if (tabId === 'fundo' && typeof carregarFundoAtual === 'function') carregarFundoAtual();
