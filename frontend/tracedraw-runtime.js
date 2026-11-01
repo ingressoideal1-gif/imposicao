@@ -60,6 +60,29 @@
       document.body.append(dialog);dialog.showModal();
     });
   }
+  function chooseAttachmentPage(result) {
+    return new Promise(resolve=>{
+      const dialog=document.createElement('dialog');
+      dialog.style.cssText='max-width:480px;padding:24px;border:1px solid #64748b;border-radius:12px;background:#1e293b;color:#f8fafc';
+      const title=document.createElement('h3');title.textContent='Qual página do PDF deseja inserir?';
+      const destination=document.createElement('p');destination.textContent='Destino: '+result.attachment_destination;
+      const label=document.createElement('label');label.textContent='Página do PDF: ';
+      const select=document.createElement('select');
+      for(let i=1;i<=result.attachment_pages;i++) {
+        const option=document.createElement('option');option.value=String(i);option.textContent='Página '+i;select.append(option);
+      }
+      label.append(select);
+      const actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px;margin-top:18px';
+      let finished=false;
+      const finish=value=>{if(finished)return;finished=true;dialog.close();dialog.remove();resolve(value);};
+      for(const [text,value] of [['Inserir página',true],['Cancelar',false]]) {
+        const button=document.createElement('button');button.type='button';button.className='btn btn-primary';button.textContent=text;
+        button.addEventListener('click',()=>finish(value?Number(select.value):null));actions.append(button);
+      }
+      dialog.addEventListener('cancel',event=>{event.preventDefault();finish(null);});
+      dialog.append(title,destination,label,actions);document.body.append(dialog);dialog.showModal();
+    });
+  }
   async function request(action,data) {
     const healthResponse=await localFetch('/health',{},5000);
     if(!healthResponse.ok)throw Error('Ponte local indisponível.');
@@ -67,6 +90,7 @@
     if(health.application!=='Ponte Imposition'||health.protocol!==1||health.direct_transport!==true)
       throw Error('Atualize a Ponte Imposition para a versão 1.3.0 ou superior.');
     if(data.gabarito&&!health.features?.includes('gabaritos'))throw Error('Atualize a Ponte Imposition para utilizar Gab.');
+    if(action==='attachment'&&!health.features?.includes('anexos-corel'))throw Error('Atualize a Ponte Imposition para a versão 1.10.0 ou superior para importar anexos.');
     if(!health.ready)throw Error(health.message||'A ponte precisa de atenção.');
     if(data.editor==='coreldraw'&&!health.editors?.includes('coreldraw'))
       throw Error('CorelDRAW indisponível na ponte. Confira a instalação do programa e atualize a Ponte Imposition.');
@@ -76,10 +100,17 @@
       headers:{'Content-Type':'application/json'},body:JSON.stringify({data,token:auth.session.access_token})});
     const result=await response.json();
     if(!response.ok)throw Error(result.message||'Operação não confirmada.');
-    if(action==='open'&&result.requires_font_selection===true) {
+    if(action==='attachment'&&result.requires_attachment_page===true) {
+      const page=await chooseAttachmentPage(result);
+      if(!page)throw Error('Importação cancelada; documento preservado.');
+      return request(action,{...data,attachment_page:page,attachment_signature:result.attachment_signature,
+        attachment_target:result.attachment_target});
+    }
+    if((action==='open'||action==='attachment')&&result.requires_font_selection===true) {
       const mode=await choosePdfFonts(result);
       if(!mode)throw Error('Abertura cancelada; arquivos preservados.');
       return request(action,{...data,origin:result.origin||data.origin,
+        ...(result.attachment_target?{attachment_target:result.attachment_target}:{}),
         pdf_font_mode:mode==='retry'?null:mode,pdf_font_signature:result.pdf_font_signature});
     }
     if(action==='open'&&result.requires_selection===true) {
@@ -89,6 +120,17 @@
     }
     return result;
   }
+  let importingAttachment=false;
+  window.importarAnexoCorel=async function(data,button) {
+    if(importingAttachment){toast('Aguarde a importação do anexo em andamento.','info');return;}
+    importingAttachment=true;
+    const previous=button.textContent;button.disabled=true;button.textContent='Importando…';
+    try {
+      const result=await request('attachment',{...data,editor:'coreldraw'});
+      toast(result.message||'Anexo inserido na página ativa do CorelDRAW.','success');
+    } catch(error) {toast(error.message||'Não foi possível importar o anexo.','error');}
+    finally {importingAttachment=false;button.disabled=false;button.textContent=previous;}
+  };
   async function compose(binding,draft) {
     const original=state.osItens[binding.osId]?.[binding.index];
     if(!original||String(original.id)!==binding.model)throw Error('Modelo mudou de posiÃ§Ã£o. Reabra o pedido.');
