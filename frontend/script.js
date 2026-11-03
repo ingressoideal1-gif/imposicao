@@ -23521,9 +23521,13 @@ function bloqueioDeModeloAprovado(item, dataToUpdate) {
 
     const campos = Object.keys(dataToUpdate || {});
 
+    // O identificador acompanha a reabertura para contar a solicitação uma única vez.
+    // Isoladamente, ele não autoriza alterar um modelo aprovado.
+    const reabrindo = String(dataToUpdate?.amostra_status || '').toUpperCase() === 'REPROVADA';
     // A saída da trava: a anotação e a volta para alteração.
     const ehSaidaDaTrava = campos.length > 0 && campos.every(c =>
         c === 'amostra_obs' || c === 'observacao_arte'
+        || (c === 'reprovacao_acao' && reabrindo)
         || (c === 'amostra_status' && String(dataToUpdate[c]).toUpperCase() === 'REPROVADA'));
     if (ehSaidaDaTrava) {
         if (podeDestravarModeloAprovado()) return null;
