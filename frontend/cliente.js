@@ -3494,10 +3494,15 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 const scaledViewport = page.getViewport({ scale: escalaTamanhoReal });
 
                 const offCanvas = document.createElement('canvas');
-                offCanvas.width = Math.round(scaledViewport.width);
-                offCanvas.height = Math.round(scaledViewport.height);
+                // A composicao ao vivo usa a mesma escala salva do painel,
+                // inclusive quando o verso repete a frente fora do modo paginado.
+                const escala = escalaDaArtePdfNoPortal(item);
+                const fx = escala.h / 100, fy = escala.v / 100;
+                offCanvas.width = Math.round(scaledViewport.width * fx);
+                offCanvas.height = Math.round(scaledViewport.height * fy);
                 const offCtx = offCanvas.getContext('2d', { colorSpace: 'srgb' });
-                await page.render({ canvasContext: offCtx, viewport: scaledViewport }).promise;
+                await page.render({ canvasContext: offCtx, viewport: scaledViewport,
+                    ...(fx === 1 && fy === 1 ? {} : { transform: [fx, 0, 0, fy, 0, 0] }) }).promise;
 
                 const dx = (finalWidth - offCanvas.width) / 2;
                 const dy = (finalHeight - offCanvas.height) / 2;
@@ -3538,6 +3543,14 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                         ddx = (finalWidth - dw) / 2;
                         ddy = 0;
                     }
+                    // O verso paginado pode vir de uma amostra ja composta:
+                    // sua escala ja foi aplicada ao gerar a imagem.
+                    const amostraComposta = item.modo_pdf && faceDaArte === 'back' && item.verso_amostra_arte_base64;
+                    const escala = amostraComposta ? { h: 100, v: 100 } : escalaDaArtePdfNoPortal(item);
+                    dw *= escala.h / 100;
+                    dh *= escala.v / 100;
+                    ddx = (finalWidth - dw) / 2;
+                    ddy = (finalHeight - dh) / 2;
                     tempCtx.drawImage(arteImg, ddx, ddy, dw, dh);
 
                     grupoCtx.drawImage(tempArte, 0, 0);

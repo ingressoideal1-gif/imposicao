@@ -117,5 +117,67 @@ function canvas() {
     assert.equal(frente.style.display, 'none');
     assert.equal(verso.style.display, 'none');
     assert.match(vazios.textContent, /Sem formato/);
+    // Arte comum (modo_pdf=false) com PDF repetido no verso: escala salva
+    // precisa valer tambem no compositor, sem alterar o tamanho da celula.
+    const desenhos = [], rasters = [];
+    function telaComposta() {
+        const tela = { width: 0, height: 0, style: {} };
+        const ctx = { clearRect() {}, fillRect() {},
+            drawImage(origem, x, y, w, h) { desenhos.push({ origem, x, y, w, h }); } };
+        tela.getContext = () => ctx;
+        return tela;
+    }
+    const comum = { id: 'comum', modo_pdf: false, amostra_num_id: 'copia',
+        arte_url: 'https://exemplo.invalid/arte.pdf', arte_escala_h: 10, arte_escala_v: 10,
+        _conferenciaBanco: true };
+    const estadoComum = { osItens: { os: [comum] }, numeracoes: [{ id: 'copia', print_mode: 'pdf_duplicate_back' }] };
+    const pagina = {
+        getViewport: ({scale}) => ({ width: 580 * MM * scale, height: 920 * MM * scale }),
+        render: args => { rasters.push(args); return { promise: Promise.resolve() }; }
+    };
+    const pdfjs = { GlobalWorkerOptions: {}, getDocument: () => ({ promise: Promise.resolve({ getPage: async()=>pagina }) }) };
+    class Imagem {
+        constructor() { this.width=580; this.height=920; }
+        set src(_url) { this.onload(); }
+    }
+    const compor = new Function('state','document','pdfjsLib','fetchPdfBytes','Image',
+        [extrair('pdfParesNoPortal'),extrair('pdfCopiaNoPortal'),extrair('arteDaFaceParaComposicao'),
+         extrair('escalaDaArtePdfNoPortal'),extrair('drawAmostraFace'),'return drawAmostraFace;'].join('\n'))(
+            estadoComum, { getElementById:()=>null, createElement:telaComposta },pdfjs,async()=>new ArrayBuffer(1),Imagem);
+    for (const face of ['front','back']) {
+        desenhos.length=0;rasters.length=0;
+        const tela=telaComposta();
+        await compor(comum,face,tela,null,{width_mm:58,height_mm:92},null,null,0,'os',2);
+        assert.equal(tela.width,116);assert.equal(tela.height,184);
+        assert.equal(desenhos[0].origem.width,116, 'PDF deve aplicar 10% tambem no portal');
+        assert.equal(desenhos[0].origem.height,184);
+        assert.equal(desenhos[0].x,0);assert.equal(desenhos[0].y,0);
+        assert.deepEqual(rasters[0].transform,[0.1,0,0,0.1,0,0]);
+    }
+    comum.arte_escala_h=20;comum.arte_escala_v=10;
+    desenhos.length=0;rasters.length=0;
+    await compor(comum,'front',telaComposta(),null,{width_mm:58,height_mm:92},null,null,0,'os',2);
+    assert.equal(desenhos[0].origem.width,232);assert.equal(desenhos[0].x,-58);
+    assert.deepEqual(rasters[0].transform,[0.2,0,0,0.1,0,0]);
+    delete comum.arte_escala_h;delete comum.arte_escala_v;
+    desenhos.length=0;rasters.length=0;
+    await compor(comum,'front',telaComposta(),null,{width_mm:58,height_mm:92},null,null,0,'os',2);
+    assert.equal(desenhos[0].origem.width,1160);
+    assert.equal(rasters[0].transform,undefined, 'sem escala salva preserva 100%');
+    comum.arte_url='https://exemplo.invalid/arte.png';
+    comum.arte_escala_h=50;comum.arte_escala_v=25;
+    desenhos.length=0;
+    await compor(comum,'back',telaComposta(),null,{width_mm:58,height_mm:92},null,null,0,'os',2);
+    assert.equal(desenhos[0].w,58);assert.equal(desenhos[0].h,46);
+    assert.equal(desenhos[0].x,29);assert.equal(desenhos[0].y,69);
+
+    comum.modo_pdf=true;comum.verso=true;
+    comum.verso_amostra_arte_base64='https://exemplo.invalid/amostra-composta.jpg';
+    estadoComum.numeracoes[0].print_mode='duplex_unico';
+    desenhos.length=0;
+    await compor(comum,'back',telaComposta(),null,{width_mm:58,height_mm:92},null,null,0,'os',2);
+    assert.equal(desenhos[0].w,116);assert.equal(desenhos[0].h,184);
+    assert.equal(desenhos[0].x,0);assert.equal(desenhos[0].y,0);
+
     console.log('OK: portal enquadra frente e verso na célula, respeita a escala e avisa sem formato');
 })().catch(erro => { console.error(erro); process.exitCode = 1; });
