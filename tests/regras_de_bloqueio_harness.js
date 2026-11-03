@@ -33,7 +33,7 @@ global.window = global.window || {};
 global.document = { getElementById: () => null };
 require(path.join(RAIZ, 'frontend', 'csv-editor.js'));
 
-const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
+const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8').replace(/\r\n/g, '\n');
 
 function extrairFuncao(src, nome) {
     const i = src.indexOf('\nfunction ' + nome + '(');
@@ -266,6 +266,24 @@ const EM_ARTE = { id: 'm2', amostra_status: 'PRONTO' };
         'o gerente tambem coloca em alteracao');
     ok(comoUsuario('admin').bloqueioDeModeloAprovado(APROVADO, { amostra_obs: 'x' }) === null,
         'e o administrador tambem');
+})();
+
+(function reabrirAprovadoComIdentificadorDaSolicitacao() {
+    const payload = { amostra_status: 'REPROVADA', amostra_obs: 'Corrigir texto',
+        reprovacao_acao: '11111111-1111-4111-8111-111111111111' };
+    for (const papel of ['admin', 'gerente', 'atendimento']) {
+        const A = comoUsuario(papel);
+        ok(A.bloqueioDeModeloAprovado(APROVADO_CLIENTE, payload) === null,
+            papel + ' reabre aprovacao do cliente com identificador da solicitacao');
+        ok(A.bloqueioDeModeloAprovado(APROVADO_CLIENTE, { ...payload, arte_url: 'outra' }) !== null,
+            papel + ' nao modifica arte junto com a reabertura');
+        ok(A.bloqueioDeModeloAprovado(APROVADO_CLIENTE, { reprovacao_acao: payload.reprovacao_acao }) !== null,
+            papel + ' nao altera identificador isoladamente');
+        ok(A.bloqueioDeModeloAprovado({ ...APROVADO_CLIENTE, status_impressao: 'Impresso' }, payload) !== null,
+            papel + ' nao reabre modelo impresso');
+    }
+    ok(comoUsuario('designer').bloqueioDeModeloAprovado(APROVADO_CLIENTE, payload) !== null,
+        'identificador nao concede permissao ao designer');
 })();
 
 (function oDesignerNaoDestravaOQueOClienteAprovou() {
