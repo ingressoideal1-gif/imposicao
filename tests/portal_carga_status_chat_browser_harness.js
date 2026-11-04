@@ -7,7 +7,7 @@ const raiz = path.resolve(__dirname, '..');
 const ler = nome => fs.readFileSync(path.join(raiz, 'frontend', nome), 'utf8');
 const cliente = ler('cliente.js');
 const html = ler('cliente.html').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<link\b[^>]*>/gi, '');
-const estilo = ler('style.css').replace(/@import[^;]+;/g, '');
+const estilo = ler('style.css').replace(/^@import[^\r\n]*$/gm, '');
 function funcao(nome) {
     const inicio = cliente.search(new RegExp('(?:async )?function ' + nome + '\\('));
     assert.ok(inicio >= 0, nome);
@@ -15,7 +15,7 @@ function funcao(nome) {
 }
 const regras = cliente.slice(cliente.indexOf('const STATUS_MODELO_APROVADO_PARA_PEDIDO'),
     cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
-const codigo = regras + '\n' + ['rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
+const codigo = regras + '\n' + ['numeracoesDoCliente', 'rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
     'desenharSecaoArte', 'avisoDaArte', 'registrarChatCliente', 'clienteFinalizarFluxo', 'clienteAprovarTudo',
     'saveAmostraToDB', 'sincronizarStatusConsolidadoPedidoArteCliente', 'escapeHtml',
     'decisionAmostraItem', 'seguirSozinhoSeAprovouTudo', 'mostrarProximaEtapaAposArte'].map(funcao).join('\n');
@@ -44,6 +44,7 @@ function preparar(cenario) {
     window.artesJaAprovadas = () => ['aprovado', 'producao'].includes(seloDoStatus(clienteState.statusArte).chave);
     window.problemaDoBancoCliente = () => false;
     window.numDoItem = () => null;
+    window.atualizarBarraFinalCliente = () => {};
     window.mensagemDaAprovacaoDeArte = () => 'Aprovação de teste';
     window.toast = msg => { window.ultimoToast = msg; };
     window.escritas = [];
@@ -117,10 +118,6 @@ function preparar(cenario) {
         await page.setViewport({ width: 390, height: 844 });
         assert.equal(await page.$eval('#cliente-aviso-chat', e => getComputedStyle(e).display), 'none');
         await page.click('#btn-cliente-aprovar-tudo');
-        await page.waitForSelector('#portal-artes-aprovadas[open]');
-        assert.equal(await page.evaluate(() => location.hash), '#arte');
-        assert.match(await page.$eval('#portal-artes-aprovadas', e => e.textContent), /Falta a aprovação dos dados de entrega/);
-        await page.click('#portal-artes-aprovadas button');
         await page.waitForFunction(() => window.location.hash === '#entrega');
         assert.match(await page.$eval('#cliente-aviso-chat', e => e.textContent), /Não é necessário aprovar novamente/);
         assert.notEqual(await page.$eval('#cliente-aviso-chat', e => getComputedStyle(e).display), 'none');
@@ -148,12 +145,8 @@ function preparar(cenario) {
             await page.goto('http://portal.test/cliente/123-sintetico?individual=' + individual + '#arte');
             await page.waitForFunction(() => window.testePronto === true);
             await page.click(individual ? '#aprovar-modelo-teste' : '#btn-cliente-aprovar-tudo');
-            await page.waitForSelector('#portal-artes-aprovadas[open]', { timeout: 5000 });
-            assert.equal(await page.evaluate(() => location.hash), '#arte');
-            const escritasAntes = await page.evaluate(() => escritas.length);
-            await page.click('#portal-artes-aprovadas button');
             await page.waitForFunction(() => location.hash === '#entrega', { timeout: 5000 });
-            assert.equal(await page.evaluate(() => escritas.length), escritasAntes, 'confirmar popup só navega');
+            assert.equal(await page.$('#portal-artes-aprovadas'), null, 'avanço sem popup');
             assert.equal(await page.evaluate(() => state.osItens[clienteState.osId][0].amostra_status), 'APROVADA');
             assert.equal(await page.evaluate(() => !!state.portalGravandoArte), false);
             assert.equal(await page.evaluate(() => escritas.filter(t => t === 'propostas_chat').length), individual ? 2 : 1);
@@ -173,9 +166,6 @@ function preparar(cenario) {
                     window.portalConfirmacoes = { entrega, faturamento: null };
                     mostrarProximaEtapaAposArte();
                 }, entrega);
-                assert.equal(await page.$eval('#portal-artes-aprovadas button', e => e === document.activeElement), true);
-                assert.equal(await page.$eval('#portal-artes-aprovadas', e => e.getBoundingClientRect().width <= innerWidth), true);
-                await page.keyboard.press('Enter');
                 assert.equal(await page.evaluate(() => location.hash), entrega === null ? '#entrega' : '#faturamento');
             }
         }
@@ -183,9 +173,8 @@ function preparar(cenario) {
             window.portalConfirmacoes = { entrega: true, faturamento: true };
             mostrarProximaEtapaAposArte();
         });
-        assert.equal(await page.$eval('#portal-artes-aprovadas button', e => e.textContent), 'Revisar e finalizar');
-        await page.keyboard.press('Escape');
-        await page.waitForFunction(() => !document.getElementById('portal-artes-aprovadas'));
+        assert.equal(await page.evaluate(() => location.hash), '#faturamento');
+        assert.equal(await page.$('#portal-artes-aprovadas'), null);
         assert.deepEqual(erros, []);
         console.log('OK: celular, carga, abas/F5, aprovação individual e geral com chat travado; erro de aprovação não avança.');
     } finally { await browser.close(); }

@@ -88,7 +88,7 @@ function ambiente(opcoes = {}) {
     vm.createContext(c);
     const regras = cliente.slice(cliente.indexOf('const STATUS_MODELO_APROVADO_PARA_PEDIDO'),
         cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
-    vm.runInContext(regras + '\n' + ['rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
+    vm.runInContext(regras + '\n' + ['numeracoesDoCliente', 'rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
         'desenharSecaoArte', 'registrarChatCliente', 'clienteFinalizarFluxo', 'decisionAmostraItem',
         'saveAmostraToDB', 'sincronizarStatusConsolidadoPedidoArteCliente'].map(n => funcao(cliente, n)).join('\n')
         + '\n' + ['semAcento', 'seloDoStatus'].map(n => funcao(shell, n)).join('\n'), c);

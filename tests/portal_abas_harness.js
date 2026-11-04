@@ -249,8 +249,8 @@ const SECAO_ARTE = extrairFuncao(CLIENTE, 'desenharSecaoArte');
         'segue pelo mesmo caminho do botao FINALIZAR');
     ok(/Todas as artes aprovadas/.test(seguir),
         'anunciando o que vai fazer: o que o sistema faz sozinho se explica');
-    ok(/setTimeout\(r, \d{3,}\)/.test(seguir),
-        'com uma pausa, para o cliente ver o proprio toque antes de a tela trocar');
+    ok(!/setTimeout/.test(seguir),
+        'avança assim que a gravação termina, sem pausa artificial');
 
     // A BANDEIRA, e nao uma corrida com o relogio: o `renderAmostrasOSItens`
     // agenda o `atualizarBarraFinalCliente` para dali a 50ms, e sem ela o botao
