@@ -1907,7 +1907,7 @@ async function clienteFinalizarFluxo(fluxoTipo) {
         toast('Erro ao finalizar pedido: ' + e.message, 'error');
         if (btnAprovar) {
             btnAprovar.disabled = false;
-            btnAprovar.textContent = fluxoTipo === 'APROVAR_TUDO' ? '✅ FINALIZAR E APROVAR PEDIDO COMPLETO' : '⚠️ SOLICITAR ALTERAÇÃO DE ARTE';
+            btnAprovar.textContent = fluxoTipo === 'APROVAR_TUDO' ? 'Continuar para a próxima etapa' : '⚠️ SOLICITAR ALTERAÇÃO DE ARTE';
         }
     } finally {
         state.portalGravandoArte = false;
@@ -1918,38 +1918,11 @@ async function clienteAprovarTudo() {
     return clienteFinalizarFluxo('APROVAR_TUDO');
 }
 
-/** Recibo da aprovação; confirmar aqui navega, sem aprovar os dados. */
+/** Avança após persistir as artes, sem confirmar entrega ou nota pelo cliente. */
 function mostrarProximaEtapaAposArte() {
-    const anterior = document.getElementById('portal-artes-aprovadas');
-    if (anterior) anterior.remove();
     const c = window.portalConfirmacoes || {};
     const decidiu = valor => valor === true || valor === false;
-    const destino = !decidiu(c.entrega) ? 'entrega' : 'faturamento';
-    const faltaEntrega = !decidiu(c.entrega);
-    const faltaNota = !decidiu(c.faturamento);
-    const popup = document.createElement('dialog');
-    popup.id = 'portal-artes-aprovadas';
-    popup.setAttribute('aria-labelledby', 'portal-artes-aprovadas-titulo');
-    popup.setAttribute('aria-describedby', 'portal-artes-aprovadas-texto');
-    popup.style.cssText = 'width:min(420px,calc(100% - 32px));box-sizing:border-box;border:1px solid #22c55e;border-radius:16px;padding:24px;background:#17202e;color:#fff;box-shadow:0 20px 80px #0008;';
-    popup.innerHTML = '<h2 id="portal-artes-aprovadas-titulo" style="margin:0 0 16px;color:#86efac">Artes aprovadas</h2>'
-        + '<p id="portal-artes-aprovadas-texto" style="line-height:1.6;margin:0 0 24px"></p>'
-        + '<button type="button" class="portal-botao principal" style="width:100%;min-height:48px" autofocus></button>';
-    popup.querySelector('p').textContent = faltaEntrega
-        ? 'Falta a aprovação dos dados de entrega. Confira a entrega para continuar seu pedido. Depois, confirme os dados da nota fiscal.'
-        : faltaNota ? 'Falta a aprovação dos dados da nota. Confira a nota para continuar seu pedido.'
-        : 'Os dados já foram conferidos. Continue para revisar e finalizar seu pedido.';
-    const botao = popup.querySelector('button');
-    botao.textContent = faltaEntrega ? 'Conferir entrega' : faltaNota ? 'Conferir nota' : 'Revisar e finalizar';
-    botao.onclick = () => {
-        popup.close();
-        popup.remove();
-        abrirSecao(destino);
-    };
-    // Escape pode fechar o recibo; os caminhos normais da aba continuam disponíveis.
-    popup.addEventListener('close', () => popup.remove(), { once: true });
-    document.body.appendChild(popup);
-    popup.showModal();
+    abrirSecao(!decidiu(c.entrega) ? 'entrega' : 'faturamento');
 }
 
 /**
@@ -2362,14 +2335,11 @@ function atualizarBarraFinalCliente(osId) {
 
     let html = '';
     if (todosAprovados) {
-        // Verde, ativo. O rótulo diz as DUAS coisas que o toque faz: aprova as
-        // artes e leva à etapa seguinte. "FINALIZAR E APROVAR PEDIDO COMPLETO"
-        // dizia só a primeira, e em caixa alta soava como o fim do caminho --
-        // quando na verdade ainda faltam a conferência da entrega e a da nota,
-        // que é para onde este botão leva.
+        // Retomada para pedidos já aprovados ou falha ao concluir a gravação.
+        // Ao aprovar o último modelo, o fluxo normal avança automaticamente.
         html = `
             <button class="btn btn-lg" onclick="clienteFinalizarFluxo('APROVAR_TUDO')" id="btn-cliente-aprovar-tudo" style="${FORMA_DO_BOTAO_FINAL} background-color: #22c55e; border-color: #22c55e; color: #ffffff; cursor: pointer; box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);">
-                ${icone('check', 18)}Aprovar artes e continuar
+                ${icone('check', 18)}Continuar para a próxima etapa
             </button>
         `;
     } else if (algumReprovado) {
@@ -2405,10 +2375,10 @@ function atualizarBarraFinalCliente(osId) {
         // apontar para um botão que não existe — que é a pior forma de trava.
         html = `
             <div class="portal-aviso calmo" style="margin: 0 0 10px; text-align: center;">
-                ${recado} Role a página e toque em <b>Aprovar</b> ou <b>Pedir alteração</b> em cada um.
+                ${recado} Toque em <b>Aprovar</b> ou <b>Pedir alteração</b> em cada modelo. Ao aprovar todos, você seguirá automaticamente para conferir os dados.
             </div>
             <button class="btn btn-lg" id="btn-cliente-aprovar-tudo" disabled style="${FORMA_DO_BOTAO_FINAL} background-color: #2b3444; color: #94a3b8; border: 1px solid #3d485c; cursor: not-allowed;">
-                ${icone('check', 18)}Aprovar artes e continuar
+                ${icone('check', 18)}Continuar para a próxima etapa
             </button>
         `;
     }
@@ -2436,13 +2406,6 @@ function atualizarBarraFinalCliente(osId) {
  * a aba de Entrega antes de ver a arte — e o pedido gravaria aprovação e
  * mensagem no chat do parceiro sem ele ter tocado em nada.
  *
- * ## Por que a pausa
- *
- * O card acabou de ficar verde e o toast "Item aprovado!" acabou de aparecer.
- * Trocar a tela no mesmo instante faria o cliente perder os dois e não entender
- * o que o levou dali. A pausa dá tempo de ele ver a própria ação, e o aviso
- * diz, em texto, o que a página vai fazer — coisa que o sistema faz sozinho
- * precisa se anunciar.
  */
 async function seguirSozinhoSeAprovouTudo(osId) {
     const itens = state.osItens[osId] || [];
@@ -2468,11 +2431,11 @@ async function seguirSozinhoSeAprovouTudo(osId) {
             + '</div>';
     }
 
-    await new Promise(r => setTimeout(r, 1200));
     try {
         await clienteFinalizarFluxo('APROVAR_TUDO');
     } finally {
         state.arteSeguindoSozinho = false;
+        atualizarBarraFinalCliente(osId);
     }
 }
 

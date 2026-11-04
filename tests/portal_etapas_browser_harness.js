@@ -106,12 +106,11 @@ function extract(file, name) {
         assert.equal(await page.$eval(selector+' button', e=>e.disabled),true,'bloqueio original preservado');
         assert.match(await page.$eval('#secao-entrega',e=>e.textContent),/Informe quem recebe/);
         assert.equal(await page.evaluate(() => secaoDeAbertura('APROVADO','arte')),'entrega','retorno aponta etapa pendente');
-        await page.evaluate(() => { abrirSecao('arte'); mostrarProximaEtapaAposArte(); });
-        assert.match(await page.$eval('#portal-artes-aprovadas',e=>e.textContent),/Depois, confirme os dados da nota/);
         const antes = await page.evaluate(() => salvamentos);
-        await page.click('#portal-artes-aprovadas button');
+        await page.evaluate(() => { abrirSecao('arte'); mostrarProximaEtapaAposArte(); });
+        assert.equal(await page.$('#portal-artes-aprovadas'), null, 'sem clique intermediário');
         assert.equal(await page.$eval('#secao-entrega',e=>e.hidden),false);
-        assert.equal(await page.evaluate(() => salvamentos),antes,'aviso apenas navega, sem aprovar dados');
+        assert.equal(await page.evaluate(() => salvamentos),antes,'avanço apenas navega, sem aprovar dados');
         await page.evaluate(() => { clienteState.statusArte='Enviar Arte'; state.osItens.teste[0].amostra_status='AGUARDANDO'; abrirSecao('arte'); });
         assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/Etapa 1 de 3/);
         assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/Primeiro aprove as amostras/);

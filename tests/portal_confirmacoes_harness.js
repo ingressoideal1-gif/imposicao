@@ -500,8 +500,8 @@ const linhasDoEnvio = new Function(
     ok(CLIENTE.indexOf('mostrarConfirmacaoDadosCliente') < 0, 'a tela sequencial saiu');
     ok(CLIENTE.indexOf('clienteConfirmacoes') < 0, 'e o estado dela junto');
     ok(/mostrarProximaEtapaAposArte\(\);/.test(CLIENTE)
-        && /botao\.onclick = \(\) => \{[\s\S]*?abrirSecao\(destino\)/.test(CLIENTE),
-        'aprovar mostra o recibo; confirmar o popup abre a proxima etapa');
+        && /abrirSecao\(!decidiu\(c.entrega\) \? 'entrega' : 'faturamento'\)/.test(CLIENTE),
+        'aprovar abre diretamente a próxima etapa sem confirmação intermediária');
 })();
 
 // ─── A conferencia que ele ja fez, lembrada na proxima visita ────────────────

@@ -7,9 +7,10 @@ const raiz = path.join(__dirname, '..');
 const cliente = fs.readFileSync(path.join(raiz, 'frontend/cliente.js'), 'utf8');
 const confirmacoes = fs.readFileSync(path.join(raiz, 'frontend/cliente-confirmacoes.js'), 'utf8');
 function funcao(nome) {
-    const inicio = cliente.indexOf('async function ' + nome + '(');
+    const inicio = cliente.indexOf('function ' + nome + '(');
+    const inicioReal = cliente.slice(inicio - 6, inicio) === 'async ' ? inicio - 6 : inicio;
     assert.ok(inicio >= 0, nome);
-    return cliente.slice(inicio, cliente.indexOf('\n}', inicio) + 2);
+    return cliente.slice(inicioReal, cliente.indexOf('\n}', inicio) + 2);
 }
 let total = 0;
 async function teste(nome, executar) {
@@ -55,7 +56,7 @@ function ambiente() {
         supabaseClient: banco, vibeClient: banco,
         state: { osItens: { vibe_123: [modelo] }, amostrasContainerId: 'cliente-amostras-itens-container' },
         clienteState: { numero: '123', osId: 'vibe_123', token: 'sintetico', statusArte: 'Dados Pendentes' },
-        document: { getElementById: id => campos[id] || null },
+        document: { querySelector: () => null, getElementById: id => campos[id] || null },
         localStorage: { getItem: () => '{}', setItem() { throw new Error('não deve salvar só no navegador'); } },
         escapeHtml: s => String(s), seloDoStatus: () => ({ chave: 'pendente' }),
         entregaExigeRecebedor: () => false,
@@ -63,9 +64,8 @@ function ambiente() {
         avisoDeFinalizacao: (...args) => avisos.push(args),
         toast: (...args) => avisos.push(args),
         problemaDoBancoCliente: () => false, numDoItem: () => null,
-        renderAmostrasOSItens() {}, mensagemDaAprovacaoDeArte: () => 'aprovado',
+        FORMA_DO_BOTAO_FINAL: '', renderAmostrasOSItens() {}, mensagemDaAprovacaoDeArte: () => 'aprovado',
         abrirSecao: secao => aberturas.push(secao),
-        mostrarProximaEtapaAposArte: () => aberturas.push('recibo-arte'),
         SECOES: ['arte', 'entrega', 'faturamento', 'orcamento', 'pagamento']
     });
     c.window = c;
@@ -73,7 +73,7 @@ function ambiente() {
         cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
     vm.runInContext(regras + '\n' + ['saveAmostraToDB', 'gravarStatusDoLink',
         'sincronizarStatusConsolidadoPedidoArteCliente', 'gravarCorrecaoDoCliente',
-        'registrarChatCliente', 'clienteFinalizarFluxo', 'decisionAmostraItem'].map(funcao).join('\n') + '\n' + confirmacoes, c);
+        'registrarChatCliente', 'clienteFinalizarFluxo', 'decisionAmostraItem', 'seguirSozinhoSeAprovouTudo', 'mostrarProximaEtapaAposArte', 'atualizarBarraFinalCliente'].map(funcao).join('\n') + '\n' + confirmacoes, c);
     c.avisoDeFinalizacao = (...args) => avisos.push(args);
     c.portalConfirmacoes.entrega = true;
     c.portalConfirmacoes.faturamento = true;
@@ -171,10 +171,57 @@ async function executar() {
         assert.notEqual(a.c.state.arteSomenteLeitura, true);
         confirmado = true;
         await a.c.clienteFinalizarFluxo('APROVAR_TUDO');
-        assert.deepEqual(a.aberturas, ['recibo-arte']);
+        assert.deepEqual(a.aberturas, ['faturamento']);
         assert.equal(a.c.state.arteSomenteLeitura, true);
         assert.equal(a.chamadas.includes('pedidos_artes'), false,
             'aprovação por item não usa id_modelo/versao inexistentes');
+    });
+    await teste('último modelo abre entrega sem outro clique e sem confirmar dados', async () => {
+        const a = ambiente();
+        a.c.portalConfirmacoes.entrega = null;
+        a.c.portalConfirmacoes.faturamento = null;
+        a.c.registrarChatCliente = () => new Promise(() => {});
+        let liberar;
+        const gravacao = new Promise(resolve => { liberar = resolve; });
+        a.c.sincronizarStatusConsolidadoPedidoArteCliente = async () => {
+            await gravacao;
+            return 'Dados Pendentes';
+        };
+        const decisao = a.c.decisionAmostraItem(12, 'vibe_123', 'APROVADA');
+        await Promise.resolve();
+        assert.equal(a.aberturas.length, 0, 'espera gravação');
+        liberar();
+        await decisao;
+        assert.deepEqual(a.aberturas, ['entrega']);
+        assert.equal(a.c.portalConfirmacoes.entrega, null);
+        assert.equal(a.c.portalConfirmacoes.faturamento, null);
+        assert.equal(a.c.state.arteSeguindoSozinho, false);
+    });
+    await teste('falha ao consolidar artes oferece retomada sem ficar em preparando', async () => {
+        const a = ambiente();
+        const barra = { style: {}, innerHTML: '' };
+        a.c.document.querySelector = () => barra;
+        a.modelo.amostra_status = 'APROVADA';
+        a.c.registrarChatCliente = async () => {};
+        a.c.sincronizarStatusConsolidadoPedidoArteCliente = async () => { throw new Error('falha de rede'); };
+        await a.c.seguirSozinhoSeAprovouTudo('vibe_123');
+        assert.equal(a.aberturas.length, 0);
+        assert.equal(a.c.state.arteSeguindoSozinho, false);
+        assert.match(barra.innerHTML, /Continuar para a próxima etapa/);
+        assert.doesNotMatch(barra.innerHTML, /Preparando/);
+    });
+    await teste('aprovação parcial ou falha ao salvar não avança', async () => {
+        for (const falhar of [false, true]) {
+            const a = ambiente();
+            a.c.portalConfirmacoes.entrega = null;
+            a.c.registrarChatCliente = async () => {};
+            a.c.sincronizarStatusConsolidadoPedidoArteCliente = async () => 'Em Aprovação';
+            if (falhar) a.banco.resposta = { data: [], error: null };
+            else a.c.state.osItens.vibe_123.push({ id: 13, amostra_status: 'PRONTO' });
+            await a.c.decisionAmostraItem(12, 'vibe_123', 'APROVADA');
+            assert.equal(a.aberturas.length, 0);
+            assert.notEqual(a.c.state.arteSomenteLeitura, true);
+        }
     });
     await teste('reprovação persiste observação no modelo sem PATCH em versão inexistente', async () => {
         const a = ambiente();
