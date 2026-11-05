@@ -31552,7 +31552,10 @@ function classificarPedidoNaArte(os) {
     const clienteAbriuOLink = !!(dadosDoLink && dadosDoLink.cliente_abriu_em);
 
     let statusCalculado;
-    if (isApprovedCalculado) {
+    // Uma alteracao pendente prevalece sobre o envio/aprovacao do ciclo anterior.
+    if (isEmAlteracaoCalculado) {
+        statusCalculado = 'Em Alteração';
+    } else if (isApprovedCalculado) {
         statusCalculado = 'Aprovada';
     } else if (isEnviarArteCalculado && !clienteAbriuOLink) {
         // `&& !clienteAbriuOLink`: o cliente ter olhado vence a palavra.
@@ -31565,8 +31568,6 @@ function classificarPedidoNaArte(os) {
         //
         // A arte aprovada continua vencendo os dois: ela é a pergunta anterior.
         statusCalculado = 'Enviar Arte';
-    } else if (isEmAlteracaoCalculado) {
-        statusCalculado = 'Em Alteração';
     } else if (clienteAbriuOLink || ARTE_EM_APROVACAO.includes(osStatus) || ARTE_EM_APROVACAO.includes(globalStatus)) {
         statusCalculado = 'Em Aprovação';
     } else if (ARTE_COM_O_DESIGNER.includes(osStatus) || ARTE_COM_O_DESIGNER.includes(globalStatus)) {
