@@ -110,6 +110,27 @@ Deno.test("whatsapp: endpoint fixo HTTPS e segredo ausente bloqueiam envio", asy
   f.c.env.CHATGURU_ENDPOINT = "https://s1.chatguru.app/api/v1"; f.c.env.CHATGURU_KEY = "";
   await assert.rejects(f.preparar, Recusa);
 });
+Deno.test("whatsapp: endpoint legado informado aceita envio e preserva idempotência", async () => {
+  for (const endpoint of ["https://app.zap.guru/api/v1", "https://app.zap.guru/api/v1/"]) {
+    const f = fixture(); f.c.env.CHATGURU_ENDPOINT = endpoint;
+    const enviar = f.deps.fetch;
+    f.deps.fetch = ((url: any, op: any) => { assert.equal(url, endpoint); return enviar(url, op); }) as typeof fetch;
+    const p = await f.preparar();
+    assert.equal((await f.executar("enviar", { confirmacao: p.confirmacao })).aceito, true);
+    await f.executar("enviar", { confirmacao: p.confirmacao });
+    assert.equal(f.c.chamadas.length, 1);
+  }
+});
+Deno.test("whatsapp: endpoint legado não permite outros hosts, credenciais ou parâmetros", async () => {
+  for (const endpoint of ["http://app.zap.guru/api/v1", "https://outro.zap.guru/api/v1",
+    "https://app.zap.guru.example.com/api/v1", "https://app.zap.guru@evil.example/api/v1",
+    "https://app.zap.guru/api/v1?destino=outro", "https://app.zap.guru/api/v1#outro"]) {
+    const f = fixture(); f.c.env.CHATGURU_ENDPOINT = endpoint;
+    await assert.rejects(f.preparar, /CHATGURU_ENDPOINT/);
+    assert.equal(f.c.chamadas.length, 0);
+    assert.equal(f.c.registros.size, 0);
+  }
+});
 Deno.test("whatsapp: telefone nacional exige DDI explicitamente configurado", () => {
   assert.throws(() => telefoneWhatsApp("11999990000", ""), Recusa);
   assert.equal(telefoneWhatsApp("(11) 99999-0000", "55"), "5511999990000");

@@ -40,8 +40,11 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   const ler = deps.ambiente || ((k: string) => Deno.env.get(k));
   const endpoint = ler("CHATGURU_ENDPOINT") || "";
   const key = ler("CHATGURU_KEY") || "", account = ler("CHATGURU_ACCOUNT_ID") || "", phone = ler("CHATGURU_PHONE_ID") || "";
-  if (!/^https:\/\/[a-z0-9-]+\.chatguru\.app\/api\/v1\/?$/.test(endpoint) || !key || !account || !phone) {
-    throw new Recusa(503, "O administrador precisa configurar o ChatGuru na nuvem.");
+  if (!/^https:\/\/(?:[a-z0-9-]+\.chatguru\.app|app\.zap\.guru)\/api\/v1\/?$/.test(endpoint)) {
+    throw new Recusa(503, "O endereço CHATGURU_ENDPOINT está ausente ou fora dos endereços permitidos da integração.");
+  }
+  if (!key || !account || !phone) {
+    throw new Recusa(503, "Complete os secrets CHATGURU_KEY, CHATGURU_ACCOUNT_ID e CHATGURU_PHONE_ID na nuvem.");
   }
   const db: typeof banco = async (...args) => {
     try { return await (deps.consultar || banco)(...args); }
