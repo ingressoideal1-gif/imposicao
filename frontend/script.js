@@ -33077,12 +33077,12 @@ function renderOrdens() {
                         <td>
                             <strong style="color: white;">${escapeHtml(rotuloDoCliente(os)) || '--'}</strong>${nomeEventoHtml}
                         </td>
+                        <td data-contato-arte="${escapeHtml(String(os.numero))}" data-contato-os="${escapeHtml(String(os.id))}" onclick="event.stopPropagation();" style="min-width:170px;max-width:240px;white-space:normal;">${window.ContatosListaArte?.html(os) || 'Carregando contato…'}</td>
                         <td>
                             <strong style="color: white;">${escapeHtml(os.vendedor) || '--'}</strong>${nomeDesignerHtml}
                         </td>
                         <td style="text-align: center; vertical-align: middle;">${previewDaArteDoPedidoHtml(os)}</td>
                         ${celulaDeTempoHtml(os)}
-                        <td style="text-align: center; vertical-align: middle;">${formatPrazoBadge(os)}</td>
                         <td style="text-align: center; vertical-align: middle;">${entregaHtml}${window.OrigemAprovacao?.html(os.numero, 'dados', entregaStatus) || ''}</td>
                         <td style="text-align: center;">
                             ${getStatusBadge(os.status_calculado || os.status)}
@@ -33119,13 +33119,14 @@ function renderOrdens() {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <button onclick="window.open('${escapeJsAttr(linkSalvo)}','${ABA_DO_CLIENTE}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
                                         <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
-                                        <button class="btn btn-sm" onclick="abrirWhatsappArte('${escapeJsAttr(os.id)}')" title="Enviar pelo WhatsApp" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
                                     </div>`);
                                 } else {
                                     btns.push(`<button class="btn btn-sm" disabled title="O link está sendo criado automaticamente" style="padding:4px 8px;font-size:0.73rem;background:rgba(59,130,246,0.10);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);border-radius:6px;opacity:0.75;cursor:wait;">⏳ Gerando Link</button>`);
                                 }
 
 
+
+                                btns.push(window.ContatosListaArte?.botaoWhatsapp(os) || '');
 
                                 // 2) Reprovar (quando status permite e usuário tem edit)
                                 if (!isReprovada && !isAprovada && st !== 'Em Fila') {
@@ -33169,6 +33170,8 @@ function renderOrdens() {
             }).join('');
         }
     }
+
+    if (tbodyArte && arteNaTela.length) window.ContatosListaArte?.carregar(arteNaTela);
 
     // Fora da pilha do próprio desenho: `abrirPedidoDoLinkDireto` chama
     // `renderOrdens` de novo, e chamá-lo aqui direto seria recursão.
@@ -50239,6 +50242,116 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
 })();
 // FIM GESTAO ENTREGAS
 
+
+/* Contato selecionado na Lista de Arte. Cache curto em memória; gravação confirmada pelo servidor. */
+(function () {
+    const cache = new Map(), pendentes = new Set();
+    let versao = 0, abrindo = false;
+    const podeEditar = () => window._currentPerms?.perm_lista_arte_edit === true;
+    async function api(acao, dados) {
+        const sessao = await supabaseClient.auth.getSession();
+        const token = sessao?.data?.session?.access_token;
+        if (!token) throw new Error('Entre na sua conta do painel.');
+        let r;
+        try {
+            r = await fetch(API_PAINEL + '/api/contatos-arte/' + acao, {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados), signal: AbortSignal.timeout(20000)
+            });
+        } catch { throw new Error('Não foi possível confirmar a operação. Reabra o contato para conferir.'); }
+        const corpo = await r.json();
+        if (!r.ok) throw new Error(typeof corpo.detail === 'string' ? corpo.detail : 'Não foi possível confirmar o contato.');
+        return corpo;
+    }
+    function html(os) {
+        if (!/^vibe_[1-9]\d*$/.test(String(os.id))) return '<span style="color:var(--text-dim)">Sem contato de pedido ERP</span>';
+        const n = String(os.numero), item = cache.get(n);
+        if (!/^[1-9]\d*$/.test(n)) return '<span>Pedido inválido</span>';
+        if (!item) return '<span style="color:var(--text-dim)">Carregando contato…</span>';
+        if (item.erro) return `<button class="btn btn-sm" onclick="ContatosListaArte.recarregar('${n}')" title="Tentar consultar novamente">Recarregar contato</button>`;
+        if (!item.dados?.valido) return '<span style="color:var(--text-dim)">Confira o contato selecionado no ERP</span>';
+        const c = item.dados;
+        return `<strong style="overflow-wrap:anywhere">${escapeHtml(c.nome || 'Sem nome')}</strong><br><span style="font-size:.8rem;overflow-wrap:anywhere">${escapeHtml(c.whatsapp || 'Sem WhatsApp')}</span>` +
+            (podeEditar() ? `<br><button class="btn btn-sm" style="min-height:28px;margin-top:3px" onclick="ContatosListaArte.editar('${n}')" aria-label="Editar contato do pedido ${n}">✎ Editar</button>` : '');
+    }
+    function pintar() {
+        document.querySelectorAll('[data-contato-arte]').forEach(el => {
+            const n = el.dataset.contatoArte;
+            el.innerHTML = html({ id: el.dataset.contatoOs, numero: n });
+        });
+    }
+    async function carregar(ordens) {
+        const ids = [...new Set(ordens.filter(o => /^vibe_[1-9]\d*$/.test(String(o.id))).map(o => String(o.numero)))]
+            .filter(n => /^[1-9]\d*$/.test(n) && !pendentes.has(n) && Date.now() - (cache.get(n)?.hora || 0) > 55000);
+        ids.forEach(n => pendentes.add(n));
+        const atual = versao;
+        try {
+            for (let i = 0; i < ids.length; i += 200) {
+                const lote = ids.slice(i, i + 200);
+                try {
+                    const linhas = await api('consultar', { pedidos: lote });
+                    if (!Array.isArray(linhas)) throw new Error('Resposta inválida.');
+                    if (atual !== versao) continue;
+                    lote.forEach(n => cache.set(n, { dados: linhas.find(c => String(c.pedido) === n) || null, hora: Date.now() }));
+                } catch {
+                    if (atual === versao) lote.forEach(n => cache.set(n, { erro: true, hora: Date.now() }));
+                }
+            }
+        } finally { ids.forEach(n => pendentes.delete(n)); if (ids.length) pintar(); }
+    }
+    async function editar(n) {
+        if (abrindo || !podeEditar() || !/^[1-9]\d*$/.test(String(n))) return;
+        abrindo = true;
+        let original;
+        try {
+            const linhas = await api('consultar', { pedidos: [n] });
+            if (!Array.isArray(linhas) || linhas.length !== 1 || !linhas[0].valido) throw new Error('Confira o contato selecionado no ERP.');
+            original = linhas[0];
+        } catch (e) { toast(e.message, 'error'); abrindo = false; return; }
+        const modal = document.createElement('dialog');
+        modal.id = 'modal-contato-lista-arte';
+        modal.style.cssText = 'width:min(440px,calc(100vw - 32px));box-sizing:border-box;background:var(--bg-card,#182234);color:var(--text,#fff);border:1px solid #475569;border-radius:12px;padding:20px;';
+        modal.setAttribute('aria-label', 'Editar contato do pedido ' + n);
+        modal.innerHTML = `<form><h3 style="margin-top:0">Contato do pedido ${n}</h3>
+            <p style="font-size:.85rem">A alteração será salva no cadastro deste contato e valerá para outros pedidos que o utilizam.</p>
+            <label style="display:block;margin:12px 0">Nome<input name="nome" required maxlength="150" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
+            <label style="display:block;margin:12px 0">WhatsApp<input name="whatsapp" type="tel" required maxlength="32" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
+            <p style="font-size:.8rem">Informe o número com DDD, conforme cadastrado no ChatGuru. Para número internacional, inclua + e DDI.</p>
+            <p data-aviso role="status" aria-live="polite"></p>
+            <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" data-cancelar class="btn">Cancelar</button><button type="submit" class="btn btn-primary">Salvar contato</button></div></form>`;
+        const form = modal.querySelector('form'), aviso = modal.querySelector('[data-aviso]');
+        form.elements.nome.value = original.nome || '';
+        form.elements.whatsapp.value = original.whatsapp || '';
+        let salvando = false;
+        const fechar = () => { if (!salvando) { modal.close(); modal.remove(); abrindo = false; } };
+        modal.querySelector('[data-cancelar]').onclick = fechar;
+        modal.addEventListener('cancel', e => { e.preventDefault(); fechar(); });
+        form.onsubmit = async e => {
+            e.preventDefault();
+            if (salvando || !podeEditar()) return;
+            const nome = form.elements.nome.value.trim(), whatsapp = form.elements.whatsapp.value.trim();
+            if (!nome || !/^\+?[\d ().-]{10,32}$/.test(whatsapp) || !/^[1-9]\d{9,14}$/.test(whatsapp.replace(/\D/g, ''))) { aviso.textContent = 'Informe nome e WhatsApp válidos, com DDD.'; return; }
+            salvando = true; aviso.textContent = 'Salvando…';
+            form.querySelectorAll('button,input').forEach(el => el.disabled = true);
+            try {
+                const salvo = await api('salvar', { pedido: n, contato_id: original.contato_id,
+                    nome_anterior: original.nome, whatsapp_anterior: original.whatsapp, nome, whatsapp });
+                if (!salvo || String(salvo.pedido) !== String(n) || salvo.contato_id !== original.contato_id || salvo.nome !== nome || salvo.whatsapp !== whatsapp || salvo.valido !== true) throw new Error('O banco não confirmou a gravação. Feche e reabra para conferir.');
+                versao++;
+                cache.forEach((item, pedido) => { if (item.dados?.contato_id === salvo.contato_id) cache.set(pedido, { dados: { ...salvo, pedido }, hora: Date.now() }); });
+                cache.set(String(n), { dados: salvo, hora: Date.now() });
+                pintar(); salvando = false; fechar(); toast('Contato salvo no banco.', 'success');
+            } catch (erro) { aviso.textContent = erro.message; }
+            finally { salvando = false; form.querySelectorAll('button,input').forEach(el => el.disabled = false); }
+        };
+        document.body.appendChild(modal); modal.showModal(); form.elements.nome.focus();
+    }
+    function botaoWhatsapp(os) {
+        if (!/^vibe_[1-9]\d*$/.test(String(os.id))) return '';
+        return `<button class="btn btn-sm" onclick="event.stopPropagation();abrirWhatsappArte('${escapeJsAttr(os.id)}')" title="Enviar link pelo WhatsApp" aria-label="Enviar link pelo WhatsApp" style="padding:4px 7px;min-width:30px;min-height:28px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.4);border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.7 7.4L3 20l1.1-4.8A8.5 8.5 0 1 1 20.5 11.5Z"/><path d="M8 7.5c-.7 0-1.2.8-1 1.7.6 3.4 3.3 6.1 6.7 6.7.9.2 1.7-.3 1.7-1l-2.2-1.5-1 1c-1.5-.7-2.7-1.9-3.4-3.4l1-1L8 7.5Z"/></svg></button>`;
+    }
+    window.ContatosListaArte = { html, carregar, editar, botaoWhatsapp, recarregar(n) { cache.delete(String(n)); return carregar([{ id: 'vibe_' + n, numero: n }]); } };
+})();
 
 /* Envio do link pelo contato selecionado no pedido; sem credenciais no cliente. */
 (function () {
