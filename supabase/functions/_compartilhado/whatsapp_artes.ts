@@ -64,7 +64,7 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   const numero = telefoneWhatsApp(contato.whats, ler("CHATGURU_DEFAULT_DDI") || "");
   const url = `${PORTAL}/cliente/${link.numero_pedido}-${link.token}`;
   const nome = String(contato.nome_contato || "Cliente").replace(/[\r\n\x00-\x1f]/g, " ").slice(0, 150);
-  const texto = `Olá, ${nome}! A arte do pedido ${link.numero_pedido} está pronta para sua conferência.\n\nAcesse o link para aprovar ou solicitar alterações:\n${url}\n\nIngresso Ideal`;
+  const texto = `Olá, ${nome}!\nA arte do pedido ${link.numero_pedido} está pronta para sua conferência.\n\nRevise atentamente:\n\n✅ Amostras\n✅ Quantidades\n✅ Numerações\n✅ Dados para Envio\n✅ Dados da Nota Fiscal\n💳 Faça o Pagamento\n\nLink: Suas AMOSTRAS👇🏻\n${url}`;
   // Um envio por versão da arte, contato, destino e remetente. Sem dados pessoais na chave.
   const chave = await hash(JSON.stringify([c.os_id, link.token, link.arte_pronta_em, contatoId, numero, endpoint, account, phone]));
   const consultar = async () => {

@@ -49,10 +49,12 @@ function fixture() {
 Deno.test("whatsapp: destinatário selecionado, aceite e status sem novo envio", async () => {
   const f = fixture(), p = await f.preparar();
   assert.equal(p.contato.whatsapp, "5511999990000"); assert.equal(f.c.chamadas.length, 0);
+  assert.equal(p.texto, "Olá, Contato Exemplo!\nA arte do pedido 11 está pronta para sua conferência.\n\nRevise atentamente:\n\n✅ Amostras\n✅ Quantidades\n✅ Numerações\n✅ Dados para Envio\n✅ Dados da Nota Fiscal\n💳 Faça o Pagamento\n\nLink: Suas AMOSTRAS👇🏻\nhttps://imposition.ai-ideal.com.br/cliente/11-abc123");
   const r = await f.executar("enviar", { confirmacao: p.confirmacao });
   assert.equal(r.estado, "aguardando"); assert.equal(r.aceito, true);
   assert.equal(f.c.chamadas[0].get("chat_number"), "5511999990000");
   assert.ok(f.c.chamadas[0].get("text")?.includes("/cliente/11-abc123"));
+  assert.equal(f.c.chamadas[0].get("text"), p.texto);
   await f.executar("enviar", { confirmacao: p.confirmacao });
   assert.equal(f.c.chamadas.length, 1);
   f.c.status = "sent";
