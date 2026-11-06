@@ -50420,9 +50420,12 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         ocupado = true; pintar();
         try {
             await concluirEnvioLinkParaAtendimento(contexto.os_id, true);
-            await requisitar('concluir', { os_id: contexto.os_id, confirmacao: contexto.confirmacao });
+            const confirmacao = await requisitar('concluir', { os_id: contexto.os_id, confirmacao: contexto.confirmacao });
+            if (confirmacao.aceito !== true || confirmacao.concluido !== true) throw new Error('Conclusão não confirmada.');
             contexto.concluido = true;
             pintar();
+            modal.close();
+            toast('Mensagem aceita pelo ChatGuru.', 'success');
         } catch {
             modal.querySelector('[data-status]').textContent = 'Mensagem já aceita. Retorno ao atendimento pendente; use Concluir para tentar novamente sem reenviar.';
         } finally { ocupado = false; pintarBotoes(); }
