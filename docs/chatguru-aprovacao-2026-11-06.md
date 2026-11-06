@@ -21,8 +21,22 @@ passou nos dois canais: 911 testes, 2 skips e 2 subtests em cada canal, além
 dos harnesses completos. Relatório local: `dist/entrega/chatguru-canais.json`.
 Aviso preexistente de Starlette/httpx preservado.
 
-Entregas separadas: PR #259 (SQL e teste PostgreSQL) e PR #260 (API).
-Publicação da tela e envio permanecem condicionados à configuração disponível.
+Entregas separadas: PR #259 (SQL e teste PostgreSQL), PR #260 (API) e PR #261
+(frontend). Os cinco secrets foram conferidos por nome, sem exposição de
+valores. A função `painel` foi publicada e relida como ACTIVE, versão 274,
+`verify_jwt=true`; requisição sem sessão retorna HTTP 401.
+Foi preparado um painel compatível com executável já auditado, sem build novo
+nem instalação: `dist/piloto/painel-382dc0eb979b` (antes do bump final de cache).
+
+Na revalidação do teste, o contato do pedido 24880 havia mudado de 64814 para
+64813 e a arte estava em Em Arte, sem `arte_pronta_em`. Não foi enviada mensagem;
+o destino atual está aguardando confirmação do usuário e a preparação normal
+da arte continua sendo um requisito. Nenhum dado do pedido foi alterado aqui.
+
+Uma tentativa de CI do SQL falhou no início do Chrome (timeout de 30 segundos
+no harness de texto), com 859 testes aprovados e 52 erros derivados da mesma
+fixture. Os outros canais passaram. Foi solicitado re-run somente desse job,
+sem modificar testes nem os controles de publicação.
 As seções abaixo registram o contrato e a entrega local inicial.
 
 Implementado em 06/11/2026 na branch `feat/chatguru-aprovacao-20261106`,
