@@ -39,6 +39,7 @@ import { conferirSenha, senhaAtual } from "../_compartilhado/senha_liberacao.ts"
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
 import { operarGabaritos } from "../_compartilhado/gabaritos.ts";
 import { operarFontesCorel } from "../_compartilhado/fontes_corel.ts";
+import { operarWhatsappArtes } from "../_compartilhado/whatsapp_artes.ts";
 import { operarEmailArtes } from "../_compartilhado/email_artes.ts";
 import { operarFundo } from "../_compartilhado/fundo.ts";
 import { exigirOperadorPropostas, operarPropostas } from "../_compartilhado/propostas.ts";
@@ -299,6 +300,14 @@ async function rotear(req: Request, url: URL): Promise<Response> {
     if (req.method !== "POST") recusaDeRotaDesconhecida(req.method);
     const quem = await quemChama(req);
     return ok(await operarGabaritos(p[1], await corpoJson(), quem));
+  }
+
+  if (p[0] === "whatsapp-artes" && p.length === 2) {
+    if (req.method !== "POST") throw new Recusa(405, "Use POST para esta operação.");
+    const quem = await quemChama(req);
+    const resposta = ok(await operarWhatsappArtes(p[1], await corpoJson(), quem));
+    resposta.headers.set("Cache-Control", "no-store");
+    return resposta;
   }
 
   if (p[0] === "email" && p.length === 2) {
