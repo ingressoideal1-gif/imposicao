@@ -71,5 +71,10 @@ function ambiente(id = 'vibe_11') {
     const aprovado=ambiente();aprovado.state.ordens[0].status='APROVADO';
     await aprovado.enviarMensagemEmailCliente({os_id:'vibe_11'});
     assert.equal(aprovado.writes.length,0);
+    const whatsapp=ambiente();
+    whatsapp.state.linksClienteData.vibe_11.cliente_abriu_em='2026-11-06T12:00:00Z';
+    await whatsapp.concluirEnvioLinkParaAtendimento('vibe_11',true);
+    assert.equal(whatsapp.state.linksClienteData.vibe_11.cliente_abriu_em,'2026-11-06T12:00:00Z');
+    assert.equal('cliente_abriu_em' in whatsapp.writes.find(w=>w.tabela==='pedidos_links_cliente').payload,false);
     console.log('OK: ambos os modos retornam para Enviar Arte; falha, retry sem reenvio, OS local e troca de pedido');
 })().catch(e=>{console.error(e);process.exitCode=1;});

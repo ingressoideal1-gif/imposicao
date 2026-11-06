@@ -33119,7 +33119,7 @@ function renderOrdens() {
                                     btns.push(`<div style="display:flex;gap:4px;">
                                         <button onclick="window.open('${escapeJsAttr(linkSalvo)}','${ABA_DO_CLIENTE}')" class="btn btn-sm" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;" title="Abrir link do cliente">🔗</button>
                                         <button class="btn btn-sm" onclick="gerarLinkCliente('${os.id}', '${os.numero}', false, this)" title="Copiar link" style="padding:3px 7px;font-size:0.8rem;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);border-radius:6px;cursor:pointer;">📋</button>
-                                        <button class="btn btn-sm" onclick="abrirModalEnviarEmailCliente('${escapeJsAttr(os.id)}', '${escapeJsAttr(os.numero)}', '${escapeJsAttr(linkSalvo)}')" title="Enviar por e-mail" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
+                                        <button class="btn btn-sm" onclick="abrirWhatsappArte('${escapeJsAttr(os.id)}')" title="Enviar pelo WhatsApp" style="padding:3px 7px;font-size:0.8rem;background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.35);border-radius:6px;cursor:pointer;">✉️</button>
                                     </div>`);
                                 } else {
                                     btns.push(`<button class="btn btn-sm" disabled title="O link está sendo criado automaticamente" style="padding:4px 8px;font-size:0.73rem;background:rgba(59,130,246,0.10);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);border-radius:6px;opacity:0.75;cursor:wait;">⏳ Gerando Link</button>`);
@@ -44099,54 +44099,21 @@ window.enviarLink = window.enviar_link;
 window.enviarLinkCliente = window.enviar_link;
 
 async function gerarLinkClienteBanner() {
-    // Mesmo estado usado para abrir e fechar o pedido no banner de artes.
-    const activeOSId = state.amostrasOSAtivo;
-    console.log('[LinkDebug] gerarLinkClienteBanner: activeOSId=', activeOSId);
-    if (!activeOSId) {
-        toast('Nenhum pedido ativo selecionado.', 'warning');
-        return;
-    }
-    const os = typeof findOSInState === 'function' ? findOSInState(activeOSId) : (state.ordens ? state.ordens.find(o => o.id === activeOSId) : null);
-    const osNum = os ? (os.numero || os.id_int || os.id) : activeOSId;
-    return executarOperacaoEmail(async () => {
-        const botao = document.getElementById('btn-enviar-link-os-banner');
-        const textoOriginal = botao?.textContent;
-        if (botao) botao.textContent = '⏳ Enviando e-mail...';
-        try {
-            if (!/^\d+$/.test(String(osNum))) throw new Error('Não foi possível identificar o número do pedido. Atualize a página.');
-            const cliente = await buscarDadosEmailCliente(activeOSId, osNum, true);
-            const campoEmail = document.createElement('input');
-            campoEmail.type = 'email';
-            campoEmail.value = String(cliente.clienteEmail || '').trim();
-            if (!campoEmail.value || !campoEmail.checkValidity()) {
-                throw new Error('O cliente não possui um e-mail válido cadastrado. Atualize o cadastro antes de enviar.');
-            }
-            cliente.clienteEmail = campoEmail.value;
-            if (linksClienteEmAndamento.has(activeOSId)) throw new Error('O link deste pedido está sendo preparado. Aguarde.');
-            linksClienteEmAndamento.add(activeOSId);
-            let linkUrl;
-            try {
-                const existente = await buscarLinkClienteAtivo(activeOSId);
-                if (existente && !linkPrecisaPrepararArte(os, existente)) {
-                    linkUrl = memorizarLinkCliente(activeOSId, osNum, existente);
-                } else {
-                    const preparo = await prepararLinkDaArtePronta(activeOSId, osNum);
-                    if (!preparo?.ok || !preparo.link) throw new Error('Não foi possível preparar a arte e o link de aprovação. O e-mail não foi enviado.');
-                    linkUrl = preparo.link;
-                    if (os) { os.status = 'Enviar Arte'; os.status_calculado = 'Enviar Arte'; }
-                    gravarStatusOverride(activeOSId, 'Enviar Arte');
-                }
-            } finally {
-                linksClienteEmAndamento.delete(activeOSId);
-            }
-            const mensagem = montarMensagemEmailCliente(activeOSId, osNum, linkUrl, cliente);
-            await enviarMensagemEmailCliente({ os_id: activeOSId, link_url: linkUrl,
-                to: mensagem.clienteEmail, subject: mensagem.subject, body_text: mensagem.bodyText }, botao,
-                () => concluirEnvioLinkParaAtendimento(activeOSId));
-        } finally {
-            if (botao) botao.textContent = textoOriginal;
+    const osId = state.amostrasOSAtivo;
+    const os = osId && findOSInState(osId);
+    if (!os) { toast('Abra um pedido antes de enviar a arte.', 'warning'); return; }
+    if (linksClienteEmAndamento.has(osId)) return;
+    linksClienteEmAndamento.add(osId);
+    try {
+        const numero = os.numero || os.id_int;
+        const existente = await buscarLinkClienteAtivo(osId);
+        if (!existente || linkPrecisaPrepararArte(os, existente)) {
+            const preparo = await prepararLinkDaArtePronta(osId, numero);
+            if (!preparo?.ok || !preparo.link) throw new Error('Não foi possível preparar a arte. Tente novamente.');
         }
-    });
+        await abrirWhatsappArte(osId);
+    } catch (e) { toast(e.message, 'error'); }
+    finally { linksClienteEmAndamento.delete(osId); }
 }
 window.gerarLinkClienteBanner = gerarLinkClienteBanner;
 
@@ -44160,7 +44127,7 @@ window.abrirEmailArtesCorpoBanner = abrirEmailArtesCorpoBanner;
 
 // Depois do aceite do e-mail, devolver a arte ao atendimento. Não alterar os
 // modelos nem regredir pedidos que já saíram da arte.
-async function concluirEnvioLinkParaAtendimento(osId) {
+async function concluirEnvioLinkParaAtendimento(osId, preservarAbertura = false) {
     const os = state.ordens.find(o => o.id === osId);
     if (!os) throw new Error('Pedido não encontrado. Atualize a lista para conferir o retorno.');
     const itens = state.osItens[osId] || [];
@@ -44175,12 +44142,12 @@ async function concluirEnvioLinkParaAtendimento(osId) {
     if (!Array.isArray(links)) throw new Error('Não foi possível conferir o link do pedido.');
     if (links.length) {
         const { data, error } = await supabaseClient.from('pedidos_links_cliente')
-            .update({ status_arte: 'Enviar Arte', cliente_abriu_em: null })
+            .update(preservarAbertura ? { status_arte: 'Enviar Arte' } : { status_arte: 'Enviar Arte', cliente_abriu_em: null })
             .eq('os_id', osId).eq('ativo', true).in('id', links.map(link => link.id))
             .select('id, status_arte, cliente_abriu_em');
         if (error) throw error;
         if (!Array.isArray(data) || links.some(link => !data.some(row =>
-            row.id === link.id && row.status_arte === 'Enviar Arte' && row.cliente_abriu_em === null))) {
+            row.id === link.id && row.status_arte === 'Enviar Arte' && (preservarAbertura || row.cliente_abriu_em === null)))) {
             throw new Error('O banco não confirmou Enviar Arte no link do pedido.');
         }
     }
@@ -44196,7 +44163,7 @@ async function concluirEnvioLinkParaAtendimento(osId) {
     state.todasArtes = anteriores.filter(arte => parseInt(arte.id_int, 10) !== numero)
         .concat(artes.map(arte => ({ ...anteriores.find(anterior => anterior.id === arte.id), ...arte, id_int: numero })));
     if (state.linksClienteData?.[osId]) {
-        Object.assign(state.linksClienteData[osId], { status_arte: 'Enviar Arte', cliente_abriu_em: null });
+        Object.assign(state.linksClienteData[osId], preservarAbertura ? { status_arte: 'Enviar Arte' } : { status_arte: 'Enviar Arte', cliente_abriu_em: null });
     }
     gravarStatusOverride(osId, 'Enviar Arte');
     os.status = 'Enviar Arte';
@@ -44486,8 +44453,8 @@ function _mostrarIconeEmailNaLinha(osId, numero, linkUrl) {
             <div style="font-size:0.82rem; font-weight:700; color:#e2e8f0; margin-bottom:4px;">Link copiado — Pedido #${numero}</div>
             <div style="font-size:0.73rem; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${linkUrl}</div>
         </div>
-        <button onclick="abrirModalEnviarEmailCliente('${osId}', '${numero}', '${linkUrl.replace(/'/g, "\\'")}')"
-                title="Enviar por e-mail"
+        <button onclick="abrirWhatsappArte('${escapeJsAttr(osId)}')"
+                title="Enviar pelo WhatsApp"
                 style="flex-shrink:0; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.4);
                        color:#60a5fa; border-radius:8px; width:38px; height:38px; cursor:pointer;
                        font-size:1.2rem; display:flex; align-items:center; justify-content:center;
@@ -44695,7 +44662,7 @@ function ensureModalEmailElement() {
                 <div class="email-content">
                     <div><label for="modal-email-modo">Opção de envio</label>
                         <select id="modal-email-modo" onchange="alterarModoEmailCliente()" style="width:100%;padding:12px;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:15px;">
-                            <option value="link">1. Com link de aprovação (atual)</option>
+                            <option value="link" disabled>Link de aprovação: enviado pelo WhatsApp</option>
                             <option value="artes_corpo">2. Artes no corpo do e-mail, sem link do cliente</option>
                         </select></div>
                     <div class="email-link" id="modal-email-link-box">
@@ -50271,3 +50238,117 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
     window.EntregasGestao={limpar,editarRota:abrirRota,iniciarDeslocamento,seletor,contextoLinhas:()=>rpc('ve_admin_contexto')};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);else iniciar();
 })();
 // FIM GESTAO ENTREGAS
+
+
+/* Envio do link pelo contato selecionado no pedido; sem credenciais no cliente. */
+(function () {
+    let contexto = null;
+    let ocupado = false;
+    let abertura = 0;
+    let modal;
+    async function requisitar(acao, dados) {
+        const sessao = await supabaseClient.auth.getSession();
+        const token = sessao?.data?.session?.access_token;
+        if (!token) throw new Error('Entre na sua conta do painel.');
+        let resposta;
+        try {
+            resposta = await fetch(API_PAINEL + '/api/whatsapp-artes/' + acao, {
+                method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(dados)
+            });
+        } catch { throw new Error('Não foi possível confirmar a operação. Consulte o status antes de repetir.'); }
+        let corpo;
+        try { corpo = await resposta.json(); }
+        catch { throw new Error('Resposta não confirmada. Consulte o status antes de repetir.'); }
+        if (!resposta.ok || !corpo.ok) throw new Error(typeof corpo.detail === 'string' ? corpo.detail : 'Não foi possível confirmar a operação.');
+        return corpo;
+    }
+    function criar() {
+        if (modal) return;
+        modal = document.createElement('dialog');
+        modal.setAttribute('aria-label', 'Enviar arte pelo WhatsApp');
+        modal.style.cssText = 'width:min(560px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid #475569;border-radius:14px;padding:24px;background:#172033;color:#fff;';
+        modal.innerHTML = `<h3>Enviar arte pelo WhatsApp</h3>
+            <p data-contato></p><p>Destinatário: contato selecionado no pedido. Para corrigir, atualize o pedido e reabra esta janela.</p>
+            <pre data-texto style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit"></pre>
+            <p data-status role="status" aria-live="polite"></p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+            <button type="button" data-fechar class="btn btn-secondary" style="min-height:44px">Fechar</button>
+            <button type="button" data-consultar class="btn btn-secondary" style="min-height:44px">Consultar status</button>
+            <button type="button" data-concluir class="btn btn-secondary" style="min-height:44px">Concluir retorno ao atendimento</button>
+            <button type="button" data-enviar class="btn btn-primary" style="min-height:44px">Enviar pelo WhatsApp</button></div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('[data-fechar]').onclick = () => modal.close();
+        modal.querySelector('[data-enviar]').onclick = () => operar(contexto?.estado === 'falhou' ? 'reenviar' : 'enviar');
+        modal.querySelector('[data-consultar]').onclick = () => operar('status');
+        modal.querySelector('[data-concluir]').onclick = concluir;
+    }
+    const avisos = {
+        novo: 'Confira o contato e a mensagem antes de enviar.',
+        preparando: 'Tentativa registrada. Consulte o status. Se permanecer assim, confira no CRM antes de qualquer reenvio.',
+        desconhecido: 'Resultado não confirmado. Confira a conversa no ChatGuru com o administrador antes de reenviar.',
+        aguardando: 'Mensagem aceita pelo ChatGuru, aguardando confirmação de envio.',
+        enviado: 'Envio informado pelo ChatGuru. Isso não confirma leitura nem aprovação da arte.',
+        falhou: 'O ChatGuru recusou o envio. Confira o cadastro do chat e a configuração com o administrador.'
+    };
+    function pintar() {
+        modal.querySelector('[data-enviar]').disabled = ocupado || !contexto || !['novo', 'falhou'].includes(contexto.estado);
+        modal.querySelector('[data-enviar]').textContent = contexto?.estado === 'falhou' ? 'Tentar novamente após correção' : 'Enviar pelo WhatsApp';
+        modal.querySelector('[data-consultar]').disabled = ocupado || !contexto;
+        modal.querySelector('[data-concluir]').hidden = !contexto?.aceito || contexto.concluido;
+        modal.querySelector('[data-concluir]').disabled = ocupado;
+        if (!contexto) return;
+        modal.querySelector('[data-contato]').textContent = contexto.contato.nome + ' — ' + contexto.contato.whatsapp;
+        modal.querySelector('[data-texto]').textContent = contexto.texto;
+        modal.querySelector('[data-status]').textContent = avisos[contexto.estado] || 'Status não reconhecido. Confira no ChatGuru.';
+    }
+    async function concluir() {
+        if (ocupado || !contexto?.aceito || contexto.concluido) return;
+        ocupado = true; pintar();
+        try {
+            await concluirEnvioLinkParaAtendimento(contexto.os_id, true);
+            await requisitar('concluir', { os_id: contexto.os_id, confirmacao: contexto.confirmacao });
+            contexto.concluido = true;
+            pintar();
+        } catch {
+            modal.querySelector('[data-status]').textContent = 'Mensagem já aceita. Retorno ao atendimento pendente; use Concluir para tentar novamente sem reenviar.';
+        } finally { ocupado = false; pintarBotoes(); }
+    }
+    async function operar(acao) {
+        if (ocupado || !contexto) return;
+        ocupado = true; pintar();
+        try {
+            const r = await requisitar(acao, { os_id: contexto.os_id, confirmacao: contexto.confirmacao });
+            contexto = { ...contexto, ...r };
+            pintar();
+        } catch (e) {
+            // Uma resposta perdida pode ter sido aceita. Bloquear novo envio até consulta.
+            if (['enviar', 'reenviar'].includes(acao)) contexto.estado = 'desconhecido';
+            pintar();
+            modal.querySelector('[data-status]').textContent = e.message;
+        } finally { ocupado = false; pintarBotoes(); }
+        if (contexto?.aceito && !contexto.concluido) await concluir();
+    }
+    function pintarBotoes() {
+        modal.querySelector('[data-enviar]').disabled = ocupado || !contexto || !['novo', 'falhou'].includes(contexto.estado);
+        modal.querySelector('[data-consultar]').disabled = ocupado || !contexto;
+        modal.querySelector('[data-concluir]').disabled = ocupado;
+    }
+    window.abrirWhatsappArte = async function (osId) {
+        if (ocupado) { toast('Aguarde a operação de WhatsApp terminar.', 'warning'); return; }
+        criar();
+        const atual = ++abertura;
+        contexto = null;
+        modal.querySelector('[data-contato]').textContent = '';
+        modal.querySelector('[data-texto]').textContent = '';
+        modal.querySelector('[data-status]').textContent = 'Conferindo o contato selecionado no pedido...';
+        pintar();
+        if (!modal.open) modal.showModal();
+        try {
+            const r = await requisitar('preparar', { os_id: osId });
+            if (atual !== abertura) return;
+            contexto = { ...r, os_id: osId };
+            pintar();
+        } catch (e) { if (atual === abertura) modal.querySelector('[data-status]').textContent = e.message; }
+    };
+})();
