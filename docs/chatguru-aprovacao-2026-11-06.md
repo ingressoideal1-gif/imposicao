@@ -29,14 +29,19 @@ Foi preparado um painel compatível com executável já auditado, sem build novo
 nem instalação: `dist/piloto/painel-382dc0eb979b` (antes do bump final de cache).
 
 Na revalidação do teste, o contato do pedido 24880 havia mudado de 64814 para
-64813 e a arte estava em Em Arte, sem `arte_pronta_em`. Não foi enviada mensagem;
-o destino atual está aguardando confirmação do usuário e a preparação normal
-da arte continua sendo um requisito. Nenhum dado do pedido foi alterado aqui.
+64813 e a arte estava em Em Arte, sem `arte_pronta_em`. O usuário confirmou
+explicitamente o contato atual 64813 para o teste. A preparação normal da arte
+continua sendo um requisito. Nenhum dado do pedido foi alterado aqui.
 
 Uma tentativa de CI do SQL falhou no início do Chrome (timeout de 30 segundos
 no harness de texto), com 859 testes aprovados e 52 erros derivados da mesma
 fixture. Os outros canais passaram. Foi solicitado re-run somente desse job,
 sem modificar testes nem os controles de publicação.
+O re-run passou e a PR #259 foi integrada em `e9978489`; a PR #260 passou
+todos os checks e foi integrada em `49eb80ec`. A tela foi atualizada sobre
+essa base para sua própria validação final.
+Cache da entrega web: v20261113. Pacote atualizado após o bump:
+`dist/piloto/painel-c66e24d15767`, somente painel, sem instalação.
 As seções abaixo registram o contrato e a entrega local inicial.
 
 Implementado em 06/11/2026 na branch `feat/chatguru-aprovacao-20261106`,
