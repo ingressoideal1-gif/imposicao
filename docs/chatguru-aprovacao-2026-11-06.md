@@ -1,5 +1,17 @@
 # Aprovação de arte pelo WhatsApp — implementação local
 
+## Correção do endpoint da conta
+
+Em 06/11/2026, o usuário informou `https://app.zap.guru/api/v1` como
+endpoint cadastrado. A validação inicial aceitava apenas `*.chatguru.app` e
+bloqueava o preparo antes de qualquer envio. O host informado apresenta o login
+ChatGuru e sua rota API responde em JSON exigindo POST quando consultada sem
+credenciais por GET. Foi incluída somente essa URL HTTPS (com barra final
+opcional), mantendo a proibição de redirecionamentos e outros hosts zap.guru.
+Erros de endpoint e secrets obrigatórios ausentes agora têm mensagens distintas.
+Testes simulados cobrem envio único, repetição e rejeição de URLs semelhantes.
+Essa conferência pública não comprova autenticação nem entrega pelo provedor.
+
 ## Ativação autorizada em andamento
 
 O usuário autorizou a ativação e indicou o pedido 24880 para o primeiro teste
