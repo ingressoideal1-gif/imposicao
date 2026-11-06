@@ -47,6 +47,7 @@ const moduleSource = source.slice(source.indexOf('/* Contato selecionado na List
     await page.evaluate(() => ContatosListaArte.editar('11'));
     await page.waitForSelector('dialog[open]');
     assert.ok(await page.$eval('dialog', e => e.getBoundingClientRect().width <= window.innerWidth));
+    assert.ok(await page.$eval('dialog', e => { const r = e.getBoundingClientRect(); return r.left > 0 && r.top > 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight; }));
     await page.evaluate(() => { const f=document.querySelector('dialog form'); f.elements.nome.value='<img src=x onerror=alert(1)>'; f.elements.whatsapp.value='1188880000'; f.requestSubmit(); f.requestSubmit(); });
     await page.waitForFunction(() => !document.querySelector('dialog'));
     assert.equal(await page.evaluate(() => chamadas.filter(c => c.acao === 'salvar').length), 1);

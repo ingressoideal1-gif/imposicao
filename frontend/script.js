@@ -50310,15 +50310,15 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         } catch (e) { toast(e.message, 'error'); abrindo = false; return; }
         const modal = document.createElement('dialog');
         modal.id = 'modal-contato-lista-arte';
-        modal.style.cssText = 'width:min(440px,calc(100vw - 32px));box-sizing:border-box;background:var(--bg-card,#182234);color:var(--text,#fff);border:1px solid #475569;border-radius:12px;padding:20px;';
+        modal.style.cssText = 'width:min(440px,calc(100vw - 32px));margin:auto;box-sizing:border-box;background:var(--bg-card,#182234);color:var(--text,#fff);border:1px solid #475569;border-radius:12px;padding:20px;';
         modal.setAttribute('aria-label', 'Editar contato do pedido ' + n);
         modal.innerHTML = `<form><h3 style="margin-top:0">Contato do pedido ${n}</h3>
             <p style="font-size:.85rem">A alteração será salva no cadastro deste contato e valerá para outros pedidos que o utilizam.</p>
-            <label style="display:block;margin:12px 0">Nome<input name="nome" required maxlength="150" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
-            <label style="display:block;margin:12px 0">WhatsApp<input name="whatsapp" type="tel" required maxlength="32" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
+            <label style="display:block;margin:12px 0">Nome<input class="form-control" name="nome" required maxlength="150" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
+            <label style="display:block;margin:12px 0">WhatsApp<input class="form-control" name="whatsapp" type="tel" required maxlength="32" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
             <p style="font-size:.8rem">Informe o número com DDD, conforme cadastrado no ChatGuru. Para número internacional, inclua + e DDI.</p>
             <p data-aviso role="status" aria-live="polite"></p>
-            <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" data-cancelar class="btn">Cancelar</button><button type="submit" class="btn btn-primary">Salvar contato</button></div></form>`;
+            <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" data-cancelar class="btn btn-secondary">Cancelar</button><button type="submit" class="btn btn-primary">Salvar contato</button></div></form>`;
         const form = modal.querySelector('form'), aviso = modal.querySelector('[data-aviso]');
         form.elements.nome.value = original.nome || '';
         form.elements.whatsapp.value = original.whatsapp || '';
