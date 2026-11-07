@@ -55,8 +55,8 @@ A versão final usa segredo dedicado além do JWT, sem alterar credenciais exist
 Teste real: preparo validado, campo confirmado e dialog_execute aceito. Uma única
 invocação de enviar; status relido. Consulta direta ao banco confirmou exatamente
 uma reserva, tentativas=1, estado=aguardando, message_id nulo, concluido=false.
-O recebimento no WhatsApp e a expansão do link no template aguardam confirmação
-humana. Não reenviar o teste para confirmar recebimento.
+O usuário confirmou: "recebi a mensagem perfeitamente". Recebimento e conteúdo
+do teste foram aceitos. Não reenviar o teste para confirmar recebimento.
 
 Evidência local: dist/entrega/dialogo-piloto-resultado.json. Publicação apenas da
 função piloto; painel/frontend e status comercial do pedido não foram alterados.
