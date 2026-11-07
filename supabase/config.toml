@@ -553,3 +553,6 @@ verify_jwt = true
 
 [functions.idgen-interno]
 verify_jwt = true
+
+[functions.whatsapp-dialogo-piloto]
+verify_jwt = true
