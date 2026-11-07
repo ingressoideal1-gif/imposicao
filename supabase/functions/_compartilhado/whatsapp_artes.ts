@@ -7,6 +7,7 @@ type Deps = { consultar?: typeof banco; ambiente?: (k: string) => string | undef
 type Quem = { id: string; permissoes: Record<string, unknown> | null };
 const PORTAL = "https://imposition.ai-ideal.com.br";
 const TABELA = "imposition_whatsapp_artes";
+const DIALOGO = "6aef191d04236cee4e7075c1";
 
 export function telefoneWhatsApp(valor: unknown, ddi: string): string {
   if (typeof valor !== "string" || !/^[+\d\s().-]+$/.test(valor)) throw new Recusa(422, "Corrija o WhatsApp do contato selecionado no pedido.");
@@ -64,16 +65,17 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   const numero = telefoneWhatsApp(contato.whats, ler("CHATGURU_DEFAULT_DDI") || "");
   const url = `${PORTAL}/cliente/${link.numero_pedido}-${link.token}`;
   const nome = String(contato.nome_contato || "Cliente").replace(/[\r\n\x00-\x1f]/g, " ").slice(0, 150);
-  const texto = `Olá, ${nome}!\nA arte do pedido ${link.numero_pedido} está pronta para sua conferência.\n\nRevise atentamente:\n\n✅ Amostras\n✅ Quantidades\n✅ Numerações\n✅ Dados para Envio\n✅ Dados da Nota Fiscal\n💳 Faça o Pagamento\n\nLink: Suas AMOSTRAS👇🏻\n${url}`;
+  const texto = `O modelo de mensagem configurado no ChatGuru será enviado com este link de aprovação:\n${url}`;
   // Um envio por versão da arte, contato, destino e remetente. Sem dados pessoais na chave.
   const chave = await hash(JSON.stringify([c.os_id, link.token, link.arte_pronta_em, contatoId, numero, endpoint, account, phone]));
   const consultar = async () => {
-    const linhas = await db("GET", `${TABELA}?chave=eq.${chave}&select=chave,estado,message_id,concluido&limit=2`);
+    const linhas = await db("GET", `${TABELA}?chave=eq.${chave}&select=chave,estado,message_id,concluido,dialogo_id,dialogo_executado&limit=2`);
     if (!Array.isArray(linhas) || linhas.length > 1) throw new Recusa(503, "Registro de envio inválido.");
     return linhas[0] || null;
   };
-  const publico = (r: any) => ({ ok: true, confirmacao: chave, estado: r?.estado || "novo", aceito: !!r?.message_id, concluido: r?.concluido === true,
-    contato: { nome, whatsapp: numero }, texto });
+  const aceito = (r: any) => !!r?.message_id || r?.dialogo_executado === true;
+  const publico = (r: any) => ({ ok: true, confirmacao: chave, estado: r?.estado || "novo", aceito: aceito(r), concluido: r?.concluido === true,
+    dialogo_executado: r?.dialogo_executado === true, contato: { nome, whatsapp: numero }, texto });
   if (acao === "preparar") return publico(await consultar());
   if (c.confirmacao !== chave) throw new Recusa(409, "O contato ou a arte mudou. Reabra o envio e confira os dados.");
   async function salvar(estado: string, message_id: string | null) {
@@ -90,7 +92,7 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   }
   let registro = await consultar();
   if (acao === "concluir") {
-    if (!registro?.message_id) throw new Recusa(409, "A mensagem ainda não foi aceita pelo ChatGuru.");
+    if (!aceito(registro)) throw new Recusa(409, "O envio ainda não foi aceito pelo ChatGuru.");
     const salvo = uma(await db("PATCH", `${TABELA}?chave=eq.${chave}`, { concluido: true }), "Não foi possível registrar a conclusão.");
     if (salvo.chave !== chave || salvo.concluido !== true) throw new Recusa(503, "O banco não confirmou a conclusão.");
     return publico(salvo);
@@ -107,16 +109,23 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
     return publico(registro);
   }
   if (registro && !(acao === "reenviar" && registro.estado === "falhou")) return publico(registro);
-  const reserva = await db("POST", "rpc/imposition_whatsapp_reservar", { p_chave: chave, p_os_id: c.os_id, p_autor: quem.id, p_repetir: acao === "reenviar" });
-  if (reserva !== true) return publico(await consultar());
+  const destino = await hash(JSON.stringify([endpoint,account,phone,numero]));
+  const reserva = await db("POST", "rpc/imposition_whatsapp_dialogo_reservar", { p_chave: chave, p_destino: destino, p_os_id: c.os_id, p_autor: quem.id, p_dialogo: DIALOGO, p_repetir: acao === "reenviar" });
+  if (reserva === "ocupado") throw new Recusa(409, "Há uma operação pendente para esta conversa. Confira no ChatGuru antes de tentar novamente.");
+  if (reserva === "existente") return publico(await consultar());
+  if (reserva !== "reservado") throw new Recusa(503, "Reserva do diálogo não confirmada.");
   // Depois desta reserva, nunca repetir automaticamente o POST ao provedor.
-  let resposta;
-  try { resposta = await chamar("message_send", { chat_number: numero, text: texto }); }
-  catch { return publico(await salvar("desconhecido", null)); }
-  const { http, data } = resposta;
-  const aceito = http >= 200 && http < 300 && data.result === "success" && data.code === 201 &&
-    typeof data.message_id === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(data.message_id);
-  if (aceito) return publico(await salvar(data.message_status === "sent" ? "enviado" : "aguardando", data.message_id));
-  const rejeitado = http < 500 && data.result === "error" && data.code === 400;
-  return publico(await salvar(rejeitado ? "falhou" : "desconhecido", null));
+  let estado = "desconhecido";
+  const sucesso = (r: any) => r.http >= 200 && r.http < 300 && r.data.result === "success" && r.data.code === 200;
+  const rejeitado = (r: any) => r.http < 500 && r.data.result === "error" && r.data.code === 400;
+  try {
+    const campo = await chamar("chat_update_custom_fields", { chat_number: numero, field__Link_do_Cliente: url });
+    if (sucesso(campo)) {
+      const dialogo = await chamar("dialog_execute", { chat_number: numero, dialog_id: DIALOGO });
+      estado = sucesso(dialogo) ? "aguardando" : rejeitado(dialogo) ? "falhou" : "desconhecido";
+    } else if (rejeitado(campo)) estado = "falhou";
+  } catch { /* Resultado incerto conserva a reserva da conversa. */ }
+  const salvo = uma(await db("POST", "rpc/imposition_whatsapp_dialogo_finalizar", { p_chave: chave, p_destino: destino, p_estado: estado }), "Não foi possível confirmar a execução do diálogo.");
+  if (salvo.chave !== chave || salvo.estado !== estado || salvo.dialogo_executado !== (estado === "aguardando")) throw new Recusa(503, "O banco não confirmou o resultado do diálogo.");
+  return publico(salvo);
 }
