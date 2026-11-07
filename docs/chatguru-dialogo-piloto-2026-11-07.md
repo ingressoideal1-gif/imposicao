@@ -43,3 +43,21 @@ Não apagar registros ou repetir uma chamada de resultado incerto. O campo do CR
 ficará com o link autorizado; não restaurar valor anterior desconhecido.
 
 Fonte: https://wiki.chatguru.com.br/documentacao-api/parametros-obrigatorios
+
+## Resultado da execução
+
+Função publicada ACTIVE, versão 2, verify_jwt=true. Fonte publicada: e9e88e1f.
+413 testes Deno passaram; após ajuste de autenticação, os cinco testes do piloto
+passaram novamente. Nenhuma dependência instalada ou validação desabilitada.
+A primeira versão recusou o preparo por autenticação, antes de qualquer envio.
+A versão final usa segredo dedicado além do JWT, sem alterar credenciais existentes.
+
+Teste real: preparo validado, campo confirmado e dialog_execute aceito. Uma única
+invocação de enviar; status relido. Consulta direta ao banco confirmou exatamente
+uma reserva, tentativas=1, estado=aguardando, message_id nulo, concluido=false.
+O recebimento no WhatsApp e a expansão do link no template aguardam confirmação
+humana. Não reenviar o teste para confirmar recebimento.
+
+Evidência local: dist/entrega/dialogo-piloto-resultado.json. Publicação apenas da
+função piloto; painel/frontend e status comercial do pedido não foram alterados.
+Código e documentação registrados na branch feat/chatguru-dialogo-piloto-20261107.
