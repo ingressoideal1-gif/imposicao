@@ -50359,6 +50359,10 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
     let ocupado = false;
     let abertura = 0;
     let modal;
+    let temporizador;
+    function podeReenviar() {
+        return contexto?.aceito && contexto.reenvio_confirmacao && contexto.reenvio_em && Date.now() >= Date.parse(contexto.reenvio_em);
+    }
     async function requisitar(acao, dados) {
         const sessao = await supabaseClient.auth.getSession();
         const token = sessao?.data?.session?.access_token;
@@ -50392,7 +50396,8 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
             <button type="button" data-enviar class="btn btn-primary" style="min-height:44px">Enviar pelo WhatsApp</button></div>`;
         document.body.appendChild(modal);
         modal.querySelector('[data-fechar]').onclick = () => modal.close();
-        modal.querySelector('[data-enviar]').onclick = () => operar(contexto?.estado === 'falhou' ? 'reenviar' : 'enviar');
+        modal.querySelector('[data-enviar]').onclick = () => operar(contexto?.estado === 'falhou' || podeReenviar() ? 'reenviar' : 'enviar');
+        modal.addEventListener('close', () => { if (!modal.open) clearInterval(temporizador); });
         modal.querySelector('[data-consultar]').onclick = () => operar('status');
         modal.querySelector('[data-concluir]').onclick = concluir;
     }
@@ -50405,8 +50410,8 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         falhou: 'O ChatGuru recusou o envio. Confira o cadastro do chat e a configuração com o administrador.'
     };
     function pintar() {
-        modal.querySelector('[data-enviar]').disabled = ocupado || !contexto || !['novo', 'falhou'].includes(contexto.estado);
-        modal.querySelector('[data-enviar]').textContent = contexto?.estado === 'falhou' ? 'Tentar novamente após correção' : 'Enviar pelo WhatsApp';
+        modal.querySelector('[data-enviar]').disabled = ocupado || !contexto || (!['novo', 'falhou'].includes(contexto.estado) && !podeReenviar());
+        pintarBotoes();
         modal.querySelector('[data-consultar]').disabled = ocupado || !contexto;
         modal.querySelector('[data-concluir]').hidden = !contexto?.aceito || contexto.concluido;
         modal.querySelector('[data-concluir]').disabled = ocupado;
@@ -50436,25 +50441,31 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         if (ocupado || !contexto) return;
         ocupado = true; pintar();
         try {
-            const r = await requisitar(acao, { os_id: contexto.os_id, confirmacao: contexto.confirmacao });
+            const r = await requisitar(acao, { os_id: contexto.os_id, confirmacao: contexto.confirmacao, ...(acao === 'reenviar' && contexto.reenvio_confirmacao ? { reenvio_confirmacao: contexto.reenvio_confirmacao } : {}) });
             contexto = { ...contexto, ...r };
             pintar();
         } catch (e) {
             // Uma resposta perdida pode ter sido aceita. Bloquear novo envio até consulta.
-            if (['enviar', 'reenviar'].includes(acao)) contexto.estado = 'desconhecido';
+            if (['enviar', 'reenviar'].includes(acao)) { contexto.estado = 'desconhecido'; contexto.aceito = false; contexto.reenvio_em = null; contexto.reenvio_confirmacao = null; }
             pintar();
             modal.querySelector('[data-status]').textContent = e.message;
         } finally { ocupado = false; pintarBotoes(); }
         if (contexto?.aceito && !contexto.concluido) await concluir();
     }
     function pintarBotoes() {
-        modal.querySelector('[data-enviar]').disabled = ocupado || !contexto || !['novo', 'falhou'].includes(contexto.estado);
+        const segundos = contexto?.reenvio_em ? Math.max(0, Math.ceil((Date.parse(contexto.reenvio_em) - Date.now()) / 1000)) : 0;
+        modal.querySelector('[data-enviar]').textContent = podeReenviar() ? 'Reenviar pelo WhatsApp'
+            : contexto?.aceito && segundos > 0 ? `Reenviar em ${segundos}s`
+            : contexto?.estado === 'falhou' ? 'Tentar novamente após correção' : 'Enviar pelo WhatsApp';
+        modal.querySelector('[data-enviar]').disabled = ocupado || !contexto || (!['novo', 'falhou'].includes(contexto.estado) && !podeReenviar());
         modal.querySelector('[data-consultar]').disabled = ocupado || !contexto;
         modal.querySelector('[data-concluir]').disabled = ocupado;
     }
     window.abrirWhatsappArte = async function (osId) {
         if (ocupado) { toast('Aguarde a operação de WhatsApp terminar.', 'warning'); return; }
         criar();
+        clearInterval(temporizador);
+        temporizador = setInterval(() => { if (modal.open) pintarBotoes(); }, 1000);
         const atual = ++abertura;
         contexto = null;
         modal.querySelector('[data-contato]').textContent = '';
