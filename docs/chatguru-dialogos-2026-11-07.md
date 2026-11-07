@@ -53,9 +53,16 @@ remover metadados do cache; dois diferem somente na emissão dos construtores
 O download CLI recusou um caminho externo; o ESZIP foi inspecionado sem extrair
 fora de dist/entrega. Snapshot anterior preservado para recuperação.
 
-Ativação e hashes públicos serão registrados em dist/entrega. Recuperação:
-reverter API/frontend por entrega protegida, preservando colunas, reservas e
-histórico. Não reverter cadastros ou liberar tentativas desconhecidas.
+SQL aplicado: 36 registros anteriores preservados por comparação de contagem
+e resumo de todos os campos originais. RLS ativo; RPCs negadas a anon/authenticated.
+API painel publicada na versão 279, ACTIVE, verify_jwt=true; chamada anônima
+recusada com HTTP 401. Nenhum envio real adicional nesta publicação.
+
+Ativação e hashes públicos ficam registrados em dist/entrega. Recuperação exige
+API que continue reconhecendo dialogo_executado, mesmo se retornar ao envio de
+texto para novos pedidos. Uma versão antiga que só reconhece message_id deixaria
+conclusões de diálogos pendentes. Preservar colunas, reservas e histórico; não
+reverter cadastros nem liberar tentativas desconhecidas.
 
 Fontes: docs/chatguru-dialogo-piloto-2026-11-07.md;
 https://wiki.chatguru.com.br/documentacao-api/parametros-obrigatorios.
