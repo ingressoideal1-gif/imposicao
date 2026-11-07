@@ -50397,7 +50397,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         modal.querySelector('[data-concluir]').onclick = concluir;
     }
     const avisos = {
-        novo: 'Confira o contato e a mensagem antes de enviar.',
+        novo: 'Confira o contato e o link antes de enviar.',
         preparando: 'Tentativa registrada. Consulte o status. Se permanecer assim, confira no CRM antes de qualquer reenvio.',
         desconhecido: 'Resultado não confirmado. Confira a conversa no ChatGuru com o administrador antes de reenviar.',
         aguardando: 'Mensagem aceita pelo ChatGuru, aguardando confirmação de envio.',
@@ -50413,7 +50413,9 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         if (!contexto) return;
         modal.querySelector('[data-contato]').textContent = contexto.contato.nome + ' — ' + contexto.contato.whatsapp;
         modal.querySelector('[data-texto]').textContent = contexto.texto;
-        modal.querySelector('[data-status]').textContent = avisos[contexto.estado] || 'Status não reconhecido. Confira no ChatGuru.';
+        modal.querySelector('[data-status]').textContent = contexto.dialogo_executado
+            ? 'Diálogo executado pelo ChatGuru. O recebimento pode ser conferido na conversa.'
+            : avisos[contexto.estado] || 'Status não reconhecido. Confira no ChatGuru.';
     }
     async function concluir() {
         if (ocupado || !contexto?.aceito || contexto.concluido) return;
@@ -50425,7 +50427,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
             contexto.concluido = true;
             pintar();
             modal.close();
-            toast('Mensagem aceita pelo ChatGuru.', 'success');
+            toast(contexto.dialogo_executado ? 'Diálogo executado pelo ChatGuru.' : 'Mensagem aceita pelo ChatGuru.', 'success');
         } catch {
             modal.querySelector('[data-status]').textContent = 'Mensagem já aceita. Retorno ao atendimento pendente; use Concluir para tentar novamente sem reenviar.';
         } finally { ocupado = false; pintarBotoes(); }

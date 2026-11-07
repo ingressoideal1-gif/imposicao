@@ -17,8 +17,8 @@ const banner = source.slice(start, source.indexOf('window.gerarLinkClienteBanner
    function findOSInState(id){return {id,numero:11};}
    window.preparos=0;window.retornos=0;window.chamadas=[];window.falharRetorno=true;
    window.semLink=false;window.falharPreparo=false;window.estadoServidor='novo';window.concluidoServidor=false;
-   window.conclusaoInvalida=false;window.resultadoEnvio='aguardando';
-   function toast(){}
+   window.conclusaoInvalida=false;window.resultadoEnvio='aguardando';window.modoDialogo=false;window.ultimoToast='';
+   function toast(texto){ultimoToast=texto;}
    async function buscarLinkClienteAtivo(){return semLink?null:{token:'abc123'};}
    function linkPrecisaPrepararArte(){return false;}
    async function prepararLinkDaArtePronta(){preparos++;return {ok:!falharPreparo,link:falharPreparo?null:'link'};}
@@ -30,10 +30,10 @@ const banner = source.slice(start, source.indexOf('window.gerarLinkClienteBanner
     const acao=url.split('/').pop();chamadas.push({acao,dados:JSON.parse(op.body)});
     if(op.headers.Authorization!=='Bearer synthetic')throw Error('Sem sessão');
     if(acao==='enviar'||acao==='reenviar'){estadoServidor=resultadoEnvio;await new Promise(r=>setTimeout(r,80));}
-    if(acao==='status')estadoServidor='enviado';
+    if(acao==='status'&&!modoDialogo)estadoServidor='enviado';
     if(acao==='concluir')concluidoServidor=!conclusaoInvalida;
     return {ok:true,json:async()=>({ok:true,estado:estadoServidor,confirmacao:'hash',aceito:['aguardando','enviado'].includes(estadoServidor),
-      concluido:concluidoServidor,contato:{nome:'Contato Exemplo',whatsapp:'5511999990000'},texto:'Mensagem sintética'})};
+      dialogo_executado:modoDialogo&&estadoServidor==='aguardando',concluido:concluidoServidor,contato:{nome:'Contato Exemplo',whatsapp:'5511999990000'},texto:'Link de aprovação sintético'})};
    };
   `+banner});
   await page.addScriptTag({content:source.slice(source.indexOf('/* Envio do link pelo contato selecionado'))});
@@ -70,10 +70,13 @@ const banner = source.slice(start, source.indexOf('window.gerarLinkClienteBanner
    assert.equal(await page.$eval('dialog',e=>e.open),true,'falha/incerteza mantém janela');
    await page.click('[data-fechar]');
   }
-  await page.evaluate(()=>{estadoServidor='novo';concluidoServidor=false;resultadoEnvio='aguardando';});
+  await page.evaluate(()=>{estadoServidor='novo';concluidoServidor=false;resultadoEnvio='aguardando';modoDialogo=true;});
   await page.evaluate(()=>abrirWhatsappArte('vibe_11')); await page.click('[data-enviar]');
   await page.waitForFunction(()=>concluidoServidor&&!document.querySelector('dialog').open);
+  assert.equal(await page.evaluate(()=>ultimoToast),'Diálogo executado pelo ChatGuru.');
   await page.evaluate(()=>abrirWhatsappArte('vibe_11'));
+  assert.match(await page.$eval('[data-status]',e=>e.textContent),/Diálogo executado/);
+  assert.equal(await page.$eval('[data-enviar]',e=>e.disabled),true);
   await page.click('[data-fechar]');await page.evaluate(()=>{semLink=true;falharPreparo=true;});
   const antes=await page.evaluate(()=>chamadas.length);
   await page.evaluate(()=>gerarLinkClienteBanner());
