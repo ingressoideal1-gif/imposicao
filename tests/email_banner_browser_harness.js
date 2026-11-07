@@ -17,6 +17,7 @@ const banner = source.slice(start, source.indexOf('window.gerarLinkClienteBanner
    function findOSInState(id){return {id,numero:11};}
    window.preparos=0;window.retornos=0;window.chamadas=[];window.falharRetorno=true;
    window.semLink=false;window.falharPreparo=false;window.estadoServidor='novo';window.concluidoServidor=false;
+   window.reenvioEm=null;window.reenvioConfirmacao=null;window.agoraExtra=0;const agoraOriginal=Date.now;Date.now=()=>agoraOriginal()+agoraExtra;
    window.conclusaoInvalida=false;window.resultadoEnvio='aguardando';window.modoDialogo=false;window.ultimoToast='';
    function toast(texto){ultimoToast=texto;}
    async function buscarLinkClienteAtivo(){return semLink?null:{token:'abc123'};}
@@ -33,7 +34,7 @@ const banner = source.slice(start, source.indexOf('window.gerarLinkClienteBanner
     if(acao==='status'&&!modoDialogo)estadoServidor='enviado';
     if(acao==='concluir')concluidoServidor=!conclusaoInvalida;
     return {ok:true,json:async()=>({ok:true,estado:estadoServidor,confirmacao:'hash',aceito:['aguardando','enviado'].includes(estadoServidor),
-      dialogo_executado:modoDialogo&&estadoServidor==='aguardando',concluido:concluidoServidor,contato:{nome:'Contato Exemplo',whatsapp:'5511999990000'},texto:'Link de aprovação sintético'})};
+      reenvio_em:reenvioEm,reenvio_confirmacao:reenvioConfirmacao,dialogo_executado:modoDialogo&&estadoServidor==='aguardando',concluido:concluidoServidor,contato:{nome:'Contato Exemplo',whatsapp:'5511999990000'},texto:'Link de aprovação sintético'})};
    };
   `+banner});
   await page.addScriptTag({content:source.slice(source.indexOf('/* Envio do link pelo contato selecionado'))});
@@ -81,6 +82,17 @@ const banner = source.slice(start, source.indexOf('window.gerarLinkClienteBanner
   const antes=await page.evaluate(()=>chamadas.length);
   await page.evaluate(()=>gerarLinkClienteBanner());
   assert.equal(await page.evaluate(()=>chamadas.length),antes);
+  await page.evaluate(()=>{document.querySelector('dialog').close();estadoServidor='aguardando';concluidoServidor=true;modoDialogo=true;reenvioEm=new Date(Date.now()+120000).toISOString();reenvioConfirmacao='instante-confirmado';});
+  await page.evaluate(()=>abrirWhatsappArte('vibe_11'));
+  assert.equal(await page.$eval('[data-enviar]',e=>e.disabled),true);
+  assert.match(await page.$eval('[data-enviar]',e=>e.textContent),/Reenviar em/);
+  await page.evaluate(()=>agoraExtra=121000);
+  await page.waitForFunction(()=>!document.querySelector('[data-enviar]').disabled);
+  assert.equal(await page.$eval('[data-enviar]',e=>e.textContent),'Reenviar pelo WhatsApp');
+  const antesReenvio=await page.evaluate(()=>chamadas.filter(c=>c.acao==='reenviar').length);
+  await page.evaluate(()=>{document.querySelector('[data-enviar]').click();document.querySelector('[data-enviar]').click();});
+  await page.waitForFunction(()=>chamadas.some(c=>c.acao==='reenviar'&&c.dados.reenvio_confirmacao==='instante-confirmado'));
+  assert.equal(await page.evaluate(()=>chamadas.filter(c=>c.acao==='reenviar').length),antesReenvio+1);
   assert.deepEqual(errors,[]);
   console.log('OK: WhatsApp fecha após confirmação; falha/incerteza/conclusão pendente mantêm janela; recuperação sem reenvio, status e mobile');
  } finally {await browser.close();}
