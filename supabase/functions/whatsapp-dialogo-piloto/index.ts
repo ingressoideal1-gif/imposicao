@@ -14,8 +14,9 @@ const resposta = (status: number, data: unknown) => Response.json(data, { status
 
 export async function handler(req: Request, deps: Deps = {}): Promise<Response> {
   const env = deps.env || (k => Deno.env.get(k));
-  const segredo = env("SUPABASE_SERVICE_ROLE_KEY");
-  if (!segredo || req.headers.get("Authorization") !== `Bearer ${segredo}`) return resposta(403, { erro: "Acesso técnico exigido." });
+  // Além do JWT validado pelo gateway, segredo exclusivo do piloto.
+  const segredo = env("CHATGURU_DIALOGO_PILOTO_TOKEN");
+  if (!segredo || req.headers.get("x-piloto-token") !== segredo || !req.headers.get("Authorization")?.startsWith("Bearer ")) return resposta(403, { erro: "Acesso técnico exigido." });
   if (req.method !== "POST") return resposta(405, { erro: "Use POST." });
   const db = deps.db || banco;
   try {

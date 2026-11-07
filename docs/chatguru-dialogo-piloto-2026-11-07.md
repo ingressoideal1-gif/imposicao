@@ -2,8 +2,10 @@
 
 Autorizado pelo usuário: publicar adaptação e testar uma vez no pedido 24880.
 Função separada `whatsapp-dialogo-piloto`, JWT habilitado e autenticação técnica
-por comparação com a chave service_role injetada no servidor. Não aceita token
-comum de operador. Não distribuir essa chave ao parceiro ou ao navegador.
+com segredo exclusivo `CHATGURU_DIALOGO_PILOTO_TOKEN` em `x-piloto-token` além
+do JWT validado pelo gateway. Uma sessão de operador sozinha não autoriza envio.
+Não distribuir o segredo ao navegador. O segredo é gerado criptograficamente
+durante a ativação e mantido somente na memória do executor e nos secrets da função.
 
 Escopo fixo: pedido 24880, diálogo `6aef191d04236cee4e7075c1`, campo
 `{Link_do_Cliente}`. O formulário da API usa `field__Link_do_Cliente` (dois

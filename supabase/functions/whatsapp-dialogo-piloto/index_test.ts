@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { handler } from "./index.ts";
 function fixture() {
-  const env: Record<string,string> = { SUPABASE_SERVICE_ROLE_KEY: "servico-sintetico", CHATGURU_ENDPOINT: "https://app.zap.guru/api/v1", CHATGURU_KEY: "teste", CHATGURU_ACCOUNT_ID: "teste", CHATGURU_PHONE_ID: "teste", CHATGURU_DEFAULT_DDI: "55" };
+  const env: Record<string,string> = { CHATGURU_DIALOGO_PILOTO_TOKEN: "servico-sintetico", CHATGURU_ENDPOINT: "https://app.zap.guru/api/v1", CHATGURU_KEY: "teste", CHATGURU_ACCOUNT_ID: "teste", CHATGURU_PHONE_ID: "teste", CHATGURU_DEFAULT_DDI: "55" };
   let registro: any = null;
   const c = { chamadas: [] as URLSearchParams[], falhaCampo: false, timeout: false, timeoutDialogo: false, numero: "11999990000", persistencia: true };
   const deps = { env: (k: string) => env[k], db: async (m: string, path: string, body?: any) => {
@@ -17,7 +17,7 @@ function fixture() {
     if (c.timeout || (c.timeoutDialogo && b.get("action") === "dialog_execute")) throw new Error("segredo-provedor");
     return Response.json(c.falhaCampo ? { result: "error", code: 400 } : { result: "success", code: 200 });
   }) as typeof fetch };
-  const executar = (acao: string, confirmacao?: string, auth = "servico-sintetico", pedido = 24880) => handler(new Request("https://local/", { method: "POST", headers: { Authorization: `Bearer ${auth}` }, body: JSON.stringify({ acao, pedido, confirmacao }) }), deps);
+  const executar = (acao: string, confirmacao?: string, auth = "servico-sintetico", pedido = 24880) => handler(new Request("https://local/", { method: "POST", headers: { Authorization: "Bearer jwt-sintetico", "x-piloto-token": auth }, body: JSON.stringify({ acao, pedido, confirmacao }) }), deps);
   const preparar = async () => (await executar("preparar")).json();
   return { c, executar, preparar };
 }
