@@ -66,3 +66,48 @@ reverter cadastros nem liberar tentativas desconhecidas.
 
 Fontes: docs/chatguru-dialogo-piloto-2026-11-07.md;
 https://wiki.chatguru.com.br/documentacao-api/parametros-obrigatorios.
+
+## Extensão Pedido_Atual — preparada localmente
+
+A mesma chamada chat_update_custom_fields passa a gravar field__Pedido_Atual
+com String(link.numero_pedido), além de field__Link_do_Cliente. No ChatGuru,
+cadastrar o campo Pedido_Atual e usar {Pedido_Atual} no diálogo/template.
+Exemplo: pedido 24880 produz o valor 24880, sem prefixo vibe_ ou token.
+Os dois campos são enviados juntos antes de dialog_execute; uma recusa impede
+a execução. Chaves de idempotência e histórico são preservados.
+Esta extensão ainda depende da publicação da API e da configuração do campo
+no ChatGuru. O teste real anterior validou somente Link_do_Cliente.
+
+## Reenvio após 120 segundos — preparado localmente
+
+Decisão humana: permitir novo envio manual depois de 120 segundos do aceite.
+A API devolve reenvio_em e reenvio_confirmacao (atualizado_em do registro aceito).
+A tela mostra contagem regressiva e libera Reenviar pelo WhatsApp; não dispara
+sozinha. POST /reenviar recebe os_id, confirmacao e reenvio_confirmacao.
+POST /enviar mantém idempotência, mesmo depois do prazo. Registros desconhecidos
+ou preparando continuam bloqueados, independentemente do tempo decorrido.
+
+Aplicar sql/chatguru_reenvio_120s.sql antes da API/frontend. Migração aditiva,
+transacional: cria histórico e RPC service_role, sem modificar registros atuais.
+A RPC trava a conversa e o registro, verifica prazo pelo relógio do banco e exige
+o mesmo atualizado_em confirmado. Arquiva o registro completo anterior em
+imposition_whatsapp_reenvios antes de reservar nova tentativa na chave existente.
+Isso preserva mensagem legada, autor, conclusão, estado e datas anteriores.
+Tentativas simultâneas e confirmações antigas não liberam múltiplos disparos.
+Falha definitiva mantém a repetição explícita já existente; incerteza mantém trava.
+Consulta de status legado e conclusão usam filtro de atualizado_em para não
+sobrescrever uma tentativa reservada concorrentemente. Conclusão comercial
+continua separada; a janela fecha somente depois da confirmação desse fluxo.
+
+Verificação local: 18 testes Deno; PostgreSQL sintético (119/120s, legado,
+histórico, permissões, confirmação antiga e resultado desconhecido); navegador
+simulado (contagem, desbloqueio, clique duplo, fechamento e reabertura).
+Sem SQL aplicado, deploy ou novo envio real nesta extensão.
+Recuperação: voltar API/frontend juntos, mantendo histórico e reservas; não
+apagar registros nem liberar resultado desconhecido. Retomada: publicar SQL,
+API e frontend e conferir o contador em um envio expressamente autorizado.
+
+Validação final: suíte Deno completa com 418 testes aprovados; dois canais com
+911 testes aprovados, 2 ignorados e 2 subtestes por canal (um aviso preexistente).
+Painel compatível preparado em dist/piloto-reenvio-120s/painel-3f294252b992,
+sem compilação, instalação ou publicação. Relatórios: dist/entrega/reenvio-120s-*.

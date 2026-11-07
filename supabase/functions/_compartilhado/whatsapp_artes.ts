@@ -34,7 +34,7 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   exigirOperadorPropostas(quem.permissoes, "consultar");
   if (!["preparar", "enviar", "reenviar", "status", "concluir"].includes(acao)) throw new Recusa(404, "Operação inexistente.");
   const c = entrada as Record<string, unknown>;
-  if (!c || typeof c !== "object" || Array.isArray(c) || Object.keys(c).some(k => !["os_id", "confirmacao"].includes(k)) ||
+  if (!c || typeof c !== "object" || Array.isArray(c) || Object.keys(c).some(k => !["os_id", "confirmacao", "reenvio_confirmacao"].includes(k)) ||
       typeof c.os_id !== "string" || !/^(vibe_[1-9]\d{0,14}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})$/.test(c.os_id)) {
     throw new Recusa(422, "Pedido inválido para envio.");
   }
@@ -69,17 +69,19 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   // Um envio por versão da arte, contato, destino e remetente. Sem dados pessoais na chave.
   const chave = await hash(JSON.stringify([c.os_id, link.token, link.arte_pronta_em, contatoId, numero, endpoint, account, phone]));
   const consultar = async () => {
-    const linhas = await db("GET", `${TABELA}?chave=eq.${chave}&select=chave,estado,message_id,concluido,dialogo_id,dialogo_executado&limit=2`);
+    const linhas = await db("GET", `${TABELA}?chave=eq.${chave}&select=chave,estado,message_id,concluido,dialogo_id,dialogo_executado,atualizado_em&limit=2`);
     if (!Array.isArray(linhas) || linhas.length > 1) throw new Recusa(503, "Registro de envio inválido.");
     return linhas[0] || null;
   };
   const aceito = (r: any) => !!r?.message_id || r?.dialogo_executado === true;
-  const publico = (r: any) => ({ ok: true, confirmacao: chave, estado: r?.estado || "novo", aceito: aceito(r), concluido: r?.concluido === true,
+  const reenviavel = (r: any) => aceito(r) && ["aguardando", "enviado"].includes(r.estado) && Number.isFinite(Date.parse(r.atualizado_em));
+  const publico = (r: any) => ({ reenvio_confirmacao: reenviavel(r) ? r.atualizado_em : null,
+    reenvio_em: reenviavel(r) ? new Date(Date.parse(r.atualizado_em) + 120000).toISOString() : null, ok: true, confirmacao: chave, estado: r?.estado || "novo", aceito: aceito(r), concluido: r?.concluido === true,
     dialogo_executado: r?.dialogo_executado === true, contato: { nome, whatsapp: numero }, texto });
   if (acao === "preparar") return publico(await consultar());
   if (c.confirmacao !== chave) throw new Recusa(409, "O contato ou a arte mudou. Reabra o envio e confira os dados.");
   async function salvar(estado: string, message_id: string | null) {
-    const r = uma(await db("PATCH", `${TABELA}?chave=eq.${chave}`, { estado, message_id, atualizado_em: new Date().toISOString() }), "Não foi possível confirmar o resultado. Consulte o status.");
+    const r = uma(await db("PATCH", `${TABELA}?chave=eq.${chave}&atualizado_em=eq.${encodeURIComponent(registro.atualizado_em)}&message_id=eq.${encodeURIComponent(message_id || "")}`, { estado, message_id, atualizado_em: new Date().toISOString() }), "Não foi possível confirmar o resultado. Consulte o status.");
     if (r.chave !== chave || r.estado !== estado || r.message_id !== message_id) throw new Recusa(503, "O banco não confirmou o resultado do envio.");
     return r;
   }
@@ -93,7 +95,7 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   let registro = await consultar();
   if (acao === "concluir") {
     if (!aceito(registro)) throw new Recusa(409, "O envio ainda não foi aceito pelo ChatGuru.");
-    const salvo = uma(await db("PATCH", `${TABELA}?chave=eq.${chave}`, { concluido: true }), "Não foi possível registrar a conclusão.");
+    const salvo = uma(await db("PATCH", `${TABELA}?chave=eq.${chave}&atualizado_em=eq.${encodeURIComponent(registro.atualizado_em)}`, { concluido: true }), "Não foi possível registrar a conclusão.");
     if (salvo.chave !== chave || salvo.concluido !== true) throw new Recusa(503, "O banco não confirmou a conclusão.");
     return publico(salvo);
   }
@@ -108,9 +110,15 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
     } catch { throw new Recusa(502, "Não foi possível consultar o ChatGuru. A mensagem não foi reenviada."); }
     return publico(registro);
   }
-  if (registro && !(acao === "reenviar" && registro.estado === "falhou")) return publico(registro);
+  const novoEnvio = acao === "reenviar" && reenviavel(registro);
+  if (novoEnvio && (c.reenvio_confirmacao !== registro.atualizado_em || Date.now() < Date.parse(registro.atualizado_em) + 120000)) {
+    throw new Recusa(409, "Aguarde 120 segundos após o envio confirmado e consulte o status antes de reenviar.");
+  }
+  if (registro && !(acao === "reenviar" && registro.estado === "falhou") && !novoEnvio) return publico(registro);
   const destino = await hash(JSON.stringify([endpoint,account,phone,numero]));
-  const reserva = await db("POST", "rpc/imposition_whatsapp_dialogo_reservar", { p_chave: chave, p_destino: destino, p_os_id: c.os_id, p_autor: quem.id, p_dialogo: DIALOGO, p_repetir: acao === "reenviar" });
+  const reserva = novoEnvio
+    ? await db("POST", "rpc/imposition_whatsapp_dialogo_reenviar", { p_chave: chave, p_destino: destino, p_os_id: c.os_id, p_autor: quem.id, p_dialogo: DIALOGO, p_atualizado_em: c.reenvio_confirmacao })
+    : await db("POST", "rpc/imposition_whatsapp_dialogo_reservar", { p_chave: chave, p_destino: destino, p_os_id: c.os_id, p_autor: quem.id, p_dialogo: DIALOGO, p_repetir: acao === "reenviar" });
   if (reserva === "ocupado") throw new Recusa(409, "Há uma operação pendente para esta conversa. Confira no ChatGuru antes de tentar novamente.");
   if (reserva === "existente") return publico(await consultar());
   if (reserva !== "reservado") throw new Recusa(503, "Reserva do diálogo não confirmada.");
@@ -119,7 +127,7 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   const sucesso = (r: any) => r.http >= 200 && r.http < 300 && r.data.result === "success" && r.data.code === 200;
   const rejeitado = (r: any) => r.http < 500 && r.data.result === "error" && r.data.code === 400;
   try {
-    const campo = await chamar("chat_update_custom_fields", { chat_number: numero, field__Link_do_Cliente: url });
+    const campo = await chamar("chat_update_custom_fields", { chat_number: numero, field__Link_do_Cliente: url, field__Pedido_Atual: String(link.numero_pedido) });
     if (sucesso(campo)) {
       const dialogo = await chamar("dialog_execute", { chat_number: numero, dialog_id: DIALOGO });
       estado = sucesso(dialogo) ? "aguardando" : rejeitado(dialogo) ? "falhou" : "desconhecido";
