@@ -17,8 +17,14 @@ function fixture() {
       if (caminho.startsWith("contatos?")) { assert.ok(caminho.includes("id=eq.7")); return [c.contato]; }
       if (caminho === "rpc/imposition_whatsapp_dialogo_finalizar") {
         if (c.falharPersistencia) return [];
-        const r = { ...registros.get(corpo.p_chave), estado: corpo.p_estado, dialogo_executado: corpo.p_estado === "aguardando" };
+        const r = { ...registros.get(corpo.p_chave), estado: corpo.p_estado, atualizado_em: new Date().toISOString(), dialogo_executado: corpo.p_estado === "aguardando" };
         registros.set(corpo.p_chave, r); return [r];
+      }
+      if (caminho === "rpc/imposition_whatsapp_dialogo_reenviar") {
+        const atual = registros.get(corpo.p_chave);
+        if (atual?.atualizado_em !== corpo.p_atualizado_em || !["aguardando", "enviado"].includes(atual.estado) || Date.now() < Date.parse(atual.atualizado_em) + 120000) return "existente";
+        registros.set(corpo.p_chave, { ...atual, estado: "preparando", dialogo_executado: false, message_id: null, concluido: false, atualizado_em: new Date().toISOString() });
+        return "reservado";
       }
       if (caminho === "rpc/imposition_whatsapp_dialogo_reservar") {
         if (c.ocupado) return "ocupado";
@@ -61,6 +67,7 @@ Deno.test("whatsapp: destinatário selecionado, aceite e status sem novo envio",
   assert.equal(r.estado, "aguardando"); assert.equal(r.aceito, true);
   assert.equal(f.c.chamadas[0].get("chat_number"), "5511999990000");
   assert.equal(f.c.chamadas[0].get("field__Link_do_Cliente"), "https://imposition.ai-ideal.com.br/cliente/11-abc123");
+  assert.equal(f.c.chamadas[0].get("field__Pedido_Atual"), "11");
   assert.equal(f.c.chamadas[1].get("dialog_id"), "6aef191d04236cee4e7075c1");
   assert.equal(r.dialogo_executado, true);
   await f.executar("enviar", { confirmacao: p.confirmacao });
@@ -93,6 +100,7 @@ Deno.test("whatsapp: rejeição não vaza resposta nem é aceita", async () => {
   const f = fixture(), p = await f.preparar(); f.c.recusado = true;
   const r = await f.executar("enviar", { confirmacao: p.confirmacao });
   assert.equal(r.estado, "falhou"); assert.equal(r.aceito, false);
+  assert.equal(f.c.chamadas.length, 1); // Recusa dos campos impede executar o diálogo.
   assert.ok(!JSON.stringify(r).includes("dados privados"));
   await assert.rejects(() => f.executar("concluir", { confirmacao: p.confirmacao }), Recusa);
 });
@@ -176,4 +184,29 @@ Deno.test("whatsapp: diálogo incerto não aceita conclusão nem repete", async 
   await assert.rejects(()=>f.executar("concluir",{confirmacao:p.confirmacao}),Recusa);
   await f.executar("reenviar",{confirmacao:p.confirmacao});
   assert.equal(f.c.chamadas.length,2);
+});
+
+Deno.test("whatsapp: reenvio explícito depois de 120s, sem duplicar cliques", async () => {
+  const f = fixture(), p = await f.preparar();
+  await f.executar("enviar", { confirmacao: p.confirmacao });
+  let r = await f.preparar();
+  await assert.rejects(() => f.executar("reenviar", { confirmacao: p.confirmacao, reenvio_confirmacao: r.reenvio_confirmacao }), /120 segundos/);
+  assert.equal(f.c.chamadas.length, 2);
+  f.c.registros.get(p.confirmacao).atualizado_em = new Date(Date.now() - 120001).toISOString();
+  r = await f.preparar();
+  // Um clique antigo em enviar nunca se transforma em novo disparo.
+  await f.executar("enviar", { confirmacao: p.confirmacao });
+  assert.equal(f.c.chamadas.length, 2);
+  const entrada = { confirmacao: p.confirmacao, reenvio_confirmacao: r.reenvio_confirmacao };
+  await Promise.all([f.executar("reenviar", entrada), f.executar("reenviar", entrada)]);
+  assert.equal(f.c.chamadas.length, 4);
+  await assert.rejects(() => f.executar("reenviar", entrada), /120 segundos/);
+});
+Deno.test("whatsapp: prazo não libera resultado desconhecido", async () => {
+  const f = fixture(), p = await f.preparar(); f.c.timeoutDialogo = true;
+  await f.executar("enviar", { confirmacao: p.confirmacao });
+  f.c.registros.get(p.confirmacao).atualizado_em = new Date(Date.now() - 86400000).toISOString();
+  assert.equal((await f.preparar()).reenvio_em, null);
+  await f.executar("reenviar", { confirmacao: p.confirmacao });
+  assert.equal(f.c.chamadas.length, 2);
 });
