@@ -50271,8 +50271,11 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         if (item.erro) return `<button class="btn btn-sm" onclick="ContatosListaArte.recarregar('${n}')" title="Tentar consultar novamente">Recarregar contato</button>`;
         if (!item.dados?.valido) return '<span style="color:var(--text-dim)">Confira o contato selecionado no ERP</span>';
         const c = item.dados;
+        const ausenteGuru = c.guru_disponivel === false;
+        const dicaGuru = ausenteGuru ? 'Número não encontrado na base do Guru deste remetente. Confira o cadastro ou sincronize a conversa.'
+            : c.guru_disponivel === true ? 'Número encontrado na base do Guru deste remetente.' : 'Disponibilidade na base do Guru não conferida.';
         return `<strong style="overflow-wrap:anywhere">${escapeHtml(c.nome || 'Sem nome')}</strong><br><span style="font-size:.8rem;overflow-wrap:anywhere">${escapeHtml(c.whatsapp || 'Sem WhatsApp')}</span>` +
-            (podeEditar() ? `<br><button class="btn btn-sm" style="min-height:28px;margin-top:3px" onclick="ContatosListaArte.editar('${n}')" aria-label="Editar contato do pedido ${n}">✎ Editar</button>` : '');
+            (podeEditar() ? `<br><button class="btn btn-sm" data-guru-ausente="${ausenteGuru}" style="min-height:28px;margin-top:3px;${ausenteGuru ? 'background:#78350f;color:#fef3c7;border:1px solid #f59e0b;' : ''}" onclick="ContatosListaArte.editar('${n}')" title="${dicaGuru}" aria-label="Editar contato do pedido ${n}. ${dicaGuru}">✎ Editar${ausenteGuru ? ' ⚠' : ''}</button>` : '');
     }
     function pintar() {
         document.querySelectorAll('[data-contato-arte]').forEach(el => {

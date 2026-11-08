@@ -24,7 +24,7 @@ const moduleSource = source.slice(source.indexOf('/* Contato selecionado na List
       window.avisos=[];function toast(m,t){avisos.push({m,t});}
       window.chamadas=[];window.salvarVazio=false;window.conflito=false;window.abriuWhats=null;
       function abrirWhatsappArte(id){abriuWhats=id;}
-      window.cadastro={pedido:11,contato_id:'7',nome:'Contato Exemplo',whatsapp:'11999990000',valido:true};
+      window.cadastro={pedido:11,contato_id:'7',nome:'Contato Exemplo',whatsapp:'11999990000',valido:true,guru_disponivel:false};
       window.fetch=async(url,op)=>{
         const acao=url.split('/').pop(),dados=JSON.parse(op.body);chamadas.push({acao,dados});
         if(op.headers.Authorization!=='Bearer synthetic')throw Error('Sessão ausente');
@@ -32,7 +32,7 @@ const moduleSource = source.slice(source.indexOf('/* Contato selecionado na List
         await new Promise(r=>setTimeout(r,70));
         if(conflito)return {ok:false,json:async()=>({detail:'Reabra o contato: alteração concorrente.'})};
         if(salvarVazio)return {ok:true,json:async()=>[]};
-        cadastro={...cadastro,nome:dados.nome,whatsapp:dados.whatsapp};
+        cadastro={...cadastro,nome:dados.nome,whatsapp:dados.whatsapp,guru_disponivel:true};
         return {ok:true,json:async()=>cadastro};
       };
     ` + moduleSource });
@@ -42,6 +42,8 @@ const moduleSource = source.slice(source.indexOf('/* Contato selecionado na List
       await ContatosListaArte.carregar(ordens); await ContatosListaArte.carregar(ordens);
     });
     assert.equal(await page.evaluate(() => chamadas.length), 1, 'uma consulta em lote, sem nova consulta por desenho');
+    assert.equal(await page.$$eval('[data-guru-ausente="true"]', es => es.length), 2);
+    assert.ok(await page.$eval('[data-guru-ausente="true"]', e => e.title.includes('não encontrado') && e.textContent.includes('⚠') && getComputedStyle(e).backgroundColor === 'rgb(120, 53, 15)'));
     await page.click('[aria-label="Enviar link pelo WhatsApp"]');
     assert.equal(await page.evaluate(() => abriuWhats), 'vibe_11');
     await page.evaluate(() => ContatosListaArte.editar('11'));
@@ -53,6 +55,9 @@ const moduleSource = source.slice(source.indexOf('/* Contato selecionado na List
     assert.equal(await page.evaluate(() => chamadas.filter(c => c.acao === 'salvar').length), 1);
     assert.equal(await page.$$eval('[data-contato-arte] img', es => es.length), 0, 'nome escapado');
     assert.ok(await page.$$eval('[data-contato-arte]', es => es.every(e => e.textContent.includes('1188880000'))), 'atualiza pedidos do mesmo contato');
+    assert.equal(await page.$$eval('[data-guru-ausente="true"]', es => es.length), 0, 'recalcula destaque após salvar');
+    await page.evaluate(async () => { cadastro.guru_disponivel=null; await ContatosListaArte.recarregar('11'); });
+    assert.ok(await page.$eval('[data-contato-arte="11"] button', e => e.title.includes('não conferida') && !e.textContent.includes('⚠')));
     await page.evaluate(() => { salvarVazio=true; return ContatosListaArte.editar('11'); });
     await page.evaluate(() => document.querySelector('dialog form').requestSubmit());
     await page.waitForFunction(() => document.querySelector('[data-aviso]').textContent.includes('não confirmou'));
