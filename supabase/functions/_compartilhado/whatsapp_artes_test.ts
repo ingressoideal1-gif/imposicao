@@ -4,17 +4,16 @@ import { Recusa } from "./sessao.ts";
 const quem = { id: "00000000-0000-4000-8000-000000000001", permissoes: { perm_lista_arte_view: true } };
 function fixture() {
   const registros = new Map<string, any>();
-  const env: Record<string, string> = { CHATGURU_ENDPOINT: "https://s1.chatguru.app/api/v1", CHATGURU_KEY: "sintetica", CHATGURU_ACCOUNT_ID: "conta", CHATGURU_PHONE_ID: "telefone", CHATGURU_DEFAULT_DDI: "55" };
+  const env: Record<string, string> = { CHATGURU_ENDPOINT: "https://s1.chatguru.app/api/v1", CHATGURU_KEY: "sintetica", CHATGURU_ACCOUNT_ID: "conta", CHATGURU_PHONE_ID: "6071afff6e66fe3fadecd101", CHATGURU_DEFAULT_DDI: "55" };
   const c = { env, registros, chamadas: [] as URLSearchParams[], recusado: false, timeout: false, falharPersistencia: false,
-    status: "scheduled", ocupado: false, timeoutDialogo: false, contato: { id: 7, id_cliente: 1, nome_contato: "Contato Exemplo", whats: "11999990000" },
-    proposta: { id_int: 11, id_contato: "7", id_cliente: 1, id_faturado: 2 },
+    status: "scheduled", ocupado: false, timeoutDialogo: false,
+    guru: {pedido:11,contato_id:"guru#"+"a".repeat(24),nome:"Contato no Guru",whatsapp:"5511999990000",valido:true},
     link: { os_id: "vibe_11", numero_pedido: 11, token: "abc123", arte_pronta_em: "2026-11-06T12:00:00Z" } };
   const deps = {
     ambiente: (k: string) => env[k],
     consultar: async (metodo: string, caminho: string, corpo?: any) => {
       if (caminho.startsWith("pedidos_links_cliente?")) return [c.link];
-      if (caminho.startsWith("propostas?")) return [c.proposta];
-      if (caminho.startsWith("contatos?")) { assert.ok(caminho.includes("id=eq.7")); return [c.contato]; }
+      if (caminho === "rpc/imposition_arte_guru_ler") return [c.guru];
       if (caminho === "rpc/imposition_whatsapp_dialogo_finalizar") {
         if (c.falharPersistencia) return [];
         const r = { ...registros.get(corpo.p_chave), estado: corpo.p_estado, atualizado_em: new Date().toISOString(), dialogo_executado: corpo.p_estado === "aguardando" };
@@ -105,14 +104,14 @@ Deno.test("whatsapp: rejeição não vaza resposta nem é aceita", async () => {
   await assert.rejects(() => f.executar("concluir", { confirmacao: p.confirmacao }), Recusa);
 });
 Deno.test("whatsapp: mudança de telefone ou arte exige nova conferência", async () => {
-  const f = fixture(), p = await f.preparar(); f.c.contato.whats = "11999990001";
+  const f = fixture(), p = await f.preparar(); f.c.guru.whatsapp = "5511999990001";
   await assert.rejects(() => f.executar("enviar", { confirmacao: p.confirmacao }), Recusa);
   assert.equal(f.c.chamadas.length, 0);
 });
 Deno.test("whatsapp: sem contato ou vínculo inválido não usa cadastro geral", async () => {
-  const f = fixture(); f.c.proposta.id_contato = "";
+  const f = fixture(); f.c.guru.valido = false;
   await assert.rejects(f.preparar, Recusa);
-  f.c.proposta.id_contato = "7"; f.c.contato.id_cliente = 99;
+  f.c.guru.valido = true; f.c.guru.pedido = 99;
   await assert.rejects(f.preparar, Recusa);
   assert.equal(f.c.chamadas.length, 0);
 });
@@ -209,4 +208,12 @@ Deno.test("whatsapp: prazo não libera resultado desconhecido", async () => {
   assert.equal((await f.preparar()).reenvio_em, null);
   await f.executar("reenviar", { confirmacao: p.confirmacao });
   assert.equal(f.c.chamadas.length, 2);
+});
+
+Deno.test("whatsapp: remetente diferente não envia",async()=>{const f=fixture();f.c.env.CHATGURU_PHONE_ID="outro";await assert.rejects(f.preparar,/3478/);assert.equal(f.c.chamadas.length,0);});
+
+Deno.test("whatsapp: troca de opção com mesmo telefone exige reconferência",async()=>{
+ const f=fixture(),p=await f.preparar();f.c.guru.contato_id="guru#"+"b".repeat(24);
+ await assert.rejects(()=>f.executar("enviar",{confirmacao:p.confirmacao}),/mudou/);
+ assert.equal(f.c.chamadas.length,0);
 });
