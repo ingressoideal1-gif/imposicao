@@ -55,16 +55,15 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   if (!/^[1-9]\d*$/.test(String(link.numero_pedido)) || !/^[a-zA-Z0-9]{6,12}$/.test(link.token) || !link.arte_pronta_em) {
     throw new Recusa(409, "Prepare a arte e o link antes do envio.");
   }
-  const proposta = uma(await db("GET", `propostas?id_int=eq.${link.numero_pedido}&select=id_int,id_contato,id_cliente,id_faturado&limit=2`), "Pedido inexistente ou ambíguo.");
-  const contatoId = String(proposta.id_contato || "").trim();
-  if (!/^[1-9]\d*$/.test(contatoId)) throw new Recusa(422, "Selecione um contato no pedido antes de enviar.");
-  const contato = uma(await db("GET", `contatos?id=eq.${contatoId}&select=id,id_cliente,nome_contato,whats&limit=2`), "O contato selecionado não foi encontrado.");
-  if (![proposta.id_cliente, proposta.id_faturado].filter(v => v != null).map(String).includes(String(contato.id_cliente))) {
-    throw new Recusa(409, "O contato selecionado não pertence ao cliente do pedido. Confira o cadastro.");
+  if (phone !== "6071afff6e66fe3fadecd101") throw new Recusa(503, "Configure o remetente 3478 para os contatos da Lista de Arte.");
+  const contato = uma(await db("POST", "rpc/imposition_arte_guru_ler", { p_pedidos: [Number(link.numero_pedido)] }), "Contato da Lista de Arte indisponível.");
+  if (Number(contato.pedido) !== Number(link.numero_pedido) || contato.valido !== true || !contato.contato_id) {
+    throw new Recusa(422, "Selecione um contato disponível no Guru 3478 na Lista de Arte.");
   }
-  const numero = telefoneWhatsApp(contato.whats, ler("CHATGURU_DEFAULT_DDI") || "");
+  const contatoId = contato.contato_id;
+  const numero = telefoneWhatsApp(contato.whatsapp, ler("CHATGURU_DEFAULT_DDI") || "");
   const url = `${PORTAL}/cliente/${link.numero_pedido}-${link.token}`;
-  const nome = String(contato.nome_contato || "Cliente").replace(/[\r\n\x00-\x1f]/g, " ").slice(0, 150);
+  const nome = String(contato.nome || "Cliente").replace(/[\r\n\x00-\x1f]/g, " ").slice(0, 150);
   const texto = `O modelo de mensagem configurado no ChatGuru será enviado com este link de aprovação:\n${url}`;
   // Um envio por versão da arte, contato, destino e remetente. Sem dados pessoais na chave.
   const chave = await hash(JSON.stringify([c.os_id, link.token, link.arte_pronta_em, contatoId, numero, endpoint, account, phone]));
