@@ -1,5 +1,23 @@
 # Contato selecionado na Lista de Arte
 
+## Alteração preparada em 09/11/2026 — seleção do Guru
+
+Estado: implementação local, ainda sem aplicação SQL ou publicação. Substitui o editor descrito no registro histórico abaixo.
+
+A coluna passa a apresentar um select com nome e telefone dos contatos vinculados ao código `propostas.id_cliente` na view privada `chatguru_contatos_3478`. Somente remetente `555195343478`, números válidos e contatos do cliente em questão. Nenhum fallback para outro remetente ou cliente de faturamento. Todos os contatos disponíveis são carregados, não apenas o principal. A leitura materializa as opções uma vez por lote de até 200 pedidos.
+
+Sem escolha salva, mantém o telefone do contato ERP quando ele pertence ao mesmo cliente e coincide com uma opção; caso contrário, usa a opção de atividade mais recente (origem e identificador como desempate). A tela não altera nome, telefone, contatos ERP ou `propostas.id_contato`. A escolha manual fica em `imposition_arte_contatos_guru`, por pedido, com autor e histórico. Se a escolha deixar de pertencer ao cliente ou for removida, exige nova seleção, sem trocar silenciosamente o destinatário. Sem opções, mostra “Sem contato no Guru 3478”.
+
+A API `contatos-arte/selecionar` aceita apenas pedido, identificador da opção e revisão da lista. Bloqueia edição livre, concorrência e escolha fora das opções. Exige as mesmas permissões de leitura/edição da Lista de Arte. `whatsapp_artes.ts` resolve o destinatário pela mesma RPC da coluna e verifica o remetente configurado. A confirmação anterior fica inválida após troca de contato; os diálogos e a proteção de 120 segundos permanecem. Nenhuma mensagem é enviada ao selecionar.
+
+Ativação pendente: aplicar `sql/lista_arte_contatos_guru_selecao.sql` após as views do 3478, publicar API `painel` e frontend em conjunto. A versão antiga do editor não deve permanecer em uso após a API nova; atualizar a página. O SQL adiciona duas tabelas privadas e duas funções service_role, sem alterar dados comerciais existentes.
+
+Validação: teste PostgreSQL em memória cobre opções, remetente, cliente, seleção automática, persistência isolada, concorrência, remoção e permissões. Teste de navegador real com rede simulada cobre carregamento, seleção, bloqueio de clique duplo, XSS, erro e restauração do valor persistido. Testes da API e do envio cobrem autorização, campos livres, confirmação, destinatário e reenvio. Sem testes ou envios em produção.
+
+Recuperação: antes de reverter API/frontend, considerar que a versão antiga envia para o contato ERP, não para a escolha nova. Preservar tabelas e histórico de seleção. Teste de retomada após publicação: abrir pedido com duas opções do Guru, selecionar a segunda, atualizar a página e abrir o envio para conferir nome/número, sem enviar.
+
+## Registro histórico de 06/11/2026
+
 Inclui coluna Contato / WhatsApp ao lado de Cliente / Evento, permite editar
 nome e WhatsApp e adiciona um ícone verde de WhatsApp nas ações. Retira apenas
 a coluna Prazo Entrega dessa lista; prazos nas demais telas permanecem intactos.
