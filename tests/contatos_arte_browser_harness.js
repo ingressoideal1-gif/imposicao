@@ -1,77 +1,58 @@
-// Navegador real com rede simulada e contatos sintéticos.
-const fs = require('node:fs'), assert = require('node:assert/strict'), puppeteer = require('puppeteer');
-const source = fs.readFileSync('frontend/script.js', 'utf8');
-const moduleSource = source.slice(source.indexOf('/* Contato selecionado na Lista de Arte.'), source.indexOf('/* Envio do link pelo contato selecionado'));
-(async () => {
-  const browser = await puppeteer.launch({ headless: true });
-  try {
-    const page = await browser.newPage(), errors = [];
-    page.on('pageerror', e => errors.push(e.message));
-    await page.setViewport({ width: 390, height: 844 });
-    await page.setRequestInterception(true); page.on('request', r => r.abort());
-    const index = fs.readFileSync('frontend/index.html', 'utf8');
-    const table = index.match(/<table[^>]*id="table-arte"[\s\S]*?<\/table>/)[0];
-    await page.setContent('<!doctype html><body>' + table + '</body>');
-    assert.equal(await page.$$eval('#table-arte th', els => els.filter(e => /Prazo/.test(e.textContent)).length), 0);
-    assert.equal(await page.$$eval('#table-arte th', els => els.filter(e => /Contato \/ WhatsApp/.test(e.textContent)).length), 1);
-    await page.evaluate(css => { const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style); }, fs.readFileSync('frontend/style.css', 'utf8'));
-    await page.addScriptTag({ content: `
-      const API_PAINEL='https://synthetic.example';
-      const supabaseClient={auth:{getSession:async()=>({data:{session:{access_token:'synthetic'}}})}};
-      window._currentPerms={perm_lista_arte_view:true,perm_lista_arte_edit:true};
-      function escapeHtml(s){const e=document.createElement('span');e.textContent=String(s);return e.innerHTML;}
-      function escapeJsAttr(s){return s;}
-      window.avisos=[];function toast(m,t){avisos.push({m,t});}
-      window.chamadas=[];window.salvarVazio=false;window.conflito=false;window.abriuWhats=null;
-      function abrirWhatsappArte(id){abriuWhats=id;}
-      window.cadastro={pedido:11,contato_id:'7',nome:'Contato Exemplo',whatsapp:'11999990000',valido:true,guru_disponivel:false};
-      window.fetch=async(url,op)=>{
-        const acao=url.split('/').pop(),dados=JSON.parse(op.body);chamadas.push({acao,dados});
-        if(op.headers.Authorization!=='Bearer synthetic')throw Error('Sessão ausente');
-        if(acao==='consultar')return {ok:true,json:async()=>dados.pedidos.map(p=>({...cadastro,pedido:Number(p)}))};
-        await new Promise(r=>setTimeout(r,70));
-        if(conflito)return {ok:false,json:async()=>({detail:'Reabra o contato: alteração concorrente.'})};
-        if(salvarVazio)return {ok:true,json:async()=>[]};
-        cadastro={...cadastro,nome:dados.nome,whatsapp:dados.whatsapp,guru_disponivel:true};
-        return {ok:true,json:async()=>cadastro};
-      };
-    ` + moduleSource });
-    await page.evaluate(async () => {
-      const ordens = [{ id: 'vibe_11', numero: 11 }, { id: 'vibe_12', numero: 12 }];
-      document.querySelector('#tbody-arte').innerHTML = ordens.map(o => '<tr><td data-contato-os="'+o.id+'" data-contato-arte="'+o.numero+'">'+ContatosListaArte.html(o)+'</td><td>'+ContatosListaArte.botaoWhatsapp(o)+'</td></tr>').join('');
-      await ContatosListaArte.carregar(ordens); await ContatosListaArte.carregar(ordens);
-    });
-    assert.equal(await page.evaluate(() => chamadas.length), 1, 'uma consulta em lote, sem nova consulta por desenho');
-    assert.equal(await page.$$eval('[data-guru-ausente="true"]', es => es.length), 2);
-    assert.ok(await page.$eval('[data-guru-ausente="true"]', e => e.title.includes('não encontrado') && e.textContent.includes('⚠') && getComputedStyle(e).backgroundColor === 'rgb(120, 53, 15)'));
-    await page.click('[aria-label="Enviar link pelo WhatsApp"]');
-    assert.equal(await page.evaluate(() => abriuWhats), 'vibe_11');
-    await page.evaluate(() => ContatosListaArte.editar('11'));
-    await page.waitForSelector('dialog[open]');
-    assert.ok(await page.$eval('dialog', e => e.getBoundingClientRect().width <= window.innerWidth));
-    assert.ok(await page.$eval('dialog', e => { const r = e.getBoundingClientRect(); return r.left > 0 && r.top > 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight; }));
-    await page.evaluate(() => { const f=document.querySelector('dialog form'); f.elements.nome.value='<img src=x onerror=alert(1)>'; f.elements.whatsapp.value='1188880000'; f.requestSubmit(); f.requestSubmit(); });
-    await page.waitForFunction(() => !document.querySelector('dialog'));
-    assert.equal(await page.evaluate(() => chamadas.filter(c => c.acao === 'salvar').length), 1);
-    assert.equal(await page.$$eval('[data-contato-arte] img', es => es.length), 0, 'nome escapado');
-    assert.ok(await page.$$eval('[data-contato-arte]', es => es.every(e => e.textContent.includes('1188880000'))), 'atualiza pedidos do mesmo contato');
-    assert.equal(await page.$$eval('[data-guru-ausente="true"]', es => es.length), 0, 'recalcula destaque após salvar');
-    await page.evaluate(async () => { cadastro.guru_disponivel=null; await ContatosListaArte.recarregar('11'); });
-    assert.ok(await page.$eval('[data-contato-arte="11"] button', e => e.title.includes('não conferida') && !e.textContent.includes('⚠')));
-    await page.evaluate(() => { salvarVazio=true; return ContatosListaArte.editar('11'); });
-    await page.evaluate(() => document.querySelector('dialog form').requestSubmit());
-    await page.waitForFunction(() => document.querySelector('[data-aviso]').textContent.includes('não confirmou'));
-    assert.equal(await page.evaluate(() => avisos.filter(a => a.t === 'success').length), 1);
-    await page.click('[data-cancelar]');
-    await page.evaluate(() => { salvarVazio=false;conflito=true;return ContatosListaArte.editar('11'); });
-    await page.evaluate(() => document.querySelector('dialog form').requestSubmit());
-    await page.waitForFunction(() => document.querySelector('[data-aviso]').textContent.includes('concorrente'));
-    await page.click('[data-cancelar]');
-    await page.evaluate(() => { _currentPerms.perm_lista_arte_edit=false; });
-    assert.ok(!(await page.evaluate(() => ContatosListaArte.html({id:'vibe_11',numero:11}))).includes('✎ Editar'));
-    await page.evaluate(() => ContatosListaArte.editar('11'));
-    assert.equal(await page.$('dialog'), null);
-    assert.deepEqual(errors, []);
-    console.log('OK: coluna, prazo removido, lote/cache, WhatsApp, modal mobile, salvamento, duplicação, XSS, falha e permissão');
-  } finally { await browser.close(); }
-})().catch(e => { console.error(e); process.exitCode = 1; });
+// Navegador real com rede simulada e dados sintéticos.
+const fs=require('node:fs'),assert=require('node:assert/strict'),puppeteer=require('puppeteer');
+const source=fs.readFileSync('frontend/script.js','utf8');
+const moduleSource=source.slice(source.indexOf('/* Contato selecionado na Lista de Arte.'),source.indexOf('/* Envio do link pelo contato selecionado'));
+(async()=>{const browser=await puppeteer.launch({headless:true});try{
+ const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewport({width:390,height:844});await page.setRequestInterception(true);page.on('request',r=>r.abort());
+ await page.setContent('<!doctype html><body><table><tbody id="linhas"></tbody></table></body>');
+ await page.addScriptTag({content:`
+ const API_PAINEL='https://synthetic.example';
+ const supabaseClient={auth:{getSession:async()=>({data:{session:{access_token:'synthetic'}}})}};
+ window._currentPerms={perm_lista_arte_view:true,perm_lista_arte_edit:true};
+ function escapeHtml(s){const e=document.createElement('span');e.textContent=String(s);return e.innerHTML;}
+ function escapeJsAttr(s){return s;}
+ window.avisos=[];function toast(m,t){avisos.push({m,t});}
+ window.abriu=null;function abrirWhatsappArte(id){abriu=id;}
+ window.chamadas=[];window.conflito=false;window.vazio=false;
+ const a={contato_id:'guru#'+'a'.repeat(24),nome:'Contato A',whatsapp:'5511999990000'};
+ const b={contato_id:'guru#'+'b'.repeat(24),nome:'<img src=x onerror=alert(1)>',whatsapp:'5511888880000'};
+ window.cadastros={11:{pedido:11,...a,valido:true,opcoes:[a,b],revisao:'c'.repeat(32)},12:{pedido:12,...a,valido:true,opcoes:[a,b],revisao:'c'.repeat(32)},13:{pedido:13,valido:false,opcoes:[]}};
+ window.fetch=async(url,op)=>{
+  const acao=url.split('/').pop(),dados=JSON.parse(op.body);chamadas.push({acao,dados});
+  if(acao==='consultar')return {ok:true,json:async()=>dados.pedidos.map(p=>cadastros[p])};
+  await new Promise(r=>setTimeout(r,80));
+  if(conflito)return {ok:false,json:async()=>({detail:'Lista alterada; recarregue.'})};
+  if(vazio)return {ok:true,json:async()=>[]};
+  const escolhido=cadastros[dados.pedido].opcoes.find(o=>o.contato_id===dados.contato_id);
+  cadastros[dados.pedido]={...cadastros[dados.pedido],...escolhido,revisao:'d'.repeat(32)};
+  return {ok:true,json:async()=>cadastros[dados.pedido]};
+ };
+ `+moduleSource});
+ await page.evaluate(async()=>{
+  const ordens=[11,12,13].map(numero=>({id:'vibe_'+numero,numero}));
+  document.querySelector('#linhas').innerHTML=ordens.map(o=>'<tr><td data-contato-os="'+o.id+'" data-contato-arte="'+o.numero+'">'+ContatosListaArte.html(o)+'</td><td>'+ContatosListaArte.botaoWhatsapp(o)+'</td></tr>').join('');
+  await ContatosListaArte.carregar(ordens);await ContatosListaArte.carregar(ordens);
+ });
+ assert.equal(await page.evaluate(()=>chamadas.length),1);
+ assert.equal(await page.$$eval('select',s=>s.length),2);
+ assert.equal(await page.$$eval('input,dialog,img',s=>s.length),0);
+ assert.ok(await page.$eval('[data-contato-arte="13"]',e=>e.textContent.includes('Sem contato no Guru 3478')));
+ assert.equal(await page.$eval('select',e=>e.options.length),2);
+ await page.evaluate(()=>{const id=cadastros[11].opcoes[1].contato_id;ContatosListaArte.selecionar('11',id);ContatosListaArte.selecionar('11',id);ContatosListaArte.enviar('11','vibe_11');});
+ assert.equal(await page.evaluate(()=>abriu),null);
+ await page.waitForFunction(()=>avisos.some(a=>a.t==='success'));
+ assert.equal(await page.evaluate(()=>chamadas.filter(c=>c.acao==='selecionar').length),1);
+ assert.equal(await page.$eval('[data-contato-arte="11"] select',e=>e.value),'guru#'+'b'.repeat(24));
+ assert.equal(await page.$eval('[data-contato-arte="12"] select',e=>e.value),'guru#'+'a'.repeat(24));
+ assert.equal(await page.$$eval('img',s=>s.length),0);
+ await page.evaluate(async()=>{conflito=true;await ContatosListaArte.selecionar('11',cadastros[11].opcoes[0].contato_id);});
+ assert.equal(await page.$eval('[data-contato-arte="11"] select',e=>e.value),'guru#'+'b'.repeat(24));
+ await page.evaluate(async()=>{conflito=false;vazio=true;await ContatosListaArte.selecionar('11',cadastros[11].opcoes[0].contato_id);});
+ assert.equal(await page.evaluate(()=>avisos.filter(a=>a.t==='success').length),1);
+ await page.evaluate(async()=>{_currentPerms.perm_lista_arte_edit=false;await ContatosListaArte.recarregar('11');});
+ assert.equal(await page.$eval('[data-contato-arte="11"] select',e=>e.disabled),true);
+ await page.click('[aria-label="Enviar link pelo WhatsApp"]');assert.equal(await page.evaluate(()=>abriu),'vibe_11');
+ assert.deepEqual(errors,[]);
+ console.log('OK: dropdown automático, vazio, seleção isolada, confirmação, XSS, conflito, permissão e envio');
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

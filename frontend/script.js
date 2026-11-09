@@ -50245,8 +50245,8 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
 
 /* Contato selecionado na Lista de Arte. Cache curto em memória; gravação confirmada pelo servidor. */
 (function () {
-    const cache = new Map(), pendentes = new Set();
-    let versao = 0, abrindo = false;
+    const cache = new Map(), pendentes = new Set(), salvando = new Set();
+    let versao = 0;
     const podeEditar = () => window._currentPerms?.perm_lista_arte_edit === true;
     async function api(acao, dados) {
         const sessao = await supabaseClient.auth.getSession();
@@ -50269,14 +50269,15 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         if (!/^[1-9]\d*$/.test(n)) return '<span>Pedido inválido</span>';
         if (!item) return '<span style="color:var(--text-dim)">Carregando contato…</span>';
         if (item.erro) return `<button class="btn btn-sm" onclick="ContatosListaArte.recarregar('${n}')" title="Tentar consultar novamente">Recarregar contato</button>`;
-        if (!item.dados?.valido) return '<span style="color:var(--text-dim)">Confira o contato selecionado no ERP</span>';
-        const c = item.dados;
-        const ausenteGuru = c.guru_disponivel === false;
-        const dicaGuru = ausenteGuru ? 'Número não encontrado na base do Guru deste remetente. Confira o cadastro ou sincronize a conversa.'
-            : c.guru_disponivel === true ? 'Número encontrado na base do Guru deste remetente.' : 'Disponibilidade na base do Guru não conferida.';
-        return `<strong style="overflow-wrap:anywhere">${escapeHtml(c.nome || 'Sem nome')}</strong><br><span style="font-size:.8rem;overflow-wrap:anywhere">${escapeHtml(c.whatsapp || 'Sem WhatsApp')}</span>` +
-            (podeEditar() ? `<br><button class="btn btn-sm" data-guru-ausente="${ausenteGuru}" style="min-height:28px;margin-top:3px;${ausenteGuru ? 'background:#78350f;color:#fef3c7;border:1px solid #f59e0b;' : ''}" onclick="ContatosListaArte.editar('${n}')" title="${dicaGuru}" aria-label="Editar contato do pedido ${n}. ${dicaGuru}">✎ Editar${ausenteGuru ? ' ⚠' : ''}</button>` : '');
+        const c = item.dados, opcoes = c?.opcoes || [];
+        if (!opcoes.length) return '<span style="color:#fbbf24">Sem contato no Guru 3478</span>';
+        const atributo = v => escapeHtml(String(v)).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        return `<select class="form-control" aria-label="Contato WhatsApp do pedido ${n}" style="width:100%;min-width:170px;max-width:260px;min-height:36px" ${!podeEditar() || salvando.has(n) ? 'disabled' : ''} onchange="ContatosListaArte.selecionar('${n}',this.value)">` +
+            (!c.valido ? '<option value="" selected disabled>Selecione um contato do Guru</option>' : '') +
+            opcoes.map(o => `<option value="${atributo(o.contato_id)}" ${o.contato_id === c.contato_id ? 'selected' : ''}>${escapeHtml(o.nome || 'Sem nome')} — ${escapeHtml(o.whatsapp)}</option>`).join('') +
+            `</select><span role="status" style="display:block;font-size:.75rem;color:var(--text-dim)">${salvando.has(n) ? 'Salvando seleção…' : 'WhatsApp 3478'}</span>`;
     }
+
     function pintar() {
         document.querySelectorAll('[data-contato-arte]').forEach(el => {
             const n = el.dataset.contatoArte;
@@ -50285,7 +50286,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
     }
     async function carregar(ordens) {
         const ids = [...new Set(ordens.filter(o => /^vibe_[1-9]\d*$/.test(String(o.id))).map(o => String(o.numero)))]
-            .filter(n => /^[1-9]\d*$/.test(n) && !pendentes.has(n) && Date.now() - (cache.get(n)?.hora || 0) > 55000);
+            .filter(n => /^[1-9]\d*$/.test(n) && !pendentes.has(n) && !salvando.has(n) && Date.now() - (cache.get(n)?.hora || 0) > 55000);
         ids.forEach(n => pendentes.add(n));
         const atual = versao;
         try {
@@ -50302,58 +50303,37 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
             }
         } finally { ids.forEach(n => pendentes.delete(n)); if (ids.length) pintar(); }
     }
-    async function editar(n) {
-        if (abrindo || !podeEditar() || !/^[1-9]\d*$/.test(String(n))) return;
-        abrindo = true;
-        let original;
+    async function selecionar(n, contatoId) {
+        n = String(n);
+        const original = cache.get(n)?.dados;
+        if (!podeEditar() || salvando.has(n) || !original || !original.opcoes?.some(o => o.contato_id === contatoId)) return;
+        if (contatoId === original.contato_id) return;
+        salvando.add(n); versao++; pintar();
         try {
-            const linhas = await api('consultar', { pedidos: [n] });
-            if (!Array.isArray(linhas) || linhas.length !== 1 || !linhas[0].valido) throw new Error('Confira o contato selecionado no ERP.');
-            original = linhas[0];
-        } catch (e) { toast(e.message, 'error'); abrindo = false; return; }
-        const modal = document.createElement('dialog');
-        modal.id = 'modal-contato-lista-arte';
-        modal.style.cssText = 'width:min(440px,calc(100vw - 32px));margin:auto;box-sizing:border-box;background:var(--bg-card,#182234);color:var(--text,#fff);border:1px solid #475569;border-radius:12px;padding:20px;';
-        modal.setAttribute('aria-label', 'Editar contato do pedido ' + n);
-        modal.innerHTML = `<form><h3 style="margin-top:0">Contato do pedido ${n}</h3>
-            <p style="font-size:.85rem">A alteração será salva no cadastro deste contato e valerá para outros pedidos que o utilizam.</p>
-            <label style="display:block;margin:12px 0">Nome<input class="form-control" name="nome" required maxlength="150" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
-            <label style="display:block;margin:12px 0">WhatsApp<input class="form-control" name="whatsapp" type="tel" required maxlength="32" style="display:block;width:100%;box-sizing:border-box;min-height:40px"></label>
-            <p style="font-size:.8rem">Informe o número com DDD, conforme cadastrado no ChatGuru. Para número internacional, inclua + e DDI.</p>
-            <p data-aviso role="status" aria-live="polite"></p>
-            <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" data-cancelar class="btn btn-secondary">Cancelar</button><button type="submit" class="btn btn-primary">Salvar contato</button></div></form>`;
-        const form = modal.querySelector('form'), aviso = modal.querySelector('[data-aviso]');
-        form.elements.nome.value = original.nome || '';
-        form.elements.whatsapp.value = original.whatsapp || '';
-        let salvando = false;
-        const fechar = () => { if (!salvando) { modal.close(); modal.remove(); abrindo = false; } };
-        modal.querySelector('[data-cancelar]').onclick = fechar;
-        modal.addEventListener('cancel', e => { e.preventDefault(); fechar(); });
-        form.onsubmit = async e => {
-            e.preventDefault();
-            if (salvando || !podeEditar()) return;
-            const nome = form.elements.nome.value.trim(), whatsapp = form.elements.whatsapp.value.trim();
-            if (!nome || !/^\+?[\d ().-]{10,32}$/.test(whatsapp) || !/^[1-9]\d{9,14}$/.test(whatsapp.replace(/\D/g, ''))) { aviso.textContent = 'Informe nome e WhatsApp válidos, com DDD.'; return; }
-            salvando = true; aviso.textContent = 'Salvando…';
-            form.querySelectorAll('button,input').forEach(el => el.disabled = true);
+            const salvo = await api('selecionar', { pedido: n, contato_id: contatoId, revisao: original.revisao });
+            if (!salvo || String(salvo.pedido) !== n || salvo.contato_id !== contatoId || salvo.valido !== true || !Array.isArray(salvo.opcoes)) throw new Error('O banco não confirmou a seleção. Recarregue os contatos.');
+            versao++;
+            cache.set(n, { dados: salvo, hora: Date.now() });
+            toast('Contato selecionado para a arte deste pedido.', 'success');
+        } catch (erro) {
+            cache.delete(n);
+            toast(erro.message, 'error');
             try {
-                const salvo = await api('salvar', { pedido: n, contato_id: original.contato_id,
-                    nome_anterior: original.nome, whatsapp_anterior: original.whatsapp, nome, whatsapp });
-                if (!salvo || String(salvo.pedido) !== String(n) || salvo.contato_id !== original.contato_id || salvo.nome !== nome || salvo.whatsapp !== whatsapp || salvo.valido !== true) throw new Error('O banco não confirmou a gravação. Feche e reabra para conferir.');
-                versao++;
-                cache.forEach((item, pedido) => { if (item.dados?.contato_id === salvo.contato_id) cache.set(pedido, { dados: { ...salvo, pedido }, hora: Date.now() }); });
-                cache.set(String(n), { dados: salvo, hora: Date.now() });
-                pintar(); salvando = false; fechar(); toast('Contato salvo no banco.', 'success');
-            } catch (erro) { aviso.textContent = erro.message; }
-            finally { salvando = false; form.querySelectorAll('button,input').forEach(el => el.disabled = false); }
-        };
-        document.body.appendChild(modal); modal.showModal(); form.elements.nome.focus();
+                const linhas = await api('consultar', { pedidos: [n] });
+                if (!Array.isArray(linhas) || linhas.length !== 1 || String(linhas[0].pedido) !== n) throw new Error();
+                cache.set(n, { dados: linhas[0], hora: Date.now() });
+            } catch { cache.set(n, { erro: true, hora: Date.now() }); }
+        } finally { salvando.delete(n); pintar(); }
+    }
+    function enviar(n, id) {
+        if (salvando.has(String(n))) { toast('Aguarde a confirmação do contato.', 'error'); return; }
+        abrirWhatsappArte(id);
     }
     function botaoWhatsapp(os) {
         if (!/^vibe_[1-9]\d*$/.test(String(os.id))) return '';
-        return `<button class="btn btn-sm" onclick="event.stopPropagation();abrirWhatsappArte('${escapeJsAttr(os.id)}')" title="Enviar link pelo WhatsApp" aria-label="Enviar link pelo WhatsApp" style="padding:4px 7px;min-width:30px;min-height:28px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.4);border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.7 7.4L3 20l1.1-4.8A8.5 8.5 0 1 1 20.5 11.5Z"/><path d="M8 7.5c-.7 0-1.2.8-1 1.7.6 3.4 3.3 6.1 6.7 6.7.9.2 1.7-.3 1.7-1l-2.2-1.5-1 1c-1.5-.7-2.7-1.9-3.4-3.4l1-1L8 7.5Z"/></svg></button>`;
+        return `<button class="btn btn-sm" onclick="event.stopPropagation();ContatosListaArte.enviar('${escapeJsAttr(String(os.numero))}','${escapeJsAttr(os.id)}')" title="Enviar link pelo WhatsApp" aria-label="Enviar link pelo WhatsApp" style="padding:4px 7px;min-width:30px;min-height:28px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.4);border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.7 7.4L3 20l1.1-4.8A8.5 8.5 0 1 1 20.5 11.5Z"/><path d="M8 7.5c-.7 0-1.2.8-1 1.7.6 3.4 3.3 6.1 6.7 6.7.9.2 1.7-.3 1.7-1l-2.2-1.5-1 1c-1.5-.7-2.7-1.9-3.4-3.4l1-1L8 7.5Z"/></svg></button>`;
     }
-    window.ContatosListaArte = { html, carregar, editar, botaoWhatsapp, recarregar(n) { cache.delete(String(n)); return carregar([{ id: 'vibe_' + n, numero: n }]); } };
+    window.ContatosListaArte = { html, carregar, selecionar, enviar, botaoWhatsapp, recarregar(n) { cache.delete(String(n)); return carregar([{ id: 'vibe_' + n, numero: n }]); } };
 })();
 
 /* Envio do link pelo contato selecionado no pedido; sem credenciais no cliente. */
@@ -50389,7 +50369,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         modal.setAttribute('aria-label', 'Enviar arte pelo WhatsApp');
         modal.style.cssText = 'width:min(560px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid #475569;border-radius:14px;padding:24px;background:#172033;color:#fff;';
         modal.innerHTML = `<h3>Enviar arte pelo WhatsApp</h3>
-            <p data-contato></p><p>Destinatário: contato selecionado no pedido. Para corrigir, atualize o pedido e reabra esta janela.</p>
+            <p data-contato></p><p>Destinatário: contato do Guru selecionado na Lista de Arte. Para trocar, escolha outro contato na coluna Contato / WhatsApp e reabra esta janela.</p>
             <pre data-texto style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit"></pre>
             <p data-status role="status" aria-live="polite"></p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
