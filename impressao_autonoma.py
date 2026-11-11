@@ -41,6 +41,11 @@ class Trabalhos:
     def gravar(db, dados):
         db.execute('UPDATE trabalhos SET dados=? WHERE id=?', (json.dumps(dados), dados['id']))
 
+    @staticmethod
+    def registrar(dados):
+        print(f'[print][autonomo] job={dados["id"]} estado={dados["estado"]} '
+              f'gerados={dados["gerados"]} enviados={dados["enviados"]}', flush=True)
+
     def obter(self, ident):
         with self.lock, self.conexao() as db:
             row = db.execute('SELECT dados FROM trabalhos WHERE id=?', (ident,)).fetchone()
@@ -59,6 +64,7 @@ class Trabalhos:
             dados = json.loads(row[0])
             dados.update(campos, atualizado=time.time())
             self.gravar(db, dados)
+            self.registrar(dados)
             return dados
 
     def cancelar(self, ident):
@@ -135,7 +141,6 @@ class Trabalhos:
         except Exception as erro:
             # Nao persistir mensagens de driver, caminhos ou dados da arte.
             self.atualizar(ident, estado='conferencia', motivo='falha_' + type(erro).__name__)
-            print('[impressao_autonoma] envio interrompido; conferencia necessaria', flush=True)
         finally:
             try:
                 finalizar()
