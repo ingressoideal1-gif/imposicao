@@ -31,4 +31,18 @@ Teste HTTP/Chromium: fechar a janela durante o trabalho e reabrir, concluir 110 
 
 Regressao inicial apontou falta do novo JS na lista de sincronismo; corrigida em security_config.py. Teste adicional detectou que selecionar paginas com Document.select retirava OutputIntent; a implementacao usa remocao das faces no documento original e a regressao passou.
 
-Resultados dos tres canais, hashes de artefatos e provas de publicacao serao registrados apos a conclusao da entrega. Nenhum pedido foi reimpresso e nenhuma estacao foi reiniciada durante o desenvolvimento.
+Nenhum pedido foi reimpresso e nenhuma estacao foi reiniciada durante o desenvolvimento.
+
+## Entrega verificada
+
+Fonte do agente: `704c00ea`, tag `agente-v1.4.11`, branch `fix/impressao-autonoma-20261111`. MSI `NewProdPiloto_Oficial_v1.4.11.msi`, 196853760 bytes, SHA-256 `d642e5df2dcf6ec99102a27407685843a483c20b689cdacddf38d833dde9c489`. ProductVersion, modulos de impressao autonoma/SQLite, cinco assets embutidos e ausencia de dados privados conferidos. Executavel Piloto tambem compilado e auditado, sem instalacao.
+
+Baterias do agente: Producao 1289 aprovados, Piloto e Oficial 1291 cada; todos com dois skips preexistentes e dois subtestes aprovados. Os testes adicionais de trava entre processos e OutputIntent passaram separadamente; por isso as contagens diferem entre rodadas. Todos os harnesses dos tres canais passaram. Web: 912 aprovados e dois skips em cada canal, com Mapas de Teatro aprovado apos adaptar a chamada ao fluxo web. Oito contratos adicionais da chamada do Pedido passaram em cada fonte (agente e web).
+
+Upload publico completo conferido por tamanho e SHA-256 antes de ativar `latest.json` e `newprod-piloto-oficial.json` em 1.4.11. Canal de teste permaneceu 1.3.35. Recibos e manifestos anteriores preservados em `dist/publicacao-unica-1.4.11-*`.
+
+A publicacao web esta no PR #279, commit `b3561d4fbf8cd385f64a19ba299b2e430ff125b9`, preservando a main atual. Em 11/11/2026 20:49 UTC, o workflow obrigatorio `43096995555` permanecia queued, sem jobs iniciados, desde 20:35:58 UTC. PR nao integrado e assets publicos da web ainda nao substituidos. O MSI oficial contem seu proprio painel corrigido, independente dessa publicacao web.
+
+Ultima consulta da LASER-01: heartbeat 20:49:12 UTC (17:49 Brasilia), ainda 1.4.10, painel saudavel na porta 9001. GUSTAVO-PROD: ainda 1.4.7, painel saudavel, tentativa anterior de atualizacao sem confirmacao por agente ainda executando. Nao se forcou atualizacao ou encerramento. Publicacao nao comprova adocao nem impressao fisica.
+
+Retomada: depois de confirmar 1.4.11 na estacao e conferir trabalhos anteriores, validar um pequeno trabalho autorizado com capa e miolo frente/verso, fechar/reabrir o painel durante o envio e conferir a fila e as folhas. Nao reimprimir automaticamente a OS inteira. Recuperacao de release exige nova versao superior, preservando registros locais e conferindo qualquer envio incerto; nao forcar downgrade.
