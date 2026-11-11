@@ -109,6 +109,7 @@ PAINEL_SYNC_BASE_URL = "https://imposicao.pages.dev"
 PAINEL_ARQUIVOS = [
     'idgen-contexto.js', 'idgen-editor.js', 'idgen-pedidos.mjs', 'idgen.js',
     'entregas-avulsas.js',
+    'impressao-autonoma.js',
     'gestao-estacoes.js',
     'pacotes-locais.js', 'antecipacao-pedidos.js', 'pacote-entrada.js',
     'briefing-editor.js', 'cliente-faturamento-form.js', 'cor-margens.js',
