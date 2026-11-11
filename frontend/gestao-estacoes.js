@@ -7,6 +7,32 @@
     const quando = v => v ? new Date(v).toLocaleString('pt-BR') : 'não informado';
     let modal, timer, busy = false, tab = 'frota', ultimaResposta, lista = [], mensagem = '';
     let cursorCentral = null;
+    async function consultarLogsRemotos() {
+        const estacao = modal.querySelector('[data-estacao-logs]').value.trim();
+        if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(estacao)) throw Error('Informe a identificação da estação, por exemplo LASER-01.');
+        const {data,error} = await supabaseClient.functions.invoke('historico-impressao/consultar-logs', {body:{estacao}});
+        if (error || !data || !Array.isArray(data.arquivos)) throw Error('Logs remotos indisponíveis. Confira sua sessão administrativa e a publicação do serviço.');
+        return data;
+    }
+    function mostrarLogsRemotos(d, body) {
+        el('h3','Logs recebidos de '+d.estacao,body);
+        el('p','Diagnósticos dos logs da estação, atualizados em segundo plano. Cada arquivo fornece até 300 linhas relevantes recentes / 64 KiB, com leitura limitada a 5 MiB da origem. Conteúdo sensível e linhas fora da geração/impressão são omitidos. A busca só pesquisa os trechos recebidos. Não é o histórico completo nem comprovação de papel impresso.',body);
+        if (!d.arquivos.length) el('p','Nenhum log recebido. A estação precisa da versão com envio remoto e conexão com a central. Isso não significa ausência de erros.',body);
+        const busca=el('input',null,body); busca.type='search'; busca.placeholder='Buscar texto nos trechos recebidos'; busca.setAttribute('aria-label','Buscar texto nos logs remotos');
+        const resultados=el('div',null,body);
+        const render=()=>{
+            resultados.replaceChildren();
+            for(const a of d.arquivos) {
+                const sec=el('section',null,resultados);
+                el('h3',a.arquivo,sec);
+                el('p',`Coletado: ${quando(a.coletado_em)} · Recebido: ${quando(a.recebido_em)} · ${a.estado==='ausente'?'Arquivo ausente na coleta':a.parcial?'Trecho parcial de diagnóstico':'Linhas de diagnóstico sem corte adicional'} · ${a.tamanho} bytes na origem`,sec);
+                if(Date.now()-Date.parse(a.recebido_em)>600000) el('p','Cópia sem atualização há mais de 10 minutos; confira o último sinal da estação.',sec);
+                const linhas=(a.linhas||[]).filter(l=>!busca.value || l.toLowerCase().includes(busca.value.toLowerCase()));
+                el('pre',linhas.join('\n') || 'Nenhuma linha neste trecho para a busca atual.',sec);
+            }
+        };
+        busca.oninput=render;render();
+    }
     async function consultarCentral(dias) {
         if (typeof supabaseClient === 'undefined' || !supabaseClient?.functions) throw Error('Entre com sua conta administrativa para consultar o histórico central.');
         const body = {dias, antes:cursorCentral};
@@ -45,7 +71,7 @@
     }
     function exportarCSV() {
         if(!ultimaResposta)return;
-        const rows=tab==='frota'?ultimaResposta.map(r=>({estacao:r.apelido||r.name,ultimo_sinal:r.last_seen,versao:r.printers_json?.version,canal:r.printers_json?.canal,livre_bytes:r.printers_json?.armazenamento?.disco_temp_livre_bytes,erros_24h:r.printers_json?.gestao?.erros_24h})):ultimaResposta.trabalhos||ultimaResposta.eventos||[ultimaResposta];
+        const rows=tab==='frota'?ultimaResposta.map(r=>({estacao:r.apelido||r.name,ultimo_sinal:r.last_seen,versao:r.printers_json?.version,canal:r.printers_json?.canal,livre_bytes:r.printers_json?.armazenamento?.disco_temp_livre_bytes,erros_24h:r.printers_json?.gestao?.erros_24h})):ultimaResposta.trabalhos||ultimaResposta.eventos||ultimaResposta.arquivos||[ultimaResposta];
         const keys=[...new Set(rows.flatMap(r=>Object.keys(r)))];
         const cell=x=>{let s=typeof x==='object'?JSON.stringify(x):String(x??'');if(/^[\s]*[=+\-@]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
         const csv=[keys.map(cell).join(';'),...rows.map(r=>keys.map(k=>cell(r[k])).join(';'))].join('\r\n');
@@ -67,12 +93,14 @@
         const abertura=modal, aba=tab;
         try {
             const dias=Number(modal.querySelector('select').value);
-            const d=aba==='central'?await consultarCentral(dias):aba==='frota'?await frota():await api(aba==='historico'?`relatorio?dias=${dias}`:aba==='disco'?'resumo':aba);
+            const d=aba==='remotos'?await consultarLogsRemotos():aba==='central'?await consultarCentral(dias):aba==='frota'?await frota():await api(aba==='historico'?`relatorio?dias=${dias}`:aba==='disco'?'resumo':aba);
             if(modal!==abertura || tab!==aba) return;
             ultimaResposta=d;
             const body=modal.querySelector('[data-corpo]'); body.replaceChildren();
             mensagem='Atualizado às '+new Date().toLocaleTimeString('pt-BR'); mostrarMensagem();
-            if(aba==='central') {
+            if(aba==='remotos') {
+                mostrarLogsRemotos(d,body);
+            } else if(aba==='central') {
                 el('p','Eventos recebidos da estação; saída da fila não comprova papel impresso. Modelos de uma seleção combinada compartilham o trabalho. Registros antigos podem estar sem identificação. O envio pendente por falta de internet aparecerá após sincronização.',body);
                 tabela([['Quando',r=>quando(r.quando)],['Recebido',r=>quando(r.recebido_em)],['Estação','estacao'],
                     ['Pedido / modelo',r=>(r.contexto?.alvos||[]).map(a=>`${a.pedido} / ${a.modelo}`).join(', ')||'Sem identificação'],
@@ -133,8 +161,8 @@
         const header=el('header',null,modal);el('h2','Gerenciamento das estações',header);
         botao(header,'Fechar',()=>modal.close());
         const nav=el('nav',null,modal);
-        const abas=local?['frota','central','resumo','fila','historico','disco','logs']:['frota','central'];
-        abas.forEach(a=>botao(nav,({frota:'Todas as estações',central:'Histórico por pedido',resumo:'Esta estação',fila:'Fila ao vivo',historico:'Histórico e relatórios',disco:'Disco e manutenção',logs:'Logs'})[a],()=>{tab=a;cursorCentral=null;ultimaResposta=null;modal.querySelector('[data-corpo]').replaceChildren();modal.querySelector('[data-filtros]').hidden=a!=='central';return atualizar();}));
+        const abas=local?['frota','central','remotos','resumo','fila','historico','disco','logs']:['frota','central','remotos'];
+        abas.forEach(a=>botao(nav,({frota:'Todas as estações',central:'Histórico por pedido',remotos:'Logs remotos',resumo:'Esta estação',fila:'Fila ao vivo',historico:'Histórico e relatórios',disco:'Disco e manutenção',logs:'Logs locais'})[a],()=>{tab=a;cursorCentral=null;ultimaResposta=null;modal.querySelector('[data-corpo]').replaceChildren();modal.querySelector('[data-filtros]').hidden=a!=='central';modal.querySelector('[data-filtros-logs]').hidden=a!=='remotos';return atualizar();}));
         const select=el('select',null,nav); select.setAttribute('aria-label','Período do relatório');[1,7,30,90].forEach(n=>{const o=el('option',n+' dias',select);o.value=n;o.selected=n===7;});select.onchange=atualizar;
         botao(nav,'Atualizar',atualizar);botao(nav,'Exportar JSON',exportar);botao(nav,'Exportar CSV',exportarCSV);
         const filtros=el('div',null,modal);filtros.dataset.filtros='';filtros.hidden=true;
@@ -142,11 +170,15 @@
             const label=el('label',nome+' ',filtros), input=el('input',null,label);input.dataset.filtro=k;input.setAttribute('aria-label',nome);input.maxLength=k==='estacao'?80:16;
         }
         botao(filtros,'Consultar histórico',async()=>{cursorCentral=null;await atualizar();});
+        const filtrosLogs=el('div',null,modal);filtrosLogs.dataset.filtrosLogs='';filtrosLogs.hidden=true;
+        const labelLogs=el('label','Estação ',filtrosLogs), estacaoLogs=el('input',null,labelLogs);
+        estacaoLogs.dataset.estacaoLogs='';estacaoLogs.maxLength=80;estacaoLogs.placeholder='LASER-01';estacaoLogs.setAttribute('aria-label','Estação dos logs remotos');
+        botao(filtrosLogs,'Consultar logs remotos',atualizar);
         const status=el('p',null,modal);status.setAttribute('role','status');
         const body=el('div',null,modal);body.dataset.corpo='';
         modal.addEventListener('close',()=>{clearInterval(timer);modal.remove();modal=null;ultimaResposta=null;});
         let ciclos=0;
-        modal.showModal();atualizar();timer=setInterval(()=>{ciclos++;if(!document.hidden && tab!=='central' && (tab!=='frota'||ciclos%6===0))atualizar();},5000);
+        modal.showModal();atualizar();timer=setInterval(()=>{ciclos++;if(!document.hidden && !['central','remotos'].includes(tab) && (tab!=='frota'||ciclos%6===0))atualizar();},5000);
     }
     const style=el('style',`.gestao-estacoes{width:94vw;max-width:1400px;height:88vh;background:#142132;color:#eef4fb;border:1px solid #688096;border-radius:12px;padding:20px}.gestao-estacoes::backdrop{background:#000a}.gestao-estacoes header,.gestao-estacoes nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.gestao-estacoes header{justify-content:space-between}.gestao-estacoes button,.gestao-estacoes select{padding:8px 12px;border:1px solid #688096;border-radius:6px;background:#243c56;color:white;cursor:pointer}.gestao-estacoes button:disabled{opacity:.4}.gestao-estacoes table{width:100%;border-collapse:collapse;margin:18px 0}.gestao-estacoes td,.gestao-estacoes th{text-align:left;padding:9px;border-bottom:1px solid #38516b}.gestao-estacoes pre{white-space:pre-wrap;overflow-wrap:anywhere}.gestao-estacoes [role=status]{color:#ffd37d}`,document.head);
     let entrada;

@@ -62,7 +62,9 @@ if (iCriar < 0 || iFimCriar < 0 || iEnviar < 0 || iSpool < 0) {
     throw new Error('nao achei criarEntregaDeImpressao / sendPrintJobDirect / nomeParaSpool no script.js');
 }
 
-const FONTE_ENTREGA = SCRIPT.slice(iCriar, iFimCriar)
+const iHistorico = SCRIPT.indexOf('function contextoHistoricoArquivo(');
+const fonteHistorico = SCRIPT.slice(iHistorico, SCRIPT.indexOf('\n}', iHistorico) + 2);
+const FONTE_ENTREGA = fonteHistorico + '\n' + SCRIPT.slice(iCriar, iFimCriar)
     + '\n' + SCRIPT.slice(iEnviar, iFimEnviar)
     + '\n' + SCRIPT.slice(iSpool, iFimSpool)
     + '\n' + SCRIPT.slice(iOpcoes, iFimOpcoes)
@@ -280,8 +282,8 @@ function montarCenario(opcoes) {
 (function aEntregaAconteceDentroDoLaco() {
     const i = PEDIDO.indexOf('arquivosRecebidos++;');
     ok(i > 0, 'achei o ponto em que a tela recebe um arquivo do streaming');
-    const trecho = PEDIDO.slice(i, i + 3400);
-    ok(/await entrega\.entregar\(\[\{ name: fileObj\.name, blob: fBlob \}\]\)/.test(trecho),
+    const trecho = PEDIDO.slice(i, PEDIDO.indexOf('} else if (directoryHandle)', i));
+    ok(/await entregarLoteComAcompanhamento\(entrega, fileObj, fBlob, baseUrl, headers, impositionAbortController.signal\)/.test(trecho),
        'cada arquivo recebido e entregue AI MESMO, dentro do laco de leitura -- '
        + 'era isto que faltava: o motor cortava certo e ninguem consumia o corte',
        trecho.slice(0, 200));
@@ -299,7 +301,7 @@ function montarCenario(opcoes) {
     // Se o `criarEntregaDeImpressao` sumir do script.js, o trabalho nao pode
     // evaporar: o comportamento antigo (juntar tudo e mandar no fim) volta.
     const i = PEDIDO.indexOf('arquivosRecebidos++;');
-    const trecho = PEDIDO.slice(i, i + 3400);
+    const trecho = PEDIDO.slice(i, PEDIDO.indexOf('} else if (directoryHandle)', i));
     ok(/printBlobQueue\.push/.test(trecho), 'a fila antiga continua como rede', trecho.slice(0, 120));
     ok(/typeof criarEntregaDeImpressao === 'function'/.test(trecho),
        'e ela so e usada quando a entrega nova nao existe');
