@@ -47,18 +47,32 @@ function ambiente(nuvem = true) {
         await a.c.conferirColunasQrIdealDosPedidos();
         ok(a.avisos.length===1 && a.avisos[0].tipo==='warning' && !/gerariam ingressos/.test(a.avisos[0].mensagem),'falha de consulta e inconclusiva, nao colisao confirmada');
         a.c.falhar=false;
-        for(const dados of [[],{},[{pedido:23063,modelo:1001859,versao:2}],
+        for(const dados of [[],[{pedido:23063,modelo:1001859,versao:2}]]) {
+            a.avisos.length=0; a.c.contratos=dados;
+            await a.c.conferirColunasQrIdealDosPedidos();
+            ok(a.avisos.length===0,'nova reserva QR12 pendente nao e colisao nem falha de consulta');
+        }
+        for(const dados of [{},[{pedido:23063,modelo:1001859,versao:1}],
+            [{pedido:23063,modelo:99999,versao:1}],
             [{pedido:23063,modelo:1001859,versao:2},{pedido:23063,modelo:1001959,versao:9}],
             [{pedido:23063,modelo:1001859,versao:2},{pedido:23063,modelo:1001859,versao:2}],
             [{pedido:1,modelo:1001859,versao:2},{pedido:1,modelo:1001959,versao:2}]]){
             a.avisos.length=0; a.c.contratos=dados;
             await a.c.conferirColunasQrIdealDosPedidos();
-            ok(a.avisos.length===1 && a.avisos[0].tipo==='warning','resposta incompleta/invalida nao libera conferencia');
+            ok(a.avisos.length===1 && a.avisos[0].tipo==='warning','falha de dados ou pedido legado incompleto preserva aviso');
         }
         a.avisos.length=0; a.c.state.numeracoes[0].elements=[{type:'QR'}]; const consultas=a.pedidos.length;
         await a.c.conferirColunasQrIdealDosPedidos();
         ok(a.avisos.length===0 && a.pedidos.length===consultas,'QR comum nao consulta contrato Ideal');
     }
+    const pedido=ambiente();
+    pedido.c.state.modelosGlobais={24787:[
+        {id:1006392,amostra_num_id:'qr'}, {id:1007392,amostra_num_id:'qr'}
+    ]};
+    pedido.c.contratos=[];
+    await pedido.c.conferirColunasQrIdealDosPedidos();
+    ok(pedido.avisos.length===0,'regressao 24787: mesmos sufixos sem contratos nao alertam colisao');
+    ok(pedido.pedidos.length===1 && pedido.pedidos[0].endsWith('pedido=24787'),'confere somente metadados do pedido');
     const a=ambiente(); let terminar;
     a.c.aguardar=new Promise(r=>{terminar=r;}); a.c.falhar=true;
     const antiga=a.c.conferirColunasQrIdealDosPedidos();

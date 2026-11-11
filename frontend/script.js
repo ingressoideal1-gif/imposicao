@@ -27848,6 +27848,8 @@ async function conferirColunasQrIdealDosPedidos() {
             state.modelosGlobais[pedido] || [], state.numeracoes || []
         );
         const modelos = classificacao.ativos;
+        // Os sufixos apenas selecionam candidatos a uma colisao LEGADA, evitando
+        // uma consulta por pedido da lista inteira. Nao determinam a versao QR.
         let choques = modelos.length < 2
             ? [] : window.conferirColunasQrIdeal(pedido, modelos);
         if (choques.length) {
@@ -27859,12 +27861,16 @@ async function conferirColunasQrIdealDosPedidos() {
                     throw new Error('Resposta de contratos inválida');
                 }
                 const porModelo = new Map(contratos.map(c => [String(c.modelo), c]));
+                const pedidoLegado = contratos.some(c => c.versao === 1);
                 choques = choques.flatMap(c => {
-                    if (c.modelos.some(m => !porModelo.has(String(m)))) {
+                    // Consulta valida sem contrato e reserva QR12 ainda pendente,
+                    // nao falha de conferencia. O servidor exige v2 nas novas
+                    // emissoes; a geracao continua exigindo o contrato reservado.
+                    // Um pedido que ja tem legado exige revisao dos modelos novos.
+                    if (pedidoLegado && c.modelos.some(m => !porModelo.has(String(m)))) {
                         contratosInconclusivos.push(`pedido ${pedido}: modelos ${c.modelos.join(' e ')}`);
-                        return [];
                     }
-                    const legados = c.modelos.filter(m => porModelo.get(String(m)).versao === 1);
+                    const legados = c.modelos.filter(m => porModelo.get(String(m))?.versao === 1);
                     return legados.length > 1 ? [{ ...c, modelos: legados }] : [];
                 });
             } catch (_) {
