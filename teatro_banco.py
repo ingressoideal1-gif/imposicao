@@ -15,7 +15,7 @@ def grupos(rows):
                 or not re.fullmatch(r"[a-f0-9]{64}", str(row.get("Revisao_Mapa", "")))
                 or any(row.get(k) != primeiro.get(k) for k in ("Mapa_ID", "Setor_ID", "Revisao_Mapa"))
                 or not isinstance(row.get("Bloco"), str) or not row["Bloco"].strip()
-                or row["Bloco"] != row.get("Fila") or not str(row.get("Numero", "")).strip()):
+                or not isinstance(row.get("Fila"), str) or not row["Fila"].strip() or not str(row.get("Numero", "")).strip()):
             raise ValueError("O banco do teatro está incompleto ou mistura setores. Importe novamente o setor.")
         if not blocos or blocos[-1]["fila"] != row["Bloco"]:
             if row["Bloco"] in vistos:

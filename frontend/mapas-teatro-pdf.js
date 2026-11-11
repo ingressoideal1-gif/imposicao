@@ -21,7 +21,7 @@
             for (const t of mapa.config.tiposAssento || []) tipos.set(t.id, { ...t, quantidade: 0 });
             const padroes = { Normal: ['Normal', '#3498db'], PCD: ['Cadeirante', '#f1c40f'], Obeso: ['Obeso', '#e67e22'], Acompanhante: ['Acompanhante', '#2ecc71'] };
             for (const c of cadeiras) {
-                const fila = String((s.cadeiras[c.key].prefixo ?? '') || 'Sem prefixo');
+                const fila = String((s.cadeiras[c.key].bloco ?? s.cadeiras[c.key].prefixo ?? '') || 'Sem prefixo');
                 filas.set(fila, (filas.get(fila) || 0) + 1);
                 if (!tipos.has(c.tipo)) tipos.set(c.tipo, { id: c.tipo, nome: padroes[c.tipo]?.[0] || c.tipo, cor: padroes[c.tipo]?.[1] || '#51657d', quantidade: 0 });
                 tipos.get(c.tipo).quantidade++;

@@ -4583,16 +4583,16 @@
     <script src="/supabase-config.js?v=1037-sessao1"></script>
     <script src="mapas-teatro-logo.js?v=1002"></script>
     <script src="mapa-teatro-revisao.js?v=1007"></script>
-    <script src="mapas-teatro-pdf.js?v=1027"></script>
+    <script src="mapas-teatro-pdf.js?v=20261121"></script>
     <script src="mapas-teatro-pdf-storage.js?v=1027"></script>
-    <script src="mapas.js?v=1027"></script>
+    <script src="mapas.js?v=20261121"></script>
     <script src="cor-numeracao-do-modelo.js?v=1035-vibe1"></script>
     <script src="cor-margens.js?v=964"></script>
     <!-- De onde cada modelo tira o dado do papel: o banco de dentro da
          numeracao (o de sempre) ou um banco do proprio pedido. Carrega antes
          do script.js, que e quem pergunta. -->
     <script src="banco-do-modelo.js?v=948"></script>
-    <script src="teatro-banco.js?v=1034"></script>
+    <script src="teatro-banco.js?v=20261121"></script>
     <script src="teatro-snapshot.js?v=1042"></script>
     <script src="mapa-teatro-do-pedido.js?v=20261031"></script>
     <script src="logo-do-frete.js?v=948"></script>
@@ -4698,6 +4698,11 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
+                                    <label for="mapa-fileira-digitos">Dígitos (opcional)</label>
+                                    <input type="number" id="mapa-fileira-digitos" class="form-control" min="1" max="16" step="1" placeholder="Automático pelo início e fim">
+                                    <small>001 até 004 gera A-001 até A-004. Aplicado somente a números, sem cortar dígitos.</small>
+                                </div>
+                                <div class="form-group">
                                     <label>Padrão Numeração</label>
                                     <select id="mapa-fileira-padrao" class="form-control">
                                         <option value="sequencial">Sequencial (1,2,3 / A,B,C)</option>
@@ -4738,6 +4743,7 @@
                             <div style="position:absolute; top:54px; left:16px; display:flex; gap:8px; z-index:10; background:rgba(0,0,0,0.5); padding:8px; border-radius:8px;">
                                 <button class="btn btn-sm" id="tool-select" onclick="setMapTool('select')" style="background:var(--blue); color:white;">🖱️ Selecionar</button>
                                 <button class="btn btn-sm btn-secondary" id="tool-pan" onclick="setMapTool('pan')">🖐 Mover</button>
+                                <button class="btn btn-sm btn-secondary" id="tool-edit" onclick="setMapTool('edit')" title="Clique em um lugar para editar, mantendo a posição, o setor e o bloco de impressão">✏️ Editar lugar</button>
                                 <button class="btn btn-sm btn-secondary" id="tool-erase" onclick="setMapTool('erase')">🧹 Borracha</button>
                                 <button class="btn btn-sm btn-secondary" id="tool-restore" onclick="setMapTool('restore')">➕ Voltar</button>
                                 <button class="btn btn-sm btn-secondary" onclick="window.deletarSelecionadas()" style="color:#ff4d4d; border-color:#ff4d4d;">❌ Excluir (X)</button>

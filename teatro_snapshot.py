@@ -30,21 +30,24 @@ def linhas(modelo):
         if any(type(c.get(k)) not in (str, int) for k in ("prefixo", "num")):
             raise ValueError("O snapshot contém fila ou lugar inválido.")
         fila, lugar = str(c["prefixo"]), str(c["num"])
+        bloco = c.get("bloco", fila)
+        if not isinstance(bloco, str) or not bloco.strip():
+            raise ValueError("Bloco inválido no snapshot.")
         if not fila.strip() or not lugar.strip() or (fila, lugar) in rotulos:
             raise ValueError("Lugar vazio ou repetido no snapshot.")
-        rotulos.add((fila, lugar)); lugares.append((y, x, chave, fila, lugar, c.get("tipo") or "Normal"))
+        rotulos.add((fila, lugar)); lugares.append((y, x, chave, fila, lugar, c.get("tipo") or "Normal", bloco))
     grupos = {}
-    for p in sorted(lugares): grupos.setdefault(p[3], []).append(p)
+    for p in sorted(lugares): grupos.setdefault(p[6], []).append(p)
     rows = []
-    for fila, lista in grupos.items():
-        for y, x, chave, _, lugar, tipo in lista:
+    for bloco, lista in grupos.items():
+        for y, x, chave, fila, lugar, tipo, _ in lista:
             sufixo = str(tipos.get(tipo, {}).get("sufixo") or "").strip()
             rows.append({"__id": json.dumps([mapa_id, setor_id, chave], ensure_ascii=False, separators=(",", ":")),
                 "Mapa": s["mapa"].get("nome") or "", "Mapa_ID": mapa_id, "Revisao_Mapa": rev,
                 "Setor": s["setor"].get("nome") or "", "Setor_ID": setor_id,
                 "Conjunto": " ".join(str(s["setor"].get("nomeConjunto") or "Fila").split())[:40],
                 "Fila": fila, "Numero": lugar + (" " + sufixo if sufixo else ""), "Lugar": lugar,
-                "Bloco": fila, "Tipo": tipo, "Posicao_X": x, "Posicao_Y": y, "Origem": "Mapa de Teatro"})
+                "Bloco": bloco, "Tipo": tipo, "Posicao_X": x, "Posicao_Y": y, "Origem": "Mapa de Teatro"})
     qtd = modelo.get("quantidade")
     if type(qtd) is not int or qtd < 1 or qtd != len(rows):
         raise ValueError("A quantidade do modelo não corresponde aos lugares ativos do snapshot. Confira no ERP.")

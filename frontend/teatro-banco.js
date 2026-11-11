@@ -35,23 +35,24 @@
                 const xy = key.split(',');
                 if (xy.length !== 2 || xy.some(v => !v.trim() || !Number.isFinite(Number(v)))) throw Error('Posição inválida no setor ' + nome + '.');
                 const fila = texto(c.prefixo ?? c.row_label), lugar = texto(c.num ?? c.col_label);
-                if (!fila.trim() || !lugar.trim()) throw Error('Há lugar sem identificador de conjunto ou número no setor ' + nome + '.');
-                return { key, x: Number(xy[0]), y: Number(xy[1]), fila, lugar, tipo: texto(c.tipo || 'Normal') };
+                const bloco = texto(c.bloco ?? fila);
+                if (!bloco.trim() || !fila.trim() || !lugar.trim()) throw Error('Há lugar sem identificador de conjunto ou número no setor ' + nome + '.');
+                return { key, x: Number(xy[0]), y: Number(xy[1]), fila, bloco, lugar, tipo: texto(c.tipo || 'Normal') };
             }).sort((a, b) => a.y - b.y || a.x - b.x || a.key.localeCompare(b.key));
             const grupos = new Map(), rotulos = new Set();
             for (const lugar of lugares) {
                 const label = assinatura([lugar.fila, lugar.lugar]);
                 if (rotulos.has(label)) throw Error('Lugar repetido no setor ' + nome + ': ' + lugar.fila + ' / ' + lugar.lugar + '.');
                 rotulos.add(label);
-                if (!grupos.has(lugar.fila)) grupos.set(lugar.fila, []);
-                grupos.get(lugar.fila).push(lugar);
+                if (!grupos.has(lugar.bloco)) grupos.set(lugar.bloco, []);
+                grupos.get(lugar.bloco).push(lugar);
             }
             const rows = [];
             for (const [fila, lugaresDoGrupo] of grupos) {
                 for (const p of lugaresDoGrupo) {
                     const sufixo = texto(tipos.get(p.tipo)?.sufixo).trim();
                     rows.push({ __id: assinatura([mapa.id, s.id, p.key]), Mapa: texto(mapa.name), Mapa_ID: mapa.id,
-                        Revisao_Mapa: rev, Setor: nome, Setor_ID: s.id, Conjunto: conjunto, Fila: fila,
+                        Revisao_Mapa: rev, Setor: nome, Setor_ID: s.id, Conjunto: conjunto, Fila: p.fila,
                         Numero: p.lugar + (sufixo ? ' ' + sufixo : ''), Lugar: p.lugar, Bloco: fila, Tipo: p.tipo,
                         Posicao_X: p.x, Posicao_Y: p.y, Origem: ORIGEM });
                 }
@@ -69,7 +70,7 @@
         for (const r of rows) {
             if (!r || r.Origem !== ORIGEM || !r.Mapa_ID || !r.Setor_ID || !/^[a-f0-9]{64}$/.test(r.Revisao_Mapa || '')
                 || r.Mapa_ID !== primeiro.Mapa_ID || r.Setor_ID !== primeiro.Setor_ID || r.Revisao_Mapa !== primeiro.Revisao_Mapa
-                || typeof r.Bloco !== 'string' || !r.Bloco.trim() || r.Bloco !== r.Fila || !texto(r.Numero).trim()) {
+                || typeof r.Bloco !== 'string' || !r.Bloco.trim() || typeof r.Fila !== 'string' || !r.Fila.trim() || !texto(r.Numero).trim()) {
                 throw Error('O banco do teatro está incompleto ou mistura setores. Importe novamente o setor.');
             }
             let bloco = blocos.at(-1);
@@ -109,7 +110,7 @@
         if (!Number.isSafeInteger(folhas) || folhas < 1 || indice < 0 || indice >= rows.length) return null;
         const bloco = fonte.blocos.find(b => indice >= b.inicio && indice < b.inicio + b.quantidade);
         const primeiro = rows[bloco.inicio], ultimo = rows[bloco.inicio + bloco.quantidade - 1];
-        return { titulo: (descricao?.nomeConjunto || primeiro.Conjunto || 'Fila') + ' ' + primeiro.Fila,
+        return { titulo: (descricao?.nomeConjunto || primeiro.Conjunto || 'Fila') + ' ' + primeiro.Bloco,
             detalhe: ' - ' + (fonte.nomeSetor || 'Teatro') + ' - de ' + primeiro.Numero + ' a ' + ultimo.Numero
                 + ' (' + bloco.quantidade + ' lugares)' };
     }
@@ -210,6 +211,10 @@
         }
         const resposta = await root.fetch(baseUrl + '/api/version', { signal });
         const info = resposta.ok ? await resposta.json() : null;
+        if (numeracoes.some(n => (n?.csv_data || []).some(r => linhaDeMapa(r) && r.Bloco !== r.Fila))
+                && !info?.capabilities?.includes('teatro_bloco_independente_v1')) {
+            throw Error('Atualize o NewProd desta estação para imprimir lugares editados mantendo o bloco original.');
+        }
         if (!info?.capabilities?.includes('teatro_vertical_modelo_v1')) throw Error('Atualize o NewProd desta estação para imprimir TEATRO com preenchimento vertical por modelo.');
         if (payload.formato?.has_cover && numeracoes.some(n => grupos(n?.csv_data || []))
                 && !info?.capabilities?.includes('teatro_capas_fila_v1')) throw Error('Atualize o NewProd desta estação para gerar uma capa por conjunto do mapa de teatro.');
