@@ -5,6 +5,7 @@ import { iguaisEmTempoConstante } from '../_compartilhado/assinatura.ts';
 import { conferirVinculoPiloto, operadorDaEstacaoPiloto } from '../_compartilhado/piloto_estacao.ts';
 import { origemPermitida, comCors } from '../_compartilhado/cors.ts';
 import { empresaHistorico, receberHistorico, consultarHistorico } from '../_compartilhado/historico_impressao.ts';
+import { receberLogs, consultarLogs } from '../_compartilhado/logs_estacoes.ts';
 
 async function corpoLimitado(req: Request) {
   const reader = req.body?.getReader();
@@ -35,16 +36,17 @@ export async function handler(req: Request): Promise<Response> {
   try {
     const acao = new URL(req.url).pathname.split('/').at(-1);
     const empresa = Deno.env.get('PILOTO_LOCAL_EMPRESA'), empresaId = Deno.env.get('PILOTO_LOCAL_EMPRESA_ID');
-    if (acao === 'enviar') {
+    if (acao === 'enviar' || acao === 'enviar-logs') {
       const esperado = await segredo('ACESSO_AGENTE_SEGREDO'), recebido = req.headers.get('x-agente-segredo') || '';
       if (!esperado || !recebido || !iguaisEmTempoConstante(recebido,esperado)) throw new Recusa(401,'agente necessario');
       const corpo = await corpoLimitado(req);
       const operador = await operadorDaEstacaoPiloto(corpo.estacao, Deno.env.get('PILOTO_LOCAL_ESTACAO') || '', Deno.env.get('PILOTO_LOCAL_OPERADOR') || '');
       const vinculo = await conferirVinculoPiloto(operador, corpo.estacao, empresa);
       if (vinculo.perm_imprimir !== true || vinculo.perm_producao_view !== true) throw new Recusa(403,'estacao sem permissao');
-      return responder(200, await receberHistorico(corpo, empresaHistorico(vinculo,empresa,empresaId)));
+      const receber = acao === 'enviar-logs' ? receberLogs : receberHistorico;
+      return responder(200, await receber(corpo, empresaHistorico(vinculo,empresa,empresaId)));
     }
-    if (acao !== 'consultar') throw new Recusa(404,'operacao inexistente');
+    if (acao !== 'consultar' && acao !== 'consultar-logs') throw new Recusa(404,'operacao inexistente');
     const authorization = req.headers.get('authorization') || '';
     if (!/^Bearer \S+$/i.test(authorization)) throw new Recusa(401,'sessao necessaria');
     const r = await fetch(Deno.env.get('SUPABASE_URL') + '/auth/v1/user', {headers:{Authorization:authorization,
@@ -55,7 +57,8 @@ export async function handler(req: Request): Promise<Response> {
     const rows = await banco('GET', 'imposition_user_permissions?user_id=eq.' + user.id + '&select=*&limit=2');
     const p = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
     if (p?.perm_admin_view !== true && p?.perm_admin_edit !== true) throw new Recusa(403,'permissao de gerenciamento necessaria');
-    return responder(200, await consultarHistorico(await corpoLimitado(req), empresaHistorico(p,empresa,empresaId)));
+    const consultar = acao === 'consultar-logs' ? consultarLogs : consultarHistorico;
+    return responder(200, await consultar(await corpoLimitado(req), empresaHistorico(p,empresa,empresaId)));
   } catch (e) {
     return e instanceof Recusa ? responder(e.status,{detail:e.detail}) : responder(503,{detail:'historico indisponivel'});
   }
