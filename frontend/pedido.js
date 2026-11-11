@@ -6229,22 +6229,37 @@ async function entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, h
     }
     let timer = null, encerrado = false, falha = null, emCurso = null;
     async function renovar() {
-        const controller = new AbortController();
-        const cancelar = () => controller.abort();
-        signal?.addEventListener('abort', cancelar, {once:true});
-        if (signal?.aborted) controller.abort();
-        const prazo = setTimeout(cancelar, 5000);
-        try {
-            const r = await fetch(`${baseUrl}/api/impose/confirmar-entrega`, {
-                method:'POST', headers:{...headers, 'Content-Type':'application/json'},
-                body:JSON.stringify({token:fileObj.token_entrega, acao:'acompanhar'}),
-                signal:controller.signal
-            });
-            const d = await r.json();
-            if (!r.ok || d.acao !== 'acompanhar') throw new Error('Acompanhamento do envio indisponível. Confira a fila antes de retomar.');
-        } finally {
-            clearTimeout(prazo);
-            signal?.removeEventListener('abort', cancelar);
+        // O driver pode atrasar as respostas locais durante a rasterizacao.
+        // Repetir somente esta consulta idempotente, nunca entrega.entregar.
+        // Tres tentativas de 30s continuam abaixo dos 300s de inatividade
+        // do agente. Recusa de token/permissao interrompe sem nova tentativa.
+        for (let tentativa = 0; tentativa < 3; tentativa++) {
+            if (signal?.aborted) throw new Error('Impressão interrompida. Confira a fila antes de retomar.');
+            const controller = new AbortController();
+            const cancelar = () => controller.abort();
+            signal?.addEventListener('abort', cancelar, {once:true});
+            if (signal?.aborted) controller.abort();
+            const prazo = setTimeout(cancelar, 30000);
+            try {
+                const r = await fetch(`${baseUrl}/api/impose/confirmar-entrega`, {
+                    method:'POST', headers:{...headers, 'Content-Type':'application/json'},
+                    body:JSON.stringify({token:fileObj.token_entrega, acao:'acompanhar'}),
+                    signal:controller.signal
+                });
+                if (r.status >= 500) throw new TypeError('Agente temporariamente indisponível.');
+                if (!r.ok) throw new Error('Acompanhamento recusado pelo agente. Confira a fila antes de retomar.');
+                const d = await r.json();
+                if (d.acao !== 'acompanhar') throw new Error('Resposta de acompanhamento inválida. Confira a fila antes de retomar.');
+                return;
+            } catch (erro) {
+                if (signal?.aborted) throw new Error('Impressão interrompida. Confira a fila antes de retomar.');
+                const transitorio = erro?.name === 'AbortError' || erro instanceof TypeError;
+                if (!transitorio) throw erro;
+                if (tentativa === 2) throw new Error('O agente não respondeu ao acompanhamento após três tentativas. Confira o spool antes de retomar; o PDF não foi reenviado.');
+            } finally {
+                clearTimeout(prazo);
+                signal?.removeEventListener('abort', cancelar);
+            }
         }
     }
     function agendar() {
