@@ -4,14 +4,17 @@ import time
 
 
 class Reserva:
-    def __init__(self, controle):
+    def __init__(self, controle, exclusiva=False):
         self._controle = controle
         self._liberada = False
+        self._exclusiva = exclusiva
 
     def liberar(self):
         with self._controle._lock:
             if not self._liberada:
                 self._controle._ativos -= 1
+                if self._exclusiva:
+                    self._controle._impressao_exclusiva = False
                 self._controle._ultima_atividade = self._controle._relogio()
                 self._liberada = True
 
@@ -23,15 +26,26 @@ class ControleProducao:
         self._lock = threading.Lock()
         self._ativos = 0
         self._atualizando = False
+        self._impressao_exclusiva = False
         self.download_lock = threading.Lock()
 
     def reservar(self):
         with self._lock:
-            if self._atualizando:
+            if self._atualizando or self._impressao_exclusiva:
                 return None
             self._ativos += 1
             self._ultima_atividade = self._relogio()
             return Reserva(self)
+
+    def reservar_impressao(self):
+        """Aceite dentro de /impose: so sua propria reserva HTTP pode existir."""
+        with self._lock:
+            if self._atualizando or self._impressao_exclusiva or self._ativos > 1:
+                return None
+            self._impressao_exclusiva = True
+            self._ativos += 1
+            self._ultima_atividade = self._relogio()
+            return Reserva(self, exclusiva=True)
 
     def segundos_ociosos(self):
         with self._lock:
@@ -71,7 +85,7 @@ class ProtegerProducaoMiddleware:
         reserva = self.controle.reservar()
         if reserva is None:
             from starlette.responses import JSONResponse
-            resposta = JSONResponse({'detail': 'NewProd em atualização. Aguarde reiniciar antes de enviar o trabalho.'},
+            resposta = JSONResponse({'detail': 'NewProd ocupado com impressão ou atualização. Acompanhe o trabalho antes de iniciar outro.'},
                                     status_code=503, headers={'Retry-After': '30'})
             return await resposta(scope, receive, send)
         try:

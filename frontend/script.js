@@ -13285,6 +13285,7 @@ function showFileInfo() {
 window._printCancelRequested = false;
 
 function cancelarImpressaoOuGeracao() {
+    if (window.ImpressaoAutonoma?.ocupada()) return window.ImpressaoAutonoma.cancelar();
     console.warn('[Cancelamento] Cancelamento de impressão/geração acionado.');
     window._printCancelRequested = true;
 

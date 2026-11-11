@@ -70,6 +70,8 @@ from propostas_api import router as propostas_router
 app.include_router(propostas_router)
 from gestao_estacoes_api import router as gestao_estacoes_router
 app.include_router(gestao_estacoes_router)
+from impressao_autonoma_api import router as impressao_autonoma_router
+app.include_router(impressao_autonoma_router)
 
 @app.middleware('http')
 async def proteger_api_local(request: Request, call_next):
@@ -405,7 +407,7 @@ def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
     from canais_newprod import CANAL
     return {"version": LOCAL_AGENT_VERSION, "canal": CANAL, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
-            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_capas_fila_v1", "teatro_capa_descricao_atual_v1", "teatro_snapshot_v1", "teatro_bloco_independente_v1", "qr_ideal_contrato_v2", "texto_banco_contorno_v1", "escala_modelo_blocos_v1", "refazer_intervalo_sets_v1", "envio_10_paginas_v1", "refazer_capas_v1"]}
+            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_capas_fila_v1", "teatro_capa_descricao_atual_v1", "teatro_snapshot_v1", "teatro_bloco_independente_v1", "qr_ideal_contrato_v2", "texto_banco_contorno_v1", "escala_modelo_blocos_v1", "refazer_intervalo_sets_v1", "envio_10_paginas_v1", "refazer_capas_v1", "impressao_autonoma_v1"]}
 
 @app.get("/api/update/check")
 def consultar_atualizacao():
@@ -1648,6 +1650,31 @@ async def impose_file(
 
         import qr_contratos
         qr_contratos.preparar_config(config)
+        if data.get('impressao_autonoma') is not None:
+            from autorizacao_local import autorizar
+            autorizar(request.state.operador, 'POST', '/api/print/submit')
+            import impressao_autonoma as autonomo
+            import impressao_autonoma_envio as destino_autonomo
+            from controle_producao import controle
+            pedido_impressao = data['impressao_autonoma']
+            destino_autonomo.validar(pedido_impressao, config)
+            if await request.is_disconnected():
+                raise HTTPException(409, 'Conexao encerrada antes do aceite. Consulte os trabalhos da estacao.')
+
+            def produzir_autonomo(callback):
+                motor = ImpositionEngine(config, on_file_generated=callback, resolver_recurso=resolver_local)
+                motor.process()
+                _publicar_faixa_qr_ideal(config, data)
+
+            resultado, novo = autonomo.trabalhos().iniciar(
+                data['integridade']['job_id'], autonomo.assinatura(data), produzir_autonomo,
+                lambda arquivo, envio, numero: destino_autonomo.enviar(
+                    arquivo, pedido_impressao, config.print_mode, envio, numero),
+                temporarios.close, controle.reservar_impressao)
+            # A thread passa a ser dona dos temporarios; a resposta HTTP nao a controla.
+            streaming_iniciado = novo
+            return JSONResponse({'type': 'impressao_autonoma', 'trabalho': resultado}, status_code=202)
+
         wants_stream = data.get("stream", False)
 
         if wants_stream:
@@ -1836,6 +1863,8 @@ async def impose_file(
             }
         )
 
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:

@@ -110,6 +110,7 @@ PAINEL_ARQUIVOS = [
     'entregas-mapa.js',
     'entregas-avulsas.js',
     'impressao-teste-modelo.js',
+    'impressao-autonoma.js',
     'offline-estacao.js',
     'vendor/offline/fabric.min.js',
     'vendor/offline/inter-1b08e7fc267a5c7e.ttf',
