@@ -22,10 +22,11 @@ for (const folha of [false, true]) {
     }
 }
 
-const a = fonte.indexOf('await entrega.entregar([{ name: fileObj.name, blob: fBlob }]);');
+const a = fonte.indexOf('await entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, headers, impositionAbortController.signal);');
 const b = fonte.indexOf('\n                                    } else {', a);
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const entregar = new AsyncFunction('entrega', 'fetch', 'fileObj', `
+    ${fonte.slice(fonte.indexOf('async function entregarLoteComAcompanhamento('), fonte.indexOf('async function executarPedImposition('))}
     const fBlob = {}; const baseUrl = 'http://estacao'; const headers = {};
     const impositionAbortController = new AbortController(); let cancelouNoMeio = false;
     for (let i = 0; i < 1; i++) { ${fonte.slice(a, b)} }

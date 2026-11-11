@@ -124,3 +124,5 @@ def iniciar(h):
             time.sleep(30)
     _thread = threading.Thread(target=rodar, name='HistoricoCentral', daemon=True)
     _thread.start()
+    from logs_remotos import iniciar as iniciar_logs
+    iniciar_logs()

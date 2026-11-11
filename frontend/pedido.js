@@ -2930,11 +2930,19 @@ function irParaPrimeiraFolhaDaPrevia() {
 window.onRefazerToggle = function(origem) {
     const cbFolhas = document.getElementById('ped-refazer-checkbox');
     const cbCels = document.getElementById('ped-refazer-cel-checkbox');
+    const cbCapas = document.getElementById('ped-refazer-capas-checkbox');
+    if (origem === 'capas' && cbCapas?.checked) {
+        if (cbFolhas) cbFolhas.checked = false;
+        if (cbCels) cbCels.checked = false;
+    } else if (origem && cbCapas) cbCapas.checked = false;
     if (origem === 'folhas' && cbFolhas?.checked && cbCels) cbCels.checked = false;
     if (origem === 'celulas' && cbCels?.checked && cbFolhas) cbFolhas.checked = false;
 
     const marcadoFolhas = refazerFolhasAtivo();
     const marcadoCels = refazerCelulasAtivo();
+    const marcadoCapas = cbCapas?.checked === true;
+    const boxCapas = document.getElementById('ped-refazer-capas-inputs');
+    if (boxCapas) boxCapas.style.display = marcadoCapas ? 'flex' : 'none';
 
     const boxFolhas = document.getElementById('ped-refazer-inputs');
     if (boxFolhas) boxFolhas.style.display = marcadoFolhas ? 'flex' : 'none';
@@ -2947,7 +2955,7 @@ window.onRefazerToggle = function(origem) {
     // Gerar PDF / Imprimir na janela, no grupo de cima, e com o Refazer ligado
     // ele vale para a faixa escolhida. O aviso e' o que diz isso ao operador,
     // dos dois lados: aqui, e junto dos proprios botoes.
-    const ligado = marcadoFolhas || marcadoCels;
+    const ligado = marcadoFolhas || marcadoCels || marcadoCapas;
     const acoes = document.getElementById('ped-refazer-acoes');
     if (acoes) acoes.style.display = ligado ? 'block' : 'none';
     const avisoNoPar = document.getElementById('ped-aviso-refazer');
@@ -2978,11 +2986,11 @@ window.onRefazerCelulaChange = function() {
 // não quer dizer nada no pedido seguinte, e deixá-la marcada é convite a refazer
 // a coisa errada.
 function resetRefazerControls() {
-    for (const id of ['ped-refazer-checkbox', 'ped-refazer-cel-checkbox']) {
+    for (const id of ['ped-refazer-checkbox', 'ped-refazer-cel-checkbox', 'ped-refazer-capas-checkbox']) {
         const el = document.getElementById(id);
         if (el) el.checked = false;
     }
-    for (const id of ['ped-refazer-de', 'ped-refazer-ate', 'ped-refazer-cel', 'ped-refazer-set-ate']) {
+    for (const id of ['ped-refazer-de', 'ped-refazer-ate', 'ped-refazer-cel', 'ped-refazer-set-ate', 'ped-refazer-capas-de', 'ped-refazer-capas-ate']) {
         const el = document.getElementById(id);
         if (el) el.value = '';
     }
@@ -2997,6 +3005,16 @@ window.resetRefazerControls = resetRefazerControls;
 function montarRefazerPayload(isRefazer) {
     const vazio = { refazer_de: 0, refazer_ate: 0, refazer_set: 1, refazer_celulas: [], sufixo: '' };
     if (!isRefazer) return vazio;
+    if (document.getElementById('ped-refazer-capas-checkbox')?.checked === true) {
+        const total = (window.pedRefazerFolhasPorSet || []).length;
+        const de = Number(document.getElementById('ped-refazer-capas-de')?.value || 1);
+        const ate = Number(document.getElementById('ped-refazer-capas-ate')?.value || total);
+        if (!total || !Number.isInteger(de) || !Number.isInteger(ate) || de < 1 || ate < de || ate > total) {
+            return {erro:`Refazer Capas: informe blocos de 1 a ${total || '?'}, na ordem inicial até final.`};
+        }
+        return {...vazio, refazer_capas:true, refazer_set:de, refazer_set_ate:ate,
+            sufixo:`_refazer_capas_blocos${de}-${ate}`};
+    }
 
     const usaCels = refazerCelulasAtivo();
     // Modos excludentes (ver onRefazerToggle): com células, a faixa de folhas não
@@ -4146,7 +4164,8 @@ window.portaDoSeletor = portaDoSeletor;
 /** O Refazer (folhas ou celulas) esta ligado? */
 function refazerLigado() {
     return (typeof refazerFolhasAtivo === 'function' && refazerFolhasAtivo())
-        || (typeof refazerCelulasAtivo === 'function' && refazerCelulasAtivo());
+        || (typeof refazerCelulasAtivo === 'function' && refazerCelulasAtivo())
+        || document.getElementById('ped-refazer-capas-checkbox')?.checked === true;
 }
 window.refazerLigado = refazerLigado;
 
@@ -6202,6 +6221,57 @@ window.runPedImposition = async function (mode, isRefazer) {
     catch (erro) { toast('Impressão bloqueada: ' + erro.message, 'error'); }
     finally { window._preparacaoImpressao = false; }
 };
+async function entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, headers, signal) {
+    // Agentes antigos ignoram campos desconhecidos na confirmacao. Nunca enviar
+    // renovacao a eles: isso confirmaria o lote antes de terminar a impressao.
+    if (!fileObj.token_entrega || fileObj.acompanhar_entrega !== true) {
+        return entrega.entregar([{ name: fileObj.name, blob: fBlob }]);
+    }
+    let timer = null, encerrado = false, falha = null, emCurso = null;
+    async function renovar() {
+        const controller = new AbortController();
+        const cancelar = () => controller.abort();
+        signal?.addEventListener('abort', cancelar, {once:true});
+        if (signal?.aborted) controller.abort();
+        const prazo = setTimeout(cancelar, 5000);
+        try {
+            const r = await fetch(`${baseUrl}/api/impose/confirmar-entrega`, {
+                method:'POST', headers:{...headers, 'Content-Type':'application/json'},
+                body:JSON.stringify({token:fileObj.token_entrega, acao:'acompanhar'}),
+                signal:controller.signal
+            });
+            const d = await r.json();
+            if (!r.ok || d.acao !== 'acompanhar') throw new Error('Acompanhamento do envio indisponível. Confira a fila antes de retomar.');
+        } finally {
+            clearTimeout(prazo);
+            signal?.removeEventListener('abort', cancelar);
+        }
+    }
+    function agendar() {
+        timer = setTimeout(() => {
+            emCurso = renovar().catch(erro => {falha=erro;}).finally(() => {
+                if (!encerrado && !falha) agendar();
+            });
+        }, 30000);
+    }
+    // Falha inicial impede o primeiro envio. Falha posterior nunca o repete.
+    await renovar();
+    agendar();
+    try {
+        const resultado = await entrega.entregar([{name:fileObj.name, blob:fBlob}]);
+        encerrado = true;
+        clearTimeout(timer);
+        if (emCurso) await emCurso;
+        if (signal?.aborted) throw new Error('Impressão interrompida. Confira a fila antes de retomar.');
+        if (falha) throw falha;
+        return resultado;
+    } finally {
+        encerrado = true;
+        clearTimeout(timer);
+        if (emCurso) await emCurso;
+    }
+}
+
 async function executarPedImposition(mode, isRefazer) {
     if (state.pedidoSelecaoCarregando) return toast('Aguarde o modelo selecionado carregar.', 'warning');
     if (state.pedidoSelecaoErro) return toast(state.pedidoSelecaoErro, 'warning');
@@ -6769,6 +6839,7 @@ async function executarPedImposition(mode, isRefazer) {
         refazer_set: refazer.refazer_set,
         ...(refazer.refazer_set_ate != null ? { refazer_set_ate: refazer.refazer_set_ate } : {}),
         refazer_celulas: refazer.refazer_celulas,
+        ...(refazer.refazer_capas ? {refazer_capas:true} : {}),
 
         // A escala da camada de arte do modelo (31/08/2026). 100/100 é o
         // tamanho natural do arquivo — o que o motor sempre fez. Ver
@@ -6781,6 +6852,14 @@ async function executarPedImposition(mode, isRefazer) {
 
 
 
+    payload.limite_paginas_envio = mode === 'print' && payload.confirmar_entrega ? 10 : 0;
+    if (payload.limite_paginas_envio) {
+        const opcoes = testeModelo?.options || getPedPrintOptions().options;
+        // Dividir um trabalho com copias agrupadas pelo driver muda a ordem
+        // entre copias. Recusar antes de gerar/enviar, nunca reduzir copias.
+        if (!payload.refazer_capas && Number(opcoes.copies || 1) !== 1) return desistir('Envio em trechos de 10 páginas exige uma cópia por vez para preservar a ordem. Nenhum arquivo foi enviado.');
+        if (testeModelo?.options?.trabalho_unico) return desistir('Envio progressivo exige entrega por bloco ou folha a folha.');
+    }
     const formData = new FormData();
     // Esta função gera a janela do Pedido, inclusive quando ela está hospedada
     // em Produção por Cor. A view ativa não muda a origem da arte da janela.
@@ -7208,6 +7287,9 @@ async function executarPedImposition(mode, isRefazer) {
                                 };
 
                                 if (mode === 'print') {
+                                    if (payload.limite_paginas_envio && fileObj.limite_paginas_envio !== 10) {
+                                        throw new Error('Atualize o NewProd para enviar trechos de até 10 páginas. Nenhum trecho foi enviado por este painel.');
+                                    }
                                     if (!entrega && typeof criarEntregaDeImpressao === 'function') {
                                         // A validação de destino (impressora ou
                                         // hot folder) acontece aqui, no primeiro
@@ -7219,7 +7301,7 @@ async function executarPedImposition(mode, isRefazer) {
                                         }
                                     }
                                     if (entrega) {
-                                        await entrega.entregar([{ name: fileObj.name, blob: fBlob }]);
+                                        await entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, headers, impositionAbortController.signal);
                                         if (entrega.cancelado) { cancelouNoMeio = true; break; }
                                         if (entrega.falhas) throw new Error('Envio do lote falhou; geracao interrompida.');
                                         if (fileObj.token_entrega) {

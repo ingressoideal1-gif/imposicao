@@ -405,7 +405,7 @@ def version_info():
     """Retorna versão/commit para confirmar qual código está rodando."""
     from canais_newprod import CANAL
     return {"version": LOCAL_AGENT_VERSION, "canal": CANAL, "commit": "local_agent_" + LOCAL_AGENT_VERSION, "desc": "strict_assembly_v2", "engine": "fastpath+garbage4",
-            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_capas_fila_v1", "teatro_capa_descricao_atual_v1", "teatro_snapshot_v1", "teatro_bloco_independente_v1", "qr_ideal_contrato_v2", "texto_banco_contorno_v1", "escala_modelo_blocos_v1", "refazer_intervalo_sets_v1"]}
+            "capabilities": ["multi_artes_pdf_duplex_unico", "integridade_impressao_v1", "mapa_teatro_blocos_v1", "teatro_vertical_modelo_v1", "teatro_capas_fila_v1", "teatro_capa_descricao_atual_v1", "teatro_snapshot_v1", "teatro_bloco_independente_v1", "qr_ideal_contrato_v2", "texto_banco_contorno_v1", "escala_modelo_blocos_v1", "refazer_intervalo_sets_v1", "envio_10_paginas_v1", "refazer_capas_v1"]}
 
 @app.get("/api/update/check")
 def consultar_atualizacao():
@@ -1082,7 +1082,7 @@ def _publicar_faixa_qr_ideal(config, data):
     evento e dias depois.
     """
     try:
-        if not data.get("pedido"):
+        if not data.get("pedido") or data.get('refazer_capas') is True:
             return
         import acesso_publicacao
 
@@ -1214,9 +1214,13 @@ async def confirmar_entrega_impose(request: Request):
     from entrega_progressiva import entregas
     dados = await request.json()
     token = dados.get("token") if isinstance(dados, dict) else None
-    if not isinstance(token, str) or not entregas.confirmar(token):
+    acao = dados.get("acao", "confirmar") if isinstance(dados, dict) else None
+    if acao not in ("confirmar", "acompanhar"):
+        raise HTTPException(status_code=422, detail="Acao de entrega invalida.")
+    operar = entregas.acompanhar if acao == "acompanhar" else entregas.confirmar
+    if not isinstance(token, str) or not operar(token):
         raise HTTPException(status_code=404, detail="Entrega pendente nao encontrada.")
-    return {"ok": True}
+    return {"ok": True, "acao": acao}
 
 
 @app.post("/api/impose")
@@ -1262,6 +1266,11 @@ async def impose_file(
         import csv
         import io
         data = json.loads(payload)
+        if data.get('refazer_capas') is True:
+            if any(type(data.get(k, 1)) is not int for k in ('refazer_set', 'refazer_set_ate')):
+                raise HTTPException(status_code=422, detail='Informe blocos inteiros para refazer capas.')
+        if data.get('limite_paginas_envio') and not (data.get('stream') and data.get('confirmar_entrega')):
+            raise HTTPException(status_code=422, detail='Envio limitado exige streaming com confirmacao de cada lote.')
         import teatro_snapshot
         data["avisos_teatro"] = teatro_snapshot.aplicar(data, db.get_mapa_teatro_para_conferencia)
         for aviso_teatro in data["avisos_teatro"]:
@@ -1627,6 +1636,8 @@ async def impose_file(
             # impressora, sem esperar o trabalho terminar.
             entregar_por_bloco=bool(data.get("entregar_por_bloco", False)),
             folha_a_folha=bool(data.get("folha_a_folha", False)),
+            limite_paginas_envio=data.get("limite_paginas_envio", 0),
+            refazer_capas=data.get("refazer_capas", False),
             # ESCALA DA CAMADA DE ARTE (31/08/2026). Vem do modelo, em %, e o
             # padrao 100 e o tamanho natural do arquivo — o que o motor sempre
             # fez. Numa folha que combina modelos, cada arte traz a sua em
@@ -1706,6 +1717,8 @@ async def impose_file(
                     loop.call_soon_threadsafe(queue.put_nowait, {
                         "type": "file",
                         "token_entrega": token_entrega,
+                        "acompanhar_entrega": bool(token_entrega),
+                        "limite_paginas_envio": getattr(config, 'limite_paginas_envio', 0),
                         "index": arquivos_emitidos,
                         "job_id": data["integridade"]["job_id"],
                         "sha256": hashlib.sha256(base64.b64decode(b64_data)).hexdigest(),
@@ -1934,7 +1947,10 @@ async def submit_print_job(
             from integridade_impressao import validar_pdf_para_entrega
             with open(pdf_path, "rb") as preparado:
                 validar_pdf_para_entrega(preparado.read(), selected_options["integridade_sha256"])
-        success, msg = print_service.send_print_job_windows(
+        # O envio pode levar minutos. Manter o event loop livre para renovar
+        # a espera da geracao e atender cancelamento/consultas locais.
+        from starlette.concurrency import run_in_threadpool
+        success, msg = await run_in_threadpool(print_service.send_print_job_windows,
             printer_name=printer_name,
             pdf_path=pdf_path,
             options=selected_options,

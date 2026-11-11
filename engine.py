@@ -1196,7 +1196,9 @@ class ImpositionConfig:
                  arte_escala_v: float = 100.0,
                  base_file_verso: str = None,
                  pdf_expected_items: int | None = None,
-                 folha_a_folha: bool = False):
+                 folha_a_folha: bool = False,
+                 limite_paginas_envio: int = 0,
+                 refazer_capas: bool = False):
 
         _validar_numeracao_ticket(numeracao)
         _validar_numeracao_ticket(numeracao_2)
@@ -1246,6 +1248,12 @@ class ImpositionConfig:
         # trabalho.
         self.entregar_por_bloco = bool(entregar_por_bloco)
         self.folha_a_folha = bool(folha_a_folha)
+        if type(limite_paginas_envio) is not int or limite_paginas_envio not in (0, 10):
+            raise ValueError('Limite de paginas de envio invalido.')
+        self.limite_paginas_envio = limite_paginas_envio
+        if type(refazer_capas) is not bool:
+            raise ValueError('Opcao de refazer capas invalida.')
+        self.refazer_capas = refazer_capas
 
         # QR Ideal: as duas chaves que dao o codigo de cada ingresso.
         # `pedido` e `pedidos_modelos.id_int` e `modelo` e `pedidos_modelos.id`.
@@ -1682,14 +1690,18 @@ class ImpositionEngine:
             return 0
         return por_bloco * max(int(getattr(cfg, "block_depth", 1) or 1), 1)
 
-    def _entregar_folha(self, doc, cfg, total_sheets, is_duplex):
+    def _entregar_folha(self, doc, cfg, total_sheets, is_duplex, forcar=False):
+        limite = (2 if is_duplex else 1) if cfg.folha_a_folha else cfg.limite_paginas_envio
+        if not len(doc) or (not forcar and len(doc) < limite):
+            return doc
         folhas = len(doc) // (2 if is_duplex else 1)
         self.folhas_entregues += folhas
-        path = cfg.out_pdf.replace(".pdf", f"_folha{self.folhas_entregues:06d}.pdf")
+        sufixo = 'folha' if cfg.folha_a_folha else 'miolo_lote'
+        path = cfg.out_pdf.replace(".pdf", f"_{sufixo}{self.folhas_entregues:06d}.pdf")
         _salvar_pdf(doc, path)
         doc.close()
         self.generated_files.append({
-            "type": "lote", "path": path, "name": os.path.basename(path),
+            "type": "lote" if cfg.folha_a_folha else "miolo", "path": path, "name": os.path.basename(path),
             "folhas": folhas, "folhas_entregues": self.folhas_entregues,
             "folhas_no_trabalho": total_sheets,
         })
@@ -2989,11 +3001,17 @@ class ImpositionEngine:
         r_de = int(getattr(cfg, "refazer_de", 0) or 0)
         r_ate = int(getattr(cfg, "refazer_ate", 0) or 0)
         r_set = int(getattr(cfg, "refazer_set", 1) or 1)
-        intervalo_sets = cfg.refazer_set_ate is not None
+        intervalo_sets = cfg.refazer_set_ate is not None and not cfg.refazer_capas
         r_set_ate = cfg.refazer_set_ate if intervalo_sets else r_set
         # Lista, não conjunto: a ordem decide qual item ocupa qual posição na
         # folha compactada (ver `refazer_celulas` no ImpositionConfig).
         r_cels = list(getattr(cfg, "refazer_celulas", None) or [])
+        if cfg.refazer_capas:
+            r_set_ate = cfg.refazer_set_ate if cfg.refazer_set_ate is not None else r_set
+            if not cfg.has_cover:
+                raise ValueError('Este formato nao possui capa de abertura.')
+            if r_de or r_ate or r_cels or min(r_set, r_set_ate) < 1 or r_set_ate < r_set:
+                raise ValueError('Refazer capas exige apenas um intervalo valido de blocos.')
 
         if r_cels:
             r_de = 0
@@ -3597,6 +3615,23 @@ class ImpositionEngine:
                 set_definitions = sets_teatro
             total_sheets = sum(s["num_sheets"] for s in set_definitions)
             print(f"[engine] strict_assembly: total_sheets={total_sheets} partitioned into {len(set_definitions)} sets")
+            if cfg.refazer_capas:
+                quantidade = len(_folhas_por_set_da_tela(set_definitions, cfg.sheets_per_block))
+                bloco_da_tela = 0
+                try:
+                    if r_set_ate > quantidade:
+                        raise ValueError('Bloco de capa inexistente neste modelo.')
+                    for set_idx, definicao in enumerate(set_definitions):
+                        for layer_idx in range(definicao.get('depth', 1)):
+                            bloco_da_tela += 1
+                            if r_set <= bloco_da_tela <= r_set_ate:
+                                self._generate_capa_for_chunk(set_idx, layer_idx, definicao, cfg, multi_map)
+                finally:
+                    doc_out.close()
+                    if doc_base: doc_base.close()
+                    for documento in pdf_cache.values():
+                        if documento is not None and not documento.is_closed: documento.close()
+                return
             
             if empacotando:
                 # Mesma regra do caminho principal. Aqui o item não sai de uma
@@ -3636,10 +3671,12 @@ class ImpositionEngine:
                                 pos // cols, cols - 1 - (pos % cols), cfg, start_x, start_y
                             )
 
-                    if cfg.folha_a_folha:
+                    if cfg.folha_a_folha or cfg.limite_paginas_envio:
                         doc_out = self._entregar_folha(
                             doc_out, cfg, math.ceil(len(itens) / poses_per_sheet), is_duplex)
 
+                if cfg.limite_paginas_envio:
+                    doc_out = self._entregar_folha(doc_out, cfg, math.ceil(len(itens) / poses_per_sheet), is_duplex, forcar=True)
                 if len(doc_out) > 0:
                     out_name = cfg.out_pdf.replace(".pdf", "_02_miolo.pdf")
                     _salvar_pdf(doc_out, out_name)
@@ -3718,10 +3755,12 @@ class ImpositionEngine:
                                     if item_data is not None:
                                         self._render_item_back(out_page_back, item_data, row, col, cfg, start_x, start_y)
                                         
-                        if cfg.folha_a_folha:
+                        if cfg.folha_a_folha or cfg.limite_paginas_envio:
                             doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex)
 
                     # 3. Salvar miolo para o layer (apenas se gerou alguma folha)
+                    if cfg.limite_paginas_envio:
+                        doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex, forcar=True)
                     if len(doc_out) > 0:
                         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_02_miolo.pdf")
                         _salvar_pdf(doc_out, out_name)
@@ -3743,6 +3782,20 @@ class ImpositionEngine:
             
             self._avisar_refazer_vazio(refazendo, r_de, r_ate, r_set, r_cels, folhas_por_set)
             print(f"[engine] strict_assembly: Gerado com sucesso.")
+            return
+
+        if cfg.refazer_capas:
+            quantidade = math.ceil(total_sheets / max(1, stack_size))
+            try:
+                if r_set_ate > quantidade:
+                    raise ValueError('Bloco de capa inexistente neste modelo.')
+                for set_idx in range(r_set - 1, r_set_ate):
+                    self._generate_capa(set_idx, stack_size, poses_per_sheet, cfg, doc_base, total_sheets, multi_map)
+            finally:
+                doc_out.close()
+                if doc_base: doc_base.close()
+                for documento in pdf_cache.values():
+                    if documento is not None and not documento.is_closed: documento.close()
             return
 
         if intervalo_sets and not r_cels:
@@ -3768,6 +3821,8 @@ class ImpositionEngine:
                     continue
             
             if set_idx != set_idx_current:
+                if cfg.limite_paginas_envio and set_idx_current != -1:
+                    doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex, forcar=True)
                 if set_idx_current != -1 and doc_out is not None:
                     # Gravar o miolo do set que acabou NÃO depende do refazer: só a
                     # capa e a contracapa dependem. Antes as duas coisas estavam sob
@@ -3798,7 +3853,7 @@ class ImpositionEngine:
                             "folhas": len(doc_out), "folhas_entregues": self.folhas_entregues,
                             "folhas_no_trabalho": total_sheets,
                         })
-                    if cfg.folha_a_folha and cfg.has_cover and not refazendo:
+                    if (cfg.folha_a_folha or cfg.limite_paginas_envio) and cfg.has_cover and not refazendo:
                         self._generate_contracapa(set_idx_current, cfg, doc_base)
                     # Só esvazia o documento quando o set foi salvo acima.
                     # Sem capa/lote, todos os sets pertencem ao PDF único.
@@ -4230,12 +4285,14 @@ class ImpositionEngine:
                         _recortar_celula(out_page_back, inicio_celula,
                                          fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
 
-            if cfg.folha_a_folha:
+            if cfg.folha_a_folha or cfg.limite_paginas_envio:
                 doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex)
 
         print(f"[engine] loop done elapsed={_time.monotonic()-_t0:.1f}s, saving...")
+        if cfg.limite_paginas_envio:
+            doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex, forcar=True)
         if cfg.has_cover:
-            if cfg.folha_a_folha and set_idx_current != -1 and not refazendo:
+            if (cfg.folha_a_folha or cfg.limite_paginas_envio) and set_idx_current != -1 and not refazendo:
                 self._generate_contracapa(set_idx_current, cfg, doc_base)
             if set_idx_current != -1 and doc_out:
                 if len(doc_out) > 0:

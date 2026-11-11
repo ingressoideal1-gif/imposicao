@@ -2278,7 +2278,7 @@
                                          em pedido.js e `fontes` no engine.py. -->
                                     <div class="jg" id="jg-refazer">
                                         <button type="button" class="jg-botao" aria-expanded="false" aria-controls="jg-refazer-corpo" onclick="alternarGrupoDaJanela('jg-refazer')">
-                                            <span>&#8634; Refazer Folhas</span>
+                                            <span>&#8634; Refazer Folhas / Capas</span>
                                             <span class="jg-seta">&#9660;</span>
                                         </button>
                                         <div class="jg-corpo" id="jg-refazer-corpo" style="display:none;">
@@ -2310,6 +2310,16 @@
                                                 <span style="font-size:0.78rem;color:var(--text-dim);">Itens:</span>
                                                 <input type="text" id="ped-refazer-cel" class="form-control" style="width:120px;padding:2px 6px;height:28px;font-size:0.8rem;text-align:center;" placeholder="Ex: 1,6,22" oninput="onRefazerCelulaChange()" title="Posi&ccedil;&otilde;es do item no modelo, separadas por v&iacute;rgula (o 1&ordm;, o 6&ordm;, o 22&ordm;...). Faixas tamb&eacute;m valem: 1-4. N&atilde;o &eacute; a c&eacute;lula da folha: 22 num formato de 10 c&eacute;lulas &eacute; v&aacute;lido. A pr&eacute;via rotula cada um com #posi&ccedil;&atilde;o.">
                                                 <span id="ped-refazer-cel-info" style="flex-basis:100%;font-size:0.72rem;color:var(--text-dim);"></span>
+                                            </div>
+
+                                            <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer;">
+                                                <input type="checkbox" id="ped-refazer-capas-checkbox" onchange="onRefazerToggle('capas')">
+                                                Refazer Capas
+                                            </label>
+                                            <div id="ped-refazer-capas-inputs" style="display:none;gap:6px;flex-wrap:wrap;margin:6px 0;align-items:center;">
+                                                <label>Do bloco <input type="number" id="ped-refazer-capas-de" min="1" placeholder="1" aria-label="Primeiro bloco para refazer capa" style="width:70px;"></label>
+                                                <label>Até <input type="number" id="ped-refazer-capas-ate" min="1" placeholder="Último" aria-label="Último bloco para refazer capa" style="width:70px;"></label>
+                                                <small>Somente a capa de abertura de cada bloco. Sem miolo ou contracapa. Campos vazios: todos os blocos.</small>
                                             </div>
 
                                             <!-- Os botoes proprios de Gerar PDF e Imprimir saíram
@@ -4599,7 +4609,7 @@
     <!-- A regra de "pago" da coluna Pagamento da Lista de Arte. A mesma que
          o link do cliente le na aba de pagamento. -->
     <script src="pagamento-do-pedido.js?v=20261031"></script>
-    <script src="arte-de-impressao.js?v=1100"></script>
+    <script src="arte-de-impressao.js?v=1101"></script>
     <script src="pacotes-locais.js?v=piloto4"></script>
     <script src="antecipacao-pedidos.js?v=piloto2"></script>
     <script src="pacote-entrada.js?v=piloto1"></script>
@@ -4636,7 +4646,7 @@
     <script src="qr-evento-envio.js?v=948"></script>
     <script src="ideal-control.js?v=1049"></script>
     <script src="criador-arte.js?v=964"></script>
-    <script src="/pedido.js?v=20261031"></script>
+    <script src="/pedido.js?v=20261111-espera"></script>
     <script src="/producao-por-cor.js?v=1028"></script>
     <script src="montagem.js?v=1074"></script>
     <script src="acabamento.js?v=1320"></script>
@@ -4976,7 +4986,7 @@
 
 
     <script src="diagnostico-artes.js?v=991"></script>
-    <script src="/gestao-estacoes.js?v=1052"></script>
+    <script src="/gestao-estacoes.js?v=1053"></script>
     <script src="/impressao-teste-modelo.js?v=1056"></script>
 </body>
 </html>
