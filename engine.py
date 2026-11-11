@@ -4772,7 +4772,7 @@ class ImpositionEngine:
             row_start, row_end = item_start["csv_row"], item_end["csv_row"]
             qtd = item_end["local_idx"] - item_start["local_idx"] + 1
             descricao = (item_start.get("teatro_capa") or {}).get("nomeConjunto")
-            bloco_str = f"{descricao or row_start.get('Conjunto') or 'Fila'} {row_start['Fila']}"
+            bloco_str = f"{descricao or row_start.get('Conjunto') or 'Fila'} {row_start.get('Bloco', row_start['Fila'])}"
             setor = row_start.get("Setor") or "Teatro"
             sufixo_str = f" - {setor} - de {row_start['Numero']} a {row_end['Numero']} ({qtd} lugares)"
         elif item_start.get('num_tipo', getattr(cfg, 'num_tipo', '')) == 'CAMAROTE':

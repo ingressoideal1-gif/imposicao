@@ -586,6 +586,7 @@ function abrirModalMapaTeatro() {
     if(document.getElementById('mapa-fileira-prefix')) document.getElementById('mapa-fileira-prefix').value = 'A';
     if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
     if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
+    if(document.getElementById('mapa-fileira-digitos')) document.getElementById('mapa-fileira-digitos').value = '';
     if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'sequencial';
     atualizarPadraoDaFileira();
     // Atualiza header do canvas com o nome do mapa
@@ -655,6 +656,7 @@ window.adicionarSetorMapa = function() {
     if(document.getElementById('mapa-fileira-prefix')) document.getElementById('mapa-fileira-prefix').value = 'A';
     if(document.getElementById('mapa-fileira-inicio')) document.getElementById('mapa-fileira-inicio').value = '1';
     if(document.getElementById('mapa-fileira-fim')) document.getElementById('mapa-fileira-fim').value = '30';
+    if(document.getElementById('mapa-fileira-digitos')) document.getElementById('mapa-fileira-digitos').value = '';
     if(document.getElementById('mapa-fileira-padrao')) document.getElementById('mapa-fileira-padrao').value = 'sequencial';
     atualizarPadraoDaFileira();
     const novoIdx = window.state.mapaAtual.config.setores.length;
@@ -876,7 +878,39 @@ window.setMapTool = function(tool) {
         restoreBtn.style.background = tool === 'restore' ? 'var(--blue)' : '';
         restoreBtn.className = tool === 'restore' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
     }
+    const editBtn = document.getElementById('tool-edit');
+    if (editBtn) {
+        editBtn.style.background = tool === 'edit' ? 'var(--blue)' : '';
+        editBtn.className = tool === 'edit' ? 'btn btn-sm' : 'btn btn-sm btn-secondary';
+    }
 }
+
+window.editarLugarMapa = function(key) {
+    const setor = getSetorAtual();
+    const cadeira = setor && getCadeirasSetor(setor)[key];
+    if (!cadeira) return;
+    const atual = `${cadeira.prefixo || ''}-${cadeira.num ?? ''}`;
+    const resposta = prompt('Identificação do lugar (ex.: K-009). A posição, o setor e o bloco de impressão serão mantidos.', atual);
+    if (resposta === null) return;
+    const partes = resposta.trim().match(/^(.+)-([A-Za-z]+|\d+)$/);
+    if (!partes || !partes[1].trim()) {
+        alert('Informe o lugar no formato Fila-Número, por exemplo K-009.');
+        return;
+    }
+    const prefixo = partes[1].trim();
+    const num = partes[2];
+    if (Object.entries(setor.cadeiras).some(([outraKey, c]) =>
+        outraKey !== key && c && c.tipo !== 'Apagado' && !c.isErased && c.prefixo === prefixo && chaveEtiquetaDoMapa(c.num) === chaveEtiquetaDoMapa(num))) {
+        alert('Já existe um lugar com essa identificação neste setor.');
+        return;
+    }
+    if (prefixo === cadeira.prefixo && num === String(cadeira.num)) return;
+    window.pushToMapHistory();
+    cadeira.bloco = cadeira.bloco ?? cadeira.prefixo;
+    cadeira.prefixo = prefixo;
+    cadeira.num = num;
+    window.cadeirasSelecionadas = new Set([key]);
+};
 
 // ==========================================
 // MOTOR DO CANVAS
@@ -1050,7 +1084,9 @@ function onMapMouseDown(e) {
         const cadeiras = getCadeirasSetor(_s);
 
         let changed = false;
-        if (mapTool === 'erase') {
+        if (mapTool === 'edit') {
+            window.editarLugarMapa(key);
+        } else if (mapTool === 'erase') {
             if (cadeiras[key]) {
                 window.pushToMapHistory();
                 window._borrachaComHistorico = true;
@@ -1066,7 +1102,7 @@ function onMapMouseDown(e) {
                 
                 for (let k in cadeiras) {
                     if (k.endsWith(',' + pos.gy)) {
-                        refPrefixo = cadeiras[k].prefixo;
+                        refPrefixo = cadeiras[k].bloco ?? cadeiras[k].prefixo;
                         break;
                     }
                 }
@@ -1087,7 +1123,7 @@ function onMapMouseDown(e) {
                     avisarMapa('Não há um rótulo válido antes deste assento. Ajuste o início antes de restaurar.', 'warning');
                     return;
                 }
-                const refNum = referencia.tipo === 'letra' ? letrasDoMapa(valor) : valor;
+                const refNum = referencia.tipo === 'letra' ? letrasDoMapa(valor) : formatarNumeroDoMapa(valor, referencia.texto);
                 if (Object.values(cadeiras).some(c => c && c.tipo !== 'Apagado' && !c.isErased
                     && String(c.prefixo ?? '') === String(refPrefixo)
                     && chaveEtiquetaDoMapa(c.num) === chaveEtiquetaDoMapa(refNum))) {
@@ -1111,7 +1147,7 @@ function onMapMouseDown(e) {
                 changed = true;
                 
                 // Preenche formulário para facilitar adição na mesma fila
-                document.getElementById('mapa-fileira-prefix').value = cadeiras[key].prefixo || '';
+                document.getElementById('mapa-fileira-prefix').value = cadeiras[key].bloco ?? cadeiras[key].prefixo ?? '';
                 document.getElementById('mapa-fileira-inicio').value = proximaEtiquetaDoMapa(cadeiras[key].num);
                 atualizarPadraoDaFileira();
                 // cadeiras já pertencem ao setor ativo
@@ -1162,7 +1198,7 @@ function onMapMouseMove(e) {
                 window.requestAnimationFrame(renderMapa);
                 
                 // Preenche formulário para facilitar adição na mesma fila
-                document.getElementById('mapa-fileira-prefix').value = cadeiras[key].prefixo || '';
+                document.getElementById('mapa-fileira-prefix').value = cadeiras[key].bloco ?? cadeiras[key].prefixo ?? '';
                 document.getElementById('mapa-fileira-inicio').value = proximaEtiquetaDoMapa(cadeiras[key].num);
                 atualizarPadraoDaFileira();
             }
@@ -1205,7 +1241,7 @@ function lerEtiquetaDoMapa(entrada, permitirZero = false) {
     if (/^\d+$/.test(texto)) {
         const valor = Number(texto);
         return Number.isSafeInteger(valor) && valor >= (permitirZero ? 0 : 1)
-            ? { tipo: 'numero', valor, texto: String(valor) } : null;
+            ? { tipo: 'numero', valor, texto } : null;
     }
     if (!/^[A-Z]+$/.test(texto)) return null;
     let valor = 0;
@@ -1231,10 +1267,15 @@ function chaveEtiquetaDoMapa(entrada) {
     return etiqueta ? `${etiqueta.tipo}:${etiqueta.valor}` : `texto:${String(entrada ?? '').trim()}`;
 }
 
+function formatarNumeroDoMapa(valor, referencia, digitos = 0) {
+    const largura = digitos || (/^0\d/.test(String(referencia)) ? String(referencia).length : 0);
+    return largura ? String(valor).padStart(largura, '0') : valor;
+}
+
 function proximaEtiquetaDoMapa(entrada) {
     const etiqueta = lerEtiquetaDoMapa(entrada);
     if (!etiqueta || !Number.isSafeInteger(etiqueta.valor + 1)) return '';
-    return etiqueta.tipo === 'letra' ? letrasDoMapa(etiqueta.valor + 1) : etiqueta.valor + 1;
+    return etiqueta.tipo === 'letra' ? letrasDoMapa(etiqueta.valor + 1) : formatarNumeroDoMapa(etiqueta.valor + 1, etiqueta.texto);
 }
 
 function expandirFaixaDoMapa(primeiro, ultimo, permitirInvertida = false, permitirZero = false) {
@@ -1280,11 +1321,22 @@ window.gerarFileiraNoCanvas = function() {
         return;
     }
     
-    let intervalo, prefixos;
+    let intervalo, prefixos, digitos = 0;
     try {
         intervalo = expandirFaixaDoMapa(document.getElementById('mapa-fileira-inicio').value,
             document.getElementById('mapa-fileira-fim').value);
         prefixos = expandirFilasDoMapa(document.getElementById('mapa-fileira-prefix').value || 'A');
+        const campo = (document.getElementById('mapa-fileira-digitos')?.value || '').trim();
+        if (intervalo.tipo === 'numero') {
+            if (campo && (!/^\d+$/.test(campo) || Number(campo) < 1 || Number(campo) > 16)) {
+                throw new Error('Informe de 1 a 16 dígitos ou deixe vazio para usar o formato do início e fim.');
+            }
+            digitos = campo ? Number(campo) : Math.max(...['inicio', 'fim'].map(id => {
+                const texto = document.getElementById('mapa-fileira-' + id).value.trim();
+                return /^0\d/.test(texto) ? texto.length : 0;
+            }));
+            intervalo.valores = intervalo.valores.map(valor => formatarNumeroDoMapa(valor, '', digitos));
+        }
     } catch (erro) {
         avisarMapa(erro.message, 'warning');
         return;
@@ -1320,7 +1372,7 @@ window.gerarFileiraNoCanvas = function() {
     
     for (let pIdx = 0; pIdx < prefixos.length; pIdx++) {
         const prefixo = prefixos[pIdx];
-        fileiras.push({ prefixo, inicio, fim, padrao });
+        fileiras.push({ prefixo, inicio, fim, padrao, digitos });
         
         let startY = null; 
         let startX = null; 
@@ -1331,7 +1383,7 @@ window.gerarFileiraNoCanvas = function() {
         if (window.cadeirasSelecionadas && window.cadeirasSelecionadas.size === 1) {
             const selKey = Array.from(window.cadeirasSelecionadas)[0];
             const selChair = cadeiras[selKey];
-            if (selChair && selChair.prefixo === prefixo) {
+            if (selChair && (selChair.bloco ?? selChair.prefixo) === prefixo) {
                 referenceChairKey = selKey;
                 let [gx, gy] = selKey.split(',').map(Number);
                 startX = gx;
@@ -1343,7 +1395,7 @@ window.gerarFileiraNoCanvas = function() {
             // Verifica se já existe a fileira com este prefixo no setor (vai pro final)
             for (let k in cadeiras) {
                 const c = cadeiras[k];
-                if (c.prefixo === prefixo) {
+                if ((c.bloco ?? c.prefixo) === prefixo) {
                     let [gx, gy] = k.split(',').map(Number);
                     if (startY === null) startY = gy;
                     if (startX === null || gx > startX) startX = gx;
