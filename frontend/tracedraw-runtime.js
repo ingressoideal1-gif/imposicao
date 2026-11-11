@@ -192,6 +192,13 @@
     throw Error('Backup no Drive continua pendente. O PDF está atualizado; tente concluir novamente em instantes.');
   };
   window.ImpositionTraceDraw.configure({request,compose,
+    async confirmPasted(binding) {
+      return confirmarNaTela({
+        titulo:'Abrir a arte colada no CorelDRAW?',
+        mensagem:`A arte colada no modelo ${binding.model} será usada para sincronizar as páginas do destino. Se já houver conteúdo nessas páginas no CDR, ele poderá ser substituído pela ponte. Salve suas edições antes de continuar e confira o resultado antes de Atualizar.`,
+        textoConfirmar:'Abrir e sincronizar',
+      });
+    },
     canEdit:()=>window._currentPerms?.perm_lista_arte_edit===true,
     async status(binding) {
       const {data,error}=await supabaseClient.rpc('imposition_tracedraw_estado',{p_pedido:Number(binding.order),p_modelo:Number(binding.model)});

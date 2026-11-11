@@ -1,9 +1,21 @@
 'use strict';
 // Somente a Lista de Arte interna. O portal e o motor continuam independentes.
 (() => {
-  let adapter = null, busy = false;
+  let adapter = null, busy = false, pasting = false;
   const mounted = new Map();
   const pendingClears = [];
+  const pasted = new Set();
+  const pasteKey = b => `imposition_corel_colagem_${b.order}_${b.model}`;
+  function pendingPaste(b) {
+    const key = pasteKey(b);
+    try { return pasted.has(key) || localStorage.getItem(key) === '1'; }
+    catch (_) { return pasted.has(key); }
+  }
+  function markPaste(b, pending) {
+    const key = pasteKey(b);
+    if (pending) pasted.add(key); else pasted.delete(key);
+    try { if (pending) localStorage.setItem(key, '1'); else localStorage.removeItem(key); } catch (_) {}
+  }
   const label = entry => entry?.art_origin === 'tracedraw' && Number.isInteger(entry.art_revision)
     ? `Arte gerada pelo ${entry.manifesto?.editor==='coreldraw'?'CorelDRAW':'TraceDraw'} · revisão ${entry.art_revision} · ${(entry.backup_pending??Boolean(entry.manifesto?.backup_job_id))?'backup no Drive pendente':'backup confirmado'}` : '';
   function configure(value) {
@@ -15,13 +27,13 @@
   function refresh() {
     for (const [host, b] of mounted) {
       if (!host.isConnected) {mounted.delete(host);continue;}
-      b.gab.disabled = b.open.disabled = b.update.disabled = busy || !adapter.canEdit();
+      b.gab.disabled = b.open.disabled = b.update.disabled = busy || pasting || !adapter.canEdit();
       b.badge.textContent = label(b.entry);
       b.badge.hidden = !b.badge.textContent;
     }
   }
   async function action(binding, name, editor, face) {
-    if (busy || !adapter.canEdit()) return;
+    if (busy || pasting || !adapter.canEdit()) return;
     const started=Date.now();
     busy = true; refresh();
     binding.feedback.textContent = name === 'open' ? `Abrindo no ${editor==='coreldraw'?'CorelDRAW':'TraceDraw'}…` : 'Preparando…';
@@ -32,6 +44,8 @@
       if(name==='open'&&binding.gab.checked)identity.gabarito=true;
       let result;
       if (name === 'update') {
+        if ([...mounted.values()].some(b => b.order === binding.order && pendingPaste(b)))
+          throw Error('Há arte colada neste pedido. Abra os modelos colados pelo botão CorelDRAW e confira as páginas antes de Atualizar.');
         const draft = await adapter.request('prepare', identity);
         const preparedAt=Date.now();
         if(!Array.isArray(draft.drafts))throw Error('A ponte está executando a versão antiga, que atualiza apenas um modelo. Reinicie a ponte antes de publicar o documento.');
@@ -93,6 +107,8 @@
           return;
         }
       } else {
+        if (name === 'open' && pendingPaste(binding) && adapter.confirmPasted
+            && !await adapter.confirmPasted(binding)) return;
         result = await adapter.request(name==='clear'?'clear':'open', identity);
       }
       if (name !== 'open' && name !== 'clear') {
@@ -102,6 +118,7 @@
         // Apenas o recibo confirmado permite atualizar a interface oficial.
         await adapter.reload(binding);
       }
+      if (name === 'open') markPaste(binding, false);
       binding.entry = result.state || binding.entry;
       binding.feedback.textContent = result.message || 'Concluído.';
     } catch (error) {
@@ -157,10 +174,26 @@
     if(!binding)return;
     binding.entry=null;
     const nativeFace=face==='verso'?'back':'front';
-    if(busy){pendingClears.push({binding,face:nativeFace});binding.feedback.textContent='PDF excluído. A limpeza do CDR será iniciada ao terminar a operação atual.';return;}
+    if(busy || pasting){pendingClears.push({binding,face:nativeFace});binding.feedback.textContent='PDF excluído. A limpeza do CDR será iniciada ao terminar a operação atual.';return;}
     await action(binding,'clear','coreldraw',nativeFace);
   }
-  window.ImpositionTraceDraw=Object.freeze({configure,mount,refresh,label,artRemoved});
+  function assertCanPaste() {
+    if (busy || pasting) throw Error('Aguarde a operação da ponte terminar antes de colar a arte.');
+    pasting = true; refresh();
+    return () => {
+      pasting = false; refresh();
+      const next = pendingClears.shift();
+      if (next) return action(next.binding, 'clear', 'coreldraw', next.face);
+    };
+  }
+  function artPasted(osId, model) {
+    const binding=[...mounted.values()].find(b=>b.osId===osId&&b.model===String(model)&&b.controls.isConnected);
+    if (!binding) return;
+    markPaste(binding, true);
+    binding.feedback.textContent='Arte colada. Abra pelo botão CorelDRAW para sincronizar e conferir as páginas antes de Atualizar.';
+    refresh();
+  }
+  window.ImpositionTraceDraw=Object.freeze({configure,mount,refresh,label,artRemoved,artPasted,assertCanPaste});
 })();
 
 // Biblioteca privada de fontes, no modulo ja sincronizado pelas estacoes.

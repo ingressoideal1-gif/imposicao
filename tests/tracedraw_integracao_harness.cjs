@@ -6,12 +6,15 @@ class Element {
   remove(){this.parentElement.children=this.parentElement.children.filter(n=>n!==this);this.isConnected=false;}
 }
 (async()=>{
+ const storage=new Map();
+ const localStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
  const window={},document={createElement:()=>new Element(),createTextNode:text=>({textContent:text})};
- vm.runInNewContext(fs.readFileSync('frontend/tracedraw-integracao.js','utf8'),{window,document});
+ vm.runInNewContext(fs.readFileSync('frontend/tracedraw-integracao.js','utf8'),{window,document,localStorage});
  const api=window.ImpositionTraceDraw,host=new Element(),anchor=new Element(),original=new Element();host.append(original,anchor);
  const container={id:'amostras-itens-container',querySelector:()=>anchor};
+ let allowPasteOpen=true;
  let calls=[],reloads=0,composeFails=false,confirmed=true,legacy=false,waitOpen=null,entry={art_origin:'tracedraw',art_revision:1,operation:'rev1',restorable:true};
- api.configure({canEdit:()=>true,compose:async()=>{if(composeFails)throw Error('Composição incompleta');return {front:'sample'};},
+ api.configure({confirmPasted:async()=>allowPasteOpen,canEdit:()=>true,compose:async()=>{if(composeFails)throw Error('Composição incompleta');return {front:'sample'};},
    reload:async()=>{reloads++;},request:async(action,data)=>{
     calls.push({action,data});
     if(action==='prepare')return legacy?{operation:'draft',files:{front:'pdf'}}:{drafts:[{model:7,operation:'draft',files:{front:'pdf'}}]};
@@ -45,5 +48,24 @@ class Element {
  assert.equal(calls.at(-1).action,'open','limpeza aguarda a operacao atual');
  release();await opening;
  assert.equal(calls.at(-1).action,'clear');assert.equal(calls.at(-1).data.face,'back');
+ calls=[];
+ const finishPaste=api.assertCanPaste();
+ assert.equal(open.disabled,true,'aguarda gravacao da colagem');
+ await open.onclick();assert.equal(calls.length,0);
+ assert.throws(()=>api.assertCanPaste(),/Aguarde/);
+ await finishPaste();assert.equal(open.disabled,false);
+ legacy=false;calls=[];
+ api.artPasted('vibe_123',7);
+ assert.equal(storage.get('imposition_corel_colagem_123_7'),'1','pendencia sobrevive a recarga');
+ assert.equal(open.disabled,false,'colagem preserva o botao CorelDRAW');
+ await update.onclick();assert.equal(calls.length,0,'nao publicar CDR anterior sobre a colagem');
+ assert.match(feedback.textContent,/arte colada/);
+ allowPasteOpen=false;
+ await open.onclick();assert.equal(calls.length,0,'cancelar preserva documento');
+ await update.onclick();assert.equal(calls.length,0,'cancelar nao libera publicacao');
+ allowPasteOpen=true;
+ await open.onclick();assert.equal(calls.at(-1).action,'open');
+ assert.equal(storage.has('imposition_corel_colagem_123_7'),false);
+ await update.onclick();assert.equal(calls.at(-1).action,'publish');
  console.log('CorelDRAW: abrir, preparar, compor, publicar, erros e portal OK');
 })().catch(error=>{console.error(error);process.exitCode=1;});
