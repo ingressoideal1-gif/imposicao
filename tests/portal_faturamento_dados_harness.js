@@ -66,14 +66,16 @@ for (const cliente of [
         + (cliente ? cliente.nome : 'Não informado') + '</strong>'));
     assert.ok(secao.innerHTML.includes(cliente ? cliente.documento : 'CPF ou CNPJ não informado'));
     assert.ok(secao.innerHTML.includes(cliente ? 'Rua Teste, 10' : 'Endereço não informado'));
-    assert.ok(secao.innerHTML.includes('Meus Dados'));
+    assert.ok(secao.innerHTML.includes('Alterar Dados da Nota'));
     assert.ok(secao.innerHTML.includes('Confirmar'));
 }
 assert.equal(chamadas.length, 0, 'exibir os dados nao grava o cadastro');
 
+const dadosSinteticos = JSON.parse(JSON.stringify(contexto.window.portalDados));
 const cartao = contexto.window.cartaoDeDecisaoFaturamento();
 assert.ok(cartao.includes('Confirmar'));
-assert.ok(cartao.includes('Meus Dados'));
+assert.match(cartao, /class="portal-botao atencao"[^>]*onclick="abrirMeusDados\(\)"/);
+assert.ok(cartao.includes('Alterar Dados da Nota'));
 assert.ok(!cartao.includes('>Alterar<'));
 assert.ok(cartao.includes('selecionarCadastroFaturamento(0)'));
 assert.ok(cartao.includes('editarCadastroFaturamento(0)'));
@@ -100,5 +102,57 @@ assert.ok(cartao.includes('Vínculo comercial'), 'mostra o tipo de vínculo fisc
     await contexto.window.persistirFaturamento();
     assert.equal(chamadas.length, antes, 'mesmo CNPJ somente leitura não gera atualização redundante');
     assert.equal(r.alterando, false);
-    console.log('OK: Nota com Confirmar, Meus Dados, CPF editavel, CNPJ leitura e RPC confirmada.');
+    function ambienteConfirmacao() {
+        const log = [];
+        const c = { ...contexto, portalDados: JSON.parse(JSON.stringify(dadosSinteticos)),
+            clienteState: { numero: '123', token: 'sintetico', pedidoFinalizado: false },
+            state: {}, SECOES: ['entrega', 'faturamento', 'orcamento'],
+            atualizarPainelDoPedido() {}, abrirSecao: secao => log.push('avanco:' + secao),
+            gravarCorrecaoDoCliente: async () => { log.push('confirmacao'); return { ok: true }; },
+            supabaseClient: { rpc: async (nome, args) => {
+                log.push(nome);
+                return { data: { ok: true, id_cliente: args.p_id_cliente || 30,
+                    cliente: { ...args.p_cadastro }, endereco_faturamento: { ...args.p_cadastro } } };
+            } }
+        };
+        c.window = c;
+        vm.createContext(c);
+        vm.runInContext(fs.readFileSync('frontend/cliente-confirmacoes.js', 'utf8'), c);
+        vm.runInContext(codigo, c);
+        return { c, log };
+    }
+    let { c, log } = ambienteConfirmacao();
+    await Promise.all([c.selecionarCadastroFaturamento(1), c.selecionarCadastroFaturamento(1)]);
+    assert.equal(c.portalConfirmacoes.faturamento, true);
+    assert.equal(c.portalDados.pedido.id_cliente, 21);
+    assert.deepEqual(log, ['link_cliente_salvar_faturamento', 'confirmacao', 'avanco:orcamento']);
+
+    ({ c, log } = ambienteConfirmacao());
+    await c.novoCadastroFaturamento();
+    const novo = c.dadosDoFormularioFaturamento();
+    Object.assign(novo.valores, { ...dadosSinteticos.cliente, ...dadosSinteticos.endereco_faturamento });
+    novo.documentoLiberado = true;
+    novo.consultado = novo.valores.cep;
+    await c.usarCadastroFaturamento();
+    assert.equal(c.portalConfirmacoes.faturamento, true, 'novo cadastro confirma sem segundo clique');
+    assert.deepEqual(log, ['link_cliente_salvar_faturamento', 'confirmacao', 'avanco:orcamento']);
+
+    ({ c, log } = ambienteConfirmacao());
+    c.supabaseClient.rpc = async () => ({ error: { message: 'offline' } });
+    await c.selecionarCadastroFaturamento(1);
+    assert.equal(c.portalConfirmacoes.faturamento, null);
+    assert.equal(c.portalErroConfirmacao.faturamento, true);
+    assert.deepEqual(log, []);
+
+    ({ c, log } = ambienteConfirmacao());
+    c.gravarCorrecaoDoCliente = async () => ({ ok: false });
+    await c.selecionarCadastroFaturamento(1);
+    assert.equal(c.portalConfirmacoes.faturamento, null, 'cadastro salvo não antecipa confirmação');
+    assert.equal(c.portalErroConfirmacao.faturamento, true);
+    assert.deepEqual(log, ['link_cliente_salvar_faturamento']);
+    c.gravarCorrecaoDoCliente = async () => ({ ok: true });
+    await c.decidirDados('faturamento', true);
+    assert.equal(c.portalConfirmacoes.faturamento, true, 'falha parcial permite repetir');
+
+    console.log('OK: Nota com Confirmar, Alterar Dados da Nota, CPF editavel, CNPJ leitura e RPC confirmada.');
 })().catch(e => { console.error(e); process.exit(1); });
