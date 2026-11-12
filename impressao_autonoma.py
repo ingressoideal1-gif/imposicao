@@ -92,8 +92,8 @@ class Trabalhos:
                     raise ValueError('Identificador ja usado para outro trabalho.')
                 return json.loads(anterior[1]), False
             for texto, in db.execute('SELECT dados FROM trabalhos'):
-                if json.loads(texto)['estado'] in ('aceito','gerando','enviando','cancelando','conferencia'):
-                    raise ValueError('Acompanhe ou confira o trabalho anterior antes de iniciar outro.')
+                if json.loads(texto)['estado'] in ('aceito','gerando','enviando','cancelando'):
+                    raise ValueError('Aguarde o envio em andamento terminar.')
             reserva = reservar()
             if reserva is None:
                 raise ValueError('Agente ocupado com outro trabalho ou atualizacao. Aguarde.')

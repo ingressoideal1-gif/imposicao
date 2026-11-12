@@ -6288,7 +6288,7 @@ async function entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, h
 }
 
 async function executarPedImposition(mode, isRefazer) {
-    if (mode === 'print' && window.ImpressaoAutonoma?.ocupada()) return toast('Acompanhe ou confira o trabalho da estação antes de iniciar outro.', 'warning');
+    if (mode === 'print' && window.ImpressaoAutonoma?.ocupada()) return toast('Aguarde o envio em andamento terminar.', 'warning');
     if (state.pedidoSelecaoCarregando) return toast('Aguarde o modelo selecionado carregar.', 'warning');
     if (state.pedidoSelecaoErro) return toast(state.pedidoSelecaoErro, 'warning');
     if (!await conferirModoVibeDoTrabalho('ped')) return;

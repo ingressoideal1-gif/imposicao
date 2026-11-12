@@ -66,14 +66,16 @@ def test_cancelamento_explicito_espera_lote_em_curso(tmp_path):
     assert final['estado']=='cancelado' and final['enviados']==1 and gerados==[0]
 
 
-def test_falha_apos_envio_pede_conferencia_sem_repetir(tmp_path):
+def test_falha_libera_novo_trabalho_sem_repetir_anterior(tmp_path):
     fila=Trabalhos(tmp_path/'jobs.sqlite');chamadas=[]
     def falhar(*a):chamadas.append(1);raise OSError('driver privado')
     dados,_=iniciar(fila,lambda cb:cb({'type':'capa'}),falhar)
     final=concluir(fila,dados['id'])
     assert final['estado']=='conferencia' and final['lotes'][0]['estado']=='enviando'
     assert 'driver privado' not in json.dumps(final)
-    with pytest.raises(ValueError,match='anterior'):iniciar(fila,lambda cb:None)
+    novo,aceito=iniciar(fila,lambda cb:cb({'type':'miolo'}))
+    assert aceito and concluir(fila,novo['id'])['estado']=='enviado'
+    assert fila.obter(dados['id'])==final
     assert not iniciar(fila,None,ident=dados['id'])[1]
     assert chamadas==[1]
     fila.conferir(dados['id'])
@@ -98,6 +100,9 @@ time.sleep(10)
     assert dado['gerados']==1 and dado['enviados']==0
     assert not fila.threads
     assert not iniciar(fila,None,ident=ident)[1]
+    novo,aceito=iniciar(fila,lambda cb:cb({'type':'capa'}))
+    assert aceito and concluir(fila,novo['id'])['enviados']==1
+    assert fila.obter(ident)==dado
 
 
 def test_admissoes_concorrentes_nao_duplicam(tmp_path):
@@ -197,3 +202,47 @@ def test_segundo_processo_nao_recupera_trabalho_do_primeiro(tmp_path):
     third=subprocess.run([sys.executable,'-c','from impressao_autonoma import trabalhos; trabalhos()'],
                          env=env,capture_output=True,timeout=10)
     assert third.returncode==0,third.stderr
+
+def test_trabalho_realmente_ativo_continua_serializado(tmp_path):
+    fila=Trabalhos(tmp_path/'jobs.sqlite');liberar=threading.Event()
+    def produzir(cb):
+        assert liberar.wait(5)
+        cb({'type':'miolo'})
+    dados,_=iniciar(fila,produzir)
+    try:
+        with pytest.raises(ValueError,match='andamento'):
+            iniciar(fila,lambda cb:cb({'type':'capa'}))
+    finally:
+        liberar.set()
+        concluir(fila,dados['id'])
+
+def test_painel_interrompido_nao_exige_conferencia():
+    script=r'''
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+(async()=>{
+  let estado='conferencia',observar;
+  const elementos=[];
+  function elemento(){
+    const e={style:{},children:[],appendChild(c){this.children.push(c);},
+      replaceChildren(){this.children=[];}};
+    elementos.push(e);return e;
+  }
+  const ctx={window:{},document:{readyState:'loading',body:elemento(),
+    createElement:elemento,addEventListener(n,fn){observar=fn;}},
+    location:{hostname:'localhost',origin:'http://localhost:9001'},
+    setTimeout(){},AbortSignal,URL,
+    fetch:async()=>({ok:true,json:async()=>({trabalhos:[
+      {id:'teste-antigo',estado,enviados:0,paginas_enviadas:0}]})})};
+  vm.runInNewContext(fs.readFileSync('frontend/impressao-autonoma.js','utf8'),ctx);
+  await observar();
+  assert.equal(ctx.window.ImpressaoAutonoma.ocupada(),false);
+  assert(!elementos.some(e=>(e.textContent||'').includes('conferi')));
+  assert(!elementos.some(e=>(e.textContent||'').includes('Confira')));
+  estado='enviando';
+  await ctx.window.ImpressaoAutonoma.consultar();
+  assert.equal(ctx.window.ImpressaoAutonoma.ocupada(),true);
+  assert(elementos.some(e=>e.textContent==='Cancelar próximos lotes'));
+})().catch(e=>{console.error(e);process.exit(1);});
+'''
+    result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=15)
+    assert result.returncode==0,result.stdout+result.stderr
