@@ -24,6 +24,7 @@ import { Recusa } from "../_compartilhado/sessao.ts";
 import { registrarPin, elevarPin } from "../_compartilhado/pin_instalacao.ts";
 import { editarComPin } from "../_compartilhado/edicao_pin.ts";
 import { banco, contar } from "../_compartilhado/banco.ts";
+import { numerosImpressos } from "../_compartilhado/numero_impresso.ts";
 import { iguaisEmTempoConstante, rotaPedida } from "./puro.ts";
 import { comCors, origemPermitida, respostaDePreflight } from "../_compartilhado/cors.ts";
 
@@ -226,7 +227,8 @@ async function publicacaoDoEvento(eventoId: string) {
     if (lote.length < 1000) break;
   }
   return {
-    versao: JSON.stringify(pedidos.map(p => [p.pedido_id_int, p.publicado_em, p.total_credenciais])),
+    // Faz cargas antigas baixarem também o número impresso, sem republicar QRs.
+    versao: "numero-impresso-v1:" + JSON.stringify(pedidos.map(p => [p.pedido_id_int, p.publicado_em, p.total_credenciais])),
     concluida: pedidos.length > 0 && pedidos.every(p => p.publicado_em && Number(p.total_credenciais) > 0),
     leitor_minimo: await banco("POST", "rpc/producao_acesso_qr_leitor_evento", { p_evento: eventoId }),
   };
@@ -285,11 +287,12 @@ async function faixa(
   const paginaMaisUma = (await banco(
     "GET",
     `producao_acesso_credenciais?evento_id=eq.${eventoId}&status=eq.ativo` +
-      `&select=id,codigo_hash,setor_id,numero&order=id.asc` +
+      `&select=id,codigo_hash,setor_id,numero,origem,pedido_id_int,modelo_id&order=id.asc` +
       `&offset=${desde}&limit=${POR_PAGINA + 1}`,
   )) ?? [];
   const temProxima = paginaMaisUma.length > POR_PAGINA;
   const pagina = paginaMaisUma.slice(0, POR_PAGINA);
+  const impressos = await numerosImpressos(pagina);
 
   const sais: Record<string, string> = {};
   for (const p of pedidos) sais[String(p.pedido_id_int)] = p.sal;
@@ -320,6 +323,8 @@ async function faixa(
       h: c.codigo_hash,
       s: c.setor_id,
       n: c.numero,
+      // Só apresentação. `n` permanece ordinal para todas as regras de acesso.
+      ...(impressos.has(c.id) ? { ni: impressos.get(c.id) } : {}),
       id: c.id,
     })),
     proxima: temProxima ? desde + POR_PAGINA : null,
