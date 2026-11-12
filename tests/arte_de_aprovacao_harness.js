@@ -282,11 +282,13 @@ function montarLote(mundo) {
     // Zerar a marca de "o cliente olhou" e o que impede o pedido que voltou de
     // uma alteracao de saltar para "Aguard. Aprovacao" com a abertura da versao
     // ANTERIOR -- o cliente nunca teria visto a arte corrigida.
-    ok(/cliente_abriu_em: null/.test(trecho),
-        'e zera a marca de que o cliente olhou, porque a arte e outra');
-    ok(/arte_pronta_em:/.test(trecho), 'carimbando a versao nova da arte');
-    ok(/state\.linksClienteData\[osId\]\.arte_pronta_em = arteProntaEm/.test(trecho),
-        'e atualiza o carimbo em memoria para o dashboard contar sem esperar F5');
+    ok(/await confirmarTransicaoDaArte\(numero, 'enviar'\)/.test(trecho),
+        'a nova etapa do link e confirmada pela transacao');
+    const sql = fs.readFileSync(path.join(RAIZ, 'sql', 'arte_transicao_concorrente.sql'), 'utf8');
+    ok(/cliente_abriu_em=NULL,arte_pronta_em=clock_timestamp\(\)/.test(sql),
+        'o banco reinicia abertura e carimba a versao junto com a conclusao');
+    ok(/arte_pronta_em = recibo.arte_pronta_em/.test(SCRIPT),
+        'a memoria usa o carimbo confirmado pelo banco');
 })();
 
 (function oGerarLinkEsperaOPreparoAntesDeCopiar() {
