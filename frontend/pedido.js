@@ -6289,6 +6289,7 @@ async function entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, h
 }
 
 async function executarPedImposition(mode, isRefazer) {
+    if (mode === 'print' && window.ImpressaoAutonoma?.ocupada()) return toast('Aguarde o envio em andamento terminar.', 'warning');
     if (state.pedidoSelecaoCarregando) return toast('Aguarde o modelo selecionado carregar.', 'warning');
     if (state.pedidoSelecaoErro) return toast(state.pedidoSelecaoErro, 'warning');
     if (!await conferirModoVibeDoTrabalho('ped')) return;
@@ -7189,6 +7190,20 @@ async function executarPedImposition(mode, isRefazer) {
 
         await window.TeatroBanco?.conferirMotor(formData, baseUrl, impositionAbortController.signal);
         await confirmarIntegridadeDoTrabalho(formData, baseUrl, state, supabaseClient, impositionAbortController.signal);
+        const destinoAutonomo = mode === 'print' ? getPedPrintOptions() : null;
+        if (mode === 'print' && payload.confirmar_entrega && destinoAutonomo
+            && !destinoAutonomo.options.hot_folder_path && !destinoAutonomo.options.impressao_reversa) {
+            if (!window.ImpressaoAutonoma) throw new Error('Recarregue o painel para acompanhar a impressão na estação.');
+            if (overlay) overlay.classList.remove('active');
+            const ok = await window.ImpressaoAutonoma.iniciar({baseUrl, formData, headers,
+                destino:destinoAutonomo, face:faceDoTrabalho, rotacionarPares,
+                historicoContexto:opcoesDeFace.historicoContexto, signal:impositionAbortController.signal});
+            if (ok && !isRefazer && !folha1 && alvosDoTrabalho.length) {
+                await confirmarImpressaoModelos(alvosDoTrabalho);
+            }
+            return;
+        }
+
         const res = await fetch(urlImpose, {
 
             method: 'POST',
