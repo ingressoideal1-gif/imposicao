@@ -4456,6 +4456,11 @@ input[type=number] {
     min-width: 0;
     line-height: 1.12;
 }
+@media (max-width: 400px) {
+    .portal-trilha-passos .portal-passo { flex-direction: column; gap: 4px; }
+    .portal-trilha-passos .portal-passo-texto { align-items: center; }
+}
+
 .portal-passo-texto b { font-size: 0.74rem; font-weight: 700; }
 .portal-passo-texto i { font-style: normal; font-size: 0.62rem; font-weight: 600; opacity: 0.85; }
 

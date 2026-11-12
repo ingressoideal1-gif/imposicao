@@ -42,7 +42,7 @@ function extract(file, name) {
             document.getElementById('cliente-loading').style.display = 'none';
             document.getElementById('portal-abas').hidden = false;
         });
-        for (const f of ['pagamento-do-pedido.js','cliente-shell.js','cliente-confirmacoes.js']) await page.addScriptTag({content: read(f)});
+        for (const f of ['icones-cliente.js','pagamento-do-pedido.js','cliente-shell.js','cliente-confirmacoes.js']) await page.addScriptTag({content: read(f)});
         await page.addScriptTag({content: extract('cliente-entrega-form.js','cartaoDeDecisaoEntrega') + '\n' + extract('cliente-faturamento-form.js','cartaoDeDecisaoFaturamento')});
         await page.addScriptTag({content: extract('cliente.js','mostrarProximaEtapaAposArte')});
         await page.evaluate(() => {
@@ -151,6 +151,7 @@ function extract(file, name) {
             await page.setViewport({width,height:844});
             assert.equal(await page.$$eval('.portal-trilha-passos .portal-passo',els=>els.length),4);
             assert.ok(await page.$eval('.portal-trilha-passos', e=>e.scrollWidth<=e.clientWidth),'quatro etapas cabem na trilha');
+            assert.ok(await page.$$eval('.portal-passo', els=>els.every(e=>e.scrollWidth<=e.clientWidth)), 'ícones e textos cabem em cada etapa');
         }
         assert.deepEqual(errors, []);
         console.log('OK: ações dentro do cartão em 320/390/1100, rolagem, teclado, modal, falha, clique repetido, sequência, finalização e bloqueio.');
