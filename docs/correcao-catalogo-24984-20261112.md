@@ -92,3 +92,24 @@ executadas nesta instalação; não foi enviado nenhum trabalho de impressão.
 Uma reversão de código não exige migração, mas retornar ao teto antigo
 com mais de 4.096 registros pode voltar a impedir novas admissões;
 não reduzir o catálogo mediante exclusão para contornar isso.
+
+## Liberação geral em 12/11/2026
+
+Após autorização explícita para todas as estações, a fonte foi publicada
+na branch `fix/catalogo-24984-20261112`, commit `0e6a0dab`, tag
+`agente-v1.4.12`. Sem merge do histórico divergente no frontend principal.
+
+O mesmo MSI instalado localmente foi enviado a `agent-releases` e baixado
+integralmente para conferir SHA-256 e tamanho. Depois foram ativados e
+relidos com cache-buster `newprod-piloto-oficial.json` e `latest.json`,
+ambos em 1.4.12, sem campo `estacoes`. O canal separado de teste não foi
+alterado. Recibos e manifestos anteriores estão em
+`dist/publicacao-unica-1.4.12-*`; log em `.tmp/publicacao-1412.log`.
+
+Primeira leitura de adoção após a publicação: PC-JR-HOME em 1.4.12;
+GUSTAVO-PROD em 1.4.7; LASER-01, LASER-02, LASER-04, TEX-01,
+RIP-EPSON-WF2 e LAPTOP-9BSK81S0 em 1.4.11; TEX-02 em 1.3.21.
+Gustavo informa `agente_ainda_executando` e TEX-02 informa `MSI 1603`
+na tentativa anterior de 1.4.11. Publicação geral confirmada; adoção das
+demais estações ainda não confirmada. Nenhuma exclusão de dados ou
+reinicialização remota foi executada. Evidência: `.tmp/adocao-1412.json`.
