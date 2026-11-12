@@ -186,11 +186,11 @@ function ordensDeTeste() {
     await montar('sincronizarPedidosProntosParaEnvio', banco, state, overrides)();
 
     const escritas = banco.log.escritas.map(e => e.tabela);
-    ok(escritas.indexOf('producao_ordens_servico') >= 0,
-        'sem sessao, AINDA sincroniza producao_ordens_servico (liberada ao anon)',
+    ok(escritas.indexOf('producao_ordens_servico') < 0,
+        'sem sessao, nao sincroniza status da ordem ao carregar',
         'escreveu: ' + JSON.stringify(escritas));
-    ok(!!overrides.find(o => o.osId === 'os_21347'),
-        'sem sessao, o override local da ordem propria continua',
+    ok(!overrides.find(o => o.osId === 'os_21347'),
+        'sem sessao, nao adianta status da ordem propria',
         JSON.stringify(overrides));
 })();
 
@@ -230,14 +230,14 @@ function ordensDeTeste() {
     await montar('sincronizarPedidosProntosParaEnvio', banco, state, overrides)();
 
     const escritas = banco.log.escritas.map(e => e.tabela);
-    ok(escritas.indexOf('pedidos_links_cliente') >= 0,
-        'com sessao, grava status_arte em pedidos_links_cliente',
+    ok(escritas.indexOf('pedidos_links_cliente') < 0,
+        'com sessao, carregar nao grava o link',
         'escreveu: ' + JSON.stringify(escritas));
-    ok(escritas.indexOf('producao_ordens_servico') >= 0,
-        'com sessao, grava tambem a ordem propria',
+    ok(escritas.indexOf('producao_ordens_servico') < 0,
+        'com sessao, carregar nao grava a ordem propria',
         'escreveu: ' + JSON.stringify(escritas));
-    ok(overrides.length === 2,
-        'com sessao, os dois pedidos ganham override local',
+    ok(overrides.length === 0,
+        'com sessao, a carga nao inventa overrides',
         JSON.stringify(overrides));
 })();
 

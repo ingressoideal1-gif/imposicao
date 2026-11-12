@@ -32,3 +32,8 @@ Teste HTTP/Chromium: fechar a janela durante o trabalho e reabrir, concluir 110 
 Regressao inicial apontou falta do novo JS na lista de sincronismo; corrigida em security_config.py. Teste adicional detectou que selecionar paginas com Document.select retirava OutputIntent; a implementacao usa remocao das faces no documento original e a regressao passou.
 
 Resultados dos tres canais, hashes de artefatos e provas de publicacao serao registrados apos a conclusao da entrega. Nenhum pedido foi reimpresso e nenhuma estacao foi reiniciada durante o desenvolvimento.
+
+
+## Atualizacao 12/11/2026
+
+A versao 1.4.14 remove a conferencia obrigatoria de trabalhos interrompidos em todas as estacoes. O historico e a idempotencia permanecem; somente trabalhos efetivamente ativos bloqueiam outro envio. MSI publicado e verificado, fonte agente-v1.4.14. Esta integracao web foi atualizada sobre a main publicada, preservando suas correcoes posteriores. Instalacao nas estacoes e impressao fisica exigem comprovacao separada.

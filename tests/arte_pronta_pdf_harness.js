@@ -27,6 +27,7 @@ function fixture(mode, pages, changes = {}) {
         buscarModeloPersistidoDaDecisao: async () => ({}), modeloEmCorrecaoDeArte: () => false,
         // Interrompe após registrar a tentativa de persistência, sem banco real.
         saveAmostraToDB: async () => { calls.push('save'); throw new Error('fim simulado'); },
+        confirmarModeloPronto: async () => { calls.push('save'); throw new Error('fim simulado'); },
     };
     ctx.window = ctx;
     vm.createContext(ctx);

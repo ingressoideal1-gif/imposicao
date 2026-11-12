@@ -50,20 +50,20 @@ function resumoFaturamento() {
     const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
     return '<div class="portal-cartao portal-entrega-resumo"><h2>Dados para a nota fiscal</h2>'
         + '<div class="portal-entrega-bloco portal-entrega-recebedor"><span class="portal-entrega-icone">'
-        + icone('pessoa', 22, '#2563eb') + '</span><div><span class="portal-entrega-legenda">Titular da nota</span>'
+        + icone('pessoa', 30, '#1d4ed8') + '</span><div><span class="portal-entrega-legenda">Titular da nota</span>'
         + '<strong>' + escapeHtml(v.nome || 'Não informado') + '</strong>'
         + '<span>' + escapeHtml(documentoEmMascara(v.documento) || 'CPF ou CNPJ não informado') + '</span>'
         + (v.ins_estadual ? '<span>Inscrição estadual: ' + escapeHtml(v.ins_estadual) + '</span>' : '')
         + (v.email ? '<span>' + escapeHtml(v.email) + '</span>' : '')
         + (v.telefone ? '<span>' + escapeHtml(v.telefone) + '</span>' : '') + '</div></div>'
         + '<div class="portal-entrega-bloco"><span class="portal-entrega-icone">'
-        + icone('pin', 22, '#16a34a') + '</span><div><span class="portal-entrega-legenda">Endereço fiscal</span>'
+        + icone('pin', 30, '#15803d') + '</span><div><span class="portal-entrega-legenda">Endereço fiscal</span>'
         + '<strong>' + escapeHtml(rua || 'Endereço não informado') + '</strong>'
         + (v.complemento ? '<span>' + escapeHtml(v.complemento) + '</span>' : '')
         + (local ? '<span>' + escapeHtml(local) + '</span>' : '')
         + '<span>CEP ' + escapeHtml(cepEmMascara(v.cep) || 'não informado') + '</span></div></div>'
         + (r.alterando
-            ? '<div class="portal-aviso calmo">Cadastro selecionado. Confirme abaixo para usar estes dados na nota.</div>' : '')
+            ? '<div class="portal-aviso calmo">Cadastro selecionado. Use o botão de confirmação para usar estes dados na nota.</div>' : '')
         + '</div>';
 }
 
@@ -110,7 +110,7 @@ function modalMeusDados() {
     const r = dadosDoFormularioFaturamento();
     if (r.tela !== 'lista') {
         return '<dialog id="portal-modal-faturamento" class="portal-modal-enderecos"><div class="portal-modal-cabecalho">'
-            + '<div><span class="portal-entrega-legenda">Meus Dados</span><h2>' + (r.novo ? 'Novo cadastro' : 'Editar cadastro') + '</h2></div>'
+            + '<div><span class="portal-entrega-legenda">Alterar Dados da Nota</span><h2>' + (r.novo ? 'Novo cadastro' : 'Editar cadastro') + '</h2></div>'
             + '<button type="button" class="portal-modal-fechar" aria-label="Fechar" onclick="fecharMeusDados()">×</button></div>'
             + formularioCadastroFaturamento()
             + (r.erro ? '<p role="alert" class="portal-aviso atencao">' + escapeHtml(r.erro) + '</p>' : '')
@@ -131,7 +131,7 @@ function modalMeusDados() {
             + (cpf ? '<button type="button" class="portal-botao" onclick="editarCadastroFaturamento(' + i + ')">Editar</button>' : '') + '</div></div>';
     }).join('') || '<p class="portal-vazio">Nenhum cadastro fiscal disponível.</p>';
     return '<dialog id="portal-modal-faturamento" class="portal-modal-enderecos"><div class="portal-modal-cabecalho">'
-        + '<div><span class="portal-entrega-legenda">Nota fiscal</span><h2>Meus Dados</h2></div>'
+        + '<div><span class="portal-entrega-legenda">Nota fiscal</span><h2>Alterar Dados da Nota</h2></div>'
         + '<button type="button" class="portal-modal-fechar" aria-label="Fechar" onclick="fecharMeusDados()">×</button></div>'
         + '<div class="portal-lista-enderecos">' + itens + '</div>'
         + '<button type="button" class="portal-botao principal" onclick="novoCadastroFaturamento()">Adicionar novo cadastro</button></dialog>';
@@ -146,8 +146,8 @@ function cartaoDeDecisaoFaturamento() {
         + '<div class="portal-par-de-botoes"><button type="button" class="portal-botao' + (confirmado ? ' principal' : '') + '" '
         + (gravando || confirmado ? 'disabled ' : '') + 'onclick="decidirDados(\'faturamento\',true)">'
         + icone('check', 17) + (gravando === 'faturamento' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar dados da nota') + '</button>'
-        + '<button type="button" class="portal-botao" ' + (gravando ? 'disabled ' : '') + 'onclick="abrirMeusDados()">'
-        + icone('pessoa', 17) + 'Meus Dados</button>' + (window.portalErroConfirmacao.faturamento ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '') + '</div></div>' + modalMeusDados();
+        + '<button type="button" class="portal-botao atencao" ' + (gravando ? 'disabled ' : '') + 'onclick="abrirMeusDados()">'
+        + icone('pessoa', 17) + 'Alterar Dados da Nota</button>' + (window.portalErroConfirmacao.faturamento ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '') + '</div></div>' + modalMeusDados();
 }
 
 function abrirMeusDados() { const m = document.getElementById('portal-modal-faturamento'); if (m && m.showModal) m.showModal(); }
@@ -177,9 +177,9 @@ function copiarCadastroFaturamento(c) {
 
 async function selecionarCadastroFaturamento(i) {
     const c = cadastrosFaturamento()[i];
-    if (!c || !(await liberarEdicaoFaturamento())) return;
+    if (!c || !(await liberarEdicaoFaturamento()) || window.portalGravandoConfirmacao) return;
     copiarCadastroFaturamento(c); dadosDoFormularioFaturamento().novo = false;
-    fecharMeusDados(); atualizarTelaFaturamento(false);
+    fecharMeusDados(); await decidirDados('faturamento', true);
 }
 
 async function editarCadastroFaturamento(i) {
@@ -248,7 +248,8 @@ async function buscarCepFaturamento() {
     finally { if (seq === consultaFaturamento) { r.buscando = false; atualizarTelaFaturamento(true); } }
 }
 
-function usarCadastroFaturamento() {
+async function usarCadastroFaturamento() {
+    if (window.portalGravandoConfirmacao || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioFaturamento(); const v = r.valores;
     const obrigatorios = ['nome','documento','cep','endereco','numero','bairro','cidade','uf'];
     if (!tipoDoDocumentoEntrega(v.documento) || obrigatorios.some(k => !String(v[k] || '').trim())
@@ -257,7 +258,7 @@ function usarCadastroFaturamento() {
     }
     CAMPOS_FATURAMENTO.forEach(k => { v[k] = String(v[k] || '').trim(); });
     v.documento = v.documento.replace(/\D/g, ''); v.cep = v.cep.replace(/\D/g, '');
-    r.tela = 'lista'; fecharMeusDados(); atualizarTelaFaturamento(false);
+    r.tela = 'lista'; fecharMeusDados(); await decidirDados('faturamento', true);
 }
 
 async function persistirFaturamento() {

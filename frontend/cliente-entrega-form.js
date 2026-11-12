@@ -232,18 +232,18 @@ function formularioEnderecoEntrega() {
     const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
     return '<div class="portal-cartao portal-entrega-resumo"><h2>Endereço de entrega</h2>'
         + '<div class="portal-entrega-bloco portal-entrega-recebedor">'
-        + '<span class="portal-entrega-icone">' + icone('pessoa', 22, '#2563eb') + '</span>'
+        + '<span class="portal-entrega-icone">' + icone('pessoa', 30, '#1d4ed8') + '</span>'
         + '<div><span class="portal-entrega-legenda">Recebedor</span>'
         + '<strong>' + escapeHtml(v.recebedor || 'Não informado') + '</strong>'
         + '<span>' + escapeHtml(documentoEmMascara(v.cpf_recebedor) || 'CPF ou CNPJ não informado') + '</span></div></div>'
         + '<div class="portal-entrega-bloco">'
-        + '<span class="portal-entrega-icone">' + icone('pin', 22, '#16a34a') + '</span>'
+        + '<span class="portal-entrega-icone">' + icone('pin', 30, '#15803d') + '</span>'
         + '<div><span class="portal-entrega-legenda">Destino</span>'
         + '<strong>' + escapeHtml(rua || 'Endereço não informado') + '</strong>'
         + (v.complemento ? '<span>' + escapeHtml(v.complemento) + '</span>' : '')
         + (local ? '<span>' + escapeHtml(local) + '</span>' : '')
         + '<span>CEP ' + escapeHtml(cepEmMascara(v.cep) || 'não informado') + '</span></div></div>'
-        + (r.alterando ? '<div class="portal-aviso calmo">Endereço selecionado. Confirme abaixo para salvar no pedido.</div>' : '')
+        + (r.alterando ? '<div class="portal-aviso calmo">Endereço selecionado. Use o botão de confirmação para salvar no pedido.</div>' : '')
         + '</div>';
 }
 
@@ -272,7 +272,7 @@ function modalEnderecosEntrega() {
             + '</div>';
     }).join('') : '<p class="portal-vazio">Não há outro endereço cadastrado para este cliente.</p>';
     return '<dialog id="portal-modal-enderecos" class="portal-modal-enderecos">'
-        + '<div class="portal-modal-cabecalho"><div><span class="portal-entrega-legenda">Entrega</span><h2>Meus Endereços</h2></div>'
+        + '<div class="portal-modal-cabecalho"><div><span class="portal-entrega-legenda">Entrega</span><h2>Alterar Endereço</h2></div>'
         + '<button type="button" class="portal-modal-fechar" aria-label="Fechar" onclick="fecharEnderecosEntrega()">×</button></div>'
         + '<div class="portal-lista-enderecos">' + cartoes + '</div>'
         + '<button type="button" class="portal-botao principal" onclick="informarOutroEnderecoEntrega()">Adicionar novo endereço</button>'
@@ -320,7 +320,7 @@ function modalNovoEnderecoEntrega() {
     }
     const podeUsar = r.documentoLiberado && !!r.consultado && !r.buscando;
     return '<dialog id="portal-modal-enderecos" class="portal-modal-enderecos">'
-        + '<div class="portal-modal-cabecalho"><div><span class="portal-entrega-legenda">Meus Endereços</span><h2>Novo endereço</h2></div>'
+        + '<div class="portal-modal-cabecalho"><div><span class="portal-entrega-legenda">Alterar Endereço</span><h2>Novo endereço</h2></div>'
         + '<button type="button" class="portal-modal-fechar" aria-label="Fechar" onclick="fecharEnderecosEntrega()">×</button></div>'
         + '<div class="portal-entrega-etapa"><h3>1. CPF ou CNPJ</h3>'
         + campoNovoEndereco('cpf_recebedor', 'CPF ou CNPJ do recebedor', {
@@ -364,7 +364,7 @@ async function liberarEdicaoEntrega() {
 async function selecionarEnderecoEntrega(indice) {
     const escolhido = enderecosCadastradosEntrega()[indice];
     if (!escolhido || !confirmarMudancaDeCidadePaga(escolhido.cidade)
-        || !(await liberarEdicaoEntrega())) return;
+        || !(await liberarEdicaoEntrega()) || window.portalGravandoConfirmacao) return;
     const r = dadosDoFormularioEntrega();
     CAMPOS_ENTREGA.forEach(k => { r.valores[k] = String(escolhido[k] || ''); });
     r.consultado = r.valores.cep.replace(/\D/g, '');
@@ -373,7 +373,7 @@ async function selecionarEnderecoEntrega(indice) {
     r.telaEnderecos = 'lista';
     r.erro = '';
     fecharEnderecosEntrega();
-    redesenharSecao('entrega');
+    await decidirDados('entrega', true);
 }
 
 async function informarOutroEnderecoEntrega() {
@@ -397,7 +397,8 @@ function voltarListaEnderecosEntrega() {
     reabrirMeusEnderecos();
 }
 
-function usarNovoEnderecoEntrega() {
+async function usarNovoEnderecoEntrega() {
+    if (window.portalGravandoConfirmacao || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
     const documento = r.valores.cpf_recebedor.replace(/\D/g, '');
     const valores = Object.fromEntries(CAMPOS_ENTREGA.map(k => [k, String(r.valores[k] || '').trim()]));
@@ -415,7 +416,7 @@ function usarNovoEnderecoEntrega() {
     r.telaEnderecos = 'lista';
     r.erro = '';
     fecharEnderecosEntrega();
-    redesenharSecao('entrega');
+    await decidirDados('entrega', true);
 }
 
 function cartaoDeDecisaoEntrega() {
@@ -429,8 +430,8 @@ function cartaoDeDecisaoEntrega() {
         + '<button type="button" class="portal-botao' + (confirmado ? ' principal' : '') + '" '
         + (gravando || confirmado ? 'disabled ' : '') + 'onclick="decidirDados(\'entrega\', true)">'
         + icone('check', 17) + (gravando === 'entrega' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar entrega') + '</button>'
-        + '<button type="button" class="portal-botao" ' + (gravando ? 'disabled ' : '')
-        + 'onclick="abrirEnderecosEntrega()">' + icone('pin', 17) + 'Meus Endereços</button>' + (window.portalErroConfirmacao.entrega ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '') + '</div>'
+        + '<button type="button" class="portal-botao atencao" ' + (gravando ? 'disabled ' : '')
+        + 'onclick="abrirEnderecosEntrega()">' + icone('pin', 17) + 'Alterar Endereço</button>' + (window.portalErroConfirmacao.entrega ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '') + '</div>'
         + '</div>' + modalEnderecosEntrega();
 }
 

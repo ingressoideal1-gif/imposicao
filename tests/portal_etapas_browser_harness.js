@@ -23,7 +23,7 @@ function extract(file, name) {
         await page.evaluate(() => {
             window.state = {osItens: {teste: [{amostra_status: 'APROVADA'}]}};
             window.clienteState = {statusArte: 'APROVADO', numero: '123', osId: 'teste', pedidoFinalizado: false};
-            window.portalDados = {pedido: {}, endereco: {}, cliente: {}, frete: {}};
+            window.portalDados = {pedido: {}, endereco: {}, cliente: {}, frete: {}, pagamentos: [{status: 'PAID'}]};
             window.escapeHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
             window.entregaExigeRecebedor = () => false;
             window.ehRetirada = () => true;
@@ -42,13 +42,13 @@ function extract(file, name) {
             document.getElementById('cliente-loading').style.display = 'none';
             document.getElementById('portal-abas').hidden = false;
         });
-        for (const f of ['cliente-shell.js','cliente-confirmacoes.js']) await page.addScriptTag({content: read(f)});
+        for (const f of ['icones-cliente.js','pagamento-do-pedido.js','cliente-shell.js','cliente-confirmacoes.js']) await page.addScriptTag({content: read(f)});
         await page.addScriptTag({content: extract('cliente-entrega-form.js','cartaoDeDecisaoEntrega') + '\n' + extract('cliente-faturamento-form.js','cartaoDeDecisaoFaturamento')});
         await page.addScriptTag({content: extract('cliente.js','mostrarProximaEtapaAposArte')});
         await page.evaluate(() => {
             for (const qual of ['entrega','faturamento']) registrarSecao(qual, () => {
-                document.getElementById('secao-' + qual).innerHTML = '<div class="portal-cartao"><h2>Confira os dados</h2><input aria-label="Complemento" value="Teste"><div style="height:850px"></div><p id="fim-' + qual + '">Último dado para conferir</p></div>'
-                    + (qual === 'entrega' ? cartaoDeDecisaoEntrega() : cartaoDeDecisaoFaturamento()) + cartaoDeFinalizacao();
+                document.getElementById('secao-' + qual).innerHTML = (qual === 'entrega' ? cartaoDeDecisaoEntrega() : cartaoDeDecisaoFaturamento()) + '<div class="portal-cartao"><h2>Confira os dados</h2><input aria-label="Complemento" value="Teste"><div style="height:850px"></div><p id="fim-' + qual + '">Último dado para conferir</p></div>'
+                    + cartaoDeFinalizacao();
             });
             abrirSecao('entrega');
         });
@@ -63,12 +63,15 @@ function extract(file, name) {
             assert.ok(box.top>=0 && box.bottom<=844 && box.left>=0 && box.right<=width && !box.overflow && box.buttons, JSON.stringify(box));
             if(width<900) assert.ok(box.bottom<=box.nav, 'não cobre abas');
             await page.evaluate(() => document.getElementById('cliente-page').scrollTo(0,document.getElementById('cliente-page').scrollHeight));
-            assert.ok(await page.$eval('#fim-entrega', e => e.getBoundingClientRect().bottom < document.querySelector('#secao-entrega .portal-par-de-botoes').getBoundingClientRect().top), 'último dado pode ser rolado acima da barra');
+            assert.ok(await page.$eval(selector, e => {
+                const b=e.getBoundingClientRect(), card=e.closest('.portal-decisao').getBoundingClientRect();
+                return getComputedStyle(e).position === 'static' && b.top >= card.top && b.bottom <= card.bottom;
+            }), 'botões acompanham o cartão ao rolar');
         }
         await page.setViewport({width:390,height:844});
         await page.evaluate(() => document.getElementById('cliente-page').scrollTo(0,0));
         await page.focus('#secao-entrega input');
-        assert.equal(await page.$eval(selector,e=>getComputedStyle(e).position),'static','libera espaço ao digitar');
+        assert.equal(await page.$eval(selector,e=>getComputedStyle(e).position),'static','botões permanecem no cartão ao digitar');
         await page.evaluate(() => document.activeElement.blur());
         if (process.env.PORTAL_PREVIEW) await page.screenshot({path:process.env.PORTAL_PREVIEW});
         await page.click(selector+' button:last-child');
@@ -87,6 +90,10 @@ function extract(file, name) {
         assert.equal(await page.evaluate(() => window.salvamentos),1,'clique repetido não duplica gravação');
         assert.equal(await page.$eval('#secao-faturamento',e=>e.hidden),false);
         assert.match(await page.$eval('#secao-faturamento .portal-par-de-botoes button',e=>e.textContent),/Confirmar dados da nota/);
+        assert.ok(await page.$eval('#secao-faturamento .portal-par-de-botoes', e => {
+            const b=e.getBoundingClientRect(), card=e.closest('.portal-decisao').getBoundingClientRect();
+            return getComputedStyle(e).position === 'static' && b.top >= card.top && b.bottom <= card.bottom;
+        }), 'Nota também mantém ações dentro do cartão');
         await page.click('#secao-faturamento .portal-par-de-botoes button');
         await page.waitForFunction(() => window.portalConfirmacoes.faturamento===true);
         assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/Falta finalizar/);
@@ -112,9 +119,41 @@ function extract(file, name) {
         assert.equal(await page.$eval('#secao-entrega',e=>e.hidden),false);
         assert.equal(await page.evaluate(() => salvamentos),antes,'avanço apenas navega, sem aprovar dados');
         await page.evaluate(() => { clienteState.statusArte='Enviar Arte'; state.osItens.teste[0].amostra_status='AGUARDANDO'; abrirSecao('arte'); });
-        assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/Etapa 1 de 3/);
+        assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/Etapa 1 de 4/);
         assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/Primeiro aprove as amostras/);
+        await page.evaluate(() => {
+            clienteState.statusArte='APROVADO'; clienteState.pedidoFinalizado=false;
+            state.osItens.teste[0].amostra_status='APROVADA';
+            portalConfirmacoes.entrega=true; portalConfirmacoes.faturamento=null;
+            portalDados.pagamentos=[{status:'A_RECEBER'}];
+            redesenharSecao('faturamento');
+            abrirSecao('faturamento');
+        });
+        await page.click('#secao-faturamento .portal-par-de-botoes button');
+        await page.waitForFunction(() => portalConfirmacoes.faturamento === true);
+        assert.equal(await page.$eval('#secao-pagamento',e=>e.hidden),false,'Nota avança para Pagar quando pendente');
+        assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/Etapa 4 de 4/);
+        const salvosAntesDeVoltar = await page.evaluate(() => salvamentos);
+        await page.evaluate(async () => { abrirSecao('faturamento'); await decidirDados('faturamento', true); });
+        assert.equal(await page.$eval('#secao-pagamento',e=>e.hidden),false,'Nota já confirmada também avança para Pagar');
+        assert.equal(await page.evaluate(() => salvamentos),salvosAntesDeVoltar,'voltar não grava novamente');
+        assert.equal(await page.$eval('.portal-trilha-fill',e=>e.style.width),'75%');
+        for (const pagamentos of [[], [{status:'CANCELADO'}], [{status:'PAID'},{status:'A_RECEBER'}]]) {
+            await page.evaluate(p => { portalDados.pagamentos=p; atualizarPainelDoPedido(); }, pagamentos);
+            assert.equal(await page.evaluate(()=>etapasDoPedido()[3].feito),false,'sem cobrança, cancelada ou parcial não concluem Pagar');
+            assert.equal(await page.evaluate(()=>secaoDeAbertura('APROVADO','arte')),'pagamento');
+        }
+        await page.evaluate(() => { portalDados.pagamentos=[{status:'PAID'},{status:'CANCELADO'}]; atualizarPainelDoPedido(); });
+        assert.equal(await page.evaluate(()=>etapasDoPedido()[3].feito),true,'somente cobranças vivas contam');
+        assert.equal(await page.$eval('.portal-trilha-fill',e=>e.style.width),'100%');
+        assert.match(await page.$eval('#portal-trilha',e=>e.textContent),/4 de 4 concluídas/);
+        for (const width of [320,390,1100]) {
+            await page.setViewport({width,height:844});
+            assert.equal(await page.$$eval('.portal-trilha-passos .portal-passo',els=>els.length),4);
+            assert.ok(await page.$eval('.portal-trilha-passos', e=>e.scrollWidth<=e.clientWidth),'quatro etapas cabem na trilha');
+            assert.ok(await page.$$eval('.portal-passo', els=>els.every(e=>e.scrollWidth<=e.clientWidth)), 'ícones e textos cabem em cada etapa');
+        }
         assert.deepEqual(errors, []);
-        console.log('OK: barra 320/390/1100, rolagem, teclado, modal, falha, clique repetido, sequência, finalização e bloqueio.');
+        console.log('OK: ações dentro do cartão em 320/390/1100, rolagem, teclado, modal, falha, clique repetido, sequência, finalização e bloqueio.');
     } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });

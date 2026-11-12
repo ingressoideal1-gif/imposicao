@@ -26821,58 +26821,8 @@ window.gravarStatusOverride = gravarStatusOverride;
  * Sincroniza dinamicamente o status da OS em memória e no banco com base nas decisões de amostra do cliente
  */
 async function sincronizarStatusOrdensDinamico() {
-    // Apenas rodar no painel interno (não na página do cliente)
-    if (state.amostrasContainerId === 'cliente-amostras-itens-container') return;
-
-    for (const os of state.ordens) {
-        const osId = os.id;
-        // A sincronização automática não desfaz o retorno explícito ao designer.
-        if ((state.todasArtes || []).some(arte => parseInt(arte.id_int) === parseInt(os.numero || os.id_int)
-            && String(arte.status || '').trim().toUpperCase() === 'EM ARTE')) continue;
-        const itens = state.osItens[osId] || [];
-        if (itens.length === 0) continue;
-
-        // Se o status da OS já estiver finalizado em termos de produção, não fazemos override
-        if (os.status === 'FINALIZADA' || os.status === 'CANCELADA' || os.status === 'PRODUÇÃO' || os.status === 'EM IMPRESSÃO') {
-            continue;
-        }
-
-        // Verificar o status de todas as amostras/itens
-        const todosAprovados = itens.every(item => item.amostra_status === 'APROVADA');
-        const algumReprovado = itens.some(item => item.amostra_status === 'REPROVADA');
-
-        let novoStatus = null;
-        if (todosAprovados) {
-            novoStatus = 'APROVADO';
-        } else if (algumReprovado) {
-            novoStatus = 'REPROVADO';
-        }
-
-        if (novoStatus && os.status !== novoStatus) {
-            console.log(`[Sync] Ajustando status da OS #${os.numero} de ${os.status} para ${novoStatus} com base nas amostras.`);
-            
-            // 1. Atualizar em memória
-            os.status = novoStatus;
-
-            // 2. Adiantar o status nesta máquina (comum para ordens Vibecode e Supabase no front)
-            gravarStatusOverride(osId, novoStatus);
-
-            // 3. Atualizar no banco Supabase (somente se for OS local e não for mock/vibe virtual)
-            if (typeof supabaseClient !== 'undefined' && supabaseClient && !osId.startsWith('vibe_')) {
-                try {
-                    await supabaseClient
-                        .from('producao_ordens_servico')
-                        .update({ status: novoStatus })
-                        .eq('id', osId);
-                } catch (err) {
-                    console.warn(`[Sync] Falha ao gravar status no Supabase para OS #${os.numero}:`, err);
-                }
-            }
-        }
-    }
-
-    await sincronizarPedidosProntosParaEnvio();
-    await reconciliarStatusPersistidosDaListaArte();
+    // Atualizar a tela nunca persiste uma decisao baseada em sua memoria.
+    return;
 }
 
 /**
@@ -26881,48 +26831,8 @@ async function sincronizarStatusOrdensDinamico() {
  * carregando um status de correção ou Enviar Arte; não percorre todo o histórico concluído.
  */
 async function reconciliarStatusPersistidosDaListaArte() {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return { verificados: 0, falhas: 0 };
-    if (!await temSessaoDoSupabase()) return { verificados: 0, falhas: 0 };
-
-    const statusParaReconciliarAposArte = ['CORRIGIR DADOS', 'CORRIGIR ARTE', 'EM ALTERAÇÃO', 'EM ALTERACAO', 'ENVIAR ARTE'];
-    const candidatos = (state.ordens || []).filter(os => {
-        if (!os || pedidoCancelado(os) || pedidoIgnoradoNosPaineis(os)) return false;
-        const numero = parseInt(os.numero || os.id_int, 10);
-        if (isNaN(numero)) return false;
-        const arte = (state.todasArtes || []).find(a => parseInt(a.id_int, 10) === numero);
-        const statusArte = String(arte && arte.status || '').trim().toUpperCase();
-        if (statusArte === 'EM ARTE') return false;
-        return !pedidoSaiuDaArte(os) || statusParaReconciliarAposArte.includes(statusArte);
-    });
-
-    const artesPorPedido = await carregarArtesParaReconciliacao(
-        candidatos.map(os => parseInt(os.numero || os.id_int, 10))
-    );
-    // Lote ausente nao pode acionar silenciosamente o caminho individual.
-    // Valida todos os candidatos antes de qualquer consolidacao/gravação.
-    if (candidatos.some(os => !Array.isArray(artesPorPedido.get(parseInt(os.numero || os.id_int, 10))))) {
-        throw new Error('lote incompleto das artes para reconciliação');
-    }
-    const falhas = [];
-    let proximo = 0;
-    const trabalhar = async () => {
-        while (proximo < candidatos.length) {
-            const os = candidatos[proximo++];
-            const numero = parseInt(os.numero || os.id_int, 10);
-            try {
-                const modelos = (state.modelosGlobais && state.modelosGlobais[numero]) || [];
-                await sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesPorPedido.get(numero));
-            } catch (e) {
-                falhas.push({ pedido: numero, erro: e && (e.message || e) });
-            }
-        }
-    };
-    await Promise.all(Array.from({ length: Math.min(4, candidatos.length) }, trabalhar));
-    if (falhas.length) {
-        console.warn('[Arte] Falha ao reconciliar status consolidados:', falhas);
-        throw new Error('não foi possível reconciliar ' + falhas.length + ' status da Lista de Arte');
-    }
-    return { verificados: candidatos.length, falhas: 0 };
+    // Compatibilidade com chamadores antigos: carregar/atualizar nunca decide status.
+    return { verificados: 0, falhas: 0 };
 }
 window.reconciliarStatusPersistidosDaListaArte = reconciliarStatusPersistidosDaListaArte;
 
@@ -26939,90 +26849,8 @@ window.reconciliarStatusPersistidosDaListaArte = reconciliarStatusPersistidosDaL
  * apenas aqueles cujos itens por acaso já tinham sido abertos na tela.
  */
 async function sincronizarPedidosProntosParaEnvio() {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return;
-
-    // Status que já passaram do ponto: mexer neles seria andar para trás.
-    const IGNORAR = [
-        'ENVIAR ARTE', 'FINALIZADA', 'CANCELADA', 'EM IMPRESSAO', 'PRODUÇÃO',
-        'APROVADO', 'APROVADA_CLIENTE', 'AGUARD. APROVAÇÃO', 'AGUARDANDO_APROVACAO',
-        'EM APROVAÇÃO', 'DADOS PENDENTES', 'CORRIGIR DADOS', 'APR PARCIAL'
-    ];
-    // Status do banco que significam "o designer terminou".
-    const PRONTOS = ['PRONTO', 'AGUARDANDO_CLIENTE'];
-
-    try {
-        const osParaVerificar = state.ordens.filter(os =>
-            !pedidoIgnoradoNosPaineis(os)
-            && !(state.todasArtes || []).some(arte => parseInt(arte.id_int) === parseInt(os.numero || os.id_int)
-                && String(arte.status || '').trim().toUpperCase() === 'EM ARTE')
-            && !IGNORAR.includes((os.status || '').trim().toUpperCase()));
-        if (osParaVerificar.length === 0) return;
-
-        const numerosParaVerificar = osParaVerificar.map(os => parseInt(os.numero)).filter(n => !isNaN(n));
-        if (numerosParaVerificar.length === 0) return;
-
-        // URLs pequenas e páginas completas: um pedido pode ter muitos modelos.
-        // Só reconciliar depois de todos os lotes terem sido lidos com sucesso.
-        const modelos = [];
-        for (let i = 0; i < numerosParaVerificar.length; i += 100) {
-            for (let offset = 0; ; offset += 500) {
-                const { data, error } = await supabaseClient
-                    .from('pedidos_modelos')
-                    .select('id_int, status_arte')
-                    .in('id_int', numerosParaVerificar.slice(i, i + 100))
-                    .order('id').range(offset, offset + 499);
-                if (error) throw error;
-                modelos.push(...(data || []));
-                if (!data || data.length < 500) break;
-            }
-        }
-        if (!modelos || modelos.length === 0) return;
-
-        const modelosPorPedido = {};
-        modelos.forEach(m => {
-            if (!modelosPorPedido[m.id_int]) modelosPorPedido[m.id_int] = [];
-            modelosPorPedido[m.id_int].push(m.status_arte || '');
-        });
-
-        // O pedido do Vibe grava em `pedidos_links_cliente`, que o `anon` não
-        // alcança. Sem sessão, a gravação seria recusada — e o `localStorage`
-        // logo abaixo ficaria dizendo "Enviar Arte" numa máquina só, divergindo
-        // do banco até alguém abrir o site. Então, sem sessão, ele fica como
-        // está. O site, que tem sessão, faz esta mesma sincronização.
-        const temSessao = await temSessaoDoSupabase();
-
-        const gravacoes = [];
-        for (const os of osParaVerificar) {
-            const statusItens = modelosPorPedido[parseInt(os.numero)] || [];
-            if (statusItens.length === 0) continue;
-            if (!statusItens.every(s => PRONTOS.includes((s || '').toUpperCase()))) continue;
-
-            const ehDoVibe = os.id.startsWith('vibe_');
-            if (ehDoVibe && !temSessao) continue;
-
-            console.log('[AUTO-SYNC-DB] Pedido #' + os.numero + ': todos modelos PRONTO no banco -> Enviar Arte');
-            os.status = 'Enviar Arte';
-            gravarStatusOverride(os.id, 'Enviar Arte');
-
-            gravacoes.push(
-                ehDoVibe
-                    ? supabaseClient.from('pedidos_links_cliente').update({ status_arte: 'Enviar Arte' }).eq('os_id', os.id)
-                    : supabaseClient.from('producao_ordens_servico').update({ status: 'Enviar Arte' }).eq('id', os.id)
-            );
-            gravacoes.push(marcarEstagioDaArteNoErp(os.numero, 'Enviar Arte'));
-        }
-
-        // Antes as gravações eram disparadas com `.then(function(){})` e qualquer
-        // falha sumia sem deixar rastro. Agora uma gravação que falhar aparece no
-        // console em vez de o status divergir do banco em silêncio.
-        const resultados = await Promise.allSettled(gravacoes);
-        resultados.forEach((r, i) => {
-            const erro = r.status === 'rejected' ? r.reason : (r.value && r.value.error);
-            if (erro) console.warn('[AUTO-SYNC-DB] Falha ao gravar "Enviar Arte" (gravação ' + i + '):', erro);
-        });
-    } catch (syncErr) {
-        console.warn('[AUTO-SYNC-DB] Erro na verificacao de status:', syncErr);
-    }
+    // A conclusao agora ocorre na transacao do clique PRONTO.
+    return;
 }
 
 /**
@@ -31392,102 +31220,64 @@ async function carregarArtesParaReconciliacao(numeros) {
     return porPedido;
 }
 
-async function sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesLote, revalidando = false) {
-    const numInt = parseInt(numero, 10);
-    if (isNaN(numInt) || typeof supabaseClient === 'undefined' || !supabaseClient) return null;
-
-    let resultado = { data: artesLote, error: null };
-    if (artesLote === undefined) {
-        const consulta = supabaseClient.from('pedidos_artes')
-            .select('id, status, entrega_dados, observacoes')
-            .eq('id_int', numInt)
-            .order('created_at', { ascending: false });
-        // Identifica o caminho no log existente, sem IDs, tokens ou dados do pedido.
-        if (typeof consulta.setHeader === 'function') {
-            consulta.setHeader('x-client-info', revalidando
-                ? 'imposition-artes/2 revalidacao' : 'imposition-artes/2 individual');
-        }
-        resultado = await consulta;
+async function confirmarTransicaoDaArte(numero, acao, modelo = null, observacao = null) {
+    const n = Number(numero);
+    if (!Number.isSafeInteger(n) || n <= 0 || typeof supabaseClient === 'undefined' || !supabaseClient) {
+        throw new Error('Pedido ou conexao invalida para confirmar a arte.');
     }
-    const { data: artes, error } = resultado;
-    if (error) throw error;
-    if (!artes || artes.length === 0) return null;
-
-    const entrega = artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'CORRIGIR')
-        ? 'CORRIGIR'
-        : artes.some(a => String(a.entrega_dados || '').trim().toUpperCase() === 'APROVADO')
-            ? 'APROVADO' : (artes[0].entrega_dados || '');
-    const observacoesComoObjeto = valor => {
-        if (valor && typeof valor === 'object' && !Array.isArray(valor)) return { ...valor };
-        if (typeof valor === 'string' && valor.trim()) {
-            try { return JSON.parse(valor); } catch (e) { return {}; }
-        }
-        return {};
-    };
-    const obsMaisRecente = observacoesComoObjeto(artes[0].observacoes);
-    const statusAtual = String(artes[0].status || '').trim().toUpperCase() === 'CORRIGIR DADOS'
-        ? (obsMaisRecente.status_antes_correcao_dados || artes[0].status)
-        : artes[0].status;
-    let listaModelos = Array.isArray(modelos) && modelos.length
-        ? modelos
-        : ((state.modelosGlobais && state.modelosGlobais[numInt]) || []);
-    // A correção de Entrega/Faturamento pode ser concluída antes de os modelos
-    // entrarem na memória desta aba. Nesse caso a decisão vem do banco, não de
-    // uma lista vazia que deixaria `Corrigir Dados` parado indefinidamente.
-    if (!listaModelos.length) {
-        const { data: modelosPersistidos, error: erroModelos } = await supabaseClient
-            .from('pedidos_modelos')
-            .select('id, status_arte, status_impressao')
-            .eq('id_int', numInt);
-        if (erroModelos) throw erroModelos;
-        listaModelos = modelosPersistidos || [];
-    }
-    const novoStatus = calcularStatusConsolidadoPedidoArte(listaModelos, entrega, statusAtual);
-    if (!novoStatus) return null;
-
-    for (const arte of artes) {
-        const payload = {};
-        if (arte.status !== novoStatus) payload.status = novoStatus;
-        if (entrega === 'CORRIGIR'
-            && String(arte.status || '').trim().toUpperCase() !== 'CORRIGIR DADOS') {
-            const obs = observacoesComoObjeto(arte.observacoes);
-            if (!obs.status_antes_correcao_dados && arte.status) {
-                obs.status_antes_correcao_dados = arte.status;
-                payload.observacoes = obs;
-            }
-        }
-        if (Object.keys(payload).length === 0) continue;
-        // O lote serve para eliminar leituras sem trabalho. Antes de qualquer
-        // alteração, refazemos a leitura individual e o cálculo pelo fluxo normal.
-        if (artesLote !== undefined) return sincronizarStatusConsolidadoPedidoArte(numInt, listaModelos, undefined, true);
-        const { data: linhaConfirmada, error: erroUpdate } = await supabaseClient
-            .from('pedidos_artes')
-            .update(payload)
-            .eq('id', arte.id)
-            .eq('id_int', numInt)
-            .select('id, status, entrega_dados, observacoes')
-            .single();
-        if (erroUpdate) throw erroUpdate;
-        if (!linhaConfirmada || String(linhaConfirmada.id) !== String(arte.id)) {
-            throw new Error('o banco não confirmou a linha consolidada de pedidos_artes');
-        }
-        for (const [campo, valor] of Object.entries(payload)) {
-            let igual;
-            if (valor && typeof valor === 'object') {
-                const recebido = linhaConfirmada[campo];
-                const chaves = Object.keys(valor);
-                igual = !!recebido && typeof recebido === 'object'
-                    && Object.keys(recebido).length === chaves.length
-                    && chaves.every(chave => JSON.stringify(recebido[chave]) === JSON.stringify(valor[chave]));
-            } else {
-                igual = linhaConfirmada[campo] === valor;
-            }
-            if (!igual) throw new Error('o banco não confirmou ' + campo + ' em pedidos_artes');
+    const { data: leitura, error: erroLeitura } = await supabaseClient.rpc('arte_transicao_ler', { p_numero: n });
+    if (erroLeitura) throw erroLeitura;
+    if (!leitura || typeof leitura.revisao !== 'string') throw new Error('Revisao da arte nao confirmada.');
+    const { data: recibo, error } = await supabaseClient.rpc('arte_transicao_confirmar', {
+        p_numero: n, p_revisao: leitura.revisao, p_acao: acao,
+        p_modelo: modelo == null ? null : Number(modelo), p_observacao: observacao
+    });
+    // Sem fallback PATCH e sem retry: conflito requer uma nova conferencia humana.
+    if (error) throw new Error(error.message || 'O pedido mudou. Reabra e confira antes de confirmar.');
+    if (!recibo || recibo.confirmado !== true || !recibo.status) throw new Error('Transicao da arte nao confirmada.');
+    (state.todasArtes || []).filter(a => Number(a.id_int) === n).forEach(a => { a.status = recibo.status; });
+    const os = (state.ordens || []).find(o => Number(o.numero || o.id_int) === n);
+    if (os && recibo.enviar) {
+        os.status = recibo.status;
+        gravarStatusOverride(os.id, recibo.status);
+        if (recibo.enviar && state.linksClienteData?.[os.id]) {
+            state.linksClienteData[os.id].status_arte = 'Enviar Arte';
+            state.linksClienteData[os.id].cliente_abriu_em = null;
+            state.linksClienteData[os.id].arte_pronta_em = recibo.arte_pronta_em;
         }
     }
-    (state.todasArtes || []).filter(a => a.id_int === numInt).forEach(a => { a.status = novoStatus; });
     window.OrigemAprovacao?.invalidar();
-    return novoStatus;
+    return recibo;
+}
+
+async function confirmarModeloPronto(itemId, osId, obs, modeloPersistido) {
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+    const numero = Number(os?.numero || String(osId).replace(/^vibe_/, ''));
+    if (!modeloPersistido?.id || Number(modeloPersistido.id_int) !== numero) {
+        throw new Error('Modelo nao confirmado neste pedido. Reabra antes de marcar pronto.');
+    }
+    if (!await garantirLinhaDePedidoArte(numero)) throw new Error('Registro de arte nao confirmado.');
+    if (!modeloEmCorrecaoDeArte(modeloPersistido) && !await getOrCreateLinkCliente(osId, numero, 'Em Arte')) {
+        throw new Error('Link do cliente nao confirmado.');
+    }
+    const recibo = await confirmarTransicaoDaArte(numero, 'pronto', modeloPersistido.id, obs);
+    const itens = [state.osItens?.[osId] || [], state.modelosGlobais?.[numero] || []];
+    for (const lista of itens) for (const item of lista) {
+        if (String(item._pedidoModeloId || item.id) !== String(modeloPersistido.id)) continue;
+        item.status_arte = recibo.correcao ? 'APROVADA' : 'AGUARDANDO_CLIENTE';
+        item.amostra_status = recibo.correcao ? 'APROVADA' : 'PRONTO';
+        item.aprovacao = item.status_arte;
+        item.amostra_obs = obs;
+        if (recibo.correcao) { item.status_impressao = 'Aguardando'; item.impressao = 'Aguardando'; }
+    }
+    return recibo;
+}
+
+async function sincronizarStatusConsolidadoPedidoArte(numero, modelos, artesLote, revalidando = false) {
+    // Os argumentos legados nao sao autoridade para uma gravacao.
+    // O servidor relê modelos/arte sob exclusao e compara a revisao recebida.
+    const recibo = await confirmarTransicaoDaArte(numero, 'reconciliar');
+    return recibo.status;
 }
 
 window.calcularStatusConsolidadoPedidoArte = calcularStatusConsolidadoPedidoArte;
@@ -37579,42 +37369,6 @@ async function voltarParaAtendimento() {
             return;
         }
 
-        await substituirPendenteInformacao(os, novoStatus);
-
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            const numero = parseInt(os && (os.numero || os.id_int));
-            const linhaExiste = await garantirLinhaDePedidoArte(numero);
-            if (!linhaExiste) throw new Error('Não foi possível preparar o registro consolidado da arte.');
-            await atualizarPedidoArteConfirmado(numero, { status: novoStatus });
-        }
-
-        // 1. Atualizar localStorage
-        gravarStatusOverride(osId, novoStatus);
-
-        // 2. Atualizar estado em memória
-        if (os) os.status = novoStatus;
-
-        // 3. Atualizar no banco Supabase
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            if (osId.startsWith('vibe_')) {
-                const { error } = await supabaseClient
-                    .from('pedidos_links_cliente')
-                    .update({ status_arte: novoStatus })
-                    .eq('os_id', osId);
-                if (error) console.warn('Erro ao atualizar status_arte em links:', error);
-            } else {
-                const { error } = await supabaseClient
-                    .from('producao_ordens_servico')
-                    .update({ status: novoStatus })
-                    .eq('id', osId);
-                if (error) console.warn('Erro ao atualizar status no Supabase:', error);
-            }
-
-            // A atualização do status_arte de pedidos_modelos já ocorre de forma individual e automática 
-            // através da função saveAmostraToDB quando o designer marca como "PRONTO" ou o cliente "APROVA".
-            // Portanto, não reescrevemos o status dos modelos aqui para evitar sobrescrever modelos Aprovados.
-        }
-
         if (todasProntas && os) {
             // A URL já nasceu na primeira carga da Lista de Arte. Agora são
             // preparadas as imagens no mesmo registro, preservando o token.
@@ -37628,9 +37382,9 @@ async function voltarParaAtendimento() {
                 // de aprovação. Dizer QUAL modelo falhou e o que fazer, porque
                 // sem isso o atendente descobre no meio do envio.
                 const nomes = (preparo.falhas || []).map(f => f.nome).join(', ');
-                toast('Pedido #' + os.numero + ' marcado como "Enviar Arte", mas não consegui '
-                    + 'atualizar a arte de aprovação de: ' + nomes + '. O link ainda NÃO está '
-                    + 'pronto para enviar — use o botão de link na lista para tentar de novo.', 'error');
+                toast('Nao foi possivel confirmar a conclusao do pedido #' + os.numero
+                    + ': ' + nomes + '. Reabra e confira antes de tentar novamente.', 'error');
+                return;
             } else {
                 toast(`Pedido #${os.numero} pronto — o link do cliente já foi gerado. Copie na lista para enviar.`, 'success');
             }
@@ -41600,7 +41354,8 @@ window.editCustomNumeracao = editCustomNumeracao;
 
 async function buscarModeloPersistidoDaDecisao(itemId, osId) {
     const item = state.osItens[osId]?.find(i => String(i.id) === String(itemId));
-    const numero = parseInt(String(osId).replace('vibe_', ''), 10);
+    const os = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+    const numero = parseInt(os?.numero || String(osId).replace('vibe_', ''), 10);
     const cliente = (typeof vibeClient !== 'undefined' && vibeClient)
         || (typeof supabaseClient !== 'undefined' && supabaseClient);
     if (!item || !cliente || isNaN(numero)) return null;
@@ -42018,7 +41773,7 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
         const modeloPersistido = decisaoInternaPronta
             ? await buscarModeloPersistidoDaDecisao(itemId, osId)
             : null;
-        const liberaImpressao = decisaoInternaPronta
+        let liberaImpressao = decisaoInternaPronta
             && (modeloEmCorrecaoDeArte(itemParaLiberar) || modeloEmCorrecaoDeArte(modeloPersistido));
         if (liberaImpressao) {
             gravar.status_impressao = 'Aguardando';
@@ -42038,8 +41793,9 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             toast('O modelo mudou durante a conferência do PDF. Tente marcar PRONTO novamente.', 'warning');
             return false;
         }
-        if (liberaImpressao) {
-            await salvarSaidaCorrecaoArteConfirmada(modeloPersistido, obs);
+        if (decisaoInternaPronta) {
+            const recibo = await confirmarModeloPronto(itemId, osId, obs, modeloPersistido);
+            liberaImpressao = recibo.correcao === true;
         } else {
             await saveAmostraToDB(itemId, osId, gravar);
         }
@@ -42125,7 +41881,7 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
             try { await loadOSItens(osId); } catch (e) { console.warn('[decisionAmostraItem] loadOSItens err:', e); }
             const osDaDecisao = typeof findOSInState === 'function' ? findOSInState(osId) : null;
             const numeroDaDecisao = osDaDecisao ? osDaDecisao.numero : String(osId).replace('vibe_', '');
-            await sincronizarStatusConsolidadoPedidoArte(numeroDaDecisao, state.osItens[osId] || []);
+            if (!decisaoInternaPronta) await sincronizarStatusConsolidadoPedidoArte(numeroDaDecisao, state.osItens[osId] || []);
             renderAmostrasOSItens(osId);
 
             // AUTO-STATUS: se o designer marcou um item como PRONTO (contexto interno, não cliente),
@@ -42155,44 +41911,9 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
  * quem chama garante que ele foi recarregado.
  */
 async function promoverPedidoSeTodosProntos(osId) {
-    const os = state.ordens.find(o => o.id === osId);
-    // O lote também passa aqui depois de liberar uma correção da produção.
-    // Esse retorno preserva a aprovação anterior e não reinicia o envio ao cliente.
-    if (!os || pedidoCancelado(os) || pedidoSaiuDaArte(os)) return false;
-
-    const todosItens = state.osItens[osId] || [];
-    const todosProntos = todosItens.length > 0 && todosItens.every(i => i.amostra_status === 'PRONTO' || i.amostra_status === 'APROVADA');
-    // A correção termina como APROVADA. Sem um PRONTO ainda aguardando aprovação,
-    // não existe arte nova para enviar, inclusive quando o status do ERP não carregou.
-    if (!todosProntos || !todosItens.some(i => i.amostra_status === 'PRONTO')
-        || todosItens.some(modeloEmCorrecaoDeArte)) return false;
-
-    const novoStatusOS = 'Enviar Arte';
-    if (os.status === novoStatusOS) return false;
-
-    // Adiantar nesta máquina
-    gravarStatusOverride(osId, novoStatusOS);
-    // Atualizar memória
-    os.status = novoStatusOS;
-    // Atualizar banco
-    try {
-        if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-            if (osId.startsWith('vibe_')) {
-                await supabaseClient.from('pedidos_links_cliente')
-                    .update({ status_arte: novoStatusOS })
-                    .eq('os_id', osId);
-            } else {
-                await supabaseClient.from('producao_ordens_servico')
-                    .update({ status: novoStatusOS })
-                    .eq('id', osId);
-            }
-        }
-    } catch (autoErr) {
-        console.warn('[AUTO-STATUS] Erro ao atualizar status para Enviar Arte:', autoErr);
-    }
-    await marcarEstagioDaArteNoErp(os.numero, 'Enviar Arte');
-    toast(`🎉 Todos os modelos prontos! Pedido #${os.numero} mudou para "Enviar Arte" automaticamente.`, 'success');
-    return true;
+    // O clique PRONTO ja confirmou modelo/pedido/link na mesma transacao.
+    // Recarregar modelos ou terminar um lote nao emite uma segunda decisao.
+    return false;
 }
 window.promoverPedidoSeTodosProntos = promoverPedidoSeTodosProntos;
 
@@ -42283,7 +42004,7 @@ window.acaoEmLoteNoPedido = async function(osId, acao) {
     try { await loadOSItens(osId); } catch (e) { console.warn('[lote] loadOSItens err:', e); }
     const osDoLote = typeof findOSInState === 'function' ? findOSInState(osId) : null;
     const numeroDoLote = osDoLote ? osDoLote.numero : String(osId).replace('vibe_', '');
-    await sincronizarStatusConsolidadoPedidoArte(numeroDoLote, state.osItens[osId] || []);
+    if (acao !== 'PRONTO') await sincronizarStatusConsolidadoPedidoArte(numeroDoLote, state.osItens[osId] || []);
     renderAmostrasOSItens(osId);
     if (acao === 'PRONTO') await promoverPedidoSeTodosProntos(osId);
 
@@ -43972,7 +43693,7 @@ function memorizarLinkCliente(osId, numero, registro) {
 }
 
 // Retorna somente um link confirmado no banco; falhas interrompem o chamador.
-async function getOrCreateLinkCliente(osId, numero) {
+async function getOrCreateLinkCliente(osId, numero, etapaInicial = null) {
     if (typeof supabaseClient === 'undefined' || !supabaseClient) {
         throw new Error('Supabase não configurado.');
     }
@@ -43991,7 +43712,7 @@ async function getOrCreateLinkCliente(osId, numero) {
                 token: generateClientToken(6),
                 id_int: os ? (os.numero || numero) : numero,
                 ativo: true,
-                status_arte: os ? (os.status || 'Enviar Arte') : 'Enviar Arte'
+                status_arte: etapaInicial || (os ? (os.status || 'Enviar Arte') : 'Enviar Arte')
             })
             .select('id, os_id, numero_pedido, token, ativo, status_arte, arte_pronta_em, cliente_abriu_em')
             .single();
@@ -44267,38 +43988,13 @@ async function prepararLinkDaArtePronta(osId, numero) {
         return { ok: false, link: null, falhas: regeneracao.falhas };
     }
 
-    const link = await getOrCreateLinkCliente(osId, numero);
+    const link = await getOrCreateLinkCliente(osId, numero, 'Em Arte');
     if (!link) return { ok: false, link: null, falhas: [{ nome: 'Link do cliente', motivo: 'link não confirmado' }] };
 
-    const arteProntaEm = new Date().toISOString();
-    const { error } = await supabaseClient
-        .from('pedidos_links_cliente')
-        .update({
-            arte_pronta_em: arteProntaEm,
-            cliente_abriu_em: null,
-            status_arte: 'Enviar Arte'
-        })
-        .eq('os_id', osId)
-        .eq('ativo', true)
-        .select('id')
-        .single();
-    if (error) {
-        return { ok: false, link: null, falhas: [{ nome: 'Link do cliente', motivo: error.message || 'falha ao registrar a versão' }] };
-    }
-
-    // O estado em memória acompanha, senão a linha da tela continuaria dizendo
-    // "Aguard. Aprovação" pela abertura da versão anterior até o próximo F5.
-    if (state.linksClienteData && state.linksClienteData[osId]) {
-        state.linksClienteData[osId].arte_pronta_em = arteProntaEm;
-        state.linksClienteData[osId].cliente_abriu_em = null;
-        state.linksClienteData[osId].status_arte = 'Enviar Arte';
-    }
-
-    const statusConsolidadoSalvo = await marcarEstagioDaArteNoErp(numero, 'Enviar Arte');
-    if (!statusConsolidadoSalvo) {
-        return { ok: false, link: null, falhas: [{
-            nome: 'Status da arte', motivo: 'pedidos_artes não confirmou Enviar Arte'
-        }] };
+    try {
+        await confirmarTransicaoDaArte(numero, 'enviar');
+    } catch (error) {
+        return { ok: false, link: null, falhas: [{ nome: 'Status da arte', motivo: error.message }] };
     }
 
     return { ok: true, link: link, falhas: [] };

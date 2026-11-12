@@ -67,12 +67,17 @@
         });
     }
 
+    function numeroApresentado(cand) {
+        if (!cand) return null;
+        return Number.isSafeInteger(cand.ni) && cand.ni >= 0 ? cand.ni : cand.n;
+    }
+
     function negado(motivo, cand, setor, detalhe) {
         return {
             estado: 'negado',
             motivo: motivo,
             credencial_id: cand ? cand.id : null,
-            numero: cand ? cand.n : null,
+            numero: numeroApresentado(cand),
             setor: setor || null,
             detalhe: detalhe || {},
         };
@@ -138,7 +143,7 @@
                     estado: 'ambiguo',
                     candidatos: meus.map(function (c) {
                         return {
-                            credencial_id: c.id, numero: c.n,
+                            credencial_id: c.id, numero: numeroApresentado(c),
                             setor: setorPorId(carga, c.s),
                         };
                     }),
@@ -151,7 +156,7 @@
         // Identifica o ingresso; o servidor decide entrada/saida e restricoes.
         // Isso permite registrar saida mesmo depois de fechar/bloquear o setor.
         if (entrada.presencaOnline && setor && setor.tipo_uso === 'reentrada') {
-            return { estado: 'permitido', credencial_id: cand.id, numero: cand.n, setor: setor };
+            return { estado: 'permitido', credencial_id: cand.id, numero: numeroApresentado(cand), setor: setor };
         }
         if (carga.evento && carga.evento.ativo === false) {
             return negado('evento_inativo', cand, setor, {});
@@ -196,7 +201,7 @@
         }
 
         // 7. Passou por todas.
-        return { estado: 'permitido', credencial_id: cand.id, numero: cand.n, setor: setor };
+        return { estado: 'permitido', credencial_id: cand.id, numero: numeroApresentado(cand), setor: setor };
     }
 
     window.portariaValidacao = { saisParaTentar: saisParaTentar, decidir: decidir };

@@ -54,48 +54,22 @@ igual(contexto.calcular([alteracao], '', 'Pendente Informação'), 'Pendente Inf
 igual(contexto.calcular([aprovado], 'CORRIGIR', 'Pendente Informação'), 'Corrigir Dados', 'correção de dados vence informação pendente');
 
 async function testarRetornoDaCorrecaoComModeloLegado() {
-    const linha = {
-        id: 'arte-20942',
-        status: 'Dados Pendentes',
-        entrega_dados: 'CORRIGIR',
-        observacoes: { existente: true }
-    };
-    const atualizacoes = [];
-    const banco = {
-        from() {
-            const consulta = { payload: null };
-            return {
-                select() { return this; },
-                update(payload) { consulta.payload = payload; return this; },
-                eq() { return this; },
-                order() { return Promise.resolve({ data: [linha], error: null }); },
-                single() {
-                    atualizacoes.push(consulta.payload);
-                    Object.assign(linha, consulta.payload);
-                    return Promise.resolve({ data: { ...linha }, error: null });
-                }
-            };
-        }
-    };
-    const ctx = { window: {}, supabaseClient: banco, state: {
-        modelosGlobais: { 20942: [{ status_arte: 'APROVADA_CLIENTE' }] }, todasArtes: []
+    const chamadas = [];
+    const linha = { id_int: 20942, status: 'Corrigir Dados' };
+    const ctx = { window: {}, state: { todasArtes: [linha] }, supabaseClient: {
+        async rpc(nome, args) {
+            chamadas.push([nome, args]);
+            return { data: nome === 'arte_transicao_ler' ? { revisao: 'r1' }
+                : { confirmado: true, status: 'APROVADO' } };
+        }, from() { throw Error('PATCH direto proibido'); }
     } };
     vm.createContext(ctx);
-    vm.runInContext(
-        trechoConst('ARTE_REPROVADOS') + '\n' +
-        trechoConst('ARTE_APROVADOS') + '\n' +
-        trechoFuncao('calcularStatusConsolidadoPedidoArte') + '\n' +
-        trechoFuncao('sincronizarStatusConsolidadoPedidoArte') + '\n' +
-        'this.sincronizar = sincronizarStatusConsolidadoPedidoArte;',
-        ctx
-    );
-
-    igual(await ctx.sincronizar(20942), 'Corrigir Dados', 'entrada na correção');
-    igual(linha.observacoes.status_antes_correcao_dados, 'Dados Pendentes', 'preserva aprovação das artes');
-    linha.entrega_dados = 'APROVADO';
-    igual(await ctx.sincronizar(20942), 'APROVADO', 'atendimento conclui a correção');
-    igual(linha.status, 'APROVADO', 'pedido legado sai de Corrigir Dados');
-    if (atualizacoes.length !== 2) throw new Error('esperava duas atualizações consolidadas');
+    vm.runInContext(trechoFuncao('confirmarTransicaoDaArte') + '\n'
+        + trechoFuncao('sincronizarStatusConsolidadoPedidoArte'), ctx);
+    igual(await ctx.sincronizarStatusConsolidadoPedidoArte(20942, [{ status_arte: 'REPROVADA_CLIENTE' }]), 'APROVADO', 'usa decisao do banco');
+    igual(chamadas.length, 2, 'leitura e confirmacao');
+    igual(chamadas[1][1].p_revisao, 'r1', 'envia revisao lida');
+    igual(linha.status, 'APROVADO', 'memoria acompanha recibo');
 }
 
 async function testarConfirmacaoDaGravacao() {
@@ -124,75 +98,35 @@ async function testarConfirmacaoDaGravacao() {
 }
 
 async function testarReconciliacaoComModelosDoBanco() {
-    const linha = {
-        id: 'arte-22192', status: 'Corrigir Dados', entrega_dados: 'APROVADO',
-        observacoes: { status_antes_correcao_dados: 'Dados Pendentes' }
-    };
-    let consultouModelos = 0;
-    const banco = {
-        from(tabela) {
-            if (tabela === 'pedidos_modelos') {
-                return {
-                    select() { return this; },
-                    eq() {
-                        consultouModelos++;
-                        return Promise.resolve({ data: [{ id: 1, status_arte: 'APROVADA_CLIENTE' }], error: null });
-                    }
-                };
-            }
-            const q = { payload: null };
-            return {
-                select() { return this; }, update(p) { q.payload = p; return this; }, eq() { return this; },
-                order() { return Promise.resolve({ data: [linha], error: null }); },
-                single() { Object.assign(linha, q.payload); return Promise.resolve({ data: { ...linha }, error: null }); }
-            };
-        }
-    };
-    const ctx = { window: {}, supabaseClient: banco, state: { modelosGlobais: {}, todasArtes: [] } };
+    let tentativas = 0;
+    const linha = { id_int: 22192, status: 'Enviar Arte' };
+    const ctx = { window: {}, state: { todasArtes: [linha] }, supabaseClient: {
+        async rpc(nome) {
+            if (nome === 'arte_transicao_ler') return { data: { revisao: 'antiga' } };
+            tentativas++; return { error: { code: '40001', message: 'O pedido mudou em outra tela' } };
+        }, from() { throw Error('Nao pode usar fallback'); }
+    } };
     vm.createContext(ctx);
-    vm.runInContext(
-        trechoConst('ARTE_REPROVADOS') + '\n' + trechoConst('ARTE_APROVADOS') + '\n'
-        + trechoFuncao('calcularStatusConsolidadoPedidoArte') + '\n'
-        + trechoFuncao('sincronizarStatusConsolidadoPedidoArte') + '\n'
-        + 'this.sincronizar = sincronizarStatusConsolidadoPedidoArte;', ctx);
-    igual(await ctx.sincronizar(22192), 'APROVADO', 'reconcilia com modelos persistidos');
-    igual(consultouModelos, 1, 'consulta modelos quando a memória está vazia');
-    igual(linha.status, 'APROVADO', 'remove Corrigir Dados persistido');
+    vm.runInContext(trechoFuncao('confirmarTransicaoDaArte') + '\n'
+        + trechoFuncao('sincronizarStatusConsolidadoPedidoArte'), ctx);
+    let falhou = false;
+    try { await ctx.sincronizarStatusConsolidadoPedidoArte(22192, [{ status_arte: 'REPROVADA_CLIENTE' }]); }
+    catch (e) { falhou = /outra tela/.test(e.message); }
+    igual(falhou, true, 'conflito pede nova conferencia');
+    igual(tentativas, 1, 'sem retry automatico');
+    igual(linha.status, 'Enviar Arte', 'falha preserva memoria');
 }
 
 async function testarReconciliacaoDaLista() {
-    const chamadas = [];
-    const ctx = {
-        supabaseClient: {},
-        state: {
-            ordens: [
-                { id: 'vibe_1', numero: 1 },
-                { id: 'vibe_2', numero: 2, status_interno: 'EM PRODUCAO' },
-                { id: 'vibe_3', numero: 3, status_interno: 'EM PRODUCAO' },
-                { id: 'vibe_4', numero: 4, status_interno: 'CANCELADO' },
-                { id: 'vibe_5', numero: 5, ignorado: true }
-            ],
-            todasArtes: [
-                { id_int: 2, status: 'Em Alteração' },
-                { id_int: 3, status: 'APROVADO' }
-            ],
-            modelosGlobais: { 1: [{ id: 11 }], 2: [{ id: 22 }] }
-        },
-        temSessaoDoSupabase: async () => true,
-        carregarArtesParaReconciliacao: async numeros => new Map(numeros.map(n => [n, []])),
-        pedidoIgnoradoNosPaineis: os => os.ignorado === true,
-        pedidoCancelado: os => os.status_interno === 'CANCELADO',
-        pedidoSaiuDaArte: os => os.status_interno === 'EM PRODUCAO',
-        sincronizarStatusConsolidadoPedidoArte: async (numero, modelos) => chamadas.push([numero, modelos.length]),
-        console: { warn() {} }
-    };
+    let chamadas = 0;
+    const ctx = { state: { ordens: [{ numero: 1 }], modelosGlobais: {1:[{status_arte:'REPROVADA_CLIENTE'}]} },
+        supabaseClient: { from() { chamadas++; throw Error('Escrita na carga'); }, rpc() { chamadas++; throw Error('RPC na carga'); } } };
     vm.createContext(ctx);
-    vm.runInContext(trechoFuncao('reconciliarStatusPersistidosDaListaArte')
-        + '\nthis.reconciliar = reconciliarStatusPersistidosDaListaArte;', ctx);
-    const resultado = await ctx.reconciliar();
-    igual(resultado.verificados, 2, 'reconcilia ativos e correções que saíram da arte');
-    igual(JSON.stringify(chamadas), JSON.stringify([[1, 1], [2, 1]]),
-        'não varre concluídos normais nem cancelados');
+    for (const nome of ['reconciliarStatusPersistidosDaListaArte','sincronizarPedidosProntosParaEnvio','sincronizarStatusOrdensDinamico']) {
+        vm.runInContext(trechoFuncao(nome), ctx); await ctx[nome]();
+    }
+    igual(chamadas, 0, 'carga da aba antiga nao grava');
+    igual(ctx.state.modelosGlobais[1][0].status_arte, 'REPROVADA_CLIENTE', 'teste conserva memoria antiga');
 }
 
 Promise.all([

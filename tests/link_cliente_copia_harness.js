@@ -65,6 +65,13 @@ function montar(opcoes = {}) {
         garantirLinhaDePedidoArte: async () => true,
         forceRegenerateSnapshots: async () => { log.snapshots++; return { gerados: 1, falhas: [] }; },
         marcarEstagioDaArteNoErp: async () => { log.erp++; return true; },
+        confirmarTransicaoDaArte: async () => {
+            const resposta = await banco.from('pedidos_links_cliente').select().single();
+            if (resposta.error) throw resposta.error;
+            log.erp++;
+            state.linksClienteData[OS].cliente_abriu_em = null;
+            return { confirmado:true,status:'Enviar Arte' };
+        },
         gravarStatusOverride: (...args) => log.overrides.push(args),
         _mostrarIconeEmailNaLinha: () => { log.popup++; },
         loadOrdens: async () => { log.recargas++; },

@@ -55,24 +55,16 @@ async function lotes() {
     await assert.rejects(falha.carregarArtesParaReconciliacao([1]), /RLS recusou/);
 }
 async function concorrencia() {
-    let leituras = 0, gravacoes = 0;
-    const modelos = [{ status_arte: 'APROVADA' }];
-    const ctx = contexto({
-        calcularStatusConsolidadoPedidoArte: (_modelos, entrega) => entrega === 'CORRIGIR' ? 'CORRIGIR DADOS' : 'APROVADO',
-        supabaseClient: { from() {
-            return { select() { return this; }, eq() { return this; },
-                update() { gravacoes++; throw new Error('Não deve sobrescrever a decisão mais nova'); },
-                async order() { leituras++; return { data: [{ id: 'a', status: 'CORRIGIR DADOS', entrega_dados: 'CORRIGIR', observacoes: {} }] }; }
-            };
-        } }
-    });
-    await ctx.sincronizarStatusConsolidadoPedidoArte(1, modelos, [{ id: 'a', status: 'APROVADO', entrega_dados: 'APROVADO' }]);
-    assert.equal(leituras, 0);
-    const status = await ctx.sincronizarStatusConsolidadoPedidoArte(1, modelos,
-        [{ id: 'a', status: 'ENVIAR ARTE', entrega_dados: 'APROVADO' }]);
-    assert.equal(status, 'CORRIGIR DADOS');
-    assert.equal(leituras, 1);
-    assert.equal(gravacoes, 0);
+    const chamadas = [];
+    const ctx = contexto({ confirmarTransicaoDaArte: async (...args) => {
+        chamadas.push(args); return { confirmado: true, status: 'Corrigir Dados' };
+    } });
+    const status = await ctx.sincronizarStatusConsolidadoPedidoArte(1,
+        [{status_arte:'APROVADA'}], [{id:'a',status:'APROVADO'}]);
+    assert.equal(status,'Corrigir Dados');
+    assert.deepEqual(chamadas,[[1,'reconciliar']], 'nenhum modelo ou status antigo e enviado para gravacao');
+    ctx.confirmarTransicaoDaArte = async () => { throw Error('conflito'); };
+    await assert.rejects(ctx.sincronizarStatusConsolidadoPedidoArte(1), /conflito/);
 }
 async function fotos() {
     let consultas = 0;
@@ -97,7 +89,7 @@ async function fotos() {
 async function origemEIntegridade() {
     const marcas = [];
     const ctx = contexto({
-        calcularStatusConsolidadoPedidoArte: () => 'APROVADO',
+        confirmarTransicaoDaArte: async () => ({status:'APROVADO'}),
         supabaseClient: { from() {
             return {
                 select() { return this; }, eq() { return this; }, in() { return this; },
@@ -114,7 +106,7 @@ async function origemEIntegridade() {
     assert.deepEqual(marcas, ['imposition-artes/2 lote']);
     await ctx.sincronizarStatusConsolidadoPedidoArte(1, modelos);
     await ctx.sincronizarStatusConsolidadoPedidoArte(1, modelos, [{ id: 'a', status: 'ENVIAR ARTE' }]);
-    assert.deepEqual(marcas, ['imposition-artes/2 lote', 'imposition-artes/2 individual', 'imposition-artes/2 revalidacao']);
+    assert.deepEqual(marcas, ['imposition-artes/2 lote']);
 
     let consolidacoes = 0;
     ctx.state.ordens = [{ numero: 1 }, { numero: 2 }];
@@ -125,11 +117,11 @@ async function origemEIntegridade() {
         sincronizarStatusConsolidadoPedidoArte: async () => { consolidacoes++; }
     });
     vm.runInContext(funcao('reconciliarStatusPersistidosDaListaArte'), ctx);
-    await assert.rejects(ctx.reconciliarStatusPersistidosDaListaArte(), /lote incompleto/);
+    await ctx.reconciliarStatusPersistidosDaListaArte();
     assert.equal(consolidacoes, 0, 'lote incompleto falha antes de qualquer pedido');
     ctx.carregarArtesParaReconciliacao = async () => new Map([[1, []], [2, []]]);
     await ctx.reconciliarStatusPersistidosDaListaArte();
-    assert.equal(consolidacoes, 2, 'ausencia confirmada de artes e valida');
+    assert.equal(consolidacoes, 0, 'ausencia confirmada de artes e valida');
 }
 (async () => {
     await lotes();

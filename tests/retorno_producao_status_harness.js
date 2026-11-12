@@ -19,7 +19,7 @@ function constante(nome) {
     assert(inicio >= 0, nome);
     return fonte.slice(inicio, fonte.indexOf(';', inicio) + 1);
 }
-const nomes = ['assinaturaDoPdfParaPronto', 'validarPaginasDoPdfParaPronto', 'carregarArtesParaReconciliacao', 'calcularStatusConsolidadoPedidoArte', 'sincronizarStatusConsolidadoPedidoArte',
+const nomes = ['confirmarTransicaoDaArte', 'confirmarModeloPronto', 'assinaturaDoPdfParaPronto', 'validarPaginasDoPdfParaPronto', 'carregarArtesParaReconciliacao', 'calcularStatusConsolidadoPedidoArte', 'sincronizarStatusConsolidadoPedidoArte',
     'atualizarPedidoArteConfirmado', 'marcarEstagioDaArteNoErp', 'devolverArteParaAlteracao',
     'buscarModeloPersistidoDaDecisao', 'salvarSaidaCorrecaoArteConfirmada', 'decisionAmostraItem',
     'promoverPedidoSeTodosProntos', 'reconciliarStatusPersistidosDaListaArte',
@@ -92,13 +92,33 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         garantirTabelasDaAmostra: async () => {}, regenerarAmostraDoModelo: async () => {},
         renderAmostrasOSItens() {}, loadOSItens: recarregar, findOSInState: () => os,
         substituirPendenteInformacao: async () => {}, garantirLinhaDePedidoArte: async () => true,
-        prepararLinkDaArtePronta: async () => { log.preparosLink++; return { ok: true }; },
+        getOrCreateLinkCliente: async () => 'link-sintetico',
+        prepararLinkDaArtePronta: async () => { log.preparosLink++; await contexto.confirmarTransicaoDaArte(numero, 'enviar'); return { ok: true }; },
         clearAmostrasOS() {}, showView() {},
         saveAmostraToDB: async (id, _, dados) => {
             const modelo = banco.pedidos_modelos.find(m => m.id === id);
             modelo.status_arte = dados.amostra_status === 'PRONTO' ? 'AGUARDANDO_CLIENTE' : dados.amostra_status;
             Object.assign(state.osItens[osId].find(m => m.id === id), dados);
         }
+    };
+    // Transporte simulado; atomicidade e locks sao testados no PostgreSQL real.
+    cliente.rpc = async (nome, args) => {
+        if (nome === 'arte_transicao_ler') return {data:{revisao:'teste'}};
+        if (falharConsolidado) return {error:{message:'falha simulada no consolidado'}};
+        let correcao=false;
+        if (args.p_acao === 'pronto') {
+            const m=banco.pedidos_modelos.find(m=>m.id===args.p_modelo);
+            correcao=m.status_impressao==='Corrigir Arte';
+            m.status_arte=correcao?'APROVADA':'AGUARDANDO_CLIENTE';
+            if(correcao)m.status_impressao='Aguardando';
+            log.updates.push({tabela:'pedidos_modelos',payload:{status_arte:m.status_arte,status_impressao:m.status_impressao}});
+        }
+        const enviar=args.p_acao!=='reconciliar' && !correcao && banco.pedidos_modelos.some(m=>m.status_arte==='AGUARDANDO_CLIENTE')
+            && banco.pedidos_modelos.every(m=>['APROVADA','AGUARDANDO_CLIENTE'].includes(m.status_arte));
+        const arte=banco.pedidos_artes[0];
+        arte.status=enviar?'Enviar Arte':contexto.calcularStatusConsolidadoPedidoArte(banco.pedidos_modelos,arte.entrega_dados,arte.status);
+        if(enviar)banco.pedidos_links_cliente[0].status_arte='Enviar Arte';
+        return {data:{confirmado:true,status:arte.status,enviar,correcao}};
     };
     vm.createContext(contexto);
     vm.runInContext(codigo, contexto);
@@ -191,38 +211,52 @@ caso('marca Corrigir Arte pendente bloqueia promocao mesmo sem status ERP', asyn
     assert.equal(await a.contexto.promoverPedidoSeTodosProntos(a.osId), false);
     assert.equal(a.log.updates.length, 0);
 });
+caso('marca antiga de correcao na memoria nao substitui o recibo do banco', async () => {
+    const a = ambiente('', 'Em Alteração');
+    a.banco.pedidos_modelos[0].status_arte = 'REPROVADA_CLIENTE';
+    await a.recarregar();
+    a.state.osItens[a.osId][0].status_impressao = 'Corrigir Arte';
+    assert.equal(await a.contexto.decisionAmostraItem(1002001, a.osId, 'PRONTO'), true);
+    assert.equal(a.banco.pedidos_modelos[0].status_arte, 'AGUARDANDO_CLIENTE');
+    assert.equal(a.state.osItens[a.osId][0].status_arte, 'AGUARDANDO_CLIENTE');
+    assert(!a.log.avisos.some(a => a.texto.includes('impressão liberada')));
+});
 caso('arte inicial com modelo pronto e outro aprovado avanca normalmente', async () => {
     const a = ambiente('', 'Em Arte');
     a.banco.pedidos_modelos.push({ id: 1002002, id_int: a.numero, status_arte: 'AGUARDANDO_CLIENTE', status_impressao: 'Aguardando' });
     await a.recarregar();
-    assert.equal(await a.contexto.promoverPedidoSeTodosProntos(a.osId), true);
+    assert.equal(await a.contexto.decisionAmostraItem(1002002, a.osId, 'PRONTO'), true);
     assert.equal(a.banco.pedidos_artes[0].status, 'Enviar Arte');
     assert.equal(a.banco.pedidos_links_cliente[0].status_arte, 'Enviar Arte');
 });
 caso('reconciliacao recupera Enviar Arte na producao com modelos aprovados', async () => {
     const a = ambiente('EM PRODUCAO', 'Enviar Arte'); await a.recarregar();
     const r = await a.contexto.reconciliarStatusPersistidosDaListaArte();
-    assert.equal(r.verificados, 1);
+    assert.equal(r.verificados, 0);
+    assert.equal(a.banco.pedidos_artes[0].status, 'Enviar Arte');
+    await a.contexto.sincronizarStatusConsolidadoPedidoArte(a.numero);
     assert.equal(a.banco.pedidos_artes[0].status, 'APROVADO');
 });
-caso('falha do consolidado e recuperada sem repetir a decisao do modelo', async () => {
+caso('falha atomica preserva modelo e exige nova acao explicita', async () => {
     const a = ambiente('EM PRODUCAO', 'Enviar Arte'); await a.recarregar();
     await a.contexto.devolverArteParaAlteracao(1002001, a.osId);
     a.banco.pedidos_artes[0].status = 'Enviar Arte';
     a.falharConsolidado(true);
     assert.equal(await a.contexto.decisionAmostraItem(1002001, a.osId, 'PRONTO'), false);
-    assert.equal(a.banco.pedidos_modelos[0].status_arte, 'APROVADA');
+    assert.equal(a.banco.pedidos_modelos[0].status_arte, 'REPROVADA_CLIENTE');
     const escritasModelo = a.log.updates.filter(u => u.tabela === 'pedidos_modelos').length;
     a.falharConsolidado(false);
     a.state.modelosGlobais = {}; // a recuperacao precisa reler os modelos persistidos
     await a.contexto.reconciliarStatusPersistidosDaListaArte();
+    assert.equal(a.banco.pedidos_artes[0].status, 'Enviar Arte');
+    assert.equal(await a.contexto.decisionAmostraItem(1002001, a.osId, 'PRONTO'), true);
     assert.equal(a.banco.pedidos_artes[0].status, 'APROVADO');
-    assert.equal(a.log.updates.filter(u => u.tabela === 'pedidos_modelos').length, escritasModelo);
+    assert.equal(a.log.updates.filter(u => u.tabela === 'pedidos_modelos').length, escritasModelo + 1);
 });
 caso('reconciliacao preserva correcao de dados', async () => {
     const a = ambiente('EM PRODUCAO', 'Enviar Arte');
     a.banco.pedidos_artes[0].entrega_dados = 'CORRIGIR'; await a.recarregar();
-    await a.contexto.reconciliarStatusPersistidosDaListaArte();
+    await a.contexto.sincronizarStatusConsolidadoPedidoArte(a.numero);
     assert.equal(a.banco.pedidos_artes[0].status, 'Corrigir Dados');
 });
 caso('retorno explicito Em Arte e historico aprovado nao sao reconciliados', async () => {

@@ -416,23 +416,23 @@ function desenharSecaoEntrega() {
         const chegadaDaRetirada = cartaoDeChegada(dados);
 
         secao.innerHTML =
-            chegadaDaRetirada
+            cartaoDeDecisao('entrega')
             + cartaoDeLinhas(tituloDoCartao('pin', 'Retirada na gráfica'), linhasDaGrafica(destino.endereco),
                 'Fale com seu atendimento para combinar a retirada.', corpo + botao)
             + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
                 envioSemOsPrazos(dados, !!chegadaDaRetirada), '')
-            + cartaoDeDecisao('entrega')
+            + chegadaDaRetirada
             + cartaoDeFinalizacao()
             + botaoDeAjuda(dados);
         return;
     }
 
     const chegada = cartaoDeChegada(dados);
-    secao.innerHTML = chegada
+    secao.innerHTML = cartaoDeDecisaoEntrega()
+        + formularioEnderecoEntrega()
         + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
             envioSemOsPrazos(dados, !!chegada), '')
-        + formularioEnderecoEntrega()
-        + cartaoDeDecisaoEntrega()
+        + chegada
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }

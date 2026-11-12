@@ -44,7 +44,7 @@ function ambiente() {
         vm.runInContext(fs.readFileSync(path.join(raiz, 'frontend', arquivo), 'utf8'), c);
     return { c, chamadas };
 }
-async function preencher(c) {
+async function preencher(c, usar = false) {
     await c.informarOutroEnderecoEntrega();
     c.editarCampoEntrega('cpf_recebedor', endereco.cpf_recebedor);
     await c.continuarDocumentoEntrega();
@@ -52,7 +52,7 @@ async function preencher(c) {
     c.editarCampoEntrega('cep', '01001-000');
     await c.buscarCepEntrega();
     c.editarCampoEntrega('numero', endereco.numero);
-    c.usarNovoEnderecoEntrega();
+    if (usar) await c.usarNovoEnderecoEntrega();
 }
 async function main() {
     let { c, chamadas } = ambiente();
@@ -64,18 +64,17 @@ async function main() {
     assert.equal(c.documentoDoRecebedorValido('11.111.111/1111-11'), false);
     assert.ok(!c.cartaoDeDecisaoEntrega().includes('portal-correcao-entrega'));
     assert.ok(!c.cartaoDeDecisaoEntrega().includes('Desfazer'));
-    assert.ok(c.cartaoDeDecisaoEntrega().includes('Meus Endereços'));
+    assert.ok(c.cartaoDeDecisaoEntrega().includes('Alterar Endereço'));
     assert.ok(!c.cartaoDeDecisaoEntrega().includes('>Alterar<'));
     await c.decidirDados('entrega', true);
     assert.equal(c.portalConfirmacoes.entrega, null);
     assert.deepEqual(chamadas, []);
     assert.equal(c.portalGravandoConfirmacao, false);
-    await preencher(c);
-    await c.decidirDados('entrega', true);
+    await preencher(c, true);
     assert.deepEqual(chamadas, ['link_cliente_salvar_entrega', 'confirmacao', 'avanco:faturamento']);
     assert.equal(c.portalConfirmacoes.entrega, true);
     assert.equal(c.portalDados.endereco.recebedor, endereco.recebedor);
-    assert.equal(c.portalDados.enderecos_entrega[0].recebedor, endereco.recebedor, 'novo endereço entra em Meus Endereços');
+    assert.equal(c.portalDados.enderecos_entrega[0].recebedor, endereco.recebedor, 'novo endereço entra em Alterar Endereço');
     c.editarCampoEntrega('numero', '999');
     assert.equal(c.dadosDoFormularioEntrega().valores.numero, '10', 'confirmado não é editável');
 
@@ -91,7 +90,7 @@ async function main() {
     assert.match(formulario, /id="entrega-endereco"[^>]*readonly/);
     assert.match(formulario, /id="entrega-numero"[^>]*required[^>]*aria-required="true"/,
         'número ou S/N é obrigatório');
-    c.usarNovoEnderecoEntrega();
+    await c.usarNovoEnderecoEntrega();
     assert.match(c.dadosDoFormularioEntrega().erro, /dados obrigatórios/,
         'não permite usar endereço sem número ou S/N');
     const nomeConsultado = c.dadosDoFormularioEntrega().valores.recebedor;
@@ -159,8 +158,7 @@ async function main() {
     assert.equal(c.dadosDoFormularioEntrega().valores.endereco, 'Rua Cadastrada');
     assert.equal(c.dadosDoFormularioEntrega().valores.numero, '44');
     assert.equal(c.dadosDoFormularioEntrega().consultado, endereco.cep);
-    assert.deepEqual(chamadas, [], 'selecionar apenas carrega; ainda não grava');
-    await c.decidirDados('entrega', true);
+    assert.equal(c.portalConfirmacoes.entrega, true, 'selecionar confirma automaticamente');
     assert.deepEqual(chamadas, ['link_cliente_salvar_entrega', 'confirmacao', 'avanco:faturamento']);
 
     ({ c, chamadas } = ambiente());
@@ -201,7 +199,7 @@ async function main() {
     c.editarCampoEntrega('endereco', 'Endereço adulterado');
     assert.equal(c.dadosDoFormularioEntrega().valores.endereco, 'Avenida Oficial', 'endereço do CNPJ não é editável');
     assert.ok(c.cartaoDeDecisaoEntrega().includes('Este endereço veio do cadastro do CNPJ'));
-    c.usarNovoEnderecoEntrega();
+    await c.usarNovoEnderecoEntrega();
     assert.ok(c.formularioEnderecoEntrega().includes('Avenida Oficial, 55'));
 
     ({ c, chamadas } = ambiente());
@@ -225,7 +223,8 @@ async function main() {
     assert.equal(c.dadosDoFormularioEntrega().alterando, false, 'falha ao desfazer mantém seleção bloqueada');
     c.gravarCorrecaoDoCliente = async () => ({ ok: true });
     await c.selecionarEnderecoEntrega(0);
-    assert.equal(c.dadosDoFormularioEntrega().alterando, true, 'selecionar outro endereço desfaz a confirmação anterior');
+    assert.equal(c.dadosDoFormularioEntrega().alterando, false, 'selecionar outro endereço conclui edição');
+    assert.equal(c.portalConfirmacoes.entrega, true);
 
     ({ c, chamadas } = ambiente());
     c.portalDados.endereco = { ...endereco, cidade: 'São Paulo' };
@@ -239,12 +238,12 @@ async function main() {
     await c.selecionarEnderecoEntrega(0);
     assert.equal(avisos.length, 0, 'mesma cidade não exibe aviso mesmo com cobrança paga');
     assert.equal(c.dadosDoFormularioEntrega().valores.cidade, '  SAO   PAULO ');
-    await c.selecionarEnderecoEntrega(1);
+    await c.selecionarEnderecoEntrega(c.portalDados.enderecos_entrega.findIndex(e => e.cidade === 'Campinas'));
     assert.equal(avisos.length, 1, 'cidade diferente exibe aviso quando há cobrança paga');
     assert.equal(avisos[0], 'Este pedido já possui uma cobrança paga. A alteração de endereço gerará uma diferença no valor do frete e será cobrada à parte.');
     assert.equal(c.dadosDoFormularioEntrega().valores.cidade, '  SAO   PAULO ', 'cancelar mantém o endereço selecionado');
     c.confirm = texto => { avisos.push(texto); return true; };
-    await c.selecionarEnderecoEntrega(1);
+    await c.selecionarEnderecoEntrega(c.portalDados.enderecos_entrega.findIndex(e => e.cidade === 'Campinas'));
     assert.equal(c.dadosDoFormularioEntrega().valores.cidade, 'Campinas', 'confirmar permite mudar a cidade');
 
     ({ c, chamadas } = ambiente());
@@ -254,6 +253,27 @@ async function main() {
     c.confirm = texto => { throw new Error('não deveria avisar sem cobrança paga: ' + texto); };
     await c.selecionarEnderecoEntrega(0);
     assert.equal(c.dadosDoFormularioEntrega().valores.cidade, 'Campinas', 'sem cobrança paga permite outra cidade');
-    console.log('OK: endereço somente leitura, Meus Endereços, CPF/CEP, CNPJ bloqueado e gravação confirmada.');
+    // A seleção e o cadastro usam os mesmos recibos e não confirmam em falha.
+    ({ c, chamadas } = ambiente());
+    c.portalDados.enderecos_entrega = [{ ...endereco }];
+    c.supabaseClient.rpc = async () => ({ error: { message: 'offline' } });
+    await c.selecionarEnderecoEntrega(0);
+    assert.equal(c.portalConfirmacoes.entrega, null);
+    assert.equal(c.portalErroConfirmacao.entrega, true);
+    assert.deepEqual(chamadas, []);
+
+    ({ c, chamadas } = ambiente());
+    c.gravarCorrecaoDoCliente = async () => ({ ok: false });
+    await preencher(c, true);
+    assert.equal(c.portalConfirmacoes.entrega, null);
+    assert.equal(c.portalErroConfirmacao.entrega, true);
+    assert.ok(!chamadas.some(x => x.startsWith('avanco')));
+
+    ({ c, chamadas } = ambiente());
+    c.portalDados.enderecos_entrega = [{ ...endereco }];
+    await Promise.all([c.selecionarEnderecoEntrega(0), c.selecionarEnderecoEntrega(0)]);
+    assert.deepEqual(chamadas, ['link_cliente_salvar_entrega', 'confirmacao', 'avanco:faturamento']);
+
+    console.log('OK: endereço somente leitura, Alterar Endereço, CPF/CEP, CNPJ bloqueado e gravação confirmada.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });
