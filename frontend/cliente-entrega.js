@@ -429,10 +429,10 @@ function desenharSecaoEntrega() {
 
     const chegada = cartaoDeChegada(dados);
     secao.innerHTML = chegada
-        + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
-            envioSemOsPrazos(dados, !!chegada), '')
         + cartaoDeDecisaoEntrega()
         + formularioEnderecoEntrega()
+        + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
+            envioSemOsPrazos(dados, !!chegada), '')
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }

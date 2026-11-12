@@ -38,6 +38,7 @@ HARNESSES = [
     "portal_carga_status_chat_harness.js",
     "portal_carga_status_chat_browser_harness.js",
     "portal_etapas_browser_harness.js",
+    "portal_notas_fiscais_harness.cjs",
 ]
 
 
