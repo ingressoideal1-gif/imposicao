@@ -26,19 +26,16 @@
             const linha = document.createElement('div'); linha.style.marginTop = '8px';
             const texto = document.createElement('div');
             const estado = {aceito:'Aceito',gerando:'Gerando',enviando:'Enviando',enviado:'Enviado ao Windows',
-                cancelado:'Cancelado após o último envio',conferencia:'Confira a fila e as folhas',encerrado:'Conferido'}[item.estado] || item.estado;
+                cancelado:'Cancelado após o último envio',conferencia:'Interrompido',encerrado:'Conferido'}[item.estado] || item.estado;
             texto.textContent = `${item.id.slice(0,8)} — ${estado}. ${item.enviados} lote(s), ${item.paginas_enviadas} página(s) enviadas.`;
             linha.appendChild(texto);
-            if (ativos.has(item.estado) || item.estado === 'conferencia') {
+            if (ativos.has(item.estado)) {
                 const botao = document.createElement('button');
-                botao.textContent = ativos.has(item.estado) ? 'Cancelar próximos lotes' : 'Já conferi a fila e as folhas';
+                botao.textContent = 'Cancelar próximos lotes';
                 botao.onclick = async () => {
                     botao.disabled = true;
                     try {
-                        if (item.estado === 'conferencia') {
-                            if (!confirm('Confirma que conferiu a fila e as folhas já impressas? Isto encerra o registro; nenhum lote será reenviado.')) return;
-                            await api('/' + item.id + '/conferir', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conferido:true})});
-                        } else await api('/' + item.id + '/cancelar', {method:'POST'});
+                        await api('/' + item.id + '/cancelar', {method:'POST'});
                         await consultar();
                     } catch (e) { root.toast?.(e.message, 'error'); }
                     finally { botao.disabled = false; }
@@ -100,7 +97,7 @@
                     await consultar();
                     const item = registros.find(r => r.id === atual.id);
                     if (item && !ativos.has(item.estado)) {
-                        if (item.estado === 'conferencia') throw new Error('Impressão interrompida. Confira a fila e as folhas antes de iniciar outro trabalho.');
+                        if (item.estado === 'conferencia') return false;
                         return item.estado === 'enviado';
                     }
                 } catch (erro) {
@@ -112,7 +109,7 @@
         } finally { atual = null; }
     }
     root.ImpressaoAutonoma = {iniciar, cancelar, consultar,
-        ocupada:() => !!atual || registros.some(r => ativos.has(r.estado) || r.estado === 'conferencia')};
+        ocupada:() => !!atual || registros.some(r => ativos.has(r.estado))};
     async function localizar() {
         if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return location.origin;
         let anterior = null;
