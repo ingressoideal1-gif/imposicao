@@ -31,3 +31,18 @@ A adoção é confirmada pela versão 1.4.14 no agente. Abrir o painel nessa ver
 Manifestos públicos latest.json e newprod-piloto-oficial.json conferidos em 12/11/2026: versão 1.4.14, mesmo hash/tamanho do MSI e sem lista restritiva de estações.
 Canal de teste preservado em 1.3.35.
 A leitura final de print_agents foi recusada pelo CLI com Invalid access token; instalação nas estações não confirmada nesta entrega.
+
+## Entrega segura concluida em 12/11/2026
+
+- PR 279 integrado apos todos os checks obrigatorios: https://github.com/ingressoideal1-gif/imposicao/pull/279.
+- Merge web: 1805aa3ea9e7efcb506f19ada671c45d1103ff9c; fonte validada d48aaf9ba9f09e167c31f4ab89801b9baeb44949.
+- CI 43305195458 aprovado nos tres canais, consulta autenticada e Windows seguranca/recuperacao.
+- Regressoes locais da integracao web: 912 testes por canal Producao/Piloto, dois skips, dois subtests e todos os harnesses aprovados.
+- Cloudflare Pages de producao: 5bd18948-477a-488f-8a36-c2ca525327f9, sucesso.
+- index.html, producao.html, pedido.js, script.js e impressao-autonoma.js conferidos por hash normalizado em imposition.ai-ideal.com.br e imposicao.pages.dev: 10/10 iguais a fonte.
+- MSI e manifestos 1.4.14 reconferidos, sem restricao de estacoes; teste permanece 1.3.35.
+- Consulta somente leitura de estacoes recuperada pela credencial de publicacao ja autorizada: Gustavo 1.4.11 (contato 18:10:28 BRT), Laser 01 1.4.13 (18:10:18 BRT).
+- Logo, publicacao concluida; adocao da 1.4.14 nessas estacoes e impressao fisica continuam pendentes.
+
+Retomada: instalar a 1.4.14 com a fila ociosa, confirmar a versao e verificar que um registro antigo interrompido nao exige conferencia para iniciar outro. Nao reenviar automaticamente a OS.
+Recuperacao: preservar historico e spool. Para o agente, preparar uma versao superior com reversao focal; para web, novo commit focal ou rollback de deployment comprovado, sem restaurar indiscriminadamente o painel antigo.
