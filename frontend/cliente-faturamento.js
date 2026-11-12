@@ -100,14 +100,56 @@ function cartaoDasNotasFiscais(dados) {
         return '<div class="portal-aviso calmo" role="status">Não foi possível consultar as notas emitidas. Atualize a página para tentar novamente.</div>';
     }
     const notas = Array.isArray(dados?.notas_fiscais) ? dados.notas_fiscais : [];
-    const botoes = notas.filter(n => n && urlDaNotaFiscal(n.url)).map(n => {
+    const botoes = notas.map((n, indice) => {
+        if (!n || !urlDaNotaFiscal(n.url)) return '';
         const titulo = 'Abrir nota fiscal — ' + String(n.tipo || 'NF-e')
             + (n.numero ? ' nº ' + String(n.numero) : '');
-        return '<a class="portal-botao principal" style="margin-top: 12px;" href="'
-            + escapeHtml(urlDaNotaFiscal(n.url)) + '" target="_blank" rel="noopener noreferrer">'
-            + escapeHtml(titulo) + '</a>';
+        return '<button type="button" class="portal-botao principal" style="margin-top: 12px;" '
+            + 'onclick="abrirNotaFiscalDoPortal(' + indice + ',this)">'
+            + escapeHtml(titulo) + '</button>';
     }).join('');
-    return botoes ? '<div class="portal-cartao"><h3>Notas fiscais emitidas</h3>' + botoes + '</div>' : '';
+    return botoes ? '<div class="portal-cartao"><h3>Notas fiscais emitidas</h3>' + botoes
+        + '<div id="portal-erro-nota" role="status" aria-live="polite"></div></div>' : '';
+}
+
+let notaFiscalAbrindo = false;
+async function abrirNotaFiscalDoPortal(indice, botao) {
+    if (notaFiscalAbrindo) return;
+    const dados = window.portalDados;
+    const nota = dados?.notas_fiscais?.[indice];
+    const numero = String(clienteState.numero || ''), token = clienteState.token;
+    const aviso = document.getElementById('portal-erro-nota');
+    if (!nota || !urlDaNotaFiscal(nota.url)) return;
+    if (aviso) aviso.textContent = '';
+    // Abre durante o clique para não ser bloqueada após a espera da rede.
+    const janela = window.open('', '_blank');
+    if (!janela) {
+        if (aviso) aviso.textContent = 'Permita abrir uma nova aba e tente novamente.';
+        return;
+    }
+    notaFiscalAbrindo = true;
+    if (botao) botao.disabled = true;
+    try {
+        janela.opener = null;
+        janela.document.title = 'Abrindo nota fiscal';
+        janela.document.body.textContent = 'Abrindo nota fiscal…';
+        const { data, error } = await supabaseClient.functions.invoke('nota-fiscal-cliente', {
+            body: { numero, token, nota_url: nota.url }
+        });
+        if (dados !== window.portalDados || numero !== String(clienteState.numero || '') || token !== clienteState.token) {
+            janela.close();
+            return;
+        }
+        const url = urlDaNotaFiscal(data?.url);
+        if (error || !url) throw new Error('Documento indisponível');
+        if (!janela.closed) janela.location.replace(url);
+    } catch (_) {
+        janela.close();
+        if (dados === window.portalDados && aviso) aviso.textContent = 'Não foi possível abrir a nota. Atualize a página e tente novamente.';
+    } finally {
+        notaFiscalAbrindo = false;
+        if (botao) botao.disabled = false;
+    }
 }
 
 async function carregarNotasFiscaisDoPortal(dados, numero, token) {
