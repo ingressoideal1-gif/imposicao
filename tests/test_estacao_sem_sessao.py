@@ -70,15 +70,12 @@ def test_o_painel_nao_reabre_a_tabela_do_token_para_o_anon():
 
     # As tres portas que a estacao batia. Cada uma tem de continuar freada.
     for funcao in ("carregarLinksExistentes", "carregarTemposNoCard"):
-        i = texto.index("async function %s()" % funcao)
+        i = texto.index("async function %s(" % funcao)
         corpo = texto[i:texto.index("\n}", i)]
         assert "temSessaoDoSupabase()" in corpo, \
             "%s voltou a pedir ao banco sem conferir a sessao" % funcao
 
     i = texto.index("async function sincronizarPedidosProntosParaEnvio()")
     corpo = texto[i:texto.index("\n}", i)]
-    assert "ehDoVibe && !temSessao" in corpo, \
-        "o AUTO-SYNC-DB voltou a gravar o pedido do Vibe sem sessao"
-    assert corpo.index("if (ehDoVibe && !temSessao) continue;") \
-        < corpo.index("gravarStatusOverride(os.id, 'Enviar Arte');"), \
-        "o override local precisa ficar DEPOIS do freio, senao a estacao diverge do banco"
+    for escrita in ('.update(', '.rpc(', 'gravarStatusOverride('):
+        assert escrita not in corpo, "carregar a lista voltou a alterar status: " + escrita

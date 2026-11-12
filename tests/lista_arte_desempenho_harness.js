@@ -26,14 +26,9 @@ async function consultas() {
     };
     vm.createContext(ctx);
     vm.runInContext(extrair('reconciliarStatusPersistidosDaListaArte'), ctx);
-    const resultado = ctx.reconciliarStatusPersistidosDaListaArte().then(() => null, e => e);
-    await tick();
-    assert.equal(chamadas, 4, 'quatro pedidos começam sem esperar os demais');
-    for (let onda = 0; onda < 3; onda++) {
-        pendentes.splice(0).forEach(r => r()); await tick();
-    }
-    assert.match((await resultado).message, /1 status/, 'a falha não vira sucesso');
-    assert.equal(chamadas, 12); assert.equal(max, 4);
+    await ctx.reconciliarStatusPersistidosDaListaArte();
+    assert.equal(chamadas, 0, 'listar pedidos nao inicia consolidacoes concorrentes');
+    assert.equal(max, 0);
 
     let agora = 1000, tentativas = 0, avisos = 0;
     const num = { id: 'n1' };
@@ -54,7 +49,7 @@ async function consultas() {
     bancos.garantirCsvDaNumeracao = async () => { tentativas++; num.csv_data = null; };
     assert.equal(await carregar(), 1, 'ausência confirmada é diferente de erro');
     assert.equal(avisos, 1); assert.equal(tentativas, 3);
-    console.log('PASS: reconciliação limitada, falha reportada, CSV sem repetição e recuperação');
+    console.log('PASS: lista sem escrita de status, CSV sem repetição e recuperação');
 }
 
 async function navegador() {
@@ -190,9 +185,9 @@ async function modelos() {
         sincronizarAprovacaoProdutosPrateleira: async () => {}, conferirColunasQrIdealDosPedidos() {},
         supabaseClient: { from: () => ({ select: () => ({ in: (coluna, numeros) => {
             ativas++; max = Math.max(max, ativas); lotes.push([...numeros]);
-            return new Promise(resolve => liberacoes.push(() => {
+            return { order() { return this; }, range() { return new Promise(resolve => liberacoes.push(() => {
                 ativas--; resolve({ data: numeros.map(n => ({ id: n, id_int: n, quantidade: 1 })) });
-            }));
+            })); } };
         } }) }) }
     };
     vm.createContext(ctx); vm.runInContext('let _cargaOrdensEmAndamento = null;\n' + ['lerDadosLista', 'iniciarComplementoLista', 'carregarModelosGlobais'].map(extrair).join('\n'), ctx);
@@ -204,7 +199,7 @@ async function modelos() {
     assert.equal(Object.keys(ctx.state.modelosGlobais).length, 650);
     assert.equal(ctx.state.modelosGlobais[650][0].id, 650);
     const anterior = ctx.state.modelosGlobais;
-    ctx.supabaseClient = { from: () => ({ select: () => ({ in: async () => ({ error: Error('Offline') }) }) }) };
+    ctx.supabaseClient = { from: () => ({ select: () => ({ in: () => ({ order() { return this; }, range: async () => ({ error: Error('Offline') }) }) }) }) };
     await ctx.carregarModelosGlobais();
     assert.equal(ctx.state.modelosGlobais, anterior, 'lote incompleto não substitui o estado anterior');
 
