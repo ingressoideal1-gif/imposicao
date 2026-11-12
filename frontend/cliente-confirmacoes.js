@@ -266,7 +266,11 @@ window.decidirDados = async function (qual, confirmou) {
         || window.portalGravandoConfirmacao || state.portalGravandoArte || state.arteSeguindoSozinho) return;
     const c = window.portalConfirmacoes;
     if (c[qual] === confirmou) {
-        if (confirmou === true) abrirSecao(SECOES[SECOES.indexOf(qual) + 1]);
+        if (confirmou === true) {
+            const proxima = typeof proximaEtapaPendente === 'function' ? proximaEtapaPendente() : null;
+            abrirSecao(qual === 'faturamento' && proxima && proxima.secao === 'pagamento'
+                ? 'pagamento' : SECOES[SECOES.indexOf(qual) + 1]);
+        }
         return;
     }
     const dados = window.portalDados || {};
@@ -309,7 +313,9 @@ window.decidirDados = async function (qual, confirmou) {
         atualizarPainelDoPedido();
     }
     if (confirmou === true && !window.portalErroConfirmacao[qual]) {
-        abrirSecao(SECOES[SECOES.indexOf(qual) + 1]);
+        const proxima = typeof proximaEtapaPendente === 'function' ? proximaEtapaPendente() : null;
+        abrirSecao(qual === 'faturamento' && proxima && proxima.secao === 'pagamento'
+            ? 'pagamento' : SECOES[SECOES.indexOf(qual) + 1]);
     }
 };
 

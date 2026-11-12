@@ -50,20 +50,20 @@ function resumoFaturamento() {
     const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
     return '<div class="portal-cartao portal-entrega-resumo"><h2>Dados para a nota fiscal</h2>'
         + '<div class="portal-entrega-bloco portal-entrega-recebedor"><span class="portal-entrega-icone">'
-        + icone('pessoa', 22, '#2563eb') + '</span><div><span class="portal-entrega-legenda">Titular da nota</span>'
+        + icone('pessoa', 30, '#1d4ed8') + '</span><div><span class="portal-entrega-legenda">Titular da nota</span>'
         + '<strong>' + escapeHtml(v.nome || 'Não informado') + '</strong>'
         + '<span>' + escapeHtml(documentoEmMascara(v.documento) || 'CPF ou CNPJ não informado') + '</span>'
         + (v.ins_estadual ? '<span>Inscrição estadual: ' + escapeHtml(v.ins_estadual) + '</span>' : '')
         + (v.email ? '<span>' + escapeHtml(v.email) + '</span>' : '')
         + (v.telefone ? '<span>' + escapeHtml(v.telefone) + '</span>' : '') + '</div></div>'
         + '<div class="portal-entrega-bloco"><span class="portal-entrega-icone">'
-        + icone('pin', 22, '#16a34a') + '</span><div><span class="portal-entrega-legenda">Endereço fiscal</span>'
+        + icone('pin', 30, '#15803d') + '</span><div><span class="portal-entrega-legenda">Endereço fiscal</span>'
         + '<strong>' + escapeHtml(rua || 'Endereço não informado') + '</strong>'
         + (v.complemento ? '<span>' + escapeHtml(v.complemento) + '</span>' : '')
         + (local ? '<span>' + escapeHtml(local) + '</span>' : '')
         + '<span>CEP ' + escapeHtml(cepEmMascara(v.cep) || 'não informado') + '</span></div></div>'
         + (r.alterando
-            ? '<div class="portal-aviso calmo">Cadastro selecionado. Confirme abaixo para usar estes dados na nota.</div>' : '')
+            ? '<div class="portal-aviso calmo">Cadastro selecionado. Use o botão de confirmação para usar estes dados na nota.</div>' : '')
         + '</div>';
 }
 

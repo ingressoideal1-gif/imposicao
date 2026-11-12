@@ -4096,22 +4096,7 @@ input[type=number] {
 .portal-erro-confirmacao { order: -1; flex-basis: 100%; color: #fbbf24; line-height: 1.4; }
 .portal-par-de-botoes .portal-botao { flex: 1; }
 
-/* As ações usam os mesmos botões e validações dos cartões. A reserva permite
-   rolar o último campo acima delas, inclusive nas telas menores. */
-.portal-decisao[data-pendente="true"] .portal-par-de-botoes {
-    position: fixed;
-    z-index: 510;
-    left: 12px;
-    right: 12px;
-    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
-    margin: 0 auto;
-    max-width: 852px;
-    padding: 12px;
-    background: #17202e;
-    border: 1px solid var(--blue);
-    border-radius: 14px;
-    box-shadow: 0 -4px 24px #0005;
-}
+/* As ações permanecem dentro do cartão de confirmação em todas as telas. */
 .portal-decisao[data-pendente="true"] .portal-par-de-botoes .portal-botao {
     min-width: 0;
     width: auto;
@@ -4123,20 +4108,8 @@ input[type=number] {
     color: #fff;
     flex: 1.5;
 }
-.cliente-page:has(.portal-secao:not([hidden]) .portal-decisao[data-pendente="true"]) .cliente-container {
-    padding-bottom: calc(220px + env(safe-area-inset-bottom, 0px));
-}
 .portal-proxima-orientacao { margin: 14px 0 0; line-height: 1.5; color: var(--text); }
 .portal-proxima-acao { margin-top: 12px; border-color: var(--blue); background: #2563eb; color: #fff; }
-@media (min-width: 900px) {
-    .portal-decisao[data-pendente="true"] .portal-par-de-botoes { bottom: 16px; }
-}
-/* Ao digitar, libera espaço para o teclado virtual. */
-body:has(input:focus, textarea:focus, select:focus) .portal-decisao .portal-par-de-botoes {
-    position: static;
-    margin-top: 14px;
-}
-
 .portal-modal-enderecos {
     width: min(560px, calc(100vw - 32px));
     max-height: calc(100vh - 40px);
@@ -4172,29 +4145,31 @@ body:has(input:focus, textarea:focus, select:focus) .portal-decisao .portal-par-
     text-transform: uppercase;
 }
 .portal-endereco-linha { margin-top: 4px; font-weight: 700; }
-.portal-entrega-resumo { display: grid; gap: 12px; }
-.portal-entrega-resumo > h2 { margin-bottom: 2px; }
+/* Um cartão branco reúne identificação e endereço nas abas Entrega e Nota. */
+.portal-entrega-resumo { display: grid; gap: 0; background: #fff; color: #0f172a; border-color: #dbe3ec; }
+.portal-entrega-resumo > h2 { margin-bottom: 8px; color: #0f172a; font-size: 1.15rem; font-weight: 800; }
 .portal-entrega-bloco {
     display: grid;
-    grid-template-columns: 38px minmax(0, 1fr);
-    gap: 10px;
-    padding: 14px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--bg);
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 14px;
+    padding: 18px 0;
+    background: transparent;
 }
-.portal-entrega-bloco > div { display: grid; gap: 3px; min-width: 0; }
-.portal-entrega-bloco strong { font-size: 1rem; overflow-wrap: anywhere; }
-.portal-entrega-bloco span:not(.portal-entrega-icone, .portal-entrega-legenda) { color: var(--text-dim); overflow-wrap: anywhere; }
+.portal-entrega-bloco + .portal-entrega-bloco { border-top: 1px solid #e2e8f0; }
+.portal-entrega-bloco > div { display: grid; gap: 5px; min-width: 0; line-height: 1.5; }
+.portal-entrega-bloco strong { color: #0f172a; font-size: 1.05rem; font-weight: 750; overflow-wrap: anywhere; }
+.portal-entrega-bloco span:not(.portal-entrega-icone, .portal-entrega-legenda) { color: #475569; overflow-wrap: anywhere; }
+.portal-entrega-bloco .portal-entrega-legenda { color: #15803d; font-size: .82rem; font-weight: 800; }
+.portal-entrega-recebedor .portal-entrega-legenda { color: #1d4ed8; }
 .portal-entrega-icone {
     display: grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: rgba(22, 163, 74, .1);
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: #f0fdf4;
 }
-.portal-entrega-recebedor .portal-entrega-icone { background: rgba(37, 99, 235, .1); }
+.portal-entrega-recebedor .portal-entrega-icone { background: #eff6ff; }
 .portal-entrega-etapa { margin: 18px 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
 .portal-entrega-etapa h3 { margin: 0 0 6px; }
 .portal-entrega-campo { display: grid; gap: 6px; margin: 12px 0; font-weight: 650; }
@@ -4442,7 +4417,7 @@ body:has(input:focus, textarea:focus, select:focus) .portal-decisao .portal-par-
 
 .portal-trilha-passos {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
     margin-top: 10px;
 }

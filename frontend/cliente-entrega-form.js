@@ -232,18 +232,18 @@ function formularioEnderecoEntrega() {
     const icone = (nome, px, cor) => typeof iconeCliente === 'function' ? iconeCliente(nome, px, cor) : '';
     return '<div class="portal-cartao portal-entrega-resumo"><h2>Endereço de entrega</h2>'
         + '<div class="portal-entrega-bloco portal-entrega-recebedor">'
-        + '<span class="portal-entrega-icone">' + icone('pessoa', 22, '#2563eb') + '</span>'
+        + '<span class="portal-entrega-icone">' + icone('pessoa', 30, '#1d4ed8') + '</span>'
         + '<div><span class="portal-entrega-legenda">Recebedor</span>'
         + '<strong>' + escapeHtml(v.recebedor || 'Não informado') + '</strong>'
         + '<span>' + escapeHtml(documentoEmMascara(v.cpf_recebedor) || 'CPF ou CNPJ não informado') + '</span></div></div>'
         + '<div class="portal-entrega-bloco">'
-        + '<span class="portal-entrega-icone">' + icone('pin', 22, '#16a34a') + '</span>'
+        + '<span class="portal-entrega-icone">' + icone('pin', 30, '#15803d') + '</span>'
         + '<div><span class="portal-entrega-legenda">Destino</span>'
         + '<strong>' + escapeHtml(rua || 'Endereço não informado') + '</strong>'
         + (v.complemento ? '<span>' + escapeHtml(v.complemento) + '</span>' : '')
         + (local ? '<span>' + escapeHtml(local) + '</span>' : '')
         + '<span>CEP ' + escapeHtml(cepEmMascara(v.cep) || 'não informado') + '</span></div></div>'
-        + (r.alterando ? '<div class="portal-aviso calmo">Endereço selecionado. Confirme abaixo para salvar no pedido.</div>' : '')
+        + (r.alterando ? '<div class="portal-aviso calmo">Endereço selecionado. Use o botão de confirmação para salvar no pedido.</div>' : '')
         + '</div>';
 }
 
