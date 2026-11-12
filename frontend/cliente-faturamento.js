@@ -92,8 +92,8 @@ function desenharSecaoFaturamento() {
 
     const dados = window.portalDados;
     secao.innerHTML =
-        resumoFaturamento()
-        + cartaoDeDecisaoFaturamento()
+        cartaoDeDecisaoFaturamento()
+        + resumoFaturamento()
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }

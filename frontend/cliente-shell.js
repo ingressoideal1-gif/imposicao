@@ -210,12 +210,12 @@ function pintarSeloDoStatus(statusArte) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  A trilha: as três etapas que fecham o pedido
+//  A trilha: as quatro etapas do pedido
 // ══════════════════════════════════════════════════════════════════════════
 //
-// O Portal tem cinco abas, mas só TRÊS delas pedem alguma coisa do cliente:
-// aprovar a arte, conferir a entrega e conferir os dados da nota. Orçamento e
-// Pagamento são consulta.
+// O Portal tem cinco abas e quatro etapas: aprovar a arte, conferir a entrega,
+// conferir os dados da nota e pagar. Orçamento permanece como consulta.
+// O pagamento só conclui quando a regra compartilhada confirma as cobranças.
 //
 // Até 25/08/2026 essa distinção não existia na tela. As cinco abas eram
 // idênticas, e o que faltava só era dito DENTRO de cada uma, no fim da rolagem:
@@ -225,9 +225,11 @@ function pintarSeloDoStatus(statusArte) {
 // A trilha mora fora das seções, acima de todas, e responde a pergunta antes de
 // ele ter de procurar: quantas etapas faltam, e quais.
 
-/** As três etapas, com o que já foi feito. */
+/** As quatro etapas, com o que já foi feito. */
 function etapasDoPedido() {
     const c = window.portalConfirmacoes || {};
+    const pagamentos = (window.portalDados && window.portalDados.pagamentos) || [];
+    const pago = typeof pedidoEstaPago === 'function' && pedidoEstaPago(pagamentos);
 
     // A arte usa a MESMA pergunta que o cartão de finalização faz — e não uma
     // conta paralela. Duas contas sobre a mesma coisa acabam divergindo, e o
@@ -250,7 +252,8 @@ function etapasDoPedido() {
     return [
         { secao: 'arte',        nome: 'Arte',    feito: arteFeita,              acao: 'Aprovar',  pronto: 'Aprovada'  },
         { secao: 'entrega',     nome: 'Entrega', feito: decidiu(c.entrega),     acao: 'Conferir', pronto: 'Conferida' },
-        { secao: 'faturamento', nome: 'Nota',    feito: decidiu(c.faturamento), acao: 'Conferir', pronto: 'Conferida' }
+        { secao: 'faturamento', nome: 'Nota',    feito: decidiu(c.faturamento), acao: 'Conferir', pronto: 'Conferida' },
+        { secao: 'pagamento', nome: 'Pagar', feito: pago, acao: 'Conferir', pronto: 'Pago' }
     ];
 }
 
@@ -283,6 +286,7 @@ function proximaEtapaPendente() {
  * sistema faz por conta propria precisa se anunciar.
  */
 function secaoDeAbertura(statusArte, secaoInicial = 'arte') {
+    if (secaoInicial === 'pagamento') return 'pagamento';
     const chave = seloDoStatus(statusArte).chave;
     const etapas = etapasDoPedido();
     if (chave === 'aprovado' || chave === 'producao') etapas[0].feito = true;
@@ -324,18 +328,19 @@ function desenharTrilha() {
     const feitas = etapas.filter(e => e.feito).length;
     const c = window.portalConfirmacoes || {};
     const proxima = etapas.find(e => !e.feito);
-    const finalizado = !!clienteState.pedidoFinalizado && feitas === 3;
+    const finalizado = !!clienteState.pedidoFinalizado && feitas === etapas.length;
     const correcao = c.entrega === false || c.faturamento === false;
-    const orientacao = finalizado && feitas === 3
+    const orientacao = finalizado && feitas === etapas.length
         ? (correcao ? 'Solicitação de correção recebida. Aguarde seu atendimento.' : 'Todas as confirmações foram concluídas.')
         : proxima
-            ? (proxima.secao === 'arte' ? 'Primeiro aprove as amostras. Depois confirme a entrega e os dados da nota.'
+            ? (proxima.secao === 'arte' ? 'Primeiro aprove as amostras. Depois confirme a entrega, os dados da nota e confira o pagamento.'
                 : proxima.secao === 'entrega' ? 'Sua arte já está aprovada. Falta confirmar a entrega' + (c.faturamento == null ? ' e conferir os dados da nota.' : '.')
-                    : 'Falta conferir e confirmar os dados da nota fiscal.')
+                    : proxima.secao === 'faturamento' ? 'Falta conferir e confirmar os dados da nota fiscal.'
+                        : 'Confira as cobranças na aba Pagar. Esta etapa será concluída quando o pagamento estiver confirmado.')
             : 'Conferências registradas. Falta finalizar o pedido.';
     const destino = proxima ? proxima.secao : 'faturamento';
     const chamada = proxima ? (proxima.secao === 'arte' ? 'Conferir amostras'
-        : proxima.secao === 'entrega' ? 'Continuar para entrega' : 'Continuar para nota') : 'Revisar e finalizar';
+        : proxima.secao === 'entrega' ? 'Continuar para entrega' : proxima.secao === 'faturamento' ? 'Continuar para nota' : 'Continuar para pagar') : 'Revisar e finalizar';
     const icone = (nome, px) => (typeof iconeCliente === 'function' ? iconeCliente(nome, px) : '');
 
     // AMBAR para o que falta, verde para o que foi feito -- e a aba aberta e
@@ -360,12 +365,12 @@ function desenharTrilha() {
 
     caixa.innerHTML =
         '<div class="portal-trilha-topo">'
-        + '<span class="portal-trilha-rotulo">' + (proxima ? 'Etapa ' + (etapas.indexOf(proxima) + 1) + ' de 3' : 'Conferência do pedido') + '</span>'
+        + '<span class="portal-trilha-rotulo">' + (proxima ? 'Etapa ' + (etapas.indexOf(proxima) + 1) + ' de ' + etapas.length : 'Conferência do pedido') + '</span>'
         + '<span class="portal-trilha-conta' + (feitas < etapas.length ? ' falta' : '') + '">'
-        + feitas + ' de 3 concluídas</span>'
+        + feitas + ' de ' + etapas.length + ' concluídas</span>'
         + '</div>'
         + '<div class="portal-trilha-barra">'
-        + '<div class="portal-trilha-fill" style="width: ' + Math.round((feitas / 3) * 100) + '%;"></div>'
+        + '<div class="portal-trilha-fill" style="width: ' + Math.round((feitas / etapas.length) * 100) + '%;"></div>'
         + '</div>'
         + '<div class="portal-trilha-passos">' + passos + '</div>'
         + '<p class="portal-proxima-orientacao" role="status">' + orientacao + '</p>'

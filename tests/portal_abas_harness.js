@@ -434,13 +434,13 @@ const CARTAO = CLIENTE.slice(CLIENTE.indexOf('if (ehCliente) {'),
 // Cinco abas identicas nao diziam onde faltava o cliente, e o que faltava so era
 // dito DENTRO de cada uma, no fim da rolagem.
 
-(function aTrilhaTemAsTresEtapasQuePedemAlgo() {
+(function aTrilhaTemAsQuatroEtapasQuePedemAlgo() {
     const etapas = extrairFuncao(SHELL, 'etapasDoPedido');
-    ['arte', 'entrega', 'faturamento'].forEach(secao => {
+    ['arte', 'entrega', 'faturamento', 'pagamento'].forEach(secao => {
         ok(etapas.indexOf("'" + secao + "'") > 0, 'a etapa ' + secao + ' esta na trilha');
     });
-    ok(etapas.indexOf("'orcamento'") < 0 && etapas.indexOf("'pagamento'") < 0,
-        'orcamento e pagamento nao entram: sao consulta, nao pedem acao');
+    ok(etapas.indexOf("'orcamento'") < 0,
+        'orcamento continua somente consulta');
     ok(/artesJaAprovadas/.test(etapas),
         'a arte usa a MESMA pergunta do cartao de finalizacao, e nao uma conta paralela');
     ok(/v === true \|\| v === false/.test(etapas),

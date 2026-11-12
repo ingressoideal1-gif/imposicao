@@ -417,11 +417,11 @@ function desenharSecaoEntrega() {
 
         secao.innerHTML =
             chegadaDaRetirada
+            + cartaoDeDecisao('entrega')
             + cartaoDeLinhas(tituloDoCartao('pin', 'Retirada na gráfica'), linhasDaGrafica(destino.endereco),
                 'Fale com seu atendimento para combinar a retirada.', corpo + botao)
             + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
                 envioSemOsPrazos(dados, !!chegadaDaRetirada), '')
-            + cartaoDeDecisao('entrega')
             + cartaoDeFinalizacao()
             + botaoDeAjuda(dados);
         return;
@@ -431,8 +431,8 @@ function desenharSecaoEntrega() {
     secao.innerHTML = chegada
         + cartaoDeLinhas(tituloDoCartao('caminhao', 'Envio'),
             envioSemOsPrazos(dados, !!chegada), '')
-        + formularioEnderecoEntrega()
         + cartaoDeDecisaoEntrega()
+        + formularioEnderecoEntrega()
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }

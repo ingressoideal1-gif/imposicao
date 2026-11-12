@@ -50,7 +50,7 @@ function extrairFuncao(fonte, nome) {
  * `artesAprovadas` e o que `artesJaAprovadas` responderia -- ela mora no
  * `cliente-confirmacoes.js` e depende do DOM, entao entra aqui como resposta.
  */
-function portal({ status, entrega, faturamento, artesAprovadas }) {
+function portal({ status, entrega, faturamento, artesAprovadas, pagamentos = [{ status: 'PAID' }] }) {
     const fonte = extrairFuncao(SHELL, 'semAcento')
                 + extrairFuncao(SHELL, 'seloDoStatus')
                 + extrairFuncao(SHELL, 'etapasDoPedido')
@@ -59,12 +59,12 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
                 + extrairFuncao(CLIENTE, 'pendenciasForaDaArte')
                 + extrairFuncao(CLIENTE, 'mensagemDaAprovacaoDeArte');
 
-    const janela = { portalConfirmacoes: { entrega, faturamento, textoEntrega: '', textoFaturamento: '' } };
+    const janela = { portalDados: { pagamentos }, portalConfirmacoes: { entrega, faturamento, textoEntrega: '', textoFaturamento: '' } };
 
-    return new Function('window', 'clienteState', 'artesJaAprovadas',
+    return new Function('window', 'clienteState', 'artesJaAprovadas', 'pedidoEstaPago',
         fonte + '\nreturn { seloDoStatus, etapasDoPedido, proximaEtapaPendente, secaoDeAbertura,'
               + ' pendenciasForaDaArte, mensagemDaAprovacaoDeArte };')(
-        janela, { statusArte: status }, () => artesAprovadas);
+        janela, { statusArte: status }, () => artesAprovadas, require('../frontend/pagamento-do-pedido.js').pedidoEstaPago);
 }
 
 // ─── 1. Em que aba o link abre ───────────────────────────────────────────────
@@ -116,7 +116,7 @@ function portal({ status, entrega, faturamento, artesAprovadas }) {
 (function cadaEtapaDizOQueEsperaDoCliente() {
     const p = portal({ status: 'EM PRODUCAO', entrega: null, faturamento: null, artesAprovadas: true });
     const etapas = p.etapasDoPedido();
-    ok(etapas.length === 3, 'continuam sendo tres etapas', etapas.length);
+    ok(etapas.length === 4, 'são quatro etapas', etapas.length);
     etapas.forEach(e => {
         ok(typeof e.acao === 'string' && e.acao.length > 0, 'a etapa ' + e.secao + ' tem verbo de acao', e);
         ok(typeof e.pronto === 'string' && e.pronto.length > 0, 'a etapa ' + e.secao + ' tem rotulo de concluida', e);
