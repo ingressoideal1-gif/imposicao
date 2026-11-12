@@ -40,11 +40,15 @@ inícios 0/1/101/801/901, TICKET, limites inválidos, código do cliente, legado
 paginações, isolamento, autenticação, leitor incompatível, carga antiga,
 armazenamento/sincronismo offline, bloqueio, entrada repetida e reentrada.
 Integração exercita o handler real de `/portaria/faixa` até a decisão JavaScript.
-Conferir resultado final dos testes na entrega; nenhuma leitura física foi feita.
+47 testes focados e 436 testes da suíte completa Deno aprovados. Nos canais
+Produção e Piloto, 911 testes Python passaram por canal, com 2 pulados, 2
+subtestes e todos os 19 harnesses aprovados. Nenhuma leitura física foi feita.
 
 ## Publicação e recuperação
 
-Entrega local isolada da árvore operacional, base `e5112d68` de `origin/main`.
+Entrega isolada da árvore operacional, base inicial `e5112d68` de `origin/main`.
+Durante a publicação foi incorporada `ab58adb4` (PR 282), preservando a entrega
+posterior do portal. A versão web desta correção passou para `v20261127`.
 Publicação exige o frontend (HTML/JS) e a Edge Function `portaria`, preservando
 sua configuração de autenticação. As duas partes são compatíveis com a versão
 anterior: cliente antigo ignora `ni`, cliente novo aceita carga antiga.
@@ -56,4 +60,9 @@ correção até atualizar o código e a carga.
 
 Recuperação: restaurar as versões anteriores da função e dos assets pelo fluxo
 protegido. Não restaurar nem excluir credenciais/leituras: não foram alteradas.
-Deploy, commit, push e escrita em produção não foram realizados nesta entrega.
+Publicação autorizada: função `portaria` v283 ACTIVE, 19 fontes conferidas,
+`verify_jwt=false` preservado, GET sem token recusado com HTTP 401. Credenciais,
+contratos e bloqueio do pedido foram comparados antes/depois por digest e
+permanecem iguais; as 461 leituras também foram preservadas. Nenhuma escrita
+de dados de negócio nem migração foi executada. Frontend segue pelo PR 283;
+a prova pública final fica em `dist/entrega/resultado-publicacao.json`.
