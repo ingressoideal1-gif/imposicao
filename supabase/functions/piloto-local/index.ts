@@ -69,7 +69,7 @@ export async function handler(req: Request): Promise<Response> {
       if (!(resultado instanceof Response)) throw new Recusa(503, 'base QR indisponivel');
       return resultado;
     }
-    if (['listar','conferir','conferir-pedido','abrir-pedido','catalogos-offline', 'lista-offline','confirmar-offline'].includes(acao || '')) return resposta(200,await operarPilotoEstacao(acao!,req,conferirAgente,VERSAO_MINIMA_PUBLICADA));
+    if (['listar','conferir','conferir-pedido','abrir-pedido','catalogos-offline', 'lista-offline','confirmar-offline','estado-cache'].includes(acao || '')) return resposta(200,await operarPilotoEstacao(acao!,req,conferirAgente,VERSAO_MINIMA_PUBLICADA));
     if (acao==='conferir-sessao') return resposta(200,await conferirSessao(req));
     return resposta(404,{detail:'operacao inexistente'});
   } catch(e) {

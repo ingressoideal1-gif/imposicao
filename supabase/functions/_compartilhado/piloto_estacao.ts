@@ -6,6 +6,7 @@ import { banco } from './banco.ts';
 import { conferirPedidoPiloto } from './piloto_pedido.ts';
 import { catalogosOffline, confirmarOffline } from './piloto_offline.ts';
 import { listaOffline } from './piloto_lista.ts';
+import { estadoCache } from './piloto_cache.ts';
 import { fornecerBaseQrV2 } from './qr_provisionamento.ts';
 import { exigirVersaoNewprod } from './newprod_versao.ts';
 
@@ -71,6 +72,7 @@ export async function operarPilotoEstacao(acao: string, req: Request,
   if (acao === 'listar') return await listarPiloto(corpo, operador);
   if (acao === 'catalogos-offline') return await catalogosOffline(corpo, operador);
   if (acao === 'lista-offline') return await listaOffline(corpo, operador);
+  if (acao === 'estado-cache') return await estadoCache(corpo, operador);
   if (acao === 'confirmar-offline') return await confirmarOffline(corpo, operador);
   if (acao === 'abrir-pedido') return await conferirPedidoPiloto(corpo, operador, banco, undefined, undefined, undefined, true);
   if (acao === 'conferir-pedido') return await conferirPedidoPiloto(corpo, operador);

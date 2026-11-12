@@ -15,8 +15,19 @@ import hashlib
 import os
 import tempfile
 import urllib.request
+import threading
+from functools import wraps
 
 _TIMEOUT = 20
+_lock = threading.RLock()
+
+
+def exclusivo(funcao):
+    @wraps(funcao)
+    def executar(*args, **kwargs):
+        with _lock:
+            return funcao(*args, **kwargs)
+    return executar
 
 
 def _pasta_cache() -> str:
@@ -42,6 +53,7 @@ def _nome_em_cache(url: str) -> str:
     return hashlib.sha256(url.encode("utf-8")).hexdigest() + ".fonte"
 
 
+@exclusivo
 def obter_bytes(url: str) -> bytes:
     """Devolve os bytes da fonte, do cache quando possivel.
 
@@ -54,7 +66,13 @@ def obter_bytes(url: str) -> bytes:
     if os.path.isfile(destino) and os.path.getsize(destino) > 0:
         try:
             with open(destino, "rb") as f:
-                return f.read()
+                dados = f.read()
+            # mtime representa o ultimo uso, inclusive em volumes sem atime.
+            try:
+                os.utime(destino, None)
+            except OSError:
+                pass
+            return dados
         except Exception:
             pass  # cache ilegivel: segue para o download
 

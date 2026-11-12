@@ -41,10 +41,10 @@ Deno.test('catalogo autonomo: pagina fora de ordem, outra empresa e modelo concl
   assert.equal((await listarPiloto({empresa:'teste',cursor:0},permissoes,a.ler,'teste')).itens.length,0);
 });
 
-Deno.test('preferencial: filtra pedido e aceita impresso sem alterar status', async()=>{
+Deno.test('preferencial: filtra pedido e nao repoe impresso no cache', async()=>{
   const a=ambiente();a.modelos[0].status_impressao='Impresso';
   const r=await listarPiloto({empresa:'teste',cursor:0,pedido:'20'},permissoes,a.ler,'teste');
-  assert.equal(r.itens.length,1);assert.equal(r.itens[0].pedido,'20');
+  assert.equal(r.itens.length,0);
   assert.ok(a.consultas[0].includes('&id_int=eq.20'));
   assert.equal(a.modelos[0].status_impressao,'Impresso');
   await assert.rejects(listarPiloto({empresa:'teste',cursor:0,pedido:'1&x=y'},permissoes,a.ler,'teste'),{status:422});

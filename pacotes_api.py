@@ -11,6 +11,7 @@ import hashlib
 import re
 from contextlib import contextmanager
 from catalogo_revisoes import reservar_vaga
+from retencao_cache import serializar_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -50,6 +51,7 @@ class ServicoPacotes:
         self.coleta_autonoma = None
         self.intervalo_catalogo = 30
         self.local = ArmazemPacotes(self.raiz / 'pacotes', habilitado=True)
+        self._cache_lock = self.local._cache_lock
         download = ArmazemComDownload(self.local, host=host, abrir=abrir)
         coleta = ColetorRecursos(self.local, host=host, abrir=abrir)
         integrado = PreparacaoComColeta(download, coleta, self.obter_coleta, self.salvar_coleta)
@@ -99,6 +101,7 @@ class ServicoPacotes:
                 protegidas.add(tuple(self.preparador._ativo[1:]))
             reservar_vaga(con, self.limite_catalogo, protegidas)
 
+    @serializar_cache
     def antecipar(self, item, authorization=None, *, _conferidor=None):
         """Snapshot limitado do catálogo online. Não recebe credenciais ou aprova impressão."""
         if not isinstance(item, dict) or item.get('empresa') != self.empresa:
@@ -228,6 +231,7 @@ class ServicoPacotes:
         finally:
             con.close()
 
+    @serializar_cache
     def abrir_pedido(self, pedido):
         import time
         if not self.coleta_autonoma or not isinstance(pedido, str) or not re.fullmatch(r'[1-9][0-9]{0,14}', pedido):
@@ -244,6 +248,7 @@ class ServicoPacotes:
         self.coleta_autonoma.solicitar()
         self._acordar.set()
 
+    @serializar_cache
     def preparar_abertura(self, resposta):
         for item in self.catalogo():
             m = item['manifesto']
@@ -260,6 +265,7 @@ class ServicoPacotes:
         finally:
             con.close()
 
+    @serializar_cache
     def preferir(self, pedido, marcado):
         if not isinstance(pedido, str) or not re.fullmatch(r'[1-9][0-9]{0,14}', pedido) or type(marcado) is not bool:
             raise ValueError('Pedido ou preferência inválidos.')
@@ -332,6 +338,7 @@ class ServicoPacotes:
         finally:
             con.close()
 
+    @serializar_cache
     def salvar_coleta(self, entrada, derivado):
         con = self._db()
         try:
@@ -367,6 +374,7 @@ class ServicoPacotes:
         finally:
             con.close()
 
+    @serializar_cache
     def cadastrar(self, item, *, _antecipacao=False):
         m = _manifesto(item['manifesto'])
         if m['empresa'] != self.empresa:
@@ -412,6 +420,7 @@ class ServicoPacotes:
         finally:
             con.close()
 
+    @serializar_cache
     def atualizar_fila(self):
         for item in self.catalogo():
             m = item['manifesto']
@@ -433,6 +442,7 @@ class ServicoPacotes:
                 self.preparador.agendar(m, item['fontes'], setor=item['setor'],
                                        prazo=datetime.fromisoformat(item['prazo']) if item['prazo'] else None)
 
+    @serializar_cache
     def receber_entrada(self, manifesto, uploads):
         m = _manifesto(manifesto)
         cfg = m['configuracao']
@@ -556,6 +566,7 @@ class ServicoPacotes:
                 resultado['arquivos_de_entrada_validados'] = True
         return resultado
 
+    @serializar_cache
     def iniciar(self):
         if self._thread and self._thread.is_alive():
             if self._stop.is_set():
@@ -748,6 +759,8 @@ def configurar_piloto(app, *, ocupado):
             raise ValueError('Identidade explícita da estação necessária para coleta autônoma.')
         from controle_producao import controle
         from coleta_autonoma import spool_vazio
+        from retencao_cache import RetencaoCache
+        servico.retencao = RetencaoCache(servico, controle=controle, spool_livre=spool_vazio)
         servico.coleta_autonoma = ColetaAutonoma(servico, ClienteAutonomo(host, empresa, estacao),
             ociosidade=controle.segundos_ociosos, spool_livre=spool_vazio)
     app.include_router(criar_router(servico, token))

@@ -32,8 +32,8 @@ export async function listarPiloto(entrada: any, permissoes: any, consultar = ba
   // Busca limitada e cursor por chave, sem OFFSET que pula linhas em fila mutável.
   const modelos = await ler('pedidos_modelos?select=*&order=id.asc&limit=16&id=gt.' + entrada.cursor
     + '&status_arte=in.(APROVADO,APROVADA,APROVADA_CLIENTE,LIBERADA,ARTE_APROVADA,ARTE%20APROVADA)'
-    + (pedido ? '&id_int=eq.' + pedido + '&or=(status_impressao.is.null,status_impressao.eq.,status_impressao.in.(Aguardando,AGUARDANDO,PENDENTE,Impresso,IMPRESSO))'
-      : '&or=(status_impressao.is.null,status_impressao.eq.,status_impressao.in.(Aguardando,AGUARDANDO,PENDENTE))'));
+    + (pedido ? '&id_int=eq.' + pedido : '')
+    + '&or=(status_impressao.is.null,status_impressao.eq.,status_impressao.in.(Aguardando,AGUARDANDO,PENDENTE))');
   if (modelos.length > 16) throw new Recusa(503, 'pagina excedente');
   const itens = [];
   let cursor = entrada.cursor;
@@ -42,11 +42,11 @@ export async function listarPiloto(entrada: any, permissoes: any, consultar = ba
     if (!Number.isSafeInteger(id) || id <= cursor) throw new Recusa(503, 'pagina fora de ordem');
     cursor = id;
     if (pedido && String(m.id_int) !== pedido) throw new Recusa(503, 'pedido divergente');
-    const impresso = pedido && String(m.status_impressao || m.status_producao || '').trim().toUpperCase() === 'IMPRESSO';
-    if (!impresso && !['','AGUARDANDO','PENDENTE'].includes(String(m.status_impressao || m.status_producao || '').trim().toUpperCase())) continue;
+    // Reimpressão explícita usa abrir-pedido; a coleta nunca repõe impressos.
+    if (!['','AGUARDANDO','PENDENTE'].includes(String(m.status_impressao || m.status_producao || '').trim().toUpperCase())) continue;
     if (!/^[1-9][0-9]*$/.test(String(m.id_int))) continue;
     const pedidos = await ler(`propostas?id_int=eq.${m.id_int}&select=*&limit=2`);
-    if (pedidos.length !== 1 || !impresso && !['EM PRODUCAO','EM PRODUÇÃO','EM IMPRESSAO','EM IMPRESSÃO','EM ACABAMENTO'].includes(String(pedidos[0].status_interno).trim().toUpperCase())) continue;
+    if (pedidos.length !== 1 || !['EM PRODUCAO','EM PRODUÇÃO','EM IMPRESSAO','EM IMPRESSÃO','EM ACABAMENTO'].includes(String(pedidos[0].status_interno).trim().toUpperCase())) continue;
     const numero = m.amostra_num_id || m.numeracao_id;
     if (numero && !/^[a-zA-Z0-9-]+$/.test(String(numero))) continue;
     const nums = numero ? await ler(`producao_numeracoes?id=eq.${numero}&select=*&limit=2`) : [];

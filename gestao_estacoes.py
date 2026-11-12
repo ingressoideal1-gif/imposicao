@@ -320,6 +320,15 @@ def resumo_coleta():
     resultado['fila'] = servico.preparador.resumo()
     resultado['thread_ativa'] = bool(servico._thread and servico._thread.is_alive())
     resultado['erro_catalogo'] = bool(servico.erro_catalogo)
+    retencao = getattr(servico, 'retencao', None)
+    if retencao is not None:
+        dados = dict(retencao.estado)
+        resultado['retencao_cache'] = {k: dados[k] for k in
+            ('adiado', 'pendente', 'modelos', 'bytes_removidos', 'quando') if k in dados}
+    fontes = getattr(servico, 'retencao_fontes', None)
+    if fontes is not None:
+        resultado['retencao_fontes'] = {k: fontes[k] for k in
+            ('bytes_removidos', 'arquivos_removidos', 'erros', 'protegido', 'acima_limite') if k in fontes}
     return resultado
 
 

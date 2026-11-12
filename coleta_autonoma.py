@@ -25,7 +25,7 @@ class ClienteAutonomo:
         self.abrir = abrir or urllib.request.build_opener(SemRedirecionamento()).open
 
     def chamar(self, acao, corpo):
-        if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'lista-offline', 'confirmar-offline'):
+        if acao not in ('listar', 'conferir', 'conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'lista-offline', 'confirmar-offline', 'estado-cache'):
             raise ValueError('Operação fora do piloto.')
         inicio = time.monotonic()
         codigo = 'canal_autonomo'
@@ -215,6 +215,13 @@ class ColetaAutonoma:
         return pagina
 
     def rodar(self):
+        retencao = getattr(self.servico, 'retencao', None)
+        if retencao and not self.servico.preparador.resumo()['pausado']:
+            try:
+                retencao.ciclo(self.cliente)
+            except Exception:
+                # Falha de rede, recusa ou schema incompleto nunca significa Impresso.
+                retencao.estado = {'pendente': True}
         self.verificar_ociosidade()
         # Independente da janela do navegador; usa a mesma ociosidade da coleta.
         offline = getattr(self.servico, 'offline', None)

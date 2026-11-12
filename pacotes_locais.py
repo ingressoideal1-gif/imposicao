@@ -11,6 +11,8 @@ import re
 import shutil
 import sqlite3
 import tempfile
+import threading
+from retencao_cache import serializar_cache, usar_cache
 from contextlib import contextmanager
 
 
@@ -82,6 +84,8 @@ def _sem_links(caminho):
 
 class ArmazemPacotes:
     def __init__(self, raiz, *, habilitado=False, reserva_bytes=1024 ** 3):
+        self._cache_lock = threading.RLock()
+        self._cache_em_uso = 0
         self.raiz = Path(os.path.abspath(raiz))
         self.habilitado = habilitado
         if type(reserva_bytes) is not int or reserva_bytes < 0:
@@ -107,6 +111,7 @@ class ArmazemPacotes:
                     "PRIMARY KEY (modelo, revisao))")
         return con
 
+    @usar_cache
     def preparar(self, manifesto, fontes, *, checkpoint=None):
         """Fontes são caminhos locais explícitos; nenhum download é disparado."""
         pasta = self._pasta(manifesto.get("empresa"))
@@ -193,6 +198,7 @@ class ArmazemPacotes:
             con.close()
         return self.consultar(m["empresa"], m["modelo"], m["revisao"], checkpoint=checkpoint)
 
+    @usar_cache
     def consultar(self, empresa, modelo, revisao, *, revisao_online=None, checkpoint=None, verificar_bytes=True):
         resultado = {"estado": "desativado", "origem": None,
                      "autorizado_offline": False, "revisao": revisao}
@@ -237,6 +243,7 @@ class ArmazemPacotes:
             resultado.update(estado="atualizacao_pendente", atualidade_online="desatualizada")
         return resultado
 
+    @serializar_cache
     def ler_recurso(self, empresa, modelo, revisao, nome):
         """Snapshot limitado aos bytes efetivamente conferidos nesta leitura."""
         pasta = self._pasta(empresa)

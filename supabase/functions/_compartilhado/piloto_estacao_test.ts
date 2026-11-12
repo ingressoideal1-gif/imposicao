@@ -16,6 +16,7 @@ Deno.test('rota autonoma: exige segredo, opt-in de estacao e operador ativo auto
       if(url.endsWith('/auth/v1/user'))return Response.json({}, {status:401});
       if(url.includes('imposition_acessos_locais?'))return Response.json(ativo?[{role:'impressor',permissoes:{perm_producao_view:true,perm_imprimir:pode}}]:[]);
       if(url.includes('pedidos_modelos?'))return Response.json([]);
+      if(url.includes('propostas?'))return Response.json([]);
       throw new Error('Consulta inesperada');
     }) as typeof fetch;
     handler=(await import('../piloto-local/index.ts')).handler;
@@ -24,7 +25,13 @@ Deno.test('rota autonoma: exige segredo, opt-in de estacao e operador ativo auto
     assert.equal((await handler(req('invalido'))).status,401);assert.equal(leituras,0);
     assert.equal((await handler(req('agente-sintetico','outra'))).status,403);assert.equal(leituras,1);
     const r=await handler(req());assert.equal(r.status,200);assert.deepEqual(await r.json(),{itens:[],proximo:0,fim:true});
+    const cache=()=>new Request('https://funcao.invalid/functions/v1/piloto-local/estado-cache',{
+      method:'POST',headers:{'Content-Type':'application/json','X-Agente-Segredo':'agente-sintetico'},
+      body:JSON.stringify({estacao:'PC-JR-HOME',empresa:'teste',pedidos:['99']})});
+    const estado=await handler(cache());assert.equal(estado.status,200);
+    assert.deepEqual((await estado.json()).pedidos,[{pedido:'99',impresso:false,modelos:[]}]);
     pode=false;assert.equal((await handler(req())).status,403);
+    assert.equal((await handler(cache())).status,403);
     ativo=false;assert.equal((await handler(req())).status,401);
     delete vars.PILOTO_LOCAL_ESTACAO;assert.equal((await handler(req())).status,503);
     assert.equal((await handler(new Request('https://funcao.invalid/piloto-local/listar'))).status,405);
