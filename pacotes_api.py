@@ -24,6 +24,11 @@ from conferencia_piloto import ConferidorPiloto, ConferenciaIndisponivel
 from coleta_autonoma import ClienteAutonomo, ColetaAutonoma
 
 
+# Capacidade de metadados; as últimas revisões e referências de pedidos
+# permanecem protegidas pelo arquivamento, inclusive ao alcançar este teto.
+LIMITE_CATALOGO = 16384
+
+
 def _conferencia_recente(quando):
     try:
         instante = datetime.fromisoformat(quando)
@@ -34,8 +39,8 @@ def _conferencia_recente(quando):
 
 class ServicoPacotes:
     def __init__(self, raiz, *, host, empresa, setor='laser', ocupado=lambda: False, abrir=None, conferir=None,
-                 limite_catalogo=4096):
-        if type(limite_catalogo) is not int or not 1 <= limite_catalogo <= 4096:
+                 limite_catalogo=LIMITE_CATALOGO):
+        if type(limite_catalogo) is not int or not 1 <= limite_catalogo <= LIMITE_CATALOGO:
             raise ValueError('Limite de catalogo invalido.')
         self.limite_catalogo = limite_catalogo
         self.raiz = Path(raiz).absolute()

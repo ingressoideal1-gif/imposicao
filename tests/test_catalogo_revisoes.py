@@ -32,6 +32,71 @@ def preencher(s):
     return [s.antecipar(entrada(versao=n))['revisao'] for n in range(1, 4)]
 
 
+def catalogo_sintetico_sem_vagas(s, total_modelos, antigas=0):
+    """Carga em lote para reproduzir o volume real sem dados da estação."""
+    s.antecipar(entrada('10000'))
+    base = next(iter(registros(s).values()))
+    linhas = []
+    itens_protegidos = []
+    for n in range(total_modelos):
+        modelo = str(10000 + n)
+        for versao in range(1, 3 if n < antigas else 2):
+            item = entrada(modelo, versao)
+            cfg = s._configuracao_antecipacao(item)
+            revisao = hashlib.sha256(json.dumps(cfg, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            registro = deepcopy(base)
+            registro['manifesto'].update(modelo=modelo, revisao=revisao, configuracao=cfg)
+            linhas.append((modelo, revisao, json.dumps(registro)))
+            if n < antigas and versao == 1:
+                itens_protegidos.append(item)
+    con = s._db()
+    try:
+        con.executemany('INSERT OR REPLACE INTO catalogo VALUES (?,?,?)', linhas)
+        con.commit()
+    finally:
+        con.close()
+    CacheRevisaoPedido(s).salvar('98', 'historico', itens_protegidos, [])
+
+
+def test_abre_pedido_acima_de_4096_preservando_referencias_apos_reinicio(tmp_path):
+    from test_revisao_pedido_piloto import ambiente
+    from selecao_piloto import SelecaoPiloto
+    from test_pacotes_api import BYTES
+    s, _, _, _ = ambiente(tmp_path)
+    catalogo_sintetico_sem_vagas(s, 4084, antigas=12)
+    antes = registros(s)
+    assert len(antes) == 4096
+    historico = CacheRevisaoPedido(s).obter('98')
+    # Reabrir o SQLite existente com o novo padrão, sem migração ou limpeza.
+    s, _, _, dados = ambiente(tmp_path)
+    selecao = SelecaoPiloto(s)
+    novo = selecao.preparar_pedido(dados)
+    assert selecao.ler('10', novo['pacotes'][0]['revisao'], 'frente') == BYTES
+    depois = registros(s)
+    assert len(depois) == 4097
+    assert all(depois[chave] == valor for chave, valor in antes.items())
+    assert CacheRevisaoPedido(s).obter('98') == historico
+    assert not registros(s, 'catalogo_arquivo')
+
+
+def test_novo_teto_recusa_sem_apagar_ultimas_revisoes(tmp_path):
+    s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste')
+    assert s.limite_catalogo == 16384
+    catalogo_sintetico_sem_vagas(s, 16384)
+    antes = registros(s)
+    with pytest.raises(CatalogoCheio):
+        s.antecipar(entrada('2'))
+    assert registros(s) == antes
+    assert not registros(s, 'catalogo_arquivo')
+
+
+@pytest.mark.parametrize('limite', [0, -1, 16385, True, 1.5, '16384'])
+def test_limite_invalido_recusado_antes_de_criar_catalogo(tmp_path, limite):
+    with pytest.raises(ValueError, match='Limite de catalogo invalido'):
+        ServicoPacotes(tmp_path, host='test.invalid', empresa='teste', limite_catalogo=limite)
+    assert not (tmp_path / 'catalogo.sqlite3').exists()
+
+
 def test_revisao_nova_arquiva_antiga_sem_apagar_recursos_ou_copia_offline(tmp_path):
     s = servico(tmp_path)
     revs = preencher(s)
