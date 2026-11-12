@@ -86,6 +86,48 @@ function linhasDoEnderecoDaNota(endereco) {
         : [{ rotulo: 'Endereço', valor: 'Não informado', falta: true }];
 }
 
+/** Documentos emitidos são independentes da confirmação do cadastro fiscal. */
+function urlDaNotaFiscal(valor) {
+    if (typeof valor !== 'string' || /[\u0000-\u0020\u007f]/.test(valor)) return '';
+    try {
+        const url = new URL(valor);
+        return url.protocol === 'https:' && url.hostname && !url.username && !url.password ? url.href : '';
+    } catch (_) { return ''; }
+}
+
+function cartaoDasNotasFiscais(dados) {
+    if (dados?.notas_fiscais_erro) {
+        return '<div class="portal-aviso calmo" role="status">Não foi possível consultar as notas emitidas. Atualize a página para tentar novamente.</div>';
+    }
+    const notas = Array.isArray(dados?.notas_fiscais) ? dados.notas_fiscais : [];
+    const botoes = notas.filter(n => n && urlDaNotaFiscal(n.url)).map(n => {
+        const titulo = 'Abrir nota fiscal — ' + String(n.tipo || 'NF-e')
+            + (n.numero ? ' nº ' + String(n.numero) : '');
+        return '<a class="portal-botao principal" style="margin-top: 12px;" href="'
+            + escapeHtml(urlDaNotaFiscal(n.url)) + '" target="_blank" rel="noopener noreferrer">'
+            + escapeHtml(titulo) + '</a>';
+    }).join('');
+    return botoes ? '<div class="portal-cartao"><h3>Notas fiscais emitidas</h3>' + botoes + '</div>' : '';
+}
+
+async function carregarNotasFiscaisDoPortal(dados, numero, token) {
+    try {
+        const { data, error } = await supabaseClient.rpc('link_cliente_notas_fiscais', {
+            p_numero: String(numero), p_token: String(token)
+        });
+        if (window.portalDados !== dados) return;
+        if (error || !Array.isArray(data)) throw new Error('Consulta indisponível');
+        dados.notas_fiscais = data;
+        dados.notas_fiscais_erro = false;
+    } catch (_) {
+        if (window.portalDados !== dados) return;
+        dados.notas_fiscais = [];
+        dados.notas_fiscais_erro = true;
+    }
+    const destino = document.getElementById('portal-notas-emitidas');
+    if (destino) destino.innerHTML = cartaoDasNotasFiscais(dados);
+}
+
 function desenharSecaoFaturamento() {
     const secao = document.getElementById('secao-faturamento');
     if (!secao) return;
@@ -94,6 +136,7 @@ function desenharSecaoFaturamento() {
     secao.innerHTML =
         cartaoDeDecisaoFaturamento()
         + resumoFaturamento()
+        + '<div id="portal-notas-emitidas">' + cartaoDasNotasFiscais(dados) + '</div>'
         + cartaoDeFinalizacao()
         + botaoDeAjuda(dados);
 }
