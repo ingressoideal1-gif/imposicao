@@ -48,6 +48,7 @@ function extrair(nome, atribuida = false) {
             const s = window.testState;
             const fundo = document.createElement('canvas');
             fundo.width = 400; fundo.height = 200;
+            fundo.dpiValue = 101.6; // Referência física de 100 x 50 mm.
             fundo.getContext('2d').fillRect(0, 0, 400, 200);
             const el = { id: 'pdf-teste', type: 'PDF', face: 'both', _centerAnchor: true,
                 _pdfCanvas: fundo, x_mm: 50, y_mm: 25, width_mm: 100, height_mm: 50, opacity: 0 };

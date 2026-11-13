@@ -5813,45 +5813,30 @@ function drawCanvasFace(canvas, face) {
 
     if (refBg && state.bgEditorVisible !== false) {
 
-        // Para garantir escala 100% (tamanho máximo no canvas) sem distorção, usamos o aspect ratio
-
-        const imgW = refBg.originalPdfWidthPt || refBg.width;
-
-        const imgH = refBg.originalPdfHeightPt || refBg.height;
-
-        
-
-        const imgAspect = imgW / imgH;
-
-        const canvasAspect = W / H;
-
-
-
-        let drawW, drawH;
-
-
-
-        // Ajusta (contain) a imagem ao tamanho exato do formato/canvas sem distorcer
-
-        if (imgAspect > canvasAspect) {
-
-            drawW = W;
-
-            drawH = W / imgAspect;
-
-        } else {
-
-            drawH = H;
-
-            drawW = H * imgAspect;
-
+        // A referência usa a mesma escala em milímetros dos elementos.
+        // Não ajustar ao quadro: isso encolhe a sangria ou amplia artes menores.
+        const pontosPorMm = 72 / 25.4;
+        const dpi = Number(refBg.dpiValue) > 0 ? Number(refBg.dpiValue) : 300;
+        let larguraMm = refBg.originalPdfWidthPt
+            ? refBg.originalPdfWidthPt / pontosPorMm : refBg.width / dpi * 25.4;
+        let alturaMm = refBg.originalPdfWidthPt
+            ? refBg.originalPdfHeightPt / pontosPorMm : refBg.height / dpi * 25.4;
+        if (!Number.isFinite(larguraMm) || !Number.isFinite(alturaMm)
+            || larguraMm < 1 || alturaMm <= 0) {
+            larguraMm = state.numFormato.width_mm;
+            alturaMm = state.numFormato.height_mm;
         }
+        // A cor tem uma área externa própria. A origem da peça fica nas
+        // margens esquerda/superior, não no centro dessa área.
+        const areaCor = refBg._margensCorEditor;
+        const drawW = (areaCor ? areaCor.width_mm : larguraMm) * S;
+        const drawH = (areaCor ? areaCor.height_mm : alturaMm) * S;
 
 
 
-        const drawX = (W - drawW) / 2;
+        const drawX = areaCor ? -areaCor.margem_esquerda_mm * S : (W - drawW) / 2;
 
-        const drawY = (H - drawH) / 2;
+        const drawY = areaCor ? -areaCor.margem_superior_mm * S : (H - drawH) / 2;
 
 
 
@@ -7812,6 +7797,11 @@ window.autoLoadCorBg = async function (formatoId) {
 
         if (meuToken !== state.bgLoadToken) return false;
 
+        // Metadados apenas da imagem de referência do editor. Uploads e
+        // fundos salvos usam outra imagem e não herdam margens desta cor.
+        const margensCorEditor = cor.margem_esquerda_mm != null
+            ? CorMargens.calcular(state.numFormato, cor) : null;
+        img._margensCorEditor = margensCorEditor;
         state.bgImage = img;
 
         // Esta arte é da COR, não da numeração: não se guarda em bg_url. Zerar
@@ -7862,6 +7852,7 @@ window.autoLoadCorBg = async function (formatoId) {
 
                     if (meuToken !== state.bgLoadToken) return false;
 
+                    imgVerso._margensCorEditor = margensCorEditor;
                     state.bgImageVerso = imgVerso;
                     atualizarControlesFundoVerso();
 
