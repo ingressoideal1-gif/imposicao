@@ -102,11 +102,30 @@
             return negado('evento_inativo', null, null, {});
         }
 
-        // 1. Nao e deste evento.
+        // Digitação usa o número relacionado à credencial, não o texto do QR.
+        // Uma carga anterior à correção de numeração não distingue ni de n:
+        // exigir o download novo evita selecionar o ordinal errado offline.
+        var porNumero = Object.prototype.hasOwnProperty.call(entrada, 'numeroDigitado');
+        var numero;
+        if (porNumero) {
+            var texto = String(entrada.numeroDigitado == null ? '' : entrada.numeroDigitado).trim();
+            numero = Number(texto);
+            if (!/^\d+$/.test(texto) || !Number.isSafeInteger(numero)) {
+                return negado('numero_invalido', null, null, {});
+            }
+            var publicacao = carga.publicacao || {};
+            if (typeof publicacao.versao !== 'string' ||
+                publicacao.versao.indexOf('numero-impresso-v1:') !== 0 ||
+                !publicacao.concluida || carga.publicacao_baixada !== publicacao.versao) {
+                return negado('numeracao_desatualizada', null, null, {});
+            }
+        }
+
+        // 1. Nao e deste evento. A câmera continua identificando pelo hash.
         var todos = (carga.credenciais || []).filter(function (c) {
-            return hashes.indexOf(c.h) !== -1;
+            return porNumero ? numeroApresentado(c) === numero : hashes.indexOf(c.h) !== -1;
         });
-        if (!todos.length) return negado('desconhecido', null, null, {});
+        if (!todos.length) return negado(porNumero ? 'numero_nao_encontrado' : 'desconhecido', null, null, {});
 
         // 2. E deste evento, mas de outra porta. A carga traz o evento INTEIRO
         //    justamente para este caso existir: se trouxesse so os setores
@@ -141,7 +160,9 @@
             if (setoresDistintos.length > 1) {
                 return {
                     estado: 'ambiguo',
-                    candidatos: meus.map(function (c) {
+                    candidatos: meus.filter(function (c, i) {
+                        return !porNumero || meus.findIndex(function (outro) { return outro.s === c.s; }) === i;
+                    }).map(function (c) {
                         return {
                             credencial_id: c.id, numero: numeroApresentado(c),
                             setor: setorPorId(carga, c.s),
@@ -149,6 +170,12 @@
                     }),
                 };
             }
+        }
+
+        // Mesmo setor e mesmo número podem identificar ingressos diferentes.
+        // Nunca escolher o primeiro nem usar o estado de entrada como desempate.
+        if (porNumero && meus.some(function (c) { return c.id !== meus[0].id; })) {
+            return negado('numero_ambiguo', null, setorPorId(carga, meus[0].s), {});
         }
 
         var cand = meus[0];

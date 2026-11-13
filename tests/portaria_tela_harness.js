@@ -541,7 +541,17 @@ async function rodar(caso) {
             }
             if (i > 0 && c.confirmarProximo) document.getElementById('btn-proximo').click();
             const comecou = Date.now();
-            if (c.concorrente) {
+            if (c.digitar === true || (Array.isArray(c.digitar) && c.digitar[i])) {
+                document.getElementById('btn-digitar').click();
+                document.getElementById('campo-numero').value = textos[i];
+                await document.getElementById('btn-conferir').onclick();
+                if (c.escolherSetor) {
+                    const botoes = Array.from(document.querySelectorAll('#escolha-setores button'));
+                    const botao = botoes.find(b => b.textContent === c.escolherSetor);
+                    if (!botao) throw new Error('Setor não oferecido pela tela');
+                    await botao.onclick();
+                }
+            } else if (c.concorrente) {
                 await Promise.all([window.portaria.validarTexto(textos[i], c.setorEscolhido || null),
                     window.portaria.validarTexto('999999')]);
             } else {
@@ -580,6 +590,8 @@ async function rodar(caso) {
             // entre dois portoes, e o dele que tem de subir -- nao o local.
             filaResultados: (await window.portariaDeposito.lerFila(50))
                 .map((l) => l.resultado),
+            filaCredenciais: (await window.portariaDeposito.lerFila(50))
+                .map((l) => l.credencial_id),
         };
     }, caso, ESPIAO);
 

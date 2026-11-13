@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <script src="reiniciar.js?v=1049"></script>
+    <script src="reiniciar.js?v=20261132"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Portaria — Ideal Control</title>
     <meta name="theme-color" content="#0a0f1e">
@@ -642,7 +642,8 @@
             </div>
 
             <div id="caixa-digitar" class="sumindo">
-                <input id="campo-numero" inputmode="numeric" placeholder="000001">
+                <label for="campo-numero">Número impresso no ingresso ou na pulseira</label>
+                <input id="campo-numero" inputmode="numeric" pattern="[0-9]+" placeholder="Ex.: 250">
                 <button id="btn-conferir">Conferir</button>
             </div>
         </div>
@@ -704,15 +705,15 @@
     <div id="erro-configurar" class="aviso sumindo" role="alert"></div>
 </div>
 
-<script src="jsqr.min.js?v=1049"></script>
-<script src="qr-ideal-hash.js?v=1049"></script>
-<script src="portaria-validacao.js?v=20261127"></script>
-<script src="portaria-deposito.js?v=1049"></script>
-<script src="portaria-camera.js?v=1049"></script>
-<script src="aviso-sonoro.js?v=1049"></script>
-<script src="portaria-sincronismo.js?v=1049"></script>
-<script src="chaveiro.js?v=1049"></script>
-<script src="portaria.js?v=1049"></script>
-<script src="sw-registro.js?v=20261127"></script>
+<script src="jsqr.min.js?v=20261132"></script>
+<script src="qr-ideal-hash.js?v=20261132"></script>
+<script src="portaria-validacao.js?v=20261132"></script>
+<script src="portaria-deposito.js?v=20261132"></script>
+<script src="portaria-camera.js?v=20261132"></script>
+<script src="aviso-sonoro.js?v=20261132"></script>
+<script src="portaria-sincronismo.js?v=20261132"></script>
+<script src="chaveiro.js?v=20261132"></script>
+<script src="portaria.js?v=20261132"></script>
+<script src="sw-registro.js?v=20261132"></script>
 </body>
 </html>
