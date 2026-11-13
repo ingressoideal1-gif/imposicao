@@ -179,7 +179,7 @@ END $$;
 
 CREATE FUNCTION arte_fila.processar() RETURNS void
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-DECLARE q arte_fila.pedidos%ROWTYPE; destino text; original_modo text; carga integer; agora timestamptz;
+DECLARE q arte_fila.pedidos%ROWTYPE; destino text; original_modo text; preservar boolean; agora timestamptz;
 BEGIN
     -- Somente o consumidor e as RPCs administrativas detêm a trava de distribuição.
     -- A ausência vence fixação, correção e trabalho iniciado.
@@ -196,15 +196,18 @@ BEGIN
         destino := NULL;
         SELECT modo INTO original_modo FROM arte_fila.designers d WHERE uid = q.original_uid
             AND EXISTS(SELECT 1 FROM public.usuarios u WHERE u.user_id::text=d.uid AND lower(u.setor) LIKE '%designer%');
-        SELECT count(*) INTO carga FROM arte_fila.pedidos WHERE em_arte AND responsavel_uid = q.original_uid;
         -- Correções já têm responsável e não passam por este laço; ausencia remove-o acima.
-        IF NOT q.redistribuir AND ((original_modo='ativo' AND carga < 3)
-            OR (original_modo IN ('ativo','segurado') AND (q.fixado OR arte_fila.em_correcao(q.id_int)))) THEN
+        preservar := NOT q.redistribuir AND original_modo IN ('ativo','segurado')
+            AND (q.fixado OR arte_fila.em_correcao(q.id_int));
+        IF preservar THEN
             destino := q.original_uid;
         ELSE
             SELECT d.uid INTO destino FROM arte_fila.designers d
             WHERE d.modo = 'ativo' AND EXISTS(SELECT 1 FROM public.usuarios u WHERE u.user_id::text=d.uid AND lower(u.setor) LIKE '%designer%')
             ORDER BY (SELECT count(*) FROM arte_fila.pedidos p WHERE p.em_arte AND p.responsavel_uid = d.uid),
+                     -- Uma linha por modelo, sem multiplicar pelas linhas de pedidos_artes.
+                     (SELECT count(*) FROM public.pedidos_modelos m JOIN arte_fila.pedidos p ON p.id_int=m.id_int
+                      WHERE p.em_arte AND p.responsavel_uid=d.uid),
                      d.ultima_atribuicao ASC NULLS FIRST, d.uid LIMIT 1;
         END IF;
         IF destino IS NULL THEN
@@ -216,7 +219,8 @@ BEGIN
             ja_distribuido=true, motivo_espera = NULL, desde = agora, atualizado_em = agora WHERE id_int = q.id_int;
         UPDATE arte_fila.designers SET ultima_atribuicao = agora WHERE uid = destino;
         PERFORM arte_fila.registrar(q.id_int,q.responsavel_uid,destino,'atribuicao',
-            CASE WHEN destino = q.original_uid THEN 'Original preservado até três pedidos' ELSE 'Menor carga; desempate por última atribuição e UID' END);
+            CASE WHEN preservar THEN 'Responsável preservado por fixação ou correção'
+                 ELSE 'Menor carga de pedidos; desempate por modelos em arte, última atribuição e UID' END);
     END LOOP;
     -- Todas as linhas de arte do pedido recebem o mesmo responsável, sem duplicar carga.
     UPDATE public.pedidos_artes a SET designer_uid = (jsonb_populate_record(NULL::public.pedidos_artes,

@@ -101,8 +101,9 @@ try:
     assert segundo.returncode == 0, erro
     sql("SELECT arte_fila.consumir();")
     resultado = json.loads(sql("SELECT json_agg(p ORDER BY id_int) FROM (SELECT id_int,responsavel_uid FROM arte_fila.pedidos) p;"))
-    assert [x["responsavel_uid"] for x in resultado[:3]] == [dono] * 3
-    assert resultado[3]["responsavel_uid"] == "10000000-0000-0000-0000-000000000002"
+    assert [x["responsavel_uid"] for x in resultado[:4]] == [
+        dono, "10000000-0000-0000-0000-000000000002",
+        "10000000-0000-0000-0000-000000000003", dono]
     assert int(sql("SELECT count(*) FROM arte_fila.historico WHERE evento='atribuicao' AND id_int IN (3,4);")) == 2
     # Uma transação abortada não pode consumir carga nem deixar evento persistido.
     sql(f"BEGIN; INSERT INTO pedidos_artes(id_int,designer_uid,status) VALUES(5,'{dono}','Em Arte'); ROLLBACK;")
@@ -117,7 +118,7 @@ try:
     print(json.dumps({"resultado": "OK", "postgres": sql("SHOW server_version;"),
                       "consumidores_serializados_produtor_independente": True,
                       "commit_tardio_nao_perde_evento": True,
-                      "terceiro_preservado_quarto_distribuido": True,
+                      "menor_carga_desde_primeira_distribuicao": True,
                       "auditoria_sem_duplicacao": True, "rollback_sem_residuo": True,
                       "diretorio_temporario": str(teste)}, ensure_ascii=False))
 finally:
