@@ -44,24 +44,23 @@ try {
     instalado=true;
     igual((await query('SELECT ativo FROM arte_fila.config'))[0].ativo,false);
     await cenario(async()=>{
-        await inserir(1);await inserir(2);await inserir(3);await inserir(4);await inserir(5);
-        igual((await pedido(3)).responsavel_uid,A);
-        igual((await pedido(4)).responsavel_uid,B);
-        igual((await pedido(5)).responsavel_uid,C);
+        // Original não ganha preferência nem com zero, um ou dois pedidos.
+        await inserir(1,C);await inserir(2);await inserir(3);await inserir(4);await inserir(5);
+        for (const [n,uid] of [[1,A],[2,B],[3,C],[4,A],[5,B]]) igual((await pedido(n)).responsavel_uid,uid);
         await inserir(6,null);
         igual((await pedido(6)).responsavel_uid,null);
         igual((await pedido(6)).desde,null);
         igual((await pedido(6)).aguardando,false);
         // Múltiplas linhas do mesmo pedido não aumentam a carga nem duplicam atribuição.
         await inserir(1);
-        igual(Number((await query('SELECT count(*) AS n FROM arte_fila.pedidos WHERE responsavel_uid=$1 AND em_arte',[A]))[0].n),3);
+        igual(Number((await query('SELECT count(*) AS n FROM arte_fila.pedidos WHERE responsavel_uid=$1 AND em_arte',[A]))[0].n),2);
         // Aprovação libera carga; retorno segue o atual (inclusive com fila segurada).
-        await query("UPDATE pedidos_artes SET status='ARTE PRONTA' WHERE id_int=4");
-        igual((await pedido(4)).em_arte,false);
+        await query("UPDATE pedidos_artes SET status='ARTE PRONTA' WHERE id_int=2");
+        igual((await pedido(2)).em_arte,false);
         await modo(B,'segurado');
-        await query("UPDATE pedidos_artes SET status='Em Alteração' WHERE id_int=4");
-        igual((await pedido(4)).responsavel_uid,B);
-        igual((await pedido(4)).em_arte,true);
+        await query("UPDATE pedidos_artes SET status='Em Alteração' WHERE id_int=2");
+        igual((await pedido(2)).responsavel_uid,B);
+        igual((await pedido(2)).em_arte,true);
         await inserir(7,B);
         igual((await pedido(7)).responsavel_uid,C);
         await fixar(6,B);
@@ -70,13 +69,41 @@ try {
         await modo(B,'ausente');
         igual((await pedido(6)).fixado,false);
         assert((await pedido(6)).responsavel_uid!==B);casos++;
-        assert((await pedido(4)).responsavel_uid!==B);casos++;
-        const transferido=(await pedido(4)).responsavel_uid;
+        assert((await pedido(2)).responsavel_uid!==B);casos++;
+        const transferido=(await pedido(2)).responsavel_uid;
         await modo(B,'ativo');
-        igual((await pedido(4)).responsavel_uid,transferido);
-        await query("UPDATE pedidos_artes SET status='ARTE PRONTA' WHERE id_int=4");
-        await query("UPDATE pedidos_artes SET status='Em Alteração' WHERE id_int=4");
-        igual((await pedido(4)).responsavel_uid,transferido);
+        igual((await pedido(2)).responsavel_uid,transferido);
+        await query("UPDATE pedidos_artes SET status='ARTE PRONTA' WHERE id_int=2");
+        await query("UPDATE pedidos_artes SET status='Em Alteração' WHERE id_int=2");
+        igual((await pedido(2)).responsavel_uid,transferido);
+    });
+    await cenario(async()=>{
+        await inserir(1); await inserir(2); await inserir(3);
+        // Cargas iguais de pedidos: B tem menos modelos, apesar de A esperar há mais tempo.
+        for (const [n,total] of [[1,5],[2,1],[3,3],[90,20]]) {
+            await query('INSERT INTO pedidos_modelos(id_int) SELECT $1 FROM generate_series(1,$2::int)',[n,total]);
+        }
+        await inserir(90,B,'ARTE PRONTA');
+        igual((await pedido(90)).em_arte,false);
+        // Linhas extras de arte não multiplicam os modelos do mesmo pedido.
+        for (let i=0;i<5;i++) await inserir(2,B);
+        await inserir(4,A);
+        igual((await pedido(4)).responsavel_uid,B);
+        await inserir(5,A);
+        igual((await pedido(5)).responsavel_uid,C);
+        // Menos pedidos prevalece mesmo com mais modelos.
+        await inserir(6,B);
+        igual((await pedido(6)).responsavel_uid,A);
+        // Soma modelos de todos os pedidos atuais do designer, não só do primeiro.
+        await query('INSERT INTO pedidos_modelos(id_int) SELECT 4 FROM generate_series(1,8)');
+        await inserir(7,B);
+        igual((await pedido(7)).responsavel_uid,C);
+        // A contagem reflete remoção de modelos antes da próxima distribuição.
+        await query('DELETE FROM pedidos_modelos WHERE id_int=1');
+        await inserir(8,B);
+        igual((await pedido(8)).responsavel_uid,A);
+        const motivo=(await query("SELECT motivo FROM arte_fila.historico WHERE id_int=4 AND evento='atribuicao'"))[0].motivo;
+        assert(motivo.includes('modelos em arte')); casos++;
     });
     await cenario(async()=>{
         await inserir(1);await fixar(1,A);
@@ -153,9 +180,9 @@ try {
             (1,'LIBERADO',$1),(2,'LIBERADO',$2),(3,'LIBERADO',$3),(4,'LIBERADO',$2)`,[admin,atendente,designer]);
         for(let n=1;n<=4;n++) await inserir(n,A);
         igual((await pedido(1)).responsavel_uid,A);
-        igual((await pedido(2)).responsavel_uid,A);
-        igual((await pedido(3)).responsavel_uid,A);
-        igual((await pedido(4)).responsavel_uid,B);
+        igual((await pedido(2)).responsavel_uid,B);
+        igual((await pedido(3)).responsavel_uid,C);
+        igual((await pedido(4)).responsavel_uid,A);
         igual(Number((await query("SELECT count(*) AS n FROM usuarios WHERE setor='Designer' AND id_empresa IS NULL"))[0].n),3);
         await modo(A,'ausente');
         igual(Number((await query('SELECT count(*) AS n FROM arte_fila.pedidos WHERE responsavel_uid=$1',[A]))[0].n),0);
@@ -199,17 +226,17 @@ try {
         igual(Number((await query('SELECT count(*) AS n FROM cron.job'))[0].n),0);
     });
     await cenario(async()=>{
-        await inserir(1); await inserir(2); await inserir(3);
+        await inserir(1); await inserir(2);
         await inserir(4,A,'PENDENTE INFORMAÇÃO');
         igual((await pedido(4)).ja_distribuido,false);
         await query("UPDATE pedidos_artes SET status='Em Arte' WHERE id_int=4");
-        igual((await pedido(4)).responsavel_uid,B);
+        igual((await pedido(4)).responsavel_uid,C);
         igual((await pedido(4)).ja_distribuido,true);
         // Retorno mantém o responsável mesmo segurado; primeira entrada fixada também.
         await query("UPDATE pedidos_artes SET status='ARTE PRONTA' WHERE id_int=4");
-        await modo(B,'segurado');
+        await modo(C,'segurado');
         await query("UPDATE pedidos_artes SET status='Em Alteração' WHERE id_int=4");
-        igual((await pedido(4)).responsavel_uid,B);
+        igual((await pedido(4)).responsavel_uid,C);
         await inserir(5,A,'PENDENTE INFORMAÇÃO'); await fixar(5,A);
         await query("UPDATE pedidos_artes SET status='Em Arte' WHERE id_int=5");
         igual((await pedido(5)).responsavel_uid,A);

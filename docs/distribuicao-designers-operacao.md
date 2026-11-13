@@ -10,6 +10,14 @@ inclusive sem a distribuição; sua correção adicional foi autorizada e prepar
 em SQL separado. Instalação e ativação continuam pendentes de autorização e
 validação operacional. Ver [revisão](revisao-distribuicao-gatilhos-2026-10-31.md).
 
+Atualização local de 13/11/2026: retirada a preferência pelo original até três
+pedidos. A seleção começa pela menor carga de pedidos e desempata pela soma dos
+modelos dos pedidos atualmente em Em Arte. O harness SQL passou em 96 verificações
+em banco descartável PGlite, incluindo ausência de preferência desde a primeira
+entrada, soma de modelos, exclusão de pedidos fora de Em Arte, linhas de arte
+duplicadas e atualização após remoção de modelos. O teste de concorrência foi
+adequado à nova ordem, mas não foi reexecutado nesta alteração. Sem aplicação remota.
+
 ## Arquivos e arquitetura
 
 - `sql/distribuicao_designers.sql`: instalação transacional, inicialmente desativada.
@@ -55,8 +63,12 @@ O rodízio é único entre as empresas, por confirmação explícita do usuário
 Disponibilidade, carga e desempate são globais; o mecanismo não altera o cadastro
 de empresas dos usuários nem as permissões comerciais existentes.
 
-O original até três e o responsável que recebe futuras alterações são o mesmo
-campo operacional; atribuições anteriores ficam no histórico. Correções preservam
+Desde a primeira distribuição, vence a menor carga de pedidos em Em Arte, sem
+preferência pelo original. O desempate usa a soma dos modelos cadastrados em
+`pedidos_modelos` desses pedidos, contando cada modelo uma vez, mesmo quando há
+várias linhas de arte. Pedidos sem modelos cadastrados somam zero modelos.
+Se também empatar em modelos, prevalecem a última atribuição mais antiga e o UID.
+O responsável escolhido recebe futuras alterações; atribuições anteriores ficam no histórico. Correções preservam
 o responsável mesmo com carga acima de três ou fila segurada. Ausência prevalece
 sobre tudo isso. Quando todos estão ausentes/segurados, o pedido fica em espera.
 A fixação manual pode escolher um designer com fila segurada; não pode escolher ausente.
@@ -103,8 +115,9 @@ Após validar o banco e publicar os arquivos do frontend pelo fluxo protegido:
 1. ADM autenticado abre **ADM → Configurações Gerais → Designers** e clica **Ativar distribuição**.
 2. Conferir resposta persistida da RPC `arte_distribuicao_estado`: `ativo=true`,
    designers corretos, carga inicial e nenhuma transferência inesperada.
-3. Num cenário autorizado, conferir três pedidos com o original e o quarto com
-   menor carga; conferir todas as linhas de arte e o histórico, não apenas a tela.
+3. Num cenário autorizado, conferir menor carga desde a primeira distribuição e
+   desempate pela soma de modelos dos pedidos em Em Arte; conferir todas as linhas
+   de arte e o histórico, não apenas a tela.
 4. Segurar fila: nenhuma transferência; ausência: todos os pedidos em Em Arte
    transferidos, fixações retiradas e motivo registrado. Reativar não traz pedidos de volta.
 5. Testar alteração de responsável com duas sessões e verificar ausência de duplicação,

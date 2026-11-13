@@ -6,8 +6,12 @@
   Designers sem `id_empresa` também participam; seus cadastros não são alterados.
 - Carga: pedidos em Em Arte, uma unidade por pedido, incluindo fixados e correções.
 - Sem designer original: aguardar atribuição manual; não distribuir nem contar tempo.
-- Original com até dois pedidos recebe o próximo. Com três ou mais, menor carga;
-  desempate por última atribuição mais antiga e identificador estável.
+- Desde a primeira distribuição, escolher o designer disponível com menos pedidos em Em Arte,
+  sem preferência pelo designer original (alteração de 13/11/2026).
+- Em empate de pedidos, escolher quem soma menos modelos cadastrados em `pedidos_modelos`
+  nos pedidos atualmente em Em Arte. Cada modelo conta uma vez; pedidos sem modelos
+  cadastrados contribuem com zero. Não acumular histórico de trabalhos fora de Em Arte.
+  Persistindo o empate, usar última atribuição mais antiga e identificador estável.
 - Não há teto: se todos tiverem três pedidos, continua distribuindo.
 - Correções retornam ao responsável atual, mesmo acima de três.
 - ADM e Atendimento podem atribuir/fixar e desfazer a fixação.
