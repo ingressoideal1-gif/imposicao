@@ -27860,7 +27860,8 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         });
 
         console.log(`[Vibecode] ${state.ordens.length} OS carregadas, ${produtos.length} itens totais`);
-        if (!opcoes.localPreparado && typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
+        // A lista preparada traz a data; a hora vem pelo complemento do agente.
+        if (typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false) {
             completarHorasDaLista(state.ordens, prazosPorPedido);
         }
         return true;

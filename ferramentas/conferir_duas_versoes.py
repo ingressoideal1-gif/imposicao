@@ -33,6 +33,7 @@ TESTES += ['test_capas_montagem_colunas.py', 'test_engine_capa_montagem.py', 'te
 TESTES += ['test_impressao_autonoma.py', 'test_impressao_autonoma_browser.py', 'test_entrega_progressiva.py']
 TESTES += ['test_retencao_cache.py', 'test_retencao_fontes.py']
 HARNESSES = ['estatisticas_piloto_harness.js', 'montagem_harness.js', 'montagem_local_harness.cjs', 'montagem_estacao_harness.cjs', 'historico_impressao_harness.js','gestao_estacoes_harness.js','modelos_pedido_carregamento_harness.js','fidelidade_numeracao_harness.js',
+             'prazo_lista_local_harness.js',
              'foto_piloto_harness.js','foto_lib_harness.js',
              'selecao_piloto_harness.js','integridade_impressao_harness.js',
              'token_estacao_harness.js','ticket_condicoes_harness.js',
