@@ -708,7 +708,7 @@
         return visto !== undefined && (agora - visto) < SILENCIO_MS;
     }
 
-    function validarTexto(texto, setorEscolhido) {
+    function validarTexto(texto, setorEscolhido, porNumero) {
         if (validando || aguardandoProximo) return Promise.resolve();
         var carga = estado.carga;
         if (!prontoParaLer()) {
@@ -729,7 +729,7 @@
         // exatamente o que a camera acabou de ler, e o porteiro acabou de tocar
         // no botao. Sem esta saida, a propria escolha dele cairia no silencio e
         // a tela nao responderia nada.
-        if (!setorEscolhido && silenciado(texto)) return Promise.resolve();
+        if (!porNumero && !setorEscolhido && silenciado(texto)) return Promise.resolve();
         validando = true;
         if (window.portariaCamera) window.portariaCamera.desligar();
         // TUDO dentro da cadeia de promise, inclusive o primeiro calculo --
@@ -738,21 +738,24 @@
         // nem verde, nem vermelho, nada. Achado em revisao de codigo,
         // 15/08/2026.
         return Promise.resolve().then(function () {
+            if (porNumero) return [];
             var sais = V.saisParaTentar(texto, carga);
             return Promise.all(sais.map(function (s) { return window.qrIdealHash(texto, s); }));
         })
             .then(function (hashes) {
                 return D.entradasPermitidas().then(function (entradas) {
-                    return V.decidir({
+                    var entrada = {
                         hashes: hashes, carga: carga,
                         agora: new Date().toISOString(),
                         entradas: entradas, setorEscolhido: setorEscolhido || null, presencaOnline: true,
-                    });
+                    };
+                    if (porNumero) entrada.numeroDigitado = texto;
+                    return V.decidir(entrada);
                 });
             })
             .then(function (v) {
                 if (v.estado === 'ambiguo') {
-                    estado.pendente = { texto: texto };
+                    estado.pendente = { texto: texto, porNumero: !!porNumero };
                     return perguntarSetor(v.candidatos);
                 }
                 if (v.setor && v.setor.tipo_uso === 'reentrada' && v.estado === 'permitido') return iniciarMovimento(v);
@@ -788,7 +791,7 @@
             b.onclick = function () {
                 aguardandoProximo = false;
                 mostrar('lendo');
-                validarTexto(estado.pendente.texto, c.setor.id);
+                return validarTexto(estado.pendente.texto, c.setor.id, estado.pendente.porNumero);
             };
             caixa.appendChild(b);
         });
@@ -894,6 +897,10 @@
     var TITULOS = {
         evento_inativo: 'EVENTO INATIVO',
         desconhecido: 'NÃO É DESTE EVENTO',
+        numero_invalido: 'NÚMERO INVÁLIDO',
+        numero_nao_encontrado: 'NÚMERO NÃO ENCONTRADO',
+        numero_ambiguo: 'NÚMERO REPETIDO',
+        numeracao_desatualizada: 'ATUALIZE OS DADOS DO EVENTO',
         setor_nao_autorizado: 'OUTRA PORTA',
         setor_bloqueado: 'SETOR BLOQUEADO',
         fora_da_janela: 'FORA DO HORÁRIO',
@@ -987,6 +994,14 @@
             $('resposta-detalhe').textContent = setor.nome || 'Ingresso';
         } else if (['ja_no_local','ja_fora_local','estado_alterado','atualizacao_necessaria'].indexOf(v.motivo) !== -1) {
             $('resposta-detalhe').textContent = (setor.nome || 'Ingresso') + ' · nº ' + v.numero;
+        } else if (v.motivo === 'numero_invalido') {
+            $('resposta-detalhe').textContent = 'Digite apenas o número impresso no ingresso ou na pulseira.';
+        } else if (v.motivo === 'numero_nao_encontrado') {
+            $('resposta-detalhe').textContent = 'Confira o número impresso e o evento selecionado.';
+        } else if (v.motivo === 'numero_ambiguo') {
+            $('resposta-detalhe').textContent = 'Há mais de um ingresso com este número neste setor. Leia o QR ou chame o responsável.';
+        } else if (v.motivo === 'numeracao_desatualizada') {
+            $('resposta-detalhe').textContent = 'Conecte à internet e conclua o download do evento antes de digitar o número. Não apague os dados do aplicativo.';
         } else if (v.motivo === 'evento_inativo') {
             // Nao ha setor nem numero a mostrar: a recusa e do evento inteiro,
             // e vem antes de o aparelho saber de que ingresso se trata.
@@ -1125,14 +1140,10 @@
         // desta leitura. Achado em revisao de codigo, 15/08/2026.
         if (window.portariaCamera) window.portariaCamera.desligar();
         $('caixa-digitar').classList.add('sumindo');
-        // Passa pelas MESMAS seis regras. Digitar nao e atalho -- e outra forma
-        // de entrada, para o ingresso rasgado e para o codigo de barras que o
-        // navegador do iPhone nao le.
-        //
-        // Fora do silencio de 2 segundos, de proposito: quem digitou quer uma
-        // resposta, mesmo que seja o mesmo numero de novo.
-        delete vistos[t];
-        validarTexto(t).then(function () {
+        // Resolve o número impresso para a mesma credencial do QR. Permissões,
+        // bloqueios, entrada única e reentrada seguem pelo fluxo compartilhado.
+        // Sem o silêncio da câmera: digitar novamente exige uma nova decisão.
+        return validarTexto(t, null, true).then(function () {
             // A camera volta quando a tela continua sendo a de leitura. Depois
             // de uma recusa quem a religa e o "Ler o proximo".
             if (!$('tela-lendo').classList.contains('sumindo')) comecarALer();
