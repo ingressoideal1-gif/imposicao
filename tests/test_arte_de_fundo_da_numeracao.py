@@ -62,6 +62,15 @@ def test_opacidade_e_visibilidade_independentes_no_navegador():
     assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
 
 
+def test_escala_fisica_do_fundo_no_editor():
+    r = subprocess.run(
+        ["node", os.path.join(RAIZ, "tests", "fundo_editor_escala_browser_harness.js")],
+        cwd=RAIZ, timeout=90, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    assert r.returncode == 0, (r.stdout or "") + (r.stderr or "")
+
+
 def test_a_migracao_existe_e_e_aditiva():
     """Coluna nova em tabela viva se adiciona; não se recria a tabela."""
     assert os.path.exists(SQL), "o SQL da migração precisa acompanhar o código"
