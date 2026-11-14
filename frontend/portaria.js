@@ -150,6 +150,23 @@
         });
     }
 
+    function atualizarAcessoAoVivo() {
+        var botao = $('btn-ao-vivo-leitura');
+        if (!botao || !estado.token || document.hidden) return Promise.resolve();
+        return api('/evento').then(function (d) {
+            botao.classList.toggle('sumindo', !(d.evento && d.evento.ao_vivo_na_leitura === true));
+        }).catch(function () { botao.classList.add('sumindo'); });
+    }
+    $('btn-ao-vivo-leitura').onclick = function () {
+        var id = estado.carga && estado.carga.evento && estado.carga.evento.id;
+        if (!id) return;
+        if (window.portariaCamera) window.portariaCamera.desligar();
+        pararDeSincronizar();
+        sincronizar(); // A fila permanece no aparelho até a confirmação do servidor.
+        window.location.href = 'controle.html?ao_vivo=' + encodeURIComponent(id);
+    };
+    setInterval(atualizarAcessoAoVivo, 30000);
+
     // ── O evento deste aparelho ─────────────────────────────────────────────
 
     /** A tela de recado, com a frase que explica por que este celular parou. */
@@ -1216,4 +1233,5 @@
     // harness dos testes, o console do navegador -- precisa do objeto exportado
     // de qualquer jeito.
     arrancar();
+    atualizarAcessoAoVivo();
 })();

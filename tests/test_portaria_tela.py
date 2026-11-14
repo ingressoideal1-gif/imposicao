@@ -769,3 +769,16 @@ def test_o_nome_do_SETOR_e_a_linha_grande_do_topo():
     assert r["setorCorpo"] >= 18, ("de relance, com gente andando na frente", r)
     # O setor vem PRIMEIRO: a ordem e a do que se le com pressa.
     assert r["setorTopo"] < r["aparelhoTopo"], r
+
+
+@pytest.mark.parametrize('liberado', [True, False])
+def test_botao_ao_vivo_obedece_opcao_do_evento_e_preserva_fila(liberado):
+    r = _harness({'modo': 'ao-vivo', 'carga': carga(), 'token': 'token-de-teste',
+                  'fila': _negadas(1), 'online': False,
+                  'mock': {'pathname': '/functions/v1/portaria/evento', 'method': 'GET', 'status': 200,
+                           'body': {'evento': {'id': 'e1', 'ao_vivo_na_leitura': liberado}}}})
+    assert r['botaoVisivel'] is liberado
+    assert r['saiu'] is liberado
+    assert r['filaDepois'] == 1
+    if liberado:
+        assert r['url'] == '/controle.html?ao_vivo=e1'

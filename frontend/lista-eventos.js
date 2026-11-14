@@ -42,10 +42,8 @@
                 // Data e local permanecem disponíveis também sem rede.
                 data: p.data_evento || null,
                 local: p.local_evento || '',
-                // Quantos entraram so a conta sabe. Sem rede, a barra mostra o
-                // que importa no portao -- "le neste aparelho" -- e cala sobre
-                // o resto, em vez de escrever um zero que seria mentira.
-                entradas: null
+                // Total confirmado pelo servidor para este aparelho, inclusive zero.
+                entradas: typeof entradasConfirmadas[p.evento_id] === 'number' ? entradasConfirmadas[p.evento_id] : null
             };
         });
 
@@ -211,11 +209,8 @@
             partes.push('lê neste aparelho'
                 + (ev.nomeAparelho ? (' como ' + ev.nomeAparelho) : ''));
         }
-        // Quantos ja entraram, quando ha alguem. Zero fica de FORA: um "0
-        // entraram" na barra de um evento que so acontece sabado nao informa
-        // nada e ocupa a linha que diz onde ele e. `null` e "nao sei" -- o
-        // celular sem rede, que nao pode afirmar numero nenhum.
-        if (ev.entradas) { partes.push(quantosEntraram(ev.entradas)); }
+        // Zero confirmado aparece; ausência de resposta não vira zero.
+        if (typeof ev.entradas === 'number') { partes.push(quantosEntraram(ev.entradas)); }
         if (!partes.length) { return null; }
         var span = document.createElement('span');
         span.className = 'sub-evento';
@@ -515,6 +510,7 @@
      * servidor deixaria o porteiro sem lista por causa de um 4G ruim.
      */
     var carregamento = 0, eventosDaConta = [];
+    var entradasConfirmadas = {};
     var vinculosIndisponiveis = {};
     function mostrarVinculosIndisponiveis() {
         var aviso = $('aviso-vinculos');
@@ -535,11 +531,12 @@
         }
     }
     async function atualizarDadosCarregados(rodada) {
-        if (!navigator.onLine) return;
+        if (!navigator.onLine) { entradasConfirmadas = {}; return; }
         var lista = window.chaveiro.listar();
         for (var i = 0; i < lista.length; i++) {
             var p = lista[i];
             if (!p || !p.token) continue;
+            delete entradasConfirmadas[p.evento_id];
             var abortar = new AbortController(), tempo = setTimeout(function () { abortar.abort(); }, 8000);
             try {
                 var r = await fetch('https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/portaria/evento', {
@@ -551,6 +548,7 @@
                 }
                 var dados = await r.json();
                 if (rodada === carregamento && dados.evento && dados.evento.id === p.evento_id) {
+                    entradasConfirmadas[p.evento_id] = dados.evento.entradas;
                     delete vinculosIndisponiveis[p.evento_id];
                     window.chaveiro.atualizarEvento(dados.evento, p.token);
                     eventosDaConta = eventosDaConta.map(function (ev) { return ev.id === dados.evento.id ? Object.assign({}, ev, dados.evento) : ev; });
@@ -654,6 +652,8 @@
 
     function arrancar() {
         if (!$('eventos')) { return Promise.resolve(); }
+        var relatorio = new URLSearchParams(window.location.search).get('ao_vivo');
+        if (relatorio && window.aoVivo) return window.aoVivo.abrir(relatorio, '', false, true);
 
         // Não restaurar os vínculos do fluxo antigo de um portão por aparelho.
         explicarVoltaDaPortaria();

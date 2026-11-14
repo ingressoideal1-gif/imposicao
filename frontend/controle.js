@@ -683,15 +683,7 @@
     /**
      * Zerar as entradas: a contagem recomeça, e SÓ a contagem.
      *
-     * Confirmação E senha de novo, mesmo dentro dos 15 minutos já liberados.
-     * É a única ação desta tela que desfaz dado que o cliente pagou para ter,
-     * e o celular pode estar na mão do porteiro — a elevação que ele herdou de
-     * uma configuração feita meia hora antes não pode servir de autorização
-     * para isto.
-     *
-     * A senha é pedida por `_pedirSenha()`, que é o MESMO caminho que o
-     * `gravar()` usa quando a elevação vence: um segundo jeito de pedir senha
-     * nesta tela seria um segundo lugar para errar.
+     * Confirma a operação e reutiliza a autorização vigente das Configurações.
      */
     function zerarEntradas() {
         var nome = (estado.painel.evento || {}).nome_evento || 'este evento';
@@ -703,7 +695,7 @@
             { rotulo: 'Zerar as entradas', perigo: true }
         ).then(function (sim) {
             if (!sim) { return; }
-            return Promise.resolve(_pedirSenha()).then(function () {
+            return comSenha(estado.evento_id, function () {
                 return gravar('/eventos/' + estado.evento_id + '/zerar-entradas', {}, 'POST');
             }).then(function () {
                 avisar('A contagem deste evento recomeçou do zero. Cada aparelho '

@@ -535,11 +535,9 @@ def test_uma_pessoa_so_entra_no_singular():
     assert _sub_evento(desenhar_html([linha])) == "1 entrou"
 
 
-def test_zero_entradas_NAO_ocupa_a_linha_do_subtitulo():
-    """"0 entraram" na barra de um evento que só acontece sábado não informa
-    nada e rouba a linha que diz onde ele é."""
+def test_zero_entradas_confirmado_aparece_no_subtitulo():
     linha = dict(LINHA_BASE, data="2026-09-12", local="Arena", entradas=0)
-    assert _sub_evento(desenhar_html([linha])) == "12/09 · Arena"
+    assert _sub_evento(desenhar_html([linha])) == "12/09 · Arena · 0 entraram"
 
 
 def test_sem_saber_o_numero_a_barra_tambem_cala():

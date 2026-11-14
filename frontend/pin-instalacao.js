@@ -94,7 +94,16 @@
             return rede('editar-pin', dados, a.token);
         }
     }
-    window.pinInstalacao = { preparar: preparar, chave: chave, aparelho: aparelho, autorizar: autorizar, pedir: pedir,
+    // Consulta reutiliza a autorização das Configurações sem abrir diálogo de senha.
+    async function consultar(eventoId, caminho) {
+        var a = aparelho(eventoId), b = bilhetes[eventoId];
+        if (!a || !b || b.expira_em * 1000 <= Date.now()) {
+            var e = new Error('A autorização expirou. Volte às Configurações para liberar o acesso.');
+            e.status = 401; throw e;
+        }
+        return rede('editar-pin', { chave: chave(), elevacao: b.token, caminho: caminho, metodo: 'GET', corpo: null }, a.token);
+    }
+    window.pinInstalacao = { consultar: consultar, preparar: preparar, chave: chave, aparelho: aparelho, autorizar: autorizar, pedir: pedir,
         encerrar: function () { bilhetes = {}; } };
     document.addEventListener('DOMContentLoaded', function () {
         if ((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone) {

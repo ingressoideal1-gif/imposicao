@@ -279,3 +279,46 @@ def test_o_tempo_e_lido_em_minutos_horas_e_dias():
     assert quanto("2026-09-12T22:05:00Z", agora) == "há 25 min"
     assert quanto("2026-09-12T19:30:00Z", agora) == "há 3 h"
     assert quanto("2026-09-10T22:30:00Z", agora) == "há 2 d"
+
+
+def test_ao_vivo_reutiliza_pin_das_configuracoes_sem_conta():
+    r = _chamar('abrir', ['e1', 'Evento', True], configuracao=True, pin=True)
+    assert not r['contaConsultada'] and not r['pediuEntrar']
+    assert r['consultaPin'] == {'id': 'e1', 'caminho': '/eventos/e1/ao-vivo'}
+    assert not r['corpoEscondido']
+    assert any('42' in placa for placa in r['resumo'])
+
+
+def test_pin_expirado_orienta_voltar_sem_abrir_login():
+    r = _chamar('abrir', ['e1', 'Evento', True], configuracao=True, pin=True, pinExpirado=True)
+    assert not r['pediuEntrar'] and not r['contaConsultada']
+    assert r['corpoEscondido']
+    assert 'Configurações' in r['aviso']
+
+
+def test_leitura_abre_relatorio_sem_pin_ou_conta_e_sem_controle_de_edicao():
+    r = _chamar('abrir', ['e1', 'Evento', False, True], leitura=True)
+    assert not r['contaConsultada'] and not r['pediuEntrar']
+    assert not r['corpoEscondido'] and not r['liberacaoVisivel']
+    assert r['retorno'] == '← Voltar à leitura'
+    assert r['consultaLeitura']['url'].endswith('/relatorio?recurso=ao-vivo&')
+    assert r['consultaLeitura']['token'] == 'Bearer token-sintetico'
+
+
+def test_leitura_sem_liberacao_nao_exibe_dados_nem_pede_login():
+    r = _chamar('abrir', ['e1', 'Evento', False, True], leitura=True, revogado=True)
+    assert r['corpoEscondido'] and not r['pediuEntrar']
+    assert 'não liberado' in r['aviso']
+
+
+def test_liberacao_no_ao_vivo_grava_opcao_no_evento():
+    r = _chamar('abrir', ['e1', 'Evento', True], configuracao=True, pin=True, liberar=True)
+    assert r['liberacaoVisivel']
+    assert r['liberacao'] == {'rota': '/eventos/e1', 'corpo': {'ao_vivo_na_leitura': True}}
+
+
+def test_relatorio_liberado_continua_sem_renovar_autorizacao_de_edicao():
+    r = _chamar('abrir', ['e1', 'Evento', True], configuracao=True, pin=True, publico=True)
+    assert r['quantasPin'] == 1 and r['consultaLeitura']
+    assert not r['pediuEntrar'] and not r['contaConsultada']
+    assert r['liberacaoVisivel'] and not r['corpoEscondido']

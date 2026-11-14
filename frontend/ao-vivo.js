@@ -141,6 +141,12 @@
     // ── O desenho ───────────────────────────────────────────────────────────
 
     function desenhar(d) {
+        var liberar = $('ao-vivo-liberacao');
+        if (liberar) {
+            liberar.classList.toggle('sumindo', !estado.voltarConfiguracao);
+            if (!$('ao-vivo-na-leitura').disabled) $('ao-vivo-na-leitura').checked = !!(d.evento && d.evento.ao_vivo_na_leitura);
+        }
+
         estado.dados = d;
         var ativo = !d.evento || d.evento.status === 'ativo';
 
@@ -329,6 +335,32 @@
         });
     }
 
+    function acessoPorPin() {
+        return !!(window.pinInstalacao && window.pinInstalacao.aparelho(estado.evento_id));
+    }
+    function sessaoDoRelatorio() {
+        // Com a consulta liberada para os aparelhos, o relatório pode continuar
+        // aberto após vencer a edição. Alterações continuam exigindo autorização.
+        if (estado.daLeitura || (acessoPorPin() && estado.dados && estado.dados.evento
+                && estado.dados.evento.ao_vivo_na_leitura === true)) return Promise.resolve({ daLeitura: true });
+        return acessoPorPin() ? Promise.resolve({ porPin: true }) : window.AcessoConta.sessao();
+    }
+    function pedirRelatorio(caminho, sessao) {
+        if (sessao.daLeitura) {
+            var a = window.chaveiro.procurar(estado.evento_id);
+            if (!a || !a.token) return Promise.reject(new Error('Este celular não está vinculado ao evento.'));
+            var partes = caminho.split('?'), recurso = partes[0].split('/').pop();
+            return fetch('https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/portaria/relatorio?recurso=' + recurso + '&' + (partes[1] || ''), {
+                headers: { Authorization: 'Bearer ' + a.token }, cache: 'no-store'
+            }).then(function (r) { return r.json().then(function (d) {
+                if (!r.ok) { var e = new Error(d.detail || 'Não foi possível abrir o relatório.'); e.status = r.status; throw e; }
+                return d;
+            }); });
+        }
+        if (sessao.porPin) return window.pinInstalacao.consultar(estado.evento_id, caminho);
+        return window.AcessoConta.pedir(caminho, { headers: { Authorization: 'Bearer ' + sessao.access_token } });
+    }
+
     function procurar(sessao) {
         var termo = String($('ao-vivo-busca').value || '').trim();
         var caixa = $('ao-vivo-achados');
@@ -339,10 +371,10 @@
         var meu = ++estado.buscaEmCurso;
         caixa.innerHTML = '';
         texto(caixa, 'p', 'Procurando…', 'config-ajuda');
-        return window.AcessoConta.pedir(
+        return pedirRelatorio(
             '/eventos/' + estado.evento_id + '/ingressos?busca='
             + encodeURIComponent(termo) + '&por_pagina=20',
-            { headers: { Authorization: 'Bearer ' + sessao.access_token } }
+            sessao
         ).then(function (r) {
             // Resposta de uma busca mais velha não pinta por cima da nova.
             if (meu !== estado.buscaEmCurso) { return; }
@@ -387,10 +419,10 @@
         var cortado = false;
 
         function proxima() {
-            return window.AcessoConta.pedir(
+            return pedirRelatorio(
                 '/eventos/' + estado.evento_id + '/leituras?pagina=' + pagina
                 + '&por_pagina=' + POR_PAGINA_CSV,
-                { headers: { Authorization: 'Bearer ' + sessao.access_token } }
+                sessao
             ).then(function (r) {
                 todas = todas.concat((r && r.leituras) || []);
                 if (r && r.ha_mais) {
@@ -449,18 +481,26 @@
     }
 
     function buscar(sessao) {
-        return window.AcessoConta.pedir(
+        return pedirRelatorio(
             '/eventos/' + estado.evento_id + '/ao-vivo',
-            { headers: { Authorization: 'Bearer ' + sessao.access_token } }
+            sessao
         ).then(function (d) {
             desenhar(d);
+            return true;
         }).catch(function (e) {
-            if (e && e.status === 401) { return pedirParaEntrar(); }
+            if (e && e.status === 401) {
+                if (!sessao.porPin && !sessao.daLeitura) return pedirParaEntrar();
+                pararRelogio();
+            }
+            if (sessao.daLeitura && e && (e.status === 401 || e.status === 403)) {
+                pararRelogio(); $('ao-vivo-corpo').classList.add('sumindo');
+            }
             var aviso = $('ao-vivo-aviso');
-            aviso.textContent = (e && e.mensagem)
+            aviso.textContent = (e && (e.message || e.mensagem))
                 || 'Não consegui buscar os números deste evento agora. '
                    + 'Confira a internet e tente de novo em instantes.';
             aviso.classList.remove('sumindo');
+            return false;
         });
     }
 
@@ -484,7 +524,7 @@
             // dono no meio do evento. O SDK renova sozinho, e `sessao()`
             // entrega o token de agora.
             Promise.resolve().then(function () {
-                return window.AcessoConta.sessao();
+                return sessaoDoRelatorio();
             }).catch(function () { return null; }).then(function (s) {
                 if (s) { return buscar(s); }
                 // Sem sessão o relógio para, e a tela fica com os últimos
@@ -508,7 +548,8 @@
         });
     }
 
-    function abrir(eventoId, nome, voltarConfiguracao) {
+    function abrir(eventoId, nome, voltarConfiguracao, daLeitura) {
+        estado.daLeitura = !!daLeitura;
         estado.evento_id = eventoId;
         estado.nome = nome || '';
         estado.dados = null;
@@ -520,13 +561,13 @@
         // Consultar dentro da configuracao nao encerra seu login temporario
         // nem descarta campos editados. A saida continua no fecharEngrenagem.
         return (estado.voltarConfiguracao ? Promise.resolve() : fecharEngrenagemSeAberta()).then(function () {
-            return window.AcessoConta.sessao();
+            return sessaoDoRelatorio();
         }).catch(function () { return null; }).then(function (s) {
             if (!s) { return pedirParaEntrar(); }
             window.conta.esconderTelaInicial(true);
             $('ao-vivo').classList.remove('sumindo');
             $('btn-voltar-ao-vivo').textContent = estado.voltarConfiguracao
-                ? '← Voltar às configurações' : '← Voltar aos meus eventos';
+                ? '← Voltar às configurações' : estado.daLeitura ? '← Voltar à leitura' : '← Voltar aos meus eventos';
             $('ao-vivo-corpo').classList.add('sumindo');
             $('ao-vivo-busca').value = '';
             $('ao-vivo-achados').innerHTML = '';
@@ -536,7 +577,7 @@
             var aviso = $('ao-vivo-aviso');
             aviso.textContent = 'Buscando os números deste evento…';
             aviso.classList.remove('sumindo');
-            return buscar(s).then(function () { ligarRelogio(); });
+            return buscar(s).then(function (ok) { if (ok) ligarRelogio(); });
         });
     }
 
@@ -545,6 +586,7 @@
         // `sumindo` em si mesmo ANTES de pedir a tela inicial de volta: é o que
         // o contrato do `conta.js` exige de quem fecha um estado de topo.
         $('ao-vivo').classList.add('sumindo');
+        if (estado.daLeitura) { window.location.href = 'portaria.html?e=' + encodeURIComponent(estado.evento_id); return Promise.resolve(); }
         if (estado.voltarConfiguracao) {
             estado.voltarConfiguracao = false;
             $('engrenagem').classList.remove('sumindo');
@@ -558,11 +600,25 @@
         if (!$('ao-vivo')) { return; }
         $('btn-voltar-ao-vivo').addEventListener('click', function () { fechar(); });
 
+        var liberar = $('ao-vivo-na-leitura');
+        if (liberar) liberar.addEventListener('change', function () {
+            var valor = liberar.checked;
+            liberar.disabled = true;
+            window.Controle.gravar('/eventos/' + estado.evento_id, { ao_vivo_na_leitura: valor }, 'PATCH').then(function () {
+                if (estado.dados && estado.dados.evento) estado.dados.evento.ao_vivo_na_leitura = valor;
+                $('ao-vivo-liberacao-aviso').textContent = valor
+                    ? 'AO VIVO liberado para todos os aparelhos do evento.' : 'AO VIVO removido da tela de leitura de todos os aparelhos.';
+            }).catch(function (e) {
+                liberar.checked = !valor;
+                $('ao-vivo-liberacao-aviso').textContent = e.message || 'Não foi possível salvar. Tente novamente.';
+            }).then(function () { liberar.disabled = false; });
+        });
+
         var atualizar = $('btn-atualizar-ao-vivo');
         atualizar.addEventListener('click', function () {
             window.botaoEspera.comecar(atualizar, 'Atualizando…');
             Promise.resolve().then(function () {
-                return window.AcessoConta.sessao();
+                return sessaoDoRelatorio();
             }).catch(function () { return null; }).then(function (s) {
                 return s ? buscar(s) : pedirParaEntrar();
             }).then(function () {
@@ -575,7 +631,7 @@
         var busca = $('ao-vivo-busca');
         var comASessao = function (tarefa) {
             return Promise.resolve().then(function () {
-                return window.AcessoConta.sessao();
+                return sessaoDoRelatorio();
             }).catch(function () { return null; }).then(function (s) {
                 return s ? tarefa(s) : pedirParaEntrar();
             });
