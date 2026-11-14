@@ -1,4 +1,5 @@
-import { painel, setoresDoEvento } from "../_compartilhado/painel_evento.ts";
+import { aoVivo } from "../_compartilhado/ao_vivo.ts";
+import { painel } from "../_compartilhado/painel_evento.ts";
 /**
  * A tela do cliente: as 19 rotas de `/api/acesso/*` que o dono do evento usa.
  *
@@ -67,7 +68,6 @@ import { idDeNumeracao, numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 // Os numeros do evento sao os MESMOS que a tela da grafica mostra, e por isso
 // vem de la e nao daqui. Ver o cabecalho de `aoVivo`, mais abaixo.
 import {
-  dashboard,
   leiturasDoEvento,
   listarIngressos,
 } from "../_compartilhado/relatorio.ts";
@@ -138,7 +138,7 @@ async function eventoDoDono(eventoId: string, usuario: { id: string }): Promise<
   const linha = ((await banco(
     "GET",
     `producao_acesso_eventos?id=eq.${uuid(eventoId)}` +
-      "&select=id,dono_auth_id,id_cliente,nome_evento,data_evento,local_evento,status",
+      "&select=id,dono_auth_id,id_cliente,nome_evento,data_evento,local_evento,status,ao_vivo_na_leitura",
   )) ?? [])[0];
   if (!linha) throw new Recusa(403, "evento nao encontrado nesta conta");
   // A conta que criou passa sem ir ao banco de novo; as outras contas do
@@ -412,7 +412,7 @@ async function meusEventos(donoId: string): Promise<any> {
       // `local_evento` entra aqui para a lista da casa poder mostrar onde e o
       // evento, ao lado da data -- sem isso o cliente com dois eventos no
       // mesmo dia nao tinha como distinguir um do outro so pelo nome.
-      "&status=neq.excluido&select=id,nome_evento,data_evento,local_evento,status,id_cliente" +
+      "&status=neq.excluido&select=id,nome_evento,data_evento,local_evento,status,ao_vivo_na_leitura,id_cliente" +
       "&order=created_at.desc",
   )) ?? [];
   for (const e of eventos) {
@@ -596,36 +596,6 @@ async function trocarMinhaSenha(
  * o relogio do celular mente sempre que ele estiver errado -- e um portao que
  * parece mudo por causa do relogio do dono e uma corrida ate a porta a toa.
  */
-async function aoVivo(evento: any): Promise<any> {
-  const setores = await setoresDoEvento(evento.id);
-  const contratado = setores.reduce(
-    (soma: number, s: any) => soma + Number(s.quantidade ?? 0),
-    0,
-  );
-  const numeros = await dashboard(evento.id, setores, contratado);
-
-  // `token_hash` NAO entra: e segredo, e o que a tela precisa saber e so se o
-  // aparelho ja foi pareado e quando ele deu sinal pela ultima vez.
-  const aparelhos = (await banco(
-    "GET",
-    `producao_acesso_dispositivos?evento_id=eq.${evento.id}` +
-      "&select=id,nome,status,ultimo_visto&order=nome.asc",
-  )) ?? [];
-
-  return {
-    evento: {
-      id: evento.id,
-      nome_evento: evento.nome_evento ?? null,
-      data_evento: evento.data_evento ?? null,
-      local_evento: evento.local_evento ?? null,
-      status: evento.status ?? null,
-    },
-    ...numeros,
-    aparelhos,
-    agora: new Date().toISOString(),
-  };
-}
-
 // ── O QR do Pedido ──────────────────────────────────────────────────────────
 
 async function sha256Hex(texto: string): Promise<string> {

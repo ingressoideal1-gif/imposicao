@@ -1,3 +1,4 @@
+import { consultarRelatorio } from "./ao_vivo.ts";
 import { banco } from "./banco.ts";
 import { Recusa } from "./sessao.ts";
 import { conferirElevacao } from "./assinatura.ts";
@@ -12,7 +13,9 @@ export async function editarComPin(c: any, aparelho: any): Promise<any> {
   if (aparelho.instalacao_id !== i.id) throw new Recusa(403, "Instalação não autorizada.");
   try { await conferirElevacao(c?.elevacao, aparelho.evento_id, "pin-" + i.id, aparelho.id); }
   catch { throw new Recusa(401, "Digite novamente a senha de edição deste celular."); }
-  const partes = typeof c?.caminho === "string" ? c.caminho.split("/").filter(Boolean) : [];
+  const [caminho, consulta = ""] = typeof c?.caminho === "string" ? c.caminho.split("?") : [""];
+  const parametros = new URLSearchParams(consulta);
+  const partes = caminho.split("/").filter(Boolean);
   const [tipo, id, acao, filho] = partes;
   const metodo = c?.metodo;
   if (!(tipo === "pedidos" ? /^[1-9][0-9]{0,14}$/.test(id || "") : UUID.test(id || "")) || partes.length > 4) throw new Recusa(404, "Operação indisponível.");
@@ -27,6 +30,12 @@ export async function editarComPin(c: any, aparelho: any): Promise<any> {
     recurso = (await banco("GET", "producao_acesso_pedidos?pedido_id_int=eq." + id + "&evento_id=eq." + aparelho.evento_id + "&select=pedido_id_int"))?.[0];
     if (!recurso) throw new Recusa(403, "Pedido de outro evento ou indisponível.");
   } else throw new Recusa(404, "Operação indisponível.");
+  // Leitura exige o mesmo bilhete já validado nas Configurações.
+  if (metodo === "GET" && tipo === "eventos" && partes.length === 3 && ["ao-vivo", "ingressos", "leituras"].includes(acao)) {
+    const evento = (await banco("GET", `producao_acesso_eventos?id=eq.${id}&select=id,nome_evento,data_evento,local_evento,status,ao_vivo_na_leitura`))?.[0];
+    if (!evento) throw new Recusa(404, "Evento indisponível.");
+    return await consultarRelatorio(evento, acao, parametros);
+  }
   if (metodo === "GET" && tipo === "eventos" && partes.length === 2) return await painel(id);
   if (tipo === "aparelhos" && id === aparelho.id &&
       (metodo === "DELETE" || (metodo === "PATCH" && c.corpo?.status && c.corpo.status !== "ativo"))) {

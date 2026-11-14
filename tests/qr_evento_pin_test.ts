@@ -1,3 +1,5 @@
+import { relatorioNaLeitura } from "../supabase/functions/_compartilhado/ao_vivo.ts";
+import { aplicarEvento } from "../supabase/functions/_compartilhado/configuracao.ts";
 // Só dados sintéticos. Sem --allow-net: nenhuma chamada pode chegar à nuvem.
 import { cifrarPin, decifrarPin, registrarPin, elevarPin, consultarPinDaGrafica } from "../supabase/functions/_compartilhado/pin_instalacao.ts";
 import { emitirQrEvento, usarQrEvento, revogarQrEvento } from "../supabase/functions/_compartilhado/qr_evento.ts";
@@ -12,9 +14,9 @@ Deno.env.set("SUPABASE_URL", "https://banco-sintetico.invalid");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "sintetico-sem-validade");
 Deno.env.set("IDEAL_CONTROL_PIN_CHAVE", "11".repeat(32));
 Deno.env.set("ACESSO_ELEVACAO_SEGREDO", "segredo-sintetico-para-testes");
-let semIngressos = false, semSetores = false;
+let semIngressos = false, semSetores = false, aoVivoLiberado = false;
 let dados: any, convite: any, chamadas: any[], aparelho: any, falharEmissao = false, papel = "admin";
-function reset() { semIngressos = false; semSetores = false; dados = null; convite = null; chamadas = []; falharEmissao = false; papel = "admin"; aparelho = { id: A, evento_id: E, instalacao_id: I, status: "ativo", nome: "Celular sintético" }; }
+function reset() { aoVivoLiberado = false; semIngressos = false; semSetores = false; dados = null; convite = null; chamadas = []; falharEmissao = false; papel = "admin"; aparelho = { id: A, evento_id: E, instalacao_id: I, status: "ativo", nome: "Celular sintético" }; }
 function assert(v: unknown, msg = "asserção falhou"): asserts v { if (!v) throw new Error(msg); }
 async function recusa(f: () => Promise<any>, status?: number) {
   try { await f(); } catch (e) { if (status) assert(e instanceof Recusa && e.status === status); return; }
@@ -28,12 +30,12 @@ globalThis.fetch = (async (input: any, options: any = {}) => {
   chamadas.push({ t, method, c });
   let r: any;
   if (t === "producao_acesso_instalacoes") {
-    if (method === "POST") { if (!dados) dados = { ...c, id: I, falhas: 0 }; r = [dados]; }
+    if (method === "POST") { if (!dados) dados = { ...c, id: I, falhas: 0, tentativas: 0, janela_em: new Date().toISOString() }; r = [dados]; }
     else r = dados && (!u.searchParams.get("chave_hash") || u.searchParams.get("chave_hash") === "eq." + dados.chave_hash) ? [dados] : [];
   } else if (t === "rpc/producao_acesso_conferir_pin") {
     // Simula somente o contrato. Não comprova execução/locks do PL/pgSQL.
     r = dados && dados.falhas < 5 && c.p_chave_hash === dados.chave_hash && c.p_pin_hash === dados.pin_hash ? I : null;
-    if (!r && dados) dados.falhas++;
+    if (!r && dados) { dados.falhas++; dados.tentativas = dados.falhas; }
   } else if (t === "producao_acesso_convites_evento") {
     if (method === "POST") { convite = { ...c, id: S }; r = falharEmissao ? [] : [convite]; }
     else { if (convite) Object.assign(convite, c); r = convite ? [convite] : []; }
@@ -44,8 +46,10 @@ globalThis.fetch = (async (input: any, options: any = {}) => {
   else if (t === "producao_acesso_dispositivos") r = [aparelho];
   else if (t === "producao_acesso_setores") r = u.searchParams.get("status") === "eq.ativo" && !semSetores ? [{id:S}] : [];
   else if (t === "producao_acesso_credenciais") r = semIngressos ? [] : [{id:A}];
-  else if (t === "producao_acesso_eventos") r = [{ id: E, status: "ativo", ...c }];
+  else if (t === "producao_acesso_eventos") r = [{ id: E, status: "ativo", ao_vivo_na_leitura: aoVivoLiberado, ...c }];
   else if (t === "producao_acesso_auditoria_pin") r = [{ id: S, ...c }];
+  else if (t === "producao_acesso_bloqueios" || t === "producao_acesso_leituras") r = [];
+  else if (t === "rpc/producao_acesso_metricas") r = { por_setor: [], recusas: [], entraram: 42, sairam: 0, recusadas: 0, ingressos_utilizados: 42, publicados_utilizados: 42 };
   else throw new Error("chamada inesperada: " + t);
   return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json" } });
 }) as typeof fetch;
@@ -131,6 +135,17 @@ Deno.test("HTTP: portaria exige token para editar e gráfica exige papel para co
     const portaria = handler!;
     const semToken = await portaria(new Request("https://local.invalid/functions/v1/portaria/editar-pin", { method: "POST", body: "{}" }));
     assert(semToken.status === 401);
+    const relatorioUrl = "https://local.invalid/functions/v1/portaria/relatorio";
+    assert((await portaria(new Request(relatorioUrl))).status === 401);
+    const auth = { Authorization: "Bearer " + TOKEN };
+    assert((await portaria(new Request(relatorioUrl, { headers: auth }))).status === 403);
+    aoVivoLiberado = true;
+    const liberado = await portaria(new Request(relatorioUrl + "?evento_id=" + A, { headers: auth }));
+    assert(liberado.status === 200 && liberado.headers.get("Cache-Control") === "no-store");
+    assert((await liberado.json()).evento.id === E); // URL não troca o evento do token.
+    const inicial = await portaria(new Request("https://local.invalid/functions/v1/portaria/evento", { headers: auth }));
+    assert((await inicial.json()).evento.entradas === 42);
+    aoVivoLiberado = false;
     const malformado = await portaria(new Request("https://local.invalid/functions/v1/portaria/consultar-qr-evento", { method: "POST", body: "{" }));
     assert(malformado.status === 422);
     await import("../supabase/functions/acesso-interno/index.ts");
@@ -162,4 +177,46 @@ Deno.test("QR: sem setores não emite; convite inválido não revela preparaçã
   reset(); semSetores = true; await recusa(() => emitirQrEvento(E,I),409); assert(!convite);
   chamadas = []; await recusa(() => usarQrEvento({segredo:KEY},false),403);
   assert(chamadas.length === 1 && chamadas[0].t === "rpc/producao_acesso_ativar_qr_evento");
+});
+
+Deno.test("AO VIVO por PIN: reutiliza bilhete e restringe evento, instalação e aparelho", async () => {
+  reset(); await registrarPin({ chave: KEY, pin: PIN });
+  const b = await elevarPin({ chave: KEY, pin: PIN }, aparelho);
+  const c = { chave: KEY, elevacao: b.token, metodo: "GET", caminho: "/eventos/" + E + "/ao-vivo" };
+  chamadas = [];
+  const r = await editarComPin(c, aparelho);
+  assert(r.evento.id === E && r.publico.entraram === 42);
+  assert(!chamadas.some(x => x.t === "rpc/producao_acesso_conferir_pin" || x.t === "producao_acesso_auditoria_pin"));
+  await recusa(() => editarComPin({ ...c, caminho: "/eventos/" + A + "/ao-vivo" }, aparelho), 403);
+  await recusa(() => editarComPin({ ...c, elevacao: "invalida" }, aparelho), 401);
+  await recusa(() => editarComPin(c, { ...aparelho, id: S }), 401);
+  await recusa(() => editarComPin(c, { ...aparelho, instalacao_id: A }), 403);
+  await recusa(() => editarComPin({ ...c, caminho: "/eventos/" + E + "/ingressos?setor_id=" + A }, aparelho), 403);
+  const l = await editarComPin({ ...c, caminho: "/eventos/" + E + "/leituras?pagina=1&por_pagina=20" }, aparelho);
+  assert(l.leituras.length === 0);
+});
+
+Deno.test("AO VIVO na leitura: liberação global é conferida a cada consulta", async () => {
+  reset();
+  await recusa(() => relatorioNaLeitura(aparelho, "ao-vivo", new URLSearchParams()), 403);
+  aoVivoLiberado = true;
+  for (const id of [A, S]) {
+    const r = await relatorioNaLeitura({ ...aparelho, id }, "ao-vivo", new URLSearchParams());
+    assert(r.publico.entraram === 42 && r.evento.ao_vivo_na_leitura === true);
+  }
+  aoVivoLiberado = false;
+  await recusa(() => relatorioNaLeitura(aparelho, "leituras", new URLSearchParams()), 403);
+});
+Deno.test("AO VIVO: opção aceita apenas booleano e mantém filtro do evento", async () => {
+  reset(); await aplicarEvento(E, { ao_vivo_na_leitura: true });
+  assert(chamadas.some(x => x.t === "producao_acesso_eventos" && x.method === "PATCH" && x.c.ao_vivo_na_leitura === true));
+  await recusa(() => aplicarEvento(E, { ao_vivo_na_leitura: "true" }), 422);
+});
+
+Deno.test("PIN incorreto não anuncia bloqueio antes do limite de tentativas", async () => {
+  reset(); await registrarPin({chave:KEY,pin:PIN});
+  try { await elevarPin({chave:KEY,pin:"999999"},aparelho); throw new Error("deveria recusar"); }
+  catch (e) { assert(e instanceof Recusa && e.status === 403 && !e.message.includes("minuto")); }
+  dados.falhas = 5; dados.tentativas = 5;
+  await recusa(() => elevarPin({chave:KEY,pin:PIN},aparelho),429);
 });

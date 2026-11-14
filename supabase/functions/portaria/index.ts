@@ -1,3 +1,4 @@
+import { relatorioNaLeitura } from "../_compartilhado/ao_vivo.ts";
 /**
  * Os tres endpoints do aparelho da portaria, agora ao lado do banco.
  *
@@ -212,9 +213,12 @@ async function entrar(corpo: any): Promise<Response> {
 async function dadosDoEvento(cabecalho: string | null): Promise<Response> {
   const aparelho = await aparelhoDoToken(cabecalho);
   const evento = ((await banco("GET", `producao_acesso_eventos?id=eq.${aparelho.evento_id}` +
-    "&select=id,nome_evento,data_evento,local_evento,status")) ?? [])[0];
+    "&select=id,nome_evento,data_evento,local_evento,status,ao_vivo_na_leitura")) ?? [])[0];
   if (!evento) return erro(409, "evento nao existe mais");
-  return ok({evento: {id:evento.id, nome_evento:evento.nome_evento, data_evento:evento.data_evento, local_evento:evento.local_evento, status:evento.status}});
+  const metricas = await banco("POST", "rpc/producao_acesso_metricas", { p_evento: aparelho.evento_id });
+  return ok({evento: {id:evento.id, nome_evento:evento.nome_evento, data_evento:evento.data_evento, local_evento:evento.local_evento, status:evento.status,
+    ao_vivo_na_leitura: evento.ao_vivo_na_leitura === true,
+    entradas: metricas?.entraram != null && Number.isFinite(Number(metricas.entraram)) ? Number(metricas.entraram) : null}});
 }
 
 /** Marca leve da publicação: não expõe códigos nem dados das credenciais. */
@@ -531,6 +535,11 @@ Deno.serve(async (req: Request) => {
     }
     if (req.method === "POST" && rota === "entrar") {
       return comCors(await entrar(await req.json()), origem);
+    }
+    if (req.method === "GET" && rota === "relatorio") {
+      const r = await relatorioNaLeitura(await aparelhoDoToken(auth), url.searchParams.get("recurso") || "ao-vivo", url.searchParams);
+      const resposta = ok(r); resposta.headers.set("Cache-Control", "no-store");
+      return comCors(resposta, origem);
     }
     if (req.method === "GET" && rota === "evento") return comCors(await dadosDoEvento(auth), origem);
     if (req.method === "GET" && rota === "faixa") {
