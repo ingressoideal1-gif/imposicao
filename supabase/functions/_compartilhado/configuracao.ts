@@ -162,6 +162,10 @@ export async function aplicarEvento(eventoId: string, corpo: any): Promise<any> 
   if ("local_evento" in corpo) {
     mudanca.local_evento = texto(corpo.local_evento, "local", 0, 200) || null;
   }
+  if ("ao_vivo_na_leitura" in corpo) {
+    if (typeof corpo.ao_vivo_na_leitura !== "boolean") throw new Recusa(422, "A liberação do AO VIVO deve ser sim ou não.");
+    mudanca.ao_vivo_na_leitura = corpo.ao_vivo_na_leitura;
+  }
   if ("data_evento" in corpo) mudanca.data_evento = corpo.data_evento || null;
   // Os TRES estados que a tela oferece, e o que cada um significa para quem
   // esta no portao:

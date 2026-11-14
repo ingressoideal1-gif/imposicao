@@ -39,6 +39,15 @@ export async function instalacao(chaveBruta: unknown): Promise<any> {
   if (linhas?.length !== 1) throw new Recusa(403, "Configure a senha deste celular primeiro.");
   return linhas[0];
 }
+async function recusarPin(chaveHash: string): Promise<never> {
+  const i = (await banco("GET", "producao_acesso_instalacoes?chave_hash=eq." + chaveHash + "&select=tentativas,janela_em"))?.[0];
+  const restante = i ? new Date(i.janela_em).getTime() + 15 * 60 * 1000 - Date.now() : 0;
+  if (i && Number(i.tentativas) >= 5 && restante > 0) {
+    const minutos = Math.ceil(restante / 60000);
+    throw new Recusa(429, `Muitas tentativas de senha neste celular. Tente novamente em ${minutos} minuto${minutos === 1 ? "" : "s"}.`);
+  }
+  throw new Recusa(403, "A senha não confere. Use os 6 números cadastrados neste celular. Se esqueceu, peça à gráfica para consultá-la.");
+}
 export async function registrarPin(corpo: any): Promise<any> {
   chaveValida(corpo?.chave); pinValido(corpo?.pin);
   const chaveHash = await hashDoToken(corpo.chave), pinHash = await hashPin(corpo.pin, chaveHash);
@@ -47,7 +56,7 @@ export async function registrarPin(corpo: any): Promise<any> {
   }, "resolution=ignore-duplicates,return=representation");
   // Confirmar também no reenvio após perda da resposta. Nunca substituir um PIN existente.
   const id = await banco("POST", "rpc/producao_acesso_conferir_pin", { p_chave_hash: chaveHash, p_pin_hash: pinHash });
-  if (!id) throw new Recusa(403, "A senha não confere ou houve muitas tentativas. Aguarde 15 minutos.");
+  if (!id) return await recusarPin(chaveHash);
   return { id };
 }
 export async function elevarPin(corpo: any, aparelho: any): Promise<any> {
@@ -58,7 +67,7 @@ export async function elevarPin(corpo: any, aparelho: any): Promise<any> {
   const id = await banco("POST", "rpc/producao_acesso_conferir_pin", {
     p_chave_hash: chaveHash, p_pin_hash: await hashPin(corpo.pin, chaveHash),
   });
-  if (id !== i.id) throw new Recusa(403, "A senha não confere ou houve muitas tentativas. Aguarde 15 minutos.");
+  if (id !== i.id) return await recusarPin(chaveHash);
   const r = await gerarElevacao(aparelho.evento_id, "pin-" + i.id, aparelho.id);
   return { token: r.token, expira_em: r.expira };
 }
