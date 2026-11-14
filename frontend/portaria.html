@@ -288,6 +288,12 @@
             background: rgba(255,255,255,.04); border: 1px solid var(--border-forte); box-shadow: none;
         }
         #btn-lanterna.acesa { background: rgba(245,158,11,0.25); border-color: #f59e0b; }
+        #btn-ao-vivo-leitura {
+            width: 56px; height: 56px; flex: 0 0 56px; padding: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            color: var(--dim); background: rgba(255,255,255,.04);
+            border: 1px solid var(--border-forte); box-shadow: none;
+        }
         #btn-digitar { flex: 1 1 auto; }
         #caixa-digitar { margin-top: 12px; }
 
@@ -573,7 +579,6 @@
             token — a fila sobe igual depois. A trava fica onde importa, no
             "Sair deste portão" da engrenagem.
         -->
-        <button id="btn-ao-vivo-leitura" class="sumindo" type="button">AO VIVO</button>
         <button id="btn-voltar" class="sumindo" type="button"
                 title="Voltar para a lista de eventos"
                 aria-label="Voltar para a lista de eventos">←</button>
@@ -639,6 +644,15 @@
                      aparelho travou. -->
                 <button id="btn-lanterna" class="sumindo" type="button"
                         title="Lanterna" aria-label="Acender a lanterna">🔦</button>
+                <button id="btn-ao-vivo-leitura" class="sumindo" type="button"
+                        title="AO VIVO" aria-label="Abrir AO VIVO">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </button>
                 <button id="btn-digitar" class="discreto">Digitar o número</button>
             </div>
 

@@ -360,6 +360,10 @@ async function rodar(caso) {
         await semear(caso);
         await esperar(LENDO);
         const botao = caso.modo === 'ao-vivo' ? 'btn-ao-vivo-leitura' : 'btn-voltar';
+        if (caso.modo === 'ao-vivo' && await page.$('#btn-toque:not(.sumindo)')) {
+            await page.click('#btn-toque');
+            await esperar(`document.getElementById('btn-toque').classList.contains('sumindo')`);
+        }
         const visivel = await page.evaluate(id => !document.getElementById(id).classList.contains('sumindo'), botao);
         if (visivel) { await page.click('#' + botao); await esperar(`window.location.pathname.indexOf('controle.html') !== -1`); }
         const url = page.url();
