@@ -233,6 +233,10 @@
         <p id="ao-vivo-aviso" class="aviso sumindo" role="alert"></p>
 
         <div id="ao-vivo-corpo" class="sumindo">
+            <div id="ao-vivo-liberacao" class="sumindo">
+                <label><input id="ao-vivo-na-leitura" type="checkbox"> Liberar AO VIVO na tela de leitura de todos os aparelhos</label>
+                <p id="ao-vivo-liberacao-aviso" class="config-ajuda" role="status">Os aparelhos poderão consultar o relatório sem entrar nas Configurações.</p>
+            </div>
             <div id="ao-vivo-resumo" class="placas"></div>
 
             <!-- PROCURAR UM INGRESSO. A pergunta da porta, e por isso ela vem
@@ -617,9 +621,8 @@
                         e nenhum celular precisa ser configurado outra vez.
                     </p>
                     <p class="config-ajuda">
-                        Peço a sua senha de novo, mesmo dentro dos 15 minutos já
-                        liberados: esta é a única coisa desta tela que não tem
-                        volta, e o celular pode estar na mão do porteiro.
+                        A autorização das Configurações vale para esta opção.
+                        Antes de zerar, você confirma a operação.
                     </p>
                     <button id="btn-zerar-entradas" class="so-com-senha perigo">Zerar as entradas deste evento</button>
                 </div>
@@ -731,7 +734,7 @@
      o "virar portão" vêm depois; `controle.js` (a engrenagem) por último entre
      eles; e a parede do PWA no fim, para não competir com o arranque da tela. -->
 <script src="chaveiro.js?v=20261132"></script>
-<script src="pin-instalacao.js?v=20261132"></script>
+<script src="pin-instalacao.js?v=20261133"></script>
 <script src="jsqr.min.js?v=20261132"></script>
 <script src="qr-evento.js?v=20261132"></script>
 <!-- O depósito da portaria mora AQUI também, e não só no portaria.html: antes
@@ -741,7 +744,7 @@
      assim que este defeito passou por toda a suíte de testes e só apareceu no
      navegador de verdade. -->
 <script src="portaria-deposito.js?v=20261132"></script>
-<script src="lista-eventos.js?v=20261132"></script>
+<script src="lista-eventos.js?v=20261133"></script>
 <!-- A conta do cliente na casa: entrar, trocar a senha provisória, sair. Vem
      DEPOIS da lista porque é ela quem decide, no arranque, se a casa abre na
      tela de entrar ou na lista — e antes do `controle.js`, que perdeu os
@@ -768,12 +771,12 @@
 <!-- O evento acontecendo: "Ao vivo" enquanto ele roda, "Relatório" depois. É a
      tela que a lista de eventos abre pelo botão do meio da linha, e a lista de
      finalizados pelo toque na linha inteira. -->
-<script src="ao-vivo.js?v=20261132"></script>
+<script src="ao-vivo.js?v=20261133"></script>
 <script src="caixa-confirmar.js?v=20261132"></script>
 <script src="menu-geral.js?v=20261132"></script>
 <script src="fila-presa.js?v=20261132"></script>
 <script src="virar-portao.js?v=20261132"></script>
-<script src="controle.js?v=20261132"></script>
+<script src="controle.js?v=20261133"></script>
 <script src="parede-pwa.js?v=20261132"></script>
 </body>
 </html>

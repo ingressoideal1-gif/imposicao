@@ -2839,8 +2839,7 @@ def test_zerar_diz_o_que_recomeca_E_o_que_continua_valendo():
     assert "ingressos" in texto
     assert "setores" in texto
     assert "aparelhos" in texto
-    # E o aviso de que a senha vem de novo.
-    assert "senha" in texto
+    assert "confirma" in texto
 
 
 def test_finalizar_diz_que_sai_da_lista_que_os_portoes_param_e_que_da_para_voltar():
@@ -2882,13 +2881,7 @@ def test_zerar_recusado_na_confirmacao_nao_pede_senha_nem_manda_nada():
     assert saida["chamadas"] == []
 
 
-def test_zerar_pede_a_senha_DE_NOVO_mesmo_com_os_15_minutos_ja_liberados():
-    """A única ação desta tela que desfaz dado que o cliente pagou para ter.
-
-    A elevação que o dono comprou meia hora antes para renomear um setor não
-    pode servir de autorização para isto — o celular pode estar na mão do
-    porteiro desde então.
-    """
+def test_zerar_reutiliza_a_autorizacao_das_configuracoes_apos_confirmar():
     saida = _no_navegador("""
         Controle.estado.sessao = { access_token: 'jwt-de-teste' };
         Controle.estado.evento_id = 'ev-1';
@@ -2911,7 +2904,7 @@ def test_zerar_pede_a_senha_DE_NOVO_mesmo_com_os_15_minutos_ja_liberados():
                  aviso: document.getElementById('aviso-gravacao').textContent };
     """)
     assert saida["estavaElevado"] is True, "o teste precisa começar JÁ elevado"
-    assert saida["pediuSenha"] == 1, "zerou sem pedir a senha de novo"
+    assert saida["pediuSenha"] == 0, "a autorização vigente deve ser reutilizada"
     assert saida["chamadas"] == [{"caminho": "/eventos/ev-1/zerar-entradas",
                                   "metodo": "POST"}]
     # Regra do projeto: o que o sistema faz sozinho se anuncia.

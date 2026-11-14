@@ -353,16 +353,15 @@ async function rodar(caso) {
         return;
     }
 
-    if (caso.modo === 'voltar') {
+    if (caso.modo === 'voltar' || caso.modo === 'ao-vivo') {
         // O `←` do topo. Ele leva a lista de eventos SEM exigir fila zerada:
         // ir e voltar da lista nao troca o token deste aparelho, e a fila sobe
         // igual depois.
         await semear(caso);
         await esperar(LENDO);
-        const visivel = await page.evaluate(() =>
-            !document.getElementById('btn-voltar').classList.contains('sumindo'));
-        if (visivel) await page.click('#btn-voltar');
-        await esperar(`window.location.pathname.indexOf('controle.html') !== -1`);
+        const botao = caso.modo === 'ao-vivo' ? 'btn-ao-vivo-leitura' : 'btn-voltar';
+        const visivel = await page.evaluate(id => !document.getElementById(id).classList.contains('sumindo'), botao);
+        if (visivel) { await page.click('#' + botao); await esperar(`window.location.pathname.indexOf('controle.html') !== -1`); }
         const url = page.url();
         const saida = {
             botaoVisivel: visivel,

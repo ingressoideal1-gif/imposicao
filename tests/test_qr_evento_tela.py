@@ -229,3 +229,35 @@ def test_evento_antecipado_sincroniza_ingressos_sem_trocar_qr():
     r = subprocess.run(["node", "tests/ideal_control_antecipado_harness.cjs"], cwd=Path(__file__).resolve().parents[1],
                        capture_output=True, encoding="utf-8", timeout=40)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_consulta_ao_vivo_reutiliza_pin_sem_dialogo_e_recusa_apos_sair():
+    r = _no_navegador(PREPARAR + r"""
+        localStorage.setItem('ideal_control_pin_configurado','synthetic');
+        localStorage.setItem('ideal_control_instalacao','cd'.repeat(32));
+        chaveiro.guardar({evento_id:E,por_qr:true,token:'ef'.repeat(32),aparelho_id:A});
+        const autorizacao=pinInstalacao.autorizar(E);
+        await until(()=>document.querySelector('input[name=pin]'));
+        const form=document.querySelector('[data-pin-campos]');
+        form.querySelector('[name=pin]').value='042815';form.querySelector('[data-pin-salvar]').click();
+        await autorizacao;
+        await pinInstalacao.consultar(E,'/eventos/'+E+'/ao-vivo');
+        await pinInstalacao.consultar(E,'/eventos/'+E+'/leituras?pagina=1');
+        pinInstalacao.encerrar();
+        const erro=await pinInstalacao.consultar(E,'/eventos/'+E+'/ao-vivo').catch(e=>e.message);
+        return {elevacoes:requests.filter(r=>r.url.endsWith('/elevar-pin')).length,
+            consultas:requests.filter(r=>r.url.endsWith('/editar-pin')).length,
+            dialogos:document.querySelectorAll('dialog[open] input[name=pin]').length,erro};
+    """)
+    assert r['elevacoes'] == 1 and r['consultas'] == 2 and r['dialogos'] == 0
+    assert 'Configurações' in r['erro']
+
+
+def test_home_exibe_contagem_do_servidor_sem_conta():
+    r = _no_navegador(PREPARAR + r"""
+        chaveiro.guardar({evento_id:E,nome_evento:'Teste',por_qr:true,token:'ef'.repeat(32),aparelho_id:A});
+        window.fetch=async()=>new Response(JSON.stringify({evento:{id:E,nome_evento:'Teste',status:'ativo',entradas:42}}),{status:200});
+        await listaEventos.carregar(null);
+        return {texto:document.getElementById('eventos').textContent};
+    """)
+    assert '42 entraram' in r['texto']

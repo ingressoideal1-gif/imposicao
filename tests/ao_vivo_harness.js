@@ -84,11 +84,45 @@ async function rodar(caso) {
     }
 
     const saida = await page.evaluate(async (c) => {
+        if (c.pin) {
+            window.AcessoConta.sessao = function () { window.__contaConsultada = true; throw new Error('Conta não deve ser consultada'); };
+            window.pinInstalacao = {
+                aparelho: function (id) { return id === 'e1' ? { token: 'aparelho-sintetico' } : null; },
+                consultar: function (id, caminho) {
+                    window.__quantasPin = (window.__quantasPin || 0) + 1;
+                    window.__consultaPin = { id: id, caminho: caminho };
+                    if (c.pinExpirado) { var e = new Error('A autorização expirou. Volte às Configurações para liberar o acesso.'); e.status = 401; return Promise.reject(e); }
+                    return Promise.resolve({ evento: { id: id, status: 'ativo', ao_vivo_na_leitura: !!c.publico }, publico: { entraram: 42 } });
+                }
+            };
+        }
+        if (c.leitura || c.publico) {
+            window.AcessoConta.sessao = function () { window.__contaConsultada = true; throw new Error('Não pedir conta'); };
+            window.chaveiro = { procurar: function () { return { token: 'token-sintetico' }; } };
+            window.fetch = function (url, opcoes) {
+                window.__consultaLeitura = { url: url, token: opcoes.headers.Authorization };
+                return Promise.resolve(new Response(JSON.stringify(c.revogado ? {detail:'AO VIVO não liberado'} : {
+                    evento: {id:'e1',status:'ativo',ao_vivo_na_leitura:true},publico:{entraram:42}
+                }), { status: c.revogado ? 403 : 200 }));
+            };
+        }
+        if (c.liberar) window.Controle.gravar = function (rota, corpo) {
+            window.__liberacao = {rota:rota,corpo:corpo}; return Promise.resolve({ok:true});
+        };
         if (c.configuracao) {
             document.getElementById('engrenagem').classList.remove('sumindo');
             document.getElementById('campo-nome-evento').value = 'Edicao ainda nao salva';
         }
         var r = await window.aoVivo[c.chamada].apply(null, c.argumentos);
+        if (c.publico) {
+            document.getElementById('btn-atualizar-ao-vivo').click();
+            await new Promise(r => setTimeout(r, 20));
+        }
+        if (c.liberar) {
+            var liberar = document.getElementById('ao-vivo-na-leitura'); liberar.checked = true;
+            liberar.dispatchEvent(new Event('change'));
+            await new Promise(r => setTimeout(r, 20));
+        }
         var retorno = document.getElementById('btn-voltar-ao-vivo').textContent;
         if (c.voltar) await window.aoVivo.fechar();
         var texto = function (sel) {
@@ -107,6 +141,14 @@ async function rodar(caso) {
         };
         return {
             retorno,
+            quantasPin: window.__quantasPin || 0,
+            consultaLeitura: window.__consultaLeitura || null,
+            liberacao: window.__liberacao || null,
+            liberacaoVisivel: !escondido('ao-vivo-liberacao'),
+            consultaPin: window.__consultaPin || null,
+            contaConsultada: !!window.__contaConsultada,
+            pediuEntrar: !!window.__pediuEntrar,
+            aviso: texto('#ao-vivo-aviso'),
             configuracaoVisivel: !escondido('engrenagem'),
             configuracaoEncerrada: !!window.__configFechada,
             nomeEditado: document.getElementById('campo-nome-evento').value,
