@@ -33,6 +33,7 @@ async function rodar(caso) {
     const html = fs.readFileSync(path.join(REPO, 'frontend', 'controle.html'), 'utf-8');
     const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
     const page = await browser.newPage();
+    if (caso.fusoNavegador) await page.emulateTimezone(caso.fusoNavegador);
     await page.setRequestInterception(true);
     page.on('request', req => {
         const url = req.url();
@@ -47,7 +48,7 @@ async function rodar(caso) {
         if (url.startsWith('http://localhost/')) {
             return req.respond({ status: 200, contentType: 'text/plain', body: '' });
         }
-        req.continue();
+        req.abort();
     });
     await page.goto('http://localhost/controle.html');
 

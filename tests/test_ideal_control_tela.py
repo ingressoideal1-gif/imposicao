@@ -193,7 +193,7 @@ DASHBOARD_FALSO = {
 
 
 def _no_navegador(script_extra, aceitar_dialogo=False, config_real=False,
-                  viewport=(1440, 900), browser_script=""):
+                  viewport=(1440, 900), browser_script="", fuso="UTC"):
     """Abre a secao do index.html num Chrome de verdade, sem backend.
 
     A pagina hospedeira e minima de proposito: carregar o index.html inteiro
@@ -234,6 +234,7 @@ const TIPOS = {{ '.js': 'application/javascript', '.css': 'text/css',
 (async () => {{
   const browser = await puppeteer.launch({{ args: ['--no-sandbox'] }});
   const page = await browser.newPage();
+  await page.emulateTimezone({json.dumps(fuso)});
   await page.setViewport({{ width: {viewport[0]}, height: {viewport[1]} }});
   const erros = [];
   page.on('pageerror', e => erros.push(String(e)));
@@ -420,7 +421,8 @@ def test_o_setor_mostra_a_faixa_impressa_com_o_mesmo_piso_de_quatro_digitos():
     assert saida["sem_faixa"] == ""
 
 
-def test_o_dashboard_desenha_o_grafico_por_hora():
+@pytest.mark.parametrize("fuso", ["UTC", "America/Los_Angeles", "Asia/Tokyo"])
+def test_o_dashboard_desenha_o_grafico_por_hora(fuso):
     saida = _no_navegador(SERVIDOR + """
         await IdealControl.abrirPedido(18560);
         document.getElementById('ic-dashboard-abrir').click();
@@ -433,10 +435,10 @@ def test_o_dashboard_desenha_o_grafico_por_hora():
             aviso_visivel: document.getElementById('ic-grafico-aviso').style.display !== 'none',
             recusas: document.getElementById('ic-recusas').textContent,
         };
-    """)
+    """, fuso=fuso)
     assert saida["colunas"] == 2
-    assert saida["rotulos"] == ["22h", "23h"]
-    assert "22h" in saida["pico"]
+    assert saida["rotulos"] == ["15/08 19h", "15/08 20h"]
+    assert "15/08 19h" in saida["pico"]
     # `grafico_truncado: false` na fixture -> o aviso fica escondido.
     assert saida["aviso_visivel"] is False
     assert "Ingresso já usado" in saida["recusas"]
@@ -522,12 +524,10 @@ def test_a_lista_de_ingressos_abre_fechada_e_pagina():
 
 
 def test_a_lista_mostra_situacao_hora_de_entrada_e_motivo_do_bloqueio():
-    """A hora sai no FUSO DE QUEM OLHA, e nao em UTC.
+    """A hora sai em Brasília, independente do navegador.
 
-    O banco guarda `22:10+00:00`; quem esta na grafica precisa ler 19:10. O
-    teste nao pode fixar "19:10", que so vale em Brasilia -- ele prova que o
-    valor passou por uma formatacao de data (e nao foi impresso cru) comparando
-    com o que o proprio navegador daria para aquele instante.
+    O banco guarda `22:10+00:00`; a tela identifica o fuso de Brasilia e deve
+    mostrar 19:10 mesmo quando o navegador esta configurado em UTC.
     """
     saida = _no_navegador(INGRESSOS + """
         await IdealControl.abrirPedido(18560);
@@ -537,7 +537,7 @@ def test_a_lista_mostra_situacao_hora_de_entrada_e_motivo_do_bloqueio():
             .find(l => l.querySelector('.ic-ingresso-numero').textContent === String(n));
         return { entrou: linha(7).textContent, bloqueado: linha(100).textContent,
                  livre: linha(50).textContent,
-                 esperado: new Date('2026-08-15T22:10:00+00:00').toLocaleString('pt-BR') };
+                 esperado: '15/08/2026 19:10:00' };
     """)
     assert "Entrou" in saida["entrou"]
     assert saida["esperado"] in saida["entrou"]

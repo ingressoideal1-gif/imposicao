@@ -430,16 +430,33 @@
             ? '—' : Number(p).toFixed(1).replace('.', ',') + '%';
     }
 
-    function quando(iso) {
-        if (!iso) { return '—'; }
-        var d = new Date(iso);
-        return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR');
+    // Relatórios usam Brasília, independente do fuso do navegador.
+    // Compatibilidade: o backend antigo enviava as faixas UTC sem o sufixo Z.
+    function dataDoRelatorio(iso) {
+        if (!iso) return null;
+        var texto = String(iso).replace(' ', 'T');
+        if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) texto += 'T00:00:00Z';
+        else if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(texto)) texto += 'Z';
+        var data = new Date(texto);
+        return isNaN(data.getTime()) ? null : data;
     }
 
-    /** "2026-08-15T22:00" → "22h". Só a hora: o eixo já diz o dia. */
-    function horaCurta(h) {
-        return h ? h.slice(11, 13) + 'h' : '—';
+    function horarioDoRelatorio(iso, faixa) {
+        var data = dataDoRelatorio(iso);
+        if (!data) return '';
+        var opcoes = { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit',
+            hour: '2-digit', hourCycle: 'h23' };
+        if (!faixa) { opcoes.year = 'numeric'; opcoes.minute = '2-digit'; opcoes.second = '2-digit'; }
+        var partes = new Intl.DateTimeFormat('pt-BR', opcoes).formatToParts(data);
+        var p = {};
+        partes.forEach(function (parte) { p[parte.type] = parte.value; });
+        return p.day + '/' + p.month + (faixa ? ' ' + p.hour + 'h' :
+            '/' + p.year + ' ' + p.hour + ':' + p.minute + ':' + p.second);
     }
+
+    function quando(iso) { return horarioDoRelatorio(iso, false) || '—'; }
+
+    function horaCurta(h) { return horarioDoRelatorio(h, true) || '—'; }
 
     /** `datetime-local` ⇄ ISO, igual ao `controle.js`. A coluna é TIMESTAMPTZ:
      *  mandar a hora do relógio crua gravaria 22:00 UTC — 19:00 em Brasília. */
