@@ -238,6 +238,33 @@ try:
     assert call(19)['estado'] == 'preparando'
     assert sql('SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=19;') == '2'
     checks.append('emissão automática concorrente, faixa exclusiva, consulta sem escrita, contrato imutável, divergência e rollback')
+    # Terceira migração: todos os pedidos, inclusive criados depois da ativação.
+    sql((ROOT/'sql/ideal_control_portal_todos_pedidos.sql').read_bytes().decode('utf-8'))
+    empty(20)
+    sql('DELETE FROM ideal_control_portal_pedidos WHERE pedido_id_int=20;')
+    assert call(20,False)['estado'] == 'pronto'
+    assert sql('SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=20;') == '0'
+    assert call(20,True,'errado')['disponivel'] is False
+    assert call(20)['estado'] == 'preparando'
+    assert sql('SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=20;') == '1'
+    empty(21)
+    sql("DELETE FROM ideal_control_portal_pedidos WHERE pedido_id_int=21; UPDATE pedidos_modelos SET status_impressao='Aguardando' WHERE id=210;")
+    assert call(21)['estado'] == 'aguardando_impressao'
+    sql("UPDATE pedidos_links_cliente SET ativo=false WHERE numero_pedido='20';")
+    assert call(20)['disponivel'] is False
+    sql("UPDATE pedidos_links_cliente SET ativo=true WHERE numero_pedido='20';")
+    before=sql('SELECT count(*) FROM producao_acesso_eventos;')
+    sql('UPDATE ideal_control_portal_config SET habilitado=false;')
+    assert call(20)['disponivel'] is False
+    assert sql('SELECT count(*) FROM producao_acesso_eventos;') == before
+    sql('UPDATE ideal_control_portal_config SET habilitado=true,todos_pedidos=false;')
+    assert call(20)['disponivel'] is False
+    assert call(19)['estado'] == 'preparando'
+    sql('UPDATE ideal_control_portal_config SET todos_pedidos=true;')
+    assert call(20)['estado'] == 'preparando'
+    sql('SET ROLE anon; UPDATE ideal_control_portal_config SET todos_pedidos=true;',ok=False)
+    sql('SET ROLE service_role; SELECT ideal_control_portal_reservar_qr(20);',ok=False)
+    checks.append('liberação geral, pedido futuro sem allowlist, impressão pendente, link revogado, desligamento e retorno ao piloto')
     print(json.dumps({'resultado':'OK','verificacoes':checks,'cluster':str(OUT)},ensure_ascii=False))
 finally:
     if started:
