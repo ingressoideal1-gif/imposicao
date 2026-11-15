@@ -160,7 +160,7 @@ def test_a_barra_do_setor_e_proporcional_e_o_numero_esta_escrito():
 def test_a_hora_de_pico_e_a_unica_marcada():
     r = desenhar(evento())
     assert r["picos"] == 1
-    assert "22h" in r["horas"][1]
+    assert "12/09 19h" in r["horas"][1]
 
 
 def test_sem_recusa_nenhuma_a_secao_inteira_some():
@@ -225,6 +225,42 @@ def csv(leituras):
     return _chamar("csvDe", [leituras])["resultado"]
 
 
+@pytest.mark.parametrize('fuso', ['UTC', 'America/Los_Angeles', 'Asia/Tokyo'])
+def test_grafico_converte_utc_para_brasilia_com_dia_independente_do_celular(fuso):
+    d = evento(por_hora=[
+        {'hora': '2026-11-15T01:00Z', 'entradas': 2, 'recusas': 0, 'saidas': 0},
+        {'hora': '2026-11-15T03:00Z', 'entradas': 1, 'recusas': 0, 'saidas': 0},
+    ], pico='2026-11-15T01:00Z')
+    r = _chamar('desenhar', [d], fusoNavegador=fuso)
+    assert '14/11 22h' in r['horas'][0]
+    assert '15/11 00h' in r['horas'][1]
+    assert r['picos'] == 1
+
+
+@pytest.mark.parametrize('fuso', ['UTC', 'America/Los_Angeles', 'Asia/Tokyo'])
+def test_csv_separa_leitura_e_sincronizacao_e_preserva_originais(fuso):
+    import csv as modulo_csv
+    import io
+    linhas = [{'momento': '2026-11-15T01:20:00Z',
+               'recebido_em': '2026-11-15T04:45:00+00:00', 'numero': 250,
+               'resultado': 'permitido', 'tipo': 'entrada'}]
+    texto = _chamar('csvDe', [linhas], fusoNavegador=fuso)['resultado']
+    r = list(modulo_csv.DictReader(io.StringIO(texto), delimiter=';'))[0]
+    assert r['Leitura (Brasília)'] == '14/11/2026 22:20:00'
+    assert r['Recebido no servidor (Brasília)'] == '15/11/2026 01:45:00'
+    assert r['Momento original (ISO)'] == linhas[0]['momento']
+    assert r['Recebimento original (ISO)'] == linhas[0]['recebido_em']
+    assert r['Numero'] == '250'
+
+
+def test_csv_offsets_equivalentes_e_valores_ausentes():
+    saida = csv([{'momento': '2026-11-14T22:20:00-03:00'},
+                 {'momento': '2026-11-15T01:20:00Z'},
+                 {'momento': None, 'recebido_em': 'invalido'}])
+    assert saida.count('"14/11/2026 22:20:00"') == 2
+    assert saida.split('\r\n')[3].startswith('"";"";')
+
+
 def test_a_planilha_usa_ponto_e_virgula_e_aspas():
     """`;` porque o Excel em português abre o ponto-e-vírgula em colunas sem
     perguntar nada, e é nele que este arquivo vai ser aberto. As aspas porque
@@ -237,8 +273,8 @@ def test_a_planilha_usa_ponto_e_virgula_e_aspas():
         "aparelho": "Portão 1", "numero": 42,
     }])
     linhas = saida.split("\r\n")
-    assert linhas[0] == ("Hora no aparelho;Hora no servidor;Setor;Aparelho;"
-                         "Numero;Tipo;Resultado;Motivo")
+    assert linhas[0] == ("Leitura (Brasília);Recebido no servidor (Brasília);Setor;Aparelho;"
+                         "Numero;Tipo;Resultado;Motivo;Momento original (ISO);Recebimento original (ISO)")
     assert '"VIP; Camarote"' in linhas[1]
     assert '"Ingresso já usado"' in linhas[1]
     assert '"42"' in linhas[1]

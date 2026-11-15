@@ -77,11 +77,31 @@
         return el;
     }
 
-    /** "2026-09-04T22:00" -> "22h". A hora vem cheia do servidor. */
-    function soAHora(iso) {
-        var m = /T(\d{2}):/.exec(String(iso || ''));
-        return m ? m[1] + 'h' : String(iso || '');
+    // Relatórios usam Brasília, independente do fuso do navegador.
+    // Compatibilidade: o backend antigo enviava as faixas UTC sem o sufixo Z.
+    function dataDoRelatorio(iso) {
+        if (!iso) return null;
+        var texto = String(iso).replace(' ', 'T');
+        if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) texto += 'T00:00:00Z';
+        else if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(texto)) texto += 'Z';
+        var data = new Date(texto);
+        return isNaN(data.getTime()) ? null : data;
     }
+
+    function horarioDoRelatorio(iso, faixa) {
+        var data = dataDoRelatorio(iso);
+        if (!data) return '';
+        var opcoes = { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit',
+            hour: '2-digit', hourCycle: 'h23' };
+        if (!faixa) { opcoes.year = 'numeric'; opcoes.minute = '2-digit'; opcoes.second = '2-digit'; }
+        var partes = new Intl.DateTimeFormat('pt-BR', opcoes).formatToParts(data);
+        var p = {};
+        partes.forEach(function (parte) { p[parte.type] = parte.value; });
+        return p.day + '/' + p.month + (faixa ? ' ' + p.hour + 'h' :
+            '/' + p.year + ' ' + p.hour + ':' + p.minute + ':' + p.second);
+    }
+
+    function soAHora(iso) { return horarioDoRelatorio(iso, true) || '—'; }
 
     /**
      * "há 4 min", "há 2 h", "agora" — contra o relógio do SERVIDOR.
@@ -321,12 +341,8 @@
             c.appendChild(topo);
             texto(c, 'div', FRASE[i.situacao] || i.situacao, 'achado-situacao');
             if (i.entrou_em) {
-                var d = new Date(i.entrou_em);
-                if (!isNaN(d.getTime())) {
-                    texto(c, 'div', 'às ' + d.toLocaleTimeString('pt-BR', {
-                        hour: '2-digit', minute: '2-digit'
-                    }), 'achado-hora');
-                }
+                var horario = horarioDoRelatorio(i.entrou_em, false);
+                if (horario) texto(c, 'div', horario + ' (Brasília)', 'achado-hora');
             }
             if (i.motivo_bloqueio) {
                 texto(c, 'div', i.motivo_bloqueio, 'achado-motivo');
@@ -394,15 +410,16 @@
         // `;` e não `,`: o Excel em português abre o ponto-e-vírgula em colunas
         // sem perguntar nada, e é nele que este arquivo vai ser aberto.
         var linhas = [[
-            'Hora no aparelho', 'Hora no servidor', 'Setor', 'Aparelho',
-            'Numero', 'Tipo', 'Resultado', 'Motivo'
+            'Leitura (Brasília)', 'Recebido no servidor (Brasília)', 'Setor', 'Aparelho',
+            'Numero', 'Tipo', 'Resultado', 'Motivo', 'Momento original (ISO)', 'Recebimento original (ISO)'
         ].join(';')];
         leituras.forEach(function (l) {
             linhas.push([
-                l.momento || '', l.recebido_em || '', l.setor || '',
+                horarioDoRelatorio(l.momento, false), horarioDoRelatorio(l.recebido_em, false), l.setor || '',
                 l.aparelho || '', l.numero === null || typeof l.numero === 'undefined'
                     ? '' : l.numero,
-                l.tipo || '', l.resultado || '', l.rotulo_motivo || l.motivo || ''
+                l.tipo || '', l.resultado || '', l.rotulo_motivo || l.motivo || '',
+                l.momento || '', l.recebido_em || ''
             ].map(function (v) {
                 // Ponto-e-vírgula e quebra de linha dentro de um campo partem a
                 // planilha em colunas que ninguém pediu. Nome de setor é texto
