@@ -1,9 +1,8 @@
 /**
  * As pecas puras da tela interna.
  *
- * `hora_casos.json` foi gerado chamando `acesso_interno._hora_cheia` caso a
- * caso -- e nao e enfeite: a primeira versao deste porte convertia para UTC, e
- * so a comparacao com o Python mostrou que ele NAO converte.
+ * `hora_casos.json` preserva os casos do porte e agora exige instantes UTC
+ * com fuso explícito. A exibição em Brasília fica nas telas do relatório.
  *
  * Rodar: npx deno test acesso-interno/puro_test.ts
  */
@@ -21,22 +20,22 @@ import {
   URL_DE_INSTALACAO,
 } from "./puro.ts";
 
-Deno.test("hora cheia: bate com o Python caso a caso", () => {
+Deno.test("hora cheia: normaliza os casos para UTC explícito", () => {
   for (const c of casos) {
     const alvo = c.momento === null ? null : c.momento;
     assertEquals(horaCheia(alvo), c.hora, `divergiu em ${JSON.stringify(alvo)}`);
   }
 });
 
-Deno.test("hora cheia: o fuso NAO desloca a hora", () => {
-  // O caso que a primeira versao errava. Converter para UTC daria 01:00 do dia
-  // seguinte, e o pico do grafico apareceria numa hora vazia.
-  assertEquals(horaCheia("2026-08-15T22:33:16-03:00"), "2026-08-15T22:00");
-  assertEquals(horaCheia("2026-08-15T22:33:16+05:30"), "2026-08-15T22:00");
+Deno.test("hora cheia: offsets equivalentes caem na mesma faixa UTC", () => {
+  assertEquals(horaCheia("2026-11-14T22:33:16-03:00"), "2026-11-15T01:00Z");
+  assertEquals(horaCheia("2026-11-15T01:33:16Z"), "2026-11-15T01:00Z");
+  assertEquals(horaCheia("2026-11-15T07:03:16+05:30"), "2026-11-15T01:00Z");
+  assertEquals(horaCheia("2026-11-15T01:33:16"), "2026-11-15T01:00Z");
 });
 
 Deno.test("hora cheia: data impossivel vira vazio, como no Python", () => {
-  for (const ruim of ["2026-13-99", "2026-02-30T10:00", "amanha", "", null]) {
+  for (const ruim of ["2026-13-99", "2026-02-30T10:00", "amanha", "", null, "2026-11-15T22:99:00Z", "2026-11-15T22:10:99Z", "2026-11-15T25:00Z", "2026-11-15T22:00+99:99"]) {
     assertEquals(horaCheia(ruim), "", `deveria ser vazio: ${ruim}`);
   }
 });
