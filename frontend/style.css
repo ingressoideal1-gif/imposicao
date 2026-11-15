@@ -3721,6 +3721,11 @@ input[type=number] {
 
 /* ─── A barra de abas ─────────────────────────────────────────────────────── */
 
+#portal-ideal-control-aba[hidden] { display: none; }
+#portal-ideal-control-aba .portal-aba-rotulo { white-space: normal; }
+.portal-abas:has(#portal-ideal-control-aba:not([hidden])) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+#secao-ideal-control canvas { display: block; width: 100%; max-width: 300px; height: auto; margin: 20px 0; }
+#secao-ideal-control .btn { margin: 8px 8px 8px 0; }
 .portal-abas {
     position: fixed;
     left: 0;

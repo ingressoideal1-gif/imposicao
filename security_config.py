@@ -169,6 +169,7 @@ PAINEL_ARQUIVOS = [
     # seu arquivo, e a `cliente.html` carrega todos. Sem eles aqui, a estacao
     # serviria a pagina antiga -- ou daria 404 em sete scripts de uma vez.
     "cliente-dados.js",
+    "cliente-ideal-control.js",
     "cliente-shell.js",
     "cliente-confirmacoes.js",
     "cliente-entrega-form.js",

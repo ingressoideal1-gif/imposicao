@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ideal Imposition — Aprovação do Pedido</title>
     <meta name="description" content="Ideal Imposition — Envio de artes e aprovação de pedidos online.">
-    <link rel="stylesheet" href="/style.css?v=20261125">
+    <link rel="stylesheet" href="/style.css?v=20261136">
     <link rel="stylesheet" href="/cliente-modelo.css?v=963">
     <style>
         /* Ajustes básicos para o cliente rodar isolado, caso existam dependências no body geral */
@@ -123,6 +123,7 @@
 
                     <!-- 💳 LINK PARA PAGAMENTO -->
                     <section id="secao-pagamento" class="portal-secao" hidden></section>
+                    <section id="secao-ideal-control" class="portal-secao" hidden></section>
 
                 </main>
             </div>
@@ -153,6 +154,9 @@
             </button>
             <button type="button" class="portal-aba" data-abre="pagamento">
                 <span class="portal-aba-icone" data-icone="pagar" aria-hidden="true"></span><span class="portal-aba-rotulo">Pagar</span>
+            </button>
+            <button type="button" id="portal-ideal-control-aba" class="portal-aba" data-abre="ideal-control" hidden>
+                <span class="portal-aba-icone" data-icone="check" aria-hidden="true"></span><span class="portal-aba-rotulo">Ideal Control</span>
             </button>
         </nav>
     </div>
@@ -205,8 +209,9 @@
     <script src="/teatro-banco.js?v=20261121"></script>
     <script src="/teatro-snapshot.js?v=1034"></script>
     <script src="/cliente-bancos.js?v=1009"></script>
-    <script src="/cliente-dados.js?v=20261126"></script>
+    <script src="/cliente-dados.js?v=20261136"></script>
     <script src="/cliente-shell.js?v=20261125"></script>
+    <script src="/cliente-ideal-control.js?v=20261136"></script>
     <script src="/cliente-confirmacoes.js?v=20261125"></script>
     <script src="/cliente-entrega-form.js?v=20261125"></script>
     <script src="/cliente-entrega.js?v=20261128"></script>

@@ -561,3 +561,7 @@ verify_jwt = true
 
 [functions.whatsapp-dialogo-piloto]
 verify_jwt = true
+
+[functions.ideal-control-portal]
+# Portal sem login: RPC privada exige link ativo, impressão e allowlist do piloto.
+verify_jwt = false

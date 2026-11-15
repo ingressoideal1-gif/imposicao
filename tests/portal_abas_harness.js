@@ -149,7 +149,8 @@ const secaoValida = carregar(['SECOES', 'secaoValida'], 'secaoValida');
     // Icone sozinho nao diz para onde leva. Controle novo neste projeto precisa
     // de rotulo em texto.
     const rotulos = HTML.match(/class="portal-aba-rotulo"[^>]*>([^<]+)</g) || [];
-    ok(rotulos.length === 5, 'cinco rotulos em texto', rotulos.length);
+    ok(rotulos.length === 6, 'cinco abas e a aba piloto inicialmente oculta', rotulos.length);
+    ok(/id="portal-ideal-control-aba"[^>]*hidden/.test(HTML), 'Ideal Control inicia oculto');
 })();
 
 (function oCabecalhoTrazALogoDaEmpresa() {
