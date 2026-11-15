@@ -14,41 +14,27 @@
  * escritos contra aquele modulo continuam apontando para onde foram escritos.
  */
 
-/**
- * "2026-08-15T22:33:16+00:00" -> "2026-08-15T22:00". Nulo vira vazio.
- *
- * Porte de `_hora_cheia`. A hora e a do RELOGIO COMO ESCRITO, sem converter
- * fuso -- foi assim que o Python sempre se comportou, e medi caso a caso antes
- * de escrever isto (`hora_casos.json`).
- *
- * A primeira versao deste porte usava `toISOString()`, que converte para UTC:
- * "22:33:16-03:00" viraria "2026-08-16T01:00" em vez de "2026-08-15T22:00". O
- * `strftime` do Python formata os campos do objeto e ignora o deslocamento, e o
- * `replace(tzinfo=utc)` de la so entra quando a data vem SEM fuso -- onde nao
- * muda campo nenhum. O grafico por hora do dashboard sairia deslocado, e a
- * unica pista seria um pico numa hora em que nao entrou ninguem.
- *
- * Por isso a leitura e textual: os campos vem da propria escrita, e nao de um
- * `Date` que reinterpreta o fuso pelo caminho.
+/** Agrupa pelo instante real, em UTC, e mantém o fuso explícito na resposta.
+ * A apresentação converte para Brasília. Valores antigos sem offset seguem a
+ * convenção UTC do banco; nunca dependem do fuso da máquina que gera o relatório.
  */
-const MOMENTO_ISO =
-  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:[+-]\d{2}:?\d{2}|Z)?)?$/;
+const MOMENTO_ISO = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 export function horaCheia(momento: unknown): string {
   if (!momento) return "";
-  const m = MOMENTO_ISO.exec(String(momento));
+  const texto = String(momento);
+  const m = MOMENTO_ISO.exec(texto);
   if (!m) return "";
-  const [, ano, mes, dia, hora] = m;
-  // O calendario ainda precisa existir: o Python levanta `ValueError` para
-  // "2026-13-99", e a regex sozinha deixaria passar.
-  const d = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
-  if (
-    d.getUTCFullYear() !== Number(ano) || d.getUTCMonth() !== Number(mes) - 1 ||
-    d.getUTCDate() !== Number(dia) || Number(hora ?? 0) > 23
-  ) {
-    return "";
-  }
-  return `${ano}-${mes}-${dia}T${hora ?? "00"}:00`;
+  const [, ano, mes, dia, hora, minuto, segundo, fuso] = m;
+  const calendario = new Date(`${ano}-${mes}-${dia}T00:00:00Z`);
+  if (calendario.getUTCFullYear() !== Number(ano) ||
+      calendario.getUTCMonth() !== Number(mes) - 1 || calendario.getUTCDate() !== Number(dia) ||
+      Number(hora || 0) > 23 || Number(minuto || 0) > 59 || Number(segundo || 0) > 59) return "";
+  const normalizado = texto.replace(' ', 'T') + (!hora ? 'T00:00:00Z' : !fuso ? 'Z' : '');
+  const instante = new Date(normalizado);
+  if (!Number.isFinite(instante.getTime())) return "";
+  instante.setUTCMinutes(0, 0, 0);
+  return instante.toISOString().slice(0, 16) + 'Z';
 }
 
 /** Porte de `_situacao`. A ordem importa: cancelado vence bloqueado, que vence

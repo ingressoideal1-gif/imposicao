@@ -205,7 +205,7 @@ Deno.test("dashboard: setores e recusas vêm da agregação; horas da amostra pa
     {
       "producao_acesso_leituras": [
         { momento: "2026-09-04T21:10:00+00:00", resultado: "permitido", tipo: "entrada", setor_id: "vip" },
-        { momento: "2026-09-04T21:40:00+00:00", resultado: "permitido", tipo: "entrada", setor_id: "vip" },
+        { momento: "2026-09-04T18:40:00-03:00", resultado: "permitido", tipo: "entrada", setor_id: "vip" },
         { momento: "2026-09-04T22:05:00+00:00", resultado: "permitido", tipo: "entrada", setor_id: "cam" },
         { momento: "2026-09-04T22:20:00+00:00", resultado: "negado", motivo: "ja_entrou", setor_id: "vip" },
       ],
@@ -220,10 +220,10 @@ Deno.test("dashboard: setores e recusas vêm da agregação; horas da amostra pa
     [["VIP", 2], ["Camarote", 1]],
   );
   assertEquals(resultado.por_hora.map((h: any) => h.hora), [
-    "2026-09-04T21:00",
-    "2026-09-04T22:00",
+    "2026-09-04T21:00Z",
+    "2026-09-04T22:00Z",
   ]);
-  assertEquals(resultado.pico, "2026-09-04T21:00");
+  assertEquals(resultado.pico, "2026-09-04T21:00Z");
   assertEquals(resultado.recusas, [
     { motivo: "ja_entrou", rotulo: MOTIVOS.ja_entrou, quantas: 1 },
   ]);
