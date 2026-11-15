@@ -182,6 +182,62 @@ try:
     sql('UPDATE producao_acesso_pedidos SET qr_revogado_em=now() WHERE pedido_id_int=13;')
     assert call(13)['estado'] == 'acesso_revogado'
     checks.append('faixa ordinal incompleta, pedido inativo e QR do pedido revogado')
+    # Segunda migração: primeira emissão automática após marcar Impresso.
+    for f in ['tests/control_portal_qr_fixture.sql','tests/control_portal_qr_baseline.sql',
+              'sql/ideal_control_portal_emissao_automatica.sql']:
+        sql((ROOT/f).read_bytes().decode('utf-8'))
+    def empty(n):
+        seed(n)
+        sql(f"DELETE FROM producao_acesso_credenciais WHERE pedido_id_int={n}; DELETE FROM producao_acesso_pedidos WHERE pedido_id_int={n}; DELETE FROM producao_acesso_qr_contratos WHERE pedido={n};")
+    empty(14)
+    assert call(14,False)['estado'] == 'pronto'
+    assert sql('SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=14;') == '0'
+    # A API das estações conserva a proteção anterior.
+    sql('SELECT producao_acesso_qr_contratos_obter(14);',ok=False)
+    sql('SET ROLE service_role; SELECT ideal_control_portal_reservar_qr(14);',ok=False)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        a=pool.submit(call,14)
+        b=pool.submit(call,14)
+        assert a.result()['evento_id'] == b.result()['evento_id']
+    assert sql('SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=14 AND versao=2;') == '1'
+    assert sql('SELECT count(*) FROM producao_acesso_qr_reservas WHERE pedido=14;') == '1'
+    original=sql('SELECT row_to_json(c)::text FROM producao_acesso_qr_contratos c WHERE pedido=14;')
+    assert call(14)['estado'] == 'preparando'
+    assert sql('SELECT row_to_json(c)::text FROM producao_acesso_qr_contratos c WHERE pedido=14;') == original
+    empty(15)
+    assert call(15)['estado'] == 'preparando'
+    assert sql("SELECT count(*) FROM producao_acesso_qr_reservas a JOIN producao_acesso_qr_reservas b ON a.modelo<b.modelo AND a.faixa && b.faixa;") == '0'
+    # Divergência de fonte não substitui o contrato nem expõe QR.
+    sql('UPDATE pedidos_modelos SET numeracao_inicio=2 WHERE id=140;')
+    sql("SET ROLE service_role; SELECT ideal_control_portal('14','ficticio-14',true);",ok=False)
+    assert sql('SELECT row_to_json(c)::text FROM producao_acesso_qr_contratos c WHERE pedido=14;') == original
+    empty(16)
+    sql("UPDATE pedidos_links_cliente SET ativo=false WHERE numero_pedido='16';")
+    assert call(16)['disponivel'] is False
+    assert sql('SELECT count(*) FROM producao_acesso_qr_reservas WHERE pedido=16;') == '0'
+    empty(17)
+    sql("UPDATE pedidos_modelos SET amostra_num_id=NULL WHERE id=170;")
+    assert call(17)['estado'] == 'sem_codigos'
+    empty(18)
+    sql("UPDATE producao_acesso_qr_controle SET ativo=false;")
+    sql("SET ROLE service_role; SELECT ideal_control_portal('18','ficticio-18',true);",ok=False)
+    assert sql('SELECT count(*) FROM producao_acesso_eventos WHERE id_cliente=18;') == '0'
+    assert sql('SELECT count(*) FROM producao_acesso_setores WHERE pedido_id_int=18;') == '0'
+    sql("UPDATE producao_acesso_qr_controle SET ativo=true;")
+    assert call(18)['estado'] == 'preparando'
+    seed(19,second=True)
+    sql('DELETE FROM producao_acesso_credenciais WHERE pedido_id_int=19; DELETE FROM producao_acesso_pedidos WHERE pedido_id_int=19; DELETE FROM producao_acesso_qr_contratos WHERE pedido=19;')
+    sql("""CREATE FUNCTION falha_reserva_simulada() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.modelo=191 THEN RAISE EXCEPTION 'falha segunda reserva'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER falha_reserva_simulada BEFORE INSERT ON producao_acesso_qr_contratos FOR EACH ROW EXECUTE FUNCTION falha_reserva_simulada();""")
+    sql("SET ROLE service_role; SELECT ideal_control_portal('19','ficticio-19',true);",ok=False)
+    assert sql('SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=19;') == '0'
+    assert sql('SELECT count(*) FROM producao_acesso_qr_reservas WHERE pedido=19;') == '0'
+    assert sql('SELECT count(*) FROM producao_acesso_eventos WHERE id_cliente=19;') == '0'
+    sql('DROP TRIGGER falha_reserva_simulada ON producao_acesso_qr_contratos;')
+    assert call(19)['estado'] == 'preparando'
+    assert sql('SELECT count(*) FROM producao_acesso_qr_contratos WHERE pedido=19;') == '2'
+    checks.append('emissão automática concorrente, faixa exclusiva, consulta sem escrita, contrato imutável, divergência e rollback')
     print(json.dumps({'resultado':'OK','verificacoes':checks,'cluster':str(OUT)},ensure_ascii=False))
 finally:
     if started:
