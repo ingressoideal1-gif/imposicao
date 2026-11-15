@@ -66,6 +66,7 @@ async function carregarPortal(numero, token) {
     if (!data) return null;
 
     window.portalDados = data;
+    if (window.PortalIdealControl) window.PortalIdealControl.iniciar(numero, token);
     if (typeof carregarNotasFiscaisDoPortal === 'function') {
         void carregarNotasFiscaisDoPortal(data, numero, token);
     }
