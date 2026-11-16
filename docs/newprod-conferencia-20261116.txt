@@ -62,7 +62,44 @@ do navegador nem a latencia real da nuvem. A atualizacao dos catalogos online
 na abertura foi preservada e ainda pode acrescentar tempo.
 Os trechos centrais disponiveis da LASER-01 nao continham o pedido 25291 nem
 seu modelo 1008086; nao fornecem uma duracao real desse pedido.
-Correcao em worktree isolada. Sem commit, publicacao, instalacao ou reinicio.
+Na etapa inicial, a correcao ficou em worktree isolada, sem publicacao.
 Para comprovar o ganho operacional, apos entrega autorizada, conferir a versao
 instalada e medir clique ate abertura do pedido 25291 na LASER-01, incluindo
 coleta ativa e reabertura. Validar tambem revisao alterada e falha de rede.
+
+Entrega segura autorizada e concluida
+Versao oficial: 1.4.17. Fonte compilada: 0778ecad4b79f17912f8ae2cd25fdf496bfb425a,
+na branch fix/newprod-conferencia-rapida-20261116, enviada ao repositorio remoto.
+A linha do agente parte da tag 1.4.16 publicada; nao foi substituida pela main
+do site, que possui historico e fonte do agente divergentes. Nao houve mudanca
+de frontend nem necessidade de nova publicacao do site.
+
+MSI: NewProdPiloto_Oficial_v1.4.17.msi, ProductVersion 1.4.17, 196890624 bytes.
+SHA-256: f94547161ca91edc96c551390c7b525416cd85f5b29f07d58dab417f62aa8631.
+UpgradeCode original preservado. Executaveis oficial e piloto compilados e
+auditados: nenhum modulo de segredo/arquivo privado; cinco modulos conferidos
+contra a fonte e 390 arquivos do painel identicos em cada executavel. As tres
+DLLs do runtime win32ui estao presentes.
+
+Depois do envio imutavel, o download publico completo coincidiu em tamanho e
+SHA-256. Somente depois foram ativados newprod-piloto-oficial.json e latest.json
+na versao 1.4.17, sem restricao de estacoes. Ambos foram relidos e conferidos.
+O manifesto de teste permaneceu exatamente igual, em 1.3.35.
+
+Validacao adicional da release: 44 testes de perfil oficial, manifesto,
+publicacao e seguranca aprovados, com o aviso Starlette/httpx existente.
+A primeira tentativa usou um wrapper da auditoria que mudava o diretorio e
+bloqueava ate arquivos DPAPI sinteticos; era inadequado aos subprocessos e
+fixtures destes testes. A execucao no diretorio do projeto, com perfil
+sintetico isolado, passou. Nao foi necessaria alteracao de produto ou teste.
+
+Consulta somente leitura da LASER-01 em 16/11/2026 as 18h10 de Brasilia:
+versao instalada reportada 1.4.16, painel 1335, contato as 18h10min31s.
+A adocao da 1.4.17 e a medicao real do pedido 25291 permanecem pendentes.
+Nenhuma instalacao manual, reinicio forcado, limpeza remota ou impressao.
+O atualizador existente preserva o adiamento quando a estacao esta ocupada.
+
+Evidencias versionadas em docs/evidencias/newprod-1417-{pacote,validacao,
+desempenho,publicacao}.json. Consulta de adocao em dist/laser01-apos-1417.json.
+Recuperacao: preservar a fonte anterior; se necessario, publicar essa fonte
+sob um numero maior. Restaurar apenas o manifesto nao provoca downgrade.

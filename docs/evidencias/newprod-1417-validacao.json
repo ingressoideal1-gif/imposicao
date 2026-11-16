@@ -1,0 +1,38 @@
+{
+  "fonte": "0778ecad4b79f17912f8ae2cd25fdf496bfb425a",
+  "perfis": [
+    "producao",
+    "piloto",
+    "oficial"
+  ],
+  "por_perfil": {
+    "harnesses_javascript_aprovados": 25,
+    "pytest_aprovados": 1353,
+    "ignorados": 3,
+    "subtestes_aprovados": 2,
+    "avisos": 1
+  },
+  "validacao_adicional_release": {
+    "aprovados": 44,
+    "nota": "Executada no diretorio do projeto com perfil sintetico. Wrapper da auditoria anterior era incompativel com subprocessos e fixtures DPAPI deste conjunto.",
+    "avisos": 1
+  },
+  "tempos": [
+    {
+      "canal": "producao",
+      "exit_code": 0,
+      "segundos": 205.49
+    },
+    {
+      "canal": "piloto",
+      "exit_code": 0,
+      "segundos": 198.93
+    },
+    {
+      "canal": "oficial",
+      "exit_code": 0,
+      "segundos": 196.88
+    }
+  ],
+  "impressao_fisica": false
+}

@@ -1,0 +1,43 @@
+{
+  "commit": "0778ecad4b79f17912f8ae2cd25fdf496bfb425a",
+  "executaveis": [
+    {
+      "arquivo": "dist/NewProd.exe",
+      "sha256": "ee561c645d317e3144c62d472eec9d11a2751b7de218e946a2d1a620a53345c0",
+      "bytes": 144708690,
+      "versao": "1.4.17",
+      "modulos_identicos_a_fonte": [
+        "agent_version",
+        "pacotes_api",
+        "retencao_cache",
+        "selecao_piloto",
+        "catalogo_revisoes"
+      ],
+      "painel_arquivos_conferidos": 390,
+      "runtime_win32ui_completo": true
+    },
+    {
+      "arquivo": "dist/piloto/NewProdPiloto.exe",
+      "sha256": "0c66c4fe60466a1d131e3dab9d89a49732c1560ce07754d4ad4719bdd0bdd2b9",
+      "bytes": 144708229,
+      "versao": "1.4.17",
+      "modulos_identicos_a_fonte": [
+        "agent_version",
+        "pacotes_api",
+        "retencao_cache",
+        "selecao_piloto",
+        "catalogo_revisoes"
+      ],
+      "painel_arquivos_conferidos": 390,
+      "runtime_win32ui_completo": true
+    }
+  ],
+  "msi": {
+    "arquivo": "NewProdPiloto_Oficial_v1.4.17.msi",
+    "version": "1.4.17",
+    "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}",
+    "sha256": "f94547161ca91edc96c551390c7b525416cd85f5b29f07d58dab417f62aa8631",
+    "bytes": 196890624
+  },
+  "instalado": false
+}
