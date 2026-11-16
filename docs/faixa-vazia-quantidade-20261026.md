@@ -12,8 +12,13 @@ validacao, campos da lista, preenchimento ao abrir, previa, PDF e impressao.
 - Inicio vazio (null, undefined, texto vazio ou espacos): 1.
 - Fim vazio: inicio + quantidade do modelo - 1.
 - TICKET: inicio + quantidade de celulas fisicas * vias - 1. Nao divide QTD.
-- Faixas preenchidas, inclusive inicio zero, sao preservadas.
-- Valores invalidos, quantidade invalida e faixas preenchidas inconsistentes
+  Desde a regra solicitada em 16/11/2026, esse calculo sempre prevalece sobre
+  o fim gravado, mesmo preenchido, divergente ou invalido. O tipo e as vias
+  sao os da numeracao vinculada, nao o tipo textual legado do modelo.
+- Inicio preenchido, inclusive zero, e preservado. Nos demais tipos, o fim
+  preenchido tambem continua preservado.
+- Inicio, quantidade ou vias invalidos e estouro de inteiro seguro continuam
+  bloqueados. Nos demais tipos, valores invalidos e faixas inconsistentes
   continuam bloqueados. PDF paginado, banco, TEATRO e CAMAROTE preservam seus fluxos.
 - O calculo nao modifica o objeto do modelo nem grava no banco. Alterar os campos
   manualmente continua seguindo o fluxo de gravacao existente.

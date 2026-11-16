@@ -16,7 +16,7 @@ function single(qtd=5) {
     return f;
 }
 async function tests() {
-    let payloadConfirmado;
+    let payloadConfirmado, payloadTicket;
     const f=single(), item=f.items[0];
     item.num_inicial=item.num_final=item.numeracao_inicio=item.numeracao_fim=null;
     const before=JSON.stringify(item);
@@ -71,12 +71,54 @@ async function tests() {
             assert.equal(JSON.stringify(empty.items[0]),cadastro);
         }
         const ticket=single(5);
-        Object.assign(ticket.items[0],{num_inicial:null,num_final:null});
+        Object.assign(ticket.items[0],{num_inicial:null,num_final:5});
         Object.assign(ticket.c.state.numeracoes[0],{tipo:'TICKET',ticket_qtd:3});
         await ticket.c.runPedImposition(mode);
         assert.equal(ticket.calls.requests.length,1,JSON.stringify(ticket.calls.notices));
         assert.equal(ticket.calls.requests[0].seq_start,1);
         assert.equal(ticket.calls.requests[0].seq_end,15);
+        payloadTicket = ticket.calls.requests[0];
+        // TICKET usa a faixa esperada mesmo com NF persistido divergente ou invalido.
+        for (const fimGravado of [1000, 9999, null, '', false, 'invalido']) {
+            for (const inicio of [0, 1, 101]) {
+                const t = single(1000);
+                Object.assign(t.items[0], {num_inicial:inicio, numeracao_inicio:inicio,
+                    num_final:fimGravado, numeracao_fim:fimGravado, tipo_numeracao:'SEQUENCIAL'});
+                Object.assign(t.c.state.numeracoes[0], {tipo:'TICKET', ticket_qtd:2});
+                const cadastro = JSON.stringify(t.items[0]);
+                assert.equal(t.c.problemaNosCamposDosModelos(), null);
+                for (const prefixo of ['ped', 'imp']) {
+                    t.elements[prefixo+'-start'] = {value:'777'};
+                    t.elements[prefixo+'-end'] = {value:'888'};
+                    t.c.preencherFaixaDoModelo(t.items[0], prefixo);
+                    assert.equal(Number(t.elements[prefixo+'-start'].value), inicio);
+                    assert.equal(Number(t.elements[prefixo+'-end'].value), inicio+1999);
+                }
+                // Inputs antigos nao podem substituir a faixa efetiva no envio.
+                t.elements['ped-end'].value = '888';
+                t.c.drawPedPreview();
+                assert.equal(t.c.pedRefazerTotalCelulas, 1000, 'previa mantem as 1000 celulas fisicas');
+                await t.c.runPedImposition(mode);
+                assert.equal(t.calls.requests.length, 1, JSON.stringify(t.calls.notices));
+                assert.equal(t.calls.requests[0].seq_start, inicio);
+                assert.equal(t.calls.requests[0].seq_end, inicio+1999);
+                assert.equal(JSON.stringify(t.items[0]), cadastro, 'calcular nao grava NF no modelo');
+            }
+        }
+        for (const alterar of [
+            t => {t.items[0].qtd = 0;},
+            t => {t.items[0].num_inicial = 'invalido';},
+            t => {t.c.state.numeracoes[0].ticket_qtd = 0;},
+            t => {t.c.state.numeracoes[0].ticket_qtd = 1.5;},
+            t => {t.items[0].num_inicial = Number.MAX_SAFE_INTEGER;},
+        ]) {
+            const t = single(1000);
+            Object.assign(t.c.state.numeracoes[0], {tipo:'TICKET', ticket_qtd:2});
+            alterar(t);
+            await t.c.runPedImposition(mode);
+            assert.equal(t.calls.requests.length, 0, 'TICKET invalido nao pode gerar ou imprimir');
+            assert.equal(t.calls.printed.length, 0);
+        }
         const multi=fixture();multi.items[1].num_inicial=null;
         multi.items[1].num_final=null;
         await multi.c.runPedImposition(mode);
@@ -135,6 +177,7 @@ async function tests() {
         assert(legacy.calls.notices.some(x=>String(x[0]).includes('Numeração inicial')),JSON.stringify(legacy.calls.notices));
     }
     if (process.argv.includes('--payload')) return console.log(JSON.stringify(payloadConfirmado));
+    if (process.argv.includes('--payload-ticket')) return console.log(JSON.stringify(payloadTicket));
     console.log('OK: faixa vazia 1-quantidade, sem gravação, inválidos bloqueados, seleção combinada, zero, TICKET, PDF paginado, CSV e camarote');
 }
 tests().catch(e=>{console.error(e);process.exitCode=1;});

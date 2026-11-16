@@ -29,6 +29,7 @@ function fixture(options={}) {
         conferirModoVibeDoTrabalho:async()=>true, // Conferencia real exercitada em modo_compativel_vibe_harness.js.
         crypto:require("node:crypto").webcrypto, TextDecoder, setTimeout, clearTimeout,
         toast:(...args)=>calls.notices.push(args),
+        getPedPrintOptions:()=>({printerName:'Simulada',options:{}}),
         showDirectoryPicker:async()=>({getFileHandle:async name=>({createWritable:async()=>({
             write:async blob=>calls.saved.push({name,blob}),close:async()=>{},
         })})}),
@@ -57,6 +58,8 @@ function fixture(options={}) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/arte-de-impressao.js'), 'utf8'),c);
     c.confirmarIntegridadeDoTrabalho=async()=>{}; // Preparação real coberta pelo harness de integridade.
     const executarInicio=pedido.indexOf('async function executarPedImposition(');
+    const entregarInicio=pedido.indexOf('async function entregarLoteComAcompanhamento(');
+    vm.runInContext(pedido.slice(entregarInicio,pedido.indexOf('\n}',entregarInicio)+2),c);
     vm.runInContext(pedido.slice(executarInicio,pedido.indexOf('\n}',executarInicio)+2),c);
     vm.runInContext(section('runPedImposition'),c);
     return {c,elements,items,calls};

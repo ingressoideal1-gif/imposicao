@@ -28382,7 +28382,8 @@ window.aplicarRegraProdutoPrateleira = aplicarRegraProdutoPrateleira;
 window.sincronizarAprovacaoProdutosPrateleira = sincronizarAprovacaoProdutosPrateleira;
 window.repararProdutosPrateleiraDosItens = repararProdutosPrateleiraDosItens;
 
-// Faixa vazia usa a quantidade do proprio modelo; nao grava nem altera o cadastro.
+// TICKET sempre usa a faixa calculada; nos demais tipos, apenas completa a faixa vazia.
+// Nao grava nem altera o cadastro.
 function faixaEfetivaDoModelo(item) {
     const valor = (principal, alternativo) => principal !== undefined ? principal : alternativo;
     const vazio = v => v == null || (typeof v === 'string' && v.trim() === '');
@@ -28393,6 +28394,10 @@ function faixaEfetivaDoModelo(item) {
     const numId = item.amostra_num_id || item.numeracao_id;
     const num = (state.numeracoes || []).find(n => String(n.id) === String(numId));
     const vias = num?.tipo === 'TICKET' ? num.ticket_qtd : 1;
+    // O NF persistido pode ter sido calculado como SEQUENCIAL pelo ERP.
+    // No TICKET, inicio + quantidade fisica * vias - 1 e a fonte de verdade.
+    // Se os dados nao permitem calcular, manter vazio para a validacao bloquear.
+    if (num?.tipo === 'TICKET') fim = null;
     const inteiro = (v, minimo) => !vazio(v) && typeof v !== 'boolean'
         && Number.isSafeInteger(Number(v)) && Number(v) >= minimo;
     if (vazio(fim) && inteiro(inicio, 0) && inteiro(qtd, 1) && inteiro(vias, 1)) {
