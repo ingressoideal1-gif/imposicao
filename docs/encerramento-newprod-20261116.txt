@@ -1,0 +1,84 @@
+ENCERRAMENTO — NEWPROD — 16/11/2026
+
+Situação ao encerrar
+Entrega segura da versão 1.4.17 concluída. A correção reduz a espera da
+conferência antes de abrir o pedido, removendo a disputa pela trava geral com
+a varredura local e a consulta remota da coleta. Revisão, integridade dos
+arquivos, arquivamento e proteção contra descarte permanecem obrigatórios.
+Atividades encerradas por solicitação do usuário. Não há monitoramento
+agendado nem instalação manual pendente em execução.
+
+Fonte e localização para retomada
+Worktree: C:\Users\Junior\Projetos Ingresso ideal\imposition-conferencia-rapida-20261116
+Branch: fix/newprod-conferencia-rapida-20261116
+Base: agente-v1.4.16 / 87d980f9d2cabbe93898087095e5695153a02721
+Fonte compilada: 0778ecad4b79f17912f8ae2cd25fdf496bfb425a
+Registro da entrega: 3ea2aa73549af5e835e031ad084e01077a0e01f4
+Tag publicada: agente-v1.4.17, apontando para o registro acima.
+O checkout operacional ideal-imposition permanece com alterações anteriores
+preservadas. A main do site tem histórico diferente da linha publicada do
+agente; não substituir a fonte do agente por ela nem mesclar integralmente
+os checkouts para retomar esta tarefa.
+
+Comprovação da entrega
+MSI: NewProdPiloto_Oficial_v1.4.17.msi — 196890624 bytes.
+SHA-256: f94547161ca91edc96c551390c7b525416cd85f5b29f07d58dab417f62aa8631.
+Download público completo conferido antes da ativação.
+newprod-piloto-oficial.json e latest.json relidos em 1.4.17, para todas as
+estações. newprod-piloto-teste.json preservado em 1.3.35.
+Não houve alteração de frontend, migração SQL, mudança de status comercial,
+limpeza manual, reinício forçado ou impressão física.
+
+Validação
+Em cada perfil (produção, piloto e oficial): 1353 testes Python e 25 harnesses
+JavaScript aprovados; 3 testes ignorados, 2 subtestes aprovados e um aviso
+Starlette/httpx. Mais 44 testes de release aprovados. Executáveis oficial e
+piloto auditados: módulos alterados iguais à fonte, 390 arquivos do painel
+conferidos por executável, runtime de impressão presente e pacote sem os
+arquivos privados proibidos. Nenhum segredo foi incluído nos registros.
+
+Ensaio sintético com um pedido já preparado, durante varredura concorrente:
+4096 registros: abertura de 5413,52 ms para 6,69 ms.
+16384 registros: abertura de 21213,29 ms para 6,89 ms.
+Isso isola o bloqueio local. Não mede o tempo completo do navegador, a rede
+real ou o pedido 25291 na LASER-01.
+
+Último estado observado da LASER-01
+Consulta de 16/11/2026 às 18h10 de Brasília: versão reportada 1.4.16, painel
+1335, contato às 18h10min31s. Última atualização validada ainda era a 1.4.16.
+O registro histórico LASER-01 [Piloto] tem contato antigo e não comprova a
+versão atual da estação. Não houve nova consulta durante este encerramento.
+A adoção da 1.4.17 e o ganho operacional permanecem pendentes de confirmação.
+
+Retomada recomendada
+1. Consultar a versão instalada reportada pela LASER-01 e o último resultado
+   do atualizador. Publicação e heartbeat recente não comprovam a atualização.
+2. Após confirmar 1.4.17, medir do clique até a tela do pedido 25291 abrir,
+   incluindo reabertura e coleta ativa. Registrar horário e duração.
+3. Se persistir demora, separar tempo da conferência online, atualização dos
+   catálogos, espera da seleção e leitura local. A atualização dos catálogos
+   online foi preservada; esta entrega não remove essa dependência de rede.
+4. Verificações de revisão alterada e falha de rede devem usar cenário
+   controlado. Não alterar o pedido real nem interromper a rede da produção
+   para simular falhas. Não forçar reinício com trabalhos ativos.
+
+Limites da investigação anterior
+Pedido 25291: modelo 1008086. Os trechos centrais disponíveis da LASER-01 não
+continham esses identificadores nem duração da abertura; não é possível
+atribuir ao pedido real os tempos sintéticos. A autorização administrativa
+da investigação cobriu apenas logs dessa estação e identificação desse
+modelo. Não presumir autorização para novas escritas ou consultas genéricas.
+Outras oportunidades identificadas (tempo de catálogos online, trava de
+seleção e retenção de caches auxiliares) exigem avaliação específica; não
+foram corrigidas nem são motivo para limpar arquivos manualmente.
+
+Evidências e recuperação
+Relatório: docs/newprod-conferencia-20261116.txt.
+Recibos: docs/evidencias/newprod-1417-{pacote,validacao,desempenho,publicacao,
+laser01-apos}.json.
+Binários e logs locais: dist/ e .tmp/ desta worktree.
+Auditoria inicial: ../ideal-imposition/.tmp/auditoria-newprod-20261116/relatorio.txt.
+As evidências temporárias não foram incluídas integralmente no Git.
+Recuperação do código, se necessária: publicar a fonte anterior sob versão
+maior, com nova validação. Repor apenas um manifesto antigo não faz downgrade.
+Preservar dados locais, snapshots, spool e configurações das estações.

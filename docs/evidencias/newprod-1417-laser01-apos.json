@@ -1,0 +1,26 @@
+{
+  "consultado_utc": "2026-11-16T21:10:55.352100+00:00",
+  "estacoes": [
+    {
+      "estacao": "LASER-01",
+      "last_seen": "2026-11-16T21:10:31.44953+00:00",
+      "versao": "1.4.16",
+      "painel": "1335",
+      "ultimo_update": {
+        "etapa": "validado",
+        "versao_alvo": "1.4.16",
+        "erro": "",
+        "quando": "2026-11-16T17:38:47.1421887Z"
+      }
+    },
+    {
+      "estacao": "LASER-01 [Piloto]",
+      "last_seen": "2026-10-07T21:22:29.207095+00:00",
+      "versao": "1.2.363-piloto-local.30",
+      "painel": "1021",
+      "ultimo_update": {}
+    }
+  ],
+  "somente_leitura": true,
+  "abertura_real_medida": false
+}
