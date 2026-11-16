@@ -58,14 +58,15 @@ def catalogo_sintetico_sem_vagas(s, total_modelos, antigas=0):
     CacheRevisaoPedido(s).salvar('98', 'historico', itens_protegidos, [])
 
 
-def test_abre_pedido_acima_de_4096_preservando_referencias_apos_reinicio(tmp_path):
+@pytest.mark.parametrize('teto_anterior', [4096, 16384])
+def test_abre_pedido_acima_do_teto_anterior_preservando_referencias_apos_reinicio(tmp_path, teto_anterior):
     from test_revisao_pedido_piloto import ambiente
     from selecao_piloto import SelecaoPiloto
     from test_pacotes_api import BYTES
     s, _, _, _ = ambiente(tmp_path)
-    catalogo_sintetico_sem_vagas(s, 4084, antigas=12)
+    catalogo_sintetico_sem_vagas(s, teto_anterior - 12, antigas=12)
     antes = registros(s)
-    assert len(antes) == 4096
+    assert len(antes) == teto_anterior
     historico = CacheRevisaoPedido(s).obter('98')
     # Reabrir o SQLite existente com o novo padrão, sem migração ou limpeza.
     s, _, _, dados = ambiente(tmp_path)
@@ -73,7 +74,7 @@ def test_abre_pedido_acima_de_4096_preservando_referencias_apos_reinicio(tmp_pat
     novo = selecao.preparar_pedido(dados)
     assert selecao.ler('10', novo['pacotes'][0]['revisao'], 'frente') == BYTES
     depois = registros(s)
-    assert len(depois) == 4097
+    assert len(depois) == teto_anterior + 1
     assert all(depois[chave] == valor for chave, valor in antes.items())
     assert CacheRevisaoPedido(s).obter('98') == historico
     assert not registros(s, 'catalogo_arquivo')
@@ -81,8 +82,8 @@ def test_abre_pedido_acima_de_4096_preservando_referencias_apos_reinicio(tmp_pat
 
 def test_novo_teto_recusa_sem_apagar_ultimas_revisoes(tmp_path):
     s = ServicoPacotes(tmp_path, host='test.invalid', empresa='teste')
-    assert s.limite_catalogo == 16384
-    catalogo_sintetico_sem_vagas(s, 16384)
+    assert s.limite_catalogo == 32768
+    catalogo_sintetico_sem_vagas(s, 32768)
     antes = registros(s)
     with pytest.raises(CatalogoCheio):
         s.antecipar(entrada('2'))
@@ -90,7 +91,7 @@ def test_novo_teto_recusa_sem_apagar_ultimas_revisoes(tmp_path):
     assert not registros(s, 'catalogo_arquivo')
 
 
-@pytest.mark.parametrize('limite', [0, -1, 16385, True, 1.5, '16384'])
+@pytest.mark.parametrize('limite', [0, -1, 32769, True, 1.5, '32768'])
 def test_limite_invalido_recusado_antes_de_criar_catalogo(tmp_path, limite):
     with pytest.raises(ValueError, match='Limite de catalogo invalido'):
         ServicoPacotes(tmp_path, host='test.invalid', empresa='teste', limite_catalogo=limite)

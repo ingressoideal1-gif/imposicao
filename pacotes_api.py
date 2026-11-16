@@ -27,7 +27,7 @@ from coleta_autonoma import ClienteAutonomo, ColetaAutonoma
 
 # Capacidade de metadados; as últimas revisões e referências de pedidos
 # permanecem protegidas pelo arquivamento, inclusive ao alcançar este teto.
-LIMITE_CATALOGO = 16384
+LIMITE_CATALOGO = 32768
 
 
 def _conferencia_recente(quando):
