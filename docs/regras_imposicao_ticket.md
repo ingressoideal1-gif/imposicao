@@ -25,6 +25,12 @@ Diferente de outros fluxos, a quantidade física do lote e a quantidade de ingre
     $$\text{Total Lógico} = \text{QTD} \times N$$
     *   *Exemplo*: `100` células físicas com $N=2$ geram uma numeração lógica de **1 a 200**.
 
+A faixa efetiva do modelo TICKET sempre termina em `início + QTD × ticket_qtd − 1`,
+independentemente do número final gravado. O início informado é preservado
+(inclusive zero); se ausente, assume 1. O tipo TICKET e `ticket_qtd` vêm do
+gabarito vinculado. Quantidade, início ou vias inválidos continuam bloqueando
+a geração. Calcular essa faixa no painel não altera automaticamente o banco.
+
 ---
 
 ## 3. Lógica Matemática de Numeração
