@@ -1,6 +1,7 @@
 """Descarte de cópias regeneráveis, após confirmação online de pedido Impresso."""
 from datetime import datetime, timezone
 from functools import wraps
+from contextlib import contextmanager
 import json
 import re
 import time
@@ -13,17 +14,24 @@ def serializar_cache(funcao):
     return executar
 
 
+@contextmanager
+def proteger_cache(armazem):
+    """Impede descarte durante o uso, sem serializar leitores, disco ou rede."""
+    with armazem._cache_lock:
+        armazem._cache_em_uso += 1
+    try:
+        yield
+    finally:
+        with armazem._cache_lock:
+            armazem._cache_em_uso -= 1
+
+
 def usar_cache(funcao):
     """Download/hash pode esperar produção; nunca segura a trava nessa espera."""
     @wraps(funcao)
     def executar(self, *args, **kwargs):
-        with self._cache_lock:
-            self._cache_em_uso += 1
-        try:
+        with proteger_cache(self):
             return funcao(self, *args, **kwargs)
-        finally:
-            with self._cache_lock:
-                self._cache_em_uso -= 1
     return executar
 
 

@@ -1,0 +1,68 @@
+NewProd: reducao da espera na conferencia de pedidos
+Data: 16/11/2026
+Base: agente-v1.4.16 (87d980f9)
+Branch: fix/newprod-conferencia-rapida-20261116
+
+Problema reproduzido
+A varredura periodica de todo o catalogo segurava a mesma trava usada para
+acessar os pacotes de um pedido. Reabria SQLite para cada modelo e verificava
+arquivos no disco enquanto mantinha a trava. Uma consulta remota feita pela
+antecipacao tambem mantinha essa trava durante a espera da rede.
+
+Correcao local
+- A varredura carrega catalogo, coletas e conferencias em uma consulta e fecha
+  a conexao antes de verificar os arquivos. Aberturas podem prosseguir durante
+  essa verificacao. A retencao continua adiada ate terminar o uso do cache.
+- A consulta remota de antecipacao ocorre fora da trava geral. A admissao e
+  a persistencia continuam serializadas e protegidas contra descarte.
+- A abertura busca o modelo e a revisao pela chave do indice SQLite, sem
+  carregar o catalogo completo.
+- Antes de agendar, uma consulta curta sob a trava confirma que a revisao
+  ainda pertence ao catalogo. Isso evita reagendar revisoes arquivadas por
+  uma admissao concorrente.
+
+Protecoes preservadas
+Conferencia online, revisoes, hashes, referencias de pedidos, isolamento por
+empresa, arquivamento e retencao permanecem obrigatorios. A falha da consulta
+online nao autoriza automaticamente o uso de dados antigos. Nenhuma alteracao
+em numeracao, quantidades, impressao, SQL remoto ou dados operacionais.
+
+Validacao
+Seis testes novos cobrem abertura durante espera de disco/rede, protecao contra
+limpeza, consulta em lote, busca por chave, arquivamento concorrente e liberacao
+da protecao apos erro. Antes da correcao, cinco falharam e um passou; depois,
+a bateria focada passou com 73 testes e um skip por privilegio de symlink.
+Comando completo: ferramentas/conferir_duas_versoes.py <perfil> --relatorio ...
+Producao, piloto e oficial: em CADA perfil, 1353 testes passaram, 3 ignorados,
+2 subtestes passaram e 25 harnesses JavaScript passaram. Houve um aviso de
+depreciacao Starlette/httpx por perfil. Nenhuma dependencia foi alterada.
+Tempo total por perfil: producao 205,49 s; piloto 198,93 s; oficial 196,88 s.
+git diff --check passou.
+Recibos e logs locais: .tmp/canais/resultados.json e .tmp/canais/<perfil>.*
+
+Medicao comparativa (milissegundos)
+Registros | Abertura durante varredura, 1.4.16 -> correcao | Varredura antes -> depois
+4096      | 5413,52 -> 6,69                                 | 5429,59 -> 1354,36
+16384     | 21213,29 -> 6,89                                | 21281,70 -> 5458,54
+Conexoes SQLite da varredura: 4097 -> 1 e 16385 -> 1, respectivamente.
+Sem varredura, as aberturas ficaram entre 5,17 e 5,57 ms nas duas variantes.
+
+Ensaio executado apos terminar a bateria de testes, com catalogos sinteticos
+separados, arquivos pequenos ja preparados e consulta online simulada como
+pedido sem alteracao; nenhum download. Compara a classe ServicoPacotes da tag
+1.4.16 com a classe corrigida, usando a mesma rotina de abertura e armazenamento.
+Nao e comparacao de dois instaladores completos nem medicao na LASER-01.
+Script: .tmp/comparar-conferencia.py; dados: .tmp/comparacao-conferencia.json.
+O script usa o auxiliar da auditoria original, em
+../ideal-imposition/.tmp/auditoria-newprod-20261116/medir.py.
+
+Limites e entrega
+A medicao sintetica isola a disputa pela trava; nao representa o tempo completo
+do navegador nem a latencia real da nuvem. A atualizacao dos catalogos online
+na abertura foi preservada e ainda pode acrescentar tempo.
+Os trechos centrais disponiveis da LASER-01 nao continham o pedido 25291 nem
+seu modelo 1008086; nao fornecem uma duracao real desse pedido.
+Correcao em worktree isolada. Sem commit, publicacao, instalacao ou reinicio.
+Para comprovar o ganho operacional, apos entrega autorizada, conferir a versao
+instalada e medir clique ate abertura do pedido 25291 na LASER-01, incluindo
+coleta ativa e reabertura. Validar tambem revisao alterada e falha de rede.

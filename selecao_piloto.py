@@ -58,9 +58,10 @@ class SelecaoPiloto:
         if not _tem_conteudo_preparavel(item):
             raise ConferenciaIndisponivel('Arte de frente ainda não disponível para preparação local.')
         resposta = s.antecipar(item, _conferidor=lambda i, _: conferido_em or cliente.conferir(i))
-        entrada = next(i['manifesto'] for i in s.catalogo()
-                       if i['manifesto']['modelo'] == dados['modelo']
-                       and i['manifesto']['revisao'] == resposta['revisao'])
+        registro = s.item_catalogo(dados['modelo'], resposta['revisao'])
+        if registro is None:
+            raise ConferenciaIndisponivel('Modelo ausente do catalogo local. Reabra para conferir.')
+        entrada = registro['manifesto']
         anterior = s.obter_coleta(entrada)
         # Instância dedicada: sem herdar a dispensa de atualização do coletor
         # ocioso. URLs iguais também são revalidadas (ETag ou download).

@@ -11,7 +11,7 @@ import hashlib
 import re
 from contextlib import contextmanager
 from catalogo_revisoes import reservar_vaga
-from retencao_cache import serializar_cache
+from retencao_cache import proteger_cache, serializar_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -101,7 +101,6 @@ class ServicoPacotes:
                 protegidas.add(tuple(self.preparador._ativo[1:]))
             reservar_vaga(con, self.limite_catalogo, protegidas)
 
-    @serializar_cache
     def antecipar(self, item, authorization=None, *, _conferidor=None):
         """Snapshot limitado do catálogo online. Não recebe credenciais ou aprova impressão."""
         if not isinstance(item, dict) or item.get('empresa') != self.empresa:
@@ -129,7 +128,15 @@ class ServicoPacotes:
                                          'LIBERADA', 'ARTE_APROVADA', 'ARTE APROVADA'}:
             raise ValueError('Modelo não aprovado na consulta.')
         conferidor = _conferidor or self.conferir
-        conferido_em = conferidor(item, authorization) if conferidor else None
+        # A rede nao segura a trava usada para abrir outros pedidos. A retencao
+        # continua adiada ate a conferencia e a admissao terminarem.
+        with proteger_cache(self.local):
+            conferido_em = conferidor(item, authorization) if conferidor else None
+            return self._registrar_antecipacao(item, conferido_em)
+
+    @serializar_cache
+    def _registrar_antecipacao(self, item, conferido_em):
+        modelo = item['modelo']
         cfg = self._configuracao_antecipacao(item)
         revisao = hashlib.sha256(json.dumps(cfg, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         m = dict(schema=1, empresa=self.empresa, modelo=modelo, revisao=revisao,
@@ -250,13 +257,12 @@ class ServicoPacotes:
 
     @serializar_cache
     def preparar_abertura(self, resposta):
-        for item in self.catalogo():
+        item = self.item_catalogo(resposta['modelo'], resposta['revisao'])
+        if item:
             m = item['manifesto']
-            if m['modelo'] == resposta['modelo'] and m['revisao'] == resposta['revisao']:
-                self.preparador.armazenamento._atualizar_ao_abrir.add((self.empresa,m['modelo'],m['revisao']))
-                self.preparador.agendar(m,item['fontes'],setor=item['setor'],
-                    prazo=datetime.fromisoformat(item['prazo']) if item['prazo'] else None)
-                break
+            self.preparador.armazenamento._atualizar_ao_abrir.add((self.empresa,m['modelo'],m['revisao']))
+            self.preparador.agendar(m,item['fontes'],setor=item['setor'],
+                prazo=datetime.fromisoformat(item['prazo']) if item['prazo'] else None)
 
     def preferencias(self):
         con = self._db()
@@ -367,6 +373,15 @@ class ServicoPacotes:
         finally:
             con.close()
 
+    def item_catalogo(self, modelo, revisao):
+        con = self._db()
+        try:
+            row = con.execute('SELECT conteudo FROM catalogo WHERE modelo=? AND revisao=?',
+                              (modelo, revisao)).fetchone()
+            return json.loads(row[0]) if row else None
+        finally:
+            con.close()
+
     def identidades(self):
         con = self._db()
         try:
@@ -420,27 +435,38 @@ class ServicoPacotes:
         finally:
             con.close()
 
-    @serializar_cache
     def atualizar_fila(self):
-        for item in self.catalogo():
-            m = item['manifesto']
-            chave = (self.empresa,m['modelo'],m['revisao'])
-            if (chave not in self.preparador.armazenamento._atualizar_ao_abrir
-                    and any(c['configuracao'].get('revisao_entrada') == m['revisao'] for c in self.copias_presentes(m['modelo']))):
-                continue
-            if self.conferir and m['configuracao'].get('tipo') == 'antecipacao_online':
-                con = self._db()
-                try:
-                    r = con.execute('SELECT quando FROM conferencias WHERE modelo=? AND revisao=?',
-                                    (m['modelo'], m['revisao'])).fetchone()
-                finally:
-                    con.close()
-                if (not r or not _conferencia_recente(r[0])) and not self.obter_coleta(m):
+        with proteger_cache(self.local):
+            # Um snapshot em lote, com o SQLite fechado antes de verificar o
+            # disco. Leituras humanas continuam livres; descarte espera o uso.
+            con = self._db()
+            try:
+                rows = con.execute('SELECT c.conteudo,d.manifesto,f.quando FROM catalogo c '
+                    'LEFT JOIN coletas d ON d.modelo=c.modelo AND d.entrada=c.revisao '
+                    'LEFT JOIN conferencias f ON f.modelo=c.modelo AND f.revisao=c.revisao').fetchall()
+            finally:
+                con.close()
+            for texto, derivado, quando in rows:
+                item = json.loads(texto)
+                m = item['manifesto']
+                chave = (self.empresa,m['modelo'],m['revisao'])
+                manifestos = [json.loads(derivado)] if derivado else []
+                if (chave not in self.preparador.armazenamento._atualizar_ao_abrir
+                        and any(c['configuracao'].get('revisao_entrada') == m['revisao']
+                            for c in self.copias_presentes(m['modelo'], _manifestos=manifestos))):
                     continue
-            estado = self.preparador.estado(self.empresa, m['modelo'], m['revisao'])['estado']
-            if estado in ('desconhecido', 'revalidacao_pendente', 'falha_preparacao', 'preparacao_interrompida'):
-                self.preparador.agendar(m, item['fontes'], setor=item['setor'],
-                                       prazo=datetime.fromisoformat(item['prazo']) if item['prazo'] else None)
+                if (self.conferir and m['configuracao'].get('tipo') == 'antecipacao_online'
+                        and not _conferencia_recente(quando) and not derivado):
+                    continue
+                estado = self.preparador.estado(self.empresa, m['modelo'], m['revisao'])['estado']
+                if estado in ('desconhecido', 'revalidacao_pendente', 'falha_preparacao', 'preparacao_interrompida'):
+                    # Uma admissao pode ter arquivado a revisao durante a leitura.
+                    # Revalidar por chave sob a trava curta, antes de agendar.
+                    with self._cache_lock:
+                        atual = self.item_catalogo(m['modelo'], m['revisao'])
+                        if atual:
+                            self.preparador.agendar(atual['manifesto'], atual['fontes'], setor=atual['setor'],
+                                prazo=datetime.fromisoformat(atual['prazo']) if atual['prazo'] else None)
 
     @serializar_cache
     def receber_entrada(self, manifesto, uploads):
