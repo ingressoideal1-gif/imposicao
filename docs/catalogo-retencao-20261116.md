@@ -71,9 +71,9 @@ impressao fisica ainda depende de verificacao operacional.
   Os 390 arquivos de frontend de cada EXE coincidem byte a byte com a fonte.
 - Recibos locais: `dist/evidencia-1416.json` e `dist/auditoria-canais-1416.json`.
 
-Publicacao ainda nao executada: nao foram alterados manifestos nem enviado MSI.
-As variaveis de credencial de publicacao nao estao disponiveis no processo;
-nenhum arquivo de segredo foi aberto para contornar essa ausencia.
+Na preparacao inicial, publicacao e credencial ficaram pendentes. A autorizacao
+posterior de publicacao permitiu usar a configuracao local apenas em memoria,
+sem exibir ou versionar credenciais.
 
 ## Validacao concluida
 
@@ -83,3 +83,17 @@ aprovados por perfil. Aviso preexistente Starlette/httpx. Os testes ignorados
 permanecem os de plataforma/privilegio da suite, sem ocultar falhas.
 `git diff --check` aprovado. Nenhum teste imprimiu ou validou a operacao
 fisica na LASER-01.
+
+## Publicacao concluida
+
+Apos autorizacao explicita, o MSI foi enviado sob nome imutavel. O download
+publico completo confirmou 196.882.432 bytes e o SHA-256 registrado acima.
+Somente depois foram ativados `newprod-piloto-oficial.json` e `latest.json`
+na versao 1.4.16, sem restricao por estacao. Releitura publica com cache-buster
+confirmou ambos. O canal de teste permanece 1.3.35. Evidencia:
+`docs/evidencias/newprod-1416-publicacao.json`.
+
+Na primeira consulta posterior, LASER-01 e outras sete estacoes ainda
+informavam 1.4.15; TEX-02 continuava 1.3.21 com MSI 1603. A publicacao esta
+concluida, mas a adocao permanece pendente. Nenhuma estacao foi reiniciada
+ou instalada manualmente e nenhuma limpeza remota foi executada.
