@@ -1456,17 +1456,17 @@ function _mtgRenderFaces() {
     }
 }
 
-function _mtgAtualizarGeracao() {
+function _mtgAtualizarGeracao(etapa) {
     const gerando = !!state.montagem.gerando;
     const editor = document.getElementById('mtg-editor');
     if (editor) { editor.disabled = gerando; editor.inert = gerando; }
     const btn = document.getElementById('mtg-btn-pdf');
     if (btn) {
-        btn.disabled = gerando || !!state.montagem.carregando || !state.montagem.celulas.length;
+        btn.disabled = gerando || !!state.montagem.carregando || !!state.bancoEmCargaNaMontagem || !state.montagem.celulas.length;
         btn.textContent = gerando ? 'Montando…' : 'Gerar PDF';
     }
     const aviso = document.getElementById('mtg-geracao-aviso');
-    if (aviso) aviso.textContent = gerando ? 'Gerando a montagem. Aguarde para continuar a edição.' : '';
+    if (aviso && (!gerando || etapa)) aviso.textContent = gerando ? etapa : '';
 }
 
 // O motor monta frente/verso em pares, preservando o espelhamento do verso.
@@ -1952,12 +1952,14 @@ function encherPedidosDaMontagem() {
     sel.disabled = lista.length === 0;
 }
 
-function _mtgOpcaoDoModelo(os, item, todos) {
+function _mtgOpcaoDoModelo(os, item, todos, candidato) {
     const pedido = String(os.numero || os.id);
     const modelo = String(item.id);
     const nome = String(item.nome_modelo || item.produto || 'modelo').slice(0, 60);
-    const quantidade = totalDeItensDoModelo(item, _mtgNumeracaoDoItem(item)).toLocaleString('pt-BR');
-    const face = modoDoModeloNaMontagem(item) !== 'front' ? ' · COM VERSO' : ' · Só frente';
+    const qtd = candidato?.qtd ?? totalDeItensDoModelo(item, _mtgNumeracaoDoItem(item));
+    const quantidade = qtd.toLocaleString('pt-BR');
+    const modo = candidato?.peca?.print_mode || modoDoModeloNaMontagem(item);
+    const face = modo !== 'front' ? ' · COM VERSO' : ' · Só frente';
     const valor = todos ? String(os.id) + '::' + modelo : modelo;
     return `<option value="${escapeHtml(valor)}" data-pedido-id="${escapeHtml(String(os.id))}" data-modelo-id="${escapeHtml(modelo)}">`
         + `${escapeHtml(pedido)} · ${escapeHtml(modelo)} · ${escapeHtml(nome)} · ${escapeHtml(quantidade)}${face}</option>`;
@@ -1980,6 +1982,12 @@ function _mtgModeloDoItem(osId, item) {
         variavel: modeloTemDadoVariavel(item, num),
         peca: pecaDaMontagem(item),
     };
+}
+
+function _mtgModeloEscolhido(item) {
+    const m = state.montagem;
+    return (m.modelosDisponiveis || []).find(c => c.osId === String(m.pedidoSel)
+        && String(c.item.id) === String(item.id))?.modelo || _mtgModeloDoItem(m.pedidoSel, item);
 }
 
 function _mtgChaveDoCandidato(c) {
@@ -2211,8 +2219,8 @@ function _mtgRenderSeletorDeModelos() {
     const controlados = new Set(m.modelosDoSeletor || []);
     const carregados = new Set(m.modelos.map(x => String(x.osId) + '::' + String(x.itemId)));
     const qtdMarcada = marcados.size;
-    trigger.disabled = !candidatos.length || !!m.carregando;
-    trigger.textContent = m.carregando ? 'Carregando modelos…'
+    trigger.disabled = !candidatos.length;
+    trigger.textContent = !candidatos.length && m.carregando ? 'Carregando modelos…'
         : qtdMarcada ? qtdMarcada + (qtdMarcada === 1 ? ' modelo selecionado' : ' modelos selecionados')
         : candidatos.length ? candidatos.length + (candidatos.length === 1 ? ' modelo aguardando' : ' modelos aguardando')
         : 'Nenhum modelo aguardando';
@@ -2248,6 +2256,10 @@ function _mtgRenderSeletorDeModelos() {
 
     if (m.modoTrabalho !== 'planejamento') {
         recs.innerHTML = '<p class="mtg-dica">Selecione o modelo e informe as posições exatas.</p>';
+        return;
+    }
+    if (m.carregando) {
+        recs.textContent = 'Carregando os demais pedidos…';
         return;
     }
     const livres = candidatos.filter(c => !carregados.has(_mtgChaveDoCandidato(c))
@@ -2304,7 +2316,10 @@ async function onMontagemPedidoChange() {
     const todos = osId === '__todos__';
     const os = (state.ordens || []).find(o => String(o.id) === osId);
     const pedidos = todos ? pedidosParaMontagem() : (os ? [os] : []);
-    const carga = state.montagem.cargaSelecao = (state.montagem.cargaSelecao || 0) + 1;
+    const m = state.montagem;
+    const carga = m.cargaSelecao = (m.cargaSelecao || 0) + 1;
+    const atual = () => state.montagem === m && m.cargaSelecao === carga;
+    m.carregando = 0;
     state.montagem.pedidoSel = todos ? null : (osId || null);
     state.montagem.modeloSel = null;
     state.montagem.modelosDisponiveis = [];
@@ -2328,52 +2343,77 @@ async function onMontagemPedidoChange() {
     selMod.innerHTML = `<option value="">Carregando modelos de ${pedidos.length} pedido(s)…</option>`;
     selMod.disabled = true;
 
-    state.montagem.carregando = (state.montagem.carregando || 0) + 1;
+    m.carregando = 1;
     _mtgAtualizarGeracao();
     try {
         // Os bancos do pedido vivem num estado global unitario. Por isso a
         // carga e a materializacao do candidato precisam acontecer em serie:
         // carregar A e B em paralelo faria o ultimo banco vencer e classificaria
         // tiragem/dado variavel dos demais pedidos com o contexto errado.
-        const itens = [];
-        const candidatos = [];
+        const falhas = [];
+        let temOpcoes = false;
         for (const pedido of pedidos) {
-            if (state.montagem.cargaSelecao !== carga) return;
-            if (typeof loadOSItens === 'function') await loadOSItens(pedido.id);
-            await _mtgGarantirBancosDoPedido(pedido.id);
-            if (state.montagem.cargaSelecao !== carga) return;
-            for (const item of (state.osItens[pedido.id] || []).filter(it =>
-                modeloDisponivelNaMontagem(pedido.id, it))) {
-                itens.push({ pedido, item });
-                const modelo = _mtgModeloDoItem(pedido.id, item);
-                if (modelo && modelo.qtd > 0) candidatos.push({
-                    osId: String(pedido.id), pedido, item, modelo,
-                });
+            if (!atual()) return;
+            try {
+                if (typeof loadOSItens === 'function' && await loadOSItens(pedido.id) === false) {
+                    throw Error('Não foi possível carregar o pedido.');
+                }
+                if (!atual()) return;
+                // Ao trocar o filtro, terminar a leitura do banco em curso antes de instalar outro.
+                if (state.bancoEmCargaNaMontagem) await state.bancoEmCargaNaMontagem.catch(() => {});
+                if (!atual()) return;
+                const banco = state.bancoEmCargaNaMontagem = _mtgGarantirBancosDoPedido(pedido.id);
+                try { await banco; }
+                finally { if (state.bancoEmCargaNaMontagem === banco) state.bancoEmCargaNaMontagem = null; }
+                if (!atual()) return;
+                if (state._bancosPedidoDe != null && String(state._bancosPedidoDe) !== String(pedido.id)) {
+                    throw Error('O banco carregado pertence a outro pedido.');
+                }
+            } catch (erro) {
+                if (!atual()) return;
+                if (!todos) throw erro;
+                falhas.push(pedido.numero || pedido.id);
+                continue;
             }
+            const opcoes = [];
+            for (const item of (state.osItens[pedido.id] || []).filter(it => modeloDisponivelNaMontagem(pedido.id, it))) {
+                const modelo = _mtgModeloDoItem(pedido.id, item);
+                opcoes.push(_mtgOpcaoDoModelo(pedido, item, todos, modelo));
+                if (!modelo || modelo.qtd <= 0) continue;
+                const candidato = {osId: String(pedido.id), pedido, item, modelo};
+                m.modelosDisponiveis.push(candidato);
+                const chave = _mtgChaveDoCandidato(candidato);
+                if ((m.modelosDoSeletor || []).includes(chave)) m.modelosMarcados.push(chave);
+            }
+            if (!opcoes.length) continue;
+            if (temOpcoes) selMod.insertAdjacentHTML('beforeend', opcoes.join(''));
+            else selMod.innerHTML = '<option value="">Pedido · Modelo · Nome · Quantidade</option>' + opcoes.join('');
+            temOpcoes = true;
+            selMod.disabled = false;
+            _mtgRenderSeletorDeModelos();
         }
-        if (!todos && state.montagem.pedidoSel !== osId) return;
-
-        state.montagem.modelosDisponiveis = candidatos;
-        const chavesDisponiveis = new Set(state.montagem.modelosDisponiveis.map(_mtgChaveDoCandidato));
-        state.montagem.modelosMarcados = (state.montagem.modelosDoSeletor || [])
-            .filter(chave => chavesDisponiveis.has(chave));
-        selMod.innerHTML = '<option value="">' + (itens.length
-            ? 'Pedido · Modelo · Nome · Quantidade'
-            : 'Nenhum modelo aguardando para este formato') + '</option>'
-            + itens.map(({ pedido, item }) => _mtgOpcaoDoModelo(pedido, item, todos)).join('');
-        selMod.disabled = itens.length === 0;
+        if (!temOpcoes) selMod.innerHTML = falhas.length
+            ? '<option value="">Falha ao carregar pedidos. Selecione novamente.</option>'
+            : '<option value="">Nenhum modelo aguardando para este formato</option>';
+        if (falhas.length && typeof toast === 'function') {
+            toast('Falha ao carregar os pedidos ' + falhas.join(', ') + '. Selecione o pedido para tentar novamente.', 'warning');
+        }
 
     } catch (e) {
-        if (state.montagem.cargaSelecao === carga && (todos || state.montagem.pedidoSel === osId)) {
+        if (atual() && (todos || state.montagem.pedidoSel === osId)) {
             selMod.innerHTML = '<option value="">Falha ao carregar. Selecione o pedido novamente.</option>';
             selMod.disabled = true;
             state.montagem.modelosDisponiveis = [];
+            state.montagem.modelosMarcados = [];
+            state.montagem.modeloSel = null;
             if (typeof toast === 'function') toast('Não foi possível carregar os modelos do pedido.', 'error');
         }
     } finally {
-        state.montagem.carregando--;
-        onMontagemPosicoesChange();
-        renderMontagem();
+        if (atual()) {
+            m.carregando = 0;
+            onMontagemPosicoesChange();
+            renderMontagem();
+        } else _mtgAtualizarGeracao();
     }
 }
 
@@ -2413,12 +2453,13 @@ function onMontagemPosicoesChange() {
     const rotulo = document.getElementById('mtg-label-posicoes');
     const caixaRecusa = document.getElementById('mtg-recusa');
 
+    const escolhido = item && _mtgModeloEscolhido(item);
     let podeAdicionar = false;
     let recusa = null;
     let total = 0;
 
     if (item) {
-        const peca = pecaDaMontagem(item);
+        const peca = escolhido.peca;
         const modelos = state.montagem.modelos;
         if (!peca.formato_id) {
             // Sem formato nao da para conferir nem para impor: melhor dizer
@@ -2432,7 +2473,7 @@ function onMontagemPosicoesChange() {
     if (caixaRecusa) {
         if (recusa && item) {
             const daFolha = state.montagem.modelos.length ? state.montagem.modelos[0].peca : null;
-            caixaRecusa.innerHTML = _mtgHtmlDaRecusa(recusa, daFolha, pecaDaMontagem(item));
+            caixaRecusa.innerHTML = _mtgHtmlDaRecusa(recusa, daFolha, escolhido.peca);
             caixaRecusa.style.display = 'flex';
         } else {
             caixaRecusa.style.display = 'none';
@@ -2440,8 +2481,7 @@ function onMontagemPosicoesChange() {
     }
 
     if (item && !recusa) {
-        const num = _mtgNumeracaoDoItem(item);
-        total = totalDeItensDoModelo(item, num);
+        total = escolhido.qtd;
         const texto = campo ? campo.value.trim() : '';
         const { posicoes, invalidos } = posicoesDaMontagem(texto, total);
 
@@ -2513,7 +2553,8 @@ function adicionarNaMontagem() {
     const item = _mtgItemEscolhido();
     if (!item) return;
 
-    const peca = pecaDaMontagem(item);
+    const escolhido = _mtgModeloEscolhido(item);
+    const peca = escolhido.peca;
     // A ULTIMA barreira antes do papel. A tela ja avisa ao escolher o modelo,
     // mas quem decide o que entra na montagem e' esta linha: sem formato, ou
     // incompativel, nao entra.
@@ -2522,8 +2563,7 @@ function adicionarNaMontagem() {
     const { celulas, modelos } = state.montagem;
     if (modelos.length && porQueNaoCabeNaMontagem(modelos[0].peca, peca)) return;
 
-    const num = _mtgNumeracaoDoItem(item);
-    const total = totalDeItensDoModelo(item, num);
+    const total = escolhido.qtd;
     const campo = document.getElementById('mtg-posicoes');
     const texto = campo ? campo.value.trim() : '';
     const { posicoes, invalidos } = posicoesDaMontagem(texto || '1', total);
@@ -2537,7 +2577,7 @@ function adicionarNaMontagem() {
     // tiragem duas vezes, e todas as posições seguintes sairiam erradas.
     let m = modeloDaMontagem(modelos, osId, item.id);
     if (!m) {
-        m = _mtgModeloDoItem(osId, item);
+        m = escolhido;
         modelos.push(m);
     }
 
@@ -3169,12 +3209,13 @@ function fonteDaAmostraDaCelula(item, face, pos, modo) {
 
 /** Prévia de tela: não altera as artes nem o payload de impressão. */
 async function desenharAmostrasDaFolha(alvo, celulas, modelos, face) {
+    const desenho = alvo._desenhoAmostras = {};
     const espacos = Array.from(alvo.querySelectorAll('.mtg-celula-amostra'));
     let proximo = 0;
     const desenhar = async () => {
         while (proximo < espacos.length) {
             const espaco = espacos[proximo++];
-            if (!espaco.isConnected) continue;
+            if (alvo._desenhoAmostras !== desenho || !espaco.isConnected) continue;
             const celula = celulas[Number(espaco.dataset.i)];
             const modelo = modelos.find(m => chaveDoModelo(m) === chaveDoModelo(celula));
             const item = (state.osItens[celula.osId] || []).find(it => String(it.id) === String(celula.itemId));
@@ -3185,13 +3226,19 @@ async function desenharAmostrasDaFolha(alvo, celulas, modelos, face) {
                 if (!/^(https?:|data:|blob:)/i.test(url) && !url.startsWith('/')) throw new Error('Endereço da amostra indisponível.');
                 const pdf = /^data:application\/pdf/i.test(url) || /\.pdf(?:[?#]|$)/i.test(url);
                 if (pdf) {
-                    const raster = await rasterDaAmostra(['montagem', url, fonte.pagina], async () => {
-                        const resposta = await aguardarRecursoDaPrevia(window.PilotoSelecao
-                            ? window.PilotoSelecao.lerUrl(url) : fetch(url));
+                    const embutido = /^(data:|blob:)/i.test(url);
+                    const piloto = window.PilotoSelecao;
+                    const recurso = !embutido && piloto?.recursoDaMontagem?.(url, celula.itemId, celula.osId, face);
+                    // Sem revisão conhecida, compartilhar apenas entre células deste desenho.
+                    const chave = ['montagem', celula.osId, celula.itemId, face, fonte.pagina, url,
+                        recurso?.chave || (embutido ? null : desenho)];
+                    const raster = await rasterDaAmostra(chave, async () => {
+                        const resposta = await aguardarRecursoDaPrevia(recurso ? recurso.ler()
+                            : piloto && !embutido ? piloto.lerUrl(url, {}, [celula]) : fetch(url, {cache:'no-store'}));
                         if (!resposta.ok) throw new Error('Não foi possível ler a arte.');
                         const bytes = await aguardarRecursoDaPrevia(resposta.arrayBuffer());
                         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                            pdfjsLib.GlobalWorkerOptions.workerSrc = piloto ? '/vendor/offline/pdf.worker.min.js' : 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
                         }
                         const tarefa = pdfjsLib.getDocument({ data: bytes });
                         let documento;
@@ -3207,7 +3254,7 @@ async function desenharAmostrasDaFolha(alvo, celulas, modelos, face) {
                             return canvas;
                         } finally { await tarefa.destroy(); }
                     });
-                    if (!espaco.isConnected) continue;
+                    if (alvo._desenhoAmostras !== desenho || !espaco.isConnected) continue;
                     const copia = document.createElement('canvas');
                     copia.width = raster.width; copia.height = raster.height;
                     copia.getContext('2d').drawImage(raster, 0, 0);
@@ -3219,12 +3266,12 @@ async function desenharAmostrasDaFolha(alvo, celulas, modelos, face) {
                     img.draggable = false;
                     img.src = url;
                     await aguardarRecursoDaPrevia(img.decode());
-                    if (!espaco.isConnected) continue;
+                    if (alvo._desenhoAmostras !== desenho || !espaco.isConnected) continue;
                     espaco.replaceChildren(img);
                 }
                 espaco.dataset.estado = 'pronto';
             } catch (e) {
-                if (!espaco.isConnected) continue;
+                if (alvo._desenhoAmostras !== desenho || !espaco.isConnected) continue;
                 espaco.textContent = 'Amostra indisponível';
                 espaco.title = e.message || 'Não foi possível carregar a amostra.';
                 espaco.dataset.estado = 'erro';
@@ -4171,7 +4218,6 @@ async function _mtgPrepararPedidoLocal(osId) {
     mesclarNumeracoesNoCatalogo(state.numeracoes, structuredClone(snapshotLocal.numeracoes).map(normalizarNumeracaoLida));
     const ok = await loadOSItens(osId, {atualizar:true, exigirModelos:true, snapshotLocal});
     if (ok === false || !atual()) throw Error('Não foi possível carregar os modelos locais da Montagem.');
-    if (window.PilotoOffline) await window.PilotoOffline.aplicarConfirmacoes(osId);
     await window.PilotoSelecao.conferirPedido(osId, atual, contexto);
     if (!atual()) throw Error('Preparação da Montagem interrompida.');
     // Nao reutilizar a marca de bancos de outra abertura/revisao.
@@ -4393,7 +4439,7 @@ function payloadDaMontagem(celulas, modelos, artes) {
  */
 async function gerarPdfDaMontagem() {
     if (state.montagem.gerando) return;
-    if (state.montagem.carregando) {
+    if (state.montagem.carregando || state.bancoEmCargaNaMontagem) {
         if (typeof toast === 'function') toast('Aguarde o carregamento do pedido antes de gerar.', 'warning');
         return;
     }
@@ -4405,8 +4451,10 @@ async function gerarPdfDaMontagem() {
         if (typeof toast === 'function') toast(validacaoInicial.erros[0], 'error');
         return;
     }
+    const painelArquivos = document.getElementById('mtg-arquivos-gerados');
+    painelArquivos?.replaceChildren();
     state.montagem.gerando = true;
-    _mtgAtualizarGeracao();
+    _mtgAtualizarGeracao('Localizando a estação…');
 
     const pasta = pastaDaMontagem();
     const abrir = abrirNaTelaDaMontagem();
@@ -4435,6 +4483,7 @@ async function gerarPdfDaMontagem() {
         }
 
         // As artes, pelas funções da tela do Pedido — com os bancos na mão.
+        _mtgAtualizarGeracao('Preparando modelos e artes…');
         const artes = await prepararArtesDaMontagem(modelos);
         const validacaoFinal = validarMontagemParaGerar(celulas, modelos, artes);
         if (!validacaoFinal.ok) throw new Error(validacaoFinal.erros[0]);
@@ -4458,6 +4507,7 @@ async function gerarPdfDaMontagem() {
 
         await confirmarIntegridadeDoTrabalho(fd, base, state, supabaseClient, undefined,
             selecaoMontagem, artes.bancosPorPedido);
+        _mtgAtualizarGeracao('Gerando o PDF na estação…');
         const resp = await fetch(base + '/api/impose', { method: 'POST', body: fd });
         if (!resp.ok) {
             const detalhe = (typeof descreverErroHttp === 'function')
@@ -4467,6 +4517,7 @@ async function gerarPdfDaMontagem() {
         }
 
         const folhas = contaDaMontagem(celulas, _mtgCelulasPorFolha(modelos)).folhas;
+        _mtgAtualizarGeracao('Recebendo o PDF e preparando as faces…');
         const original = await resp.blob();
         const faces = separados && modo !== 'front' ? ['front', 'back'] : [faceEfetiva];
         // Prepara todos os arquivos antes de entregar qualquer um.
@@ -4477,6 +4528,7 @@ async function gerarPdfDaMontagem() {
                 nome: nomeBase.replace(/\.pdf$/i, '_' + ({both:'frente-e-verso',front:'frente',back:'verso'}[faceArquivo]) + '.pdf'),
             });
         }
+        _mtgAtualizarGeracao(pasta ? 'Gravando os arquivos na pasta escolhida…' : 'Preparando o download…');
         const destinosGravados = [];
         for (const arquivo of arquivos) {
             if (pasta) {
@@ -4488,7 +4540,20 @@ async function gerarPdfDaMontagem() {
                 }
             } else baixarPdfDaMontagem(arquivo.blob, arquivo.nome);
         }
-        if (abrir) abrirPdfDaMontagemNaTela(arquivos[0].blob, arquivos[0].nome);
+        if (abrir) {
+            if (painelArquivos && arquivos.length > 1) {
+                for (const [i, arquivo] of arquivos.entries()) {
+                    const botao = document.createElement('button');
+                    botao.type = 'button';
+                    botao.className = 'btn btn-secondary';
+                    botao.textContent = i === 0 ? 'Visualizar frente' : 'Visualizar verso';
+                    botao.title = arquivo.nome;
+                    botao.onclick = () => abrirPdfDaMontagemNaTela(arquivo.blob, arquivo.nome);
+                    painelArquivos.appendChild(botao);
+                }
+            }
+            abrirPdfDaMontagemNaTela(arquivos[0].blob, arquivos[0].nome);
+        }
         if (typeof toast === 'function') toast((arquivos.length === 2
             ? 'PDFs de frente e verso gerados separadamente.' : 'PDF da montagem gerado.')
             + (destinosGravados.length ? ' Gravado em ' + destinosGravados.join(', ') : ''), 'success');
