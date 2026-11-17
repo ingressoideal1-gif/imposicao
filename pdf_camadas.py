@@ -44,9 +44,31 @@ def _preservar_camadas(destino, origem):
     estado['fontes'][origem._graft_id] = mapa
 
 
-def mostrar_pagina(pagina, retangulo, origem, *args, **kwargs):
+def mostrar_pagina(pagina, retangulo, origem, pno=0, keep_proportion=True,
+                   overlay=True, oc=0, rotate=0, clip=None):
     _preservar_camadas(pagina.parent, origem)
-    return pagina.show_pdf_page(retangulo, origem, *args, **kwargs)
+    fonte = origem[pno]
+    giro = fonte.rotation
+    if not giro:
+        return pagina.show_pdf_page(retangulo, origem, pno,
+            keep_proportion=keep_proportion, overlay=overlay, oc=oc,
+            rotate=rotate, clip=clip)
+
+    # /Rotate orienta a pagina no visualizador, mas show_pdf_page copia seus
+    # fluxos sem aplicar essa orientacao. O retangulo de destino ja usa o
+    # tamanho visivel: converter o recorte para as coordenadas sem /Rotate e
+    # compor o giro da origem (horario) com o giro pedido (anti-horario).
+    # Nao rasterizar nem reescrever o arquivo. Restaurar inclusive em erro:
+    # a mesma origem pode reaparecer em outra pose, verso ou capa.
+    recorte = fonte.rect if clip is None else fonte.rect & fitz.Rect(clip)
+    recorte = recorte * fonte.derotation_matrix
+    try:
+        fonte.set_rotation(0)
+        return pagina.show_pdf_page(retangulo, origem, pno,
+            keep_proportion=keep_proportion, overlay=overlay, oc=oc,
+            rotate=(rotate - giro) % 360, clip=recorte)
+    finally:
+        fonte.set_rotation(giro)
 
 
 def inserir_paginas(destino, origem, *args, **kwargs):

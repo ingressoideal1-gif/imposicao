@@ -1,0 +1,410 @@
+{
+  "versao": "1.4.18",
+  "base": "agente-v1.4.17",
+  "etapas": [
+    {
+      "etapa": "producao/pytest",
+      "segundos": 175.112,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/estatisticas_piloto_harness.js",
+      "segundos": 7.248,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/montagem_harness.js",
+      "segundos": 0.175,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/montagem_local_harness.cjs",
+      "segundos": 0.113,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/montagem_estacao_harness.cjs",
+      "segundos": 0.057,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/historico_impressao_harness.js",
+      "segundos": 0.08,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/gestao_estacoes_harness.js",
+      "segundos": 18.911,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/modelos_pedido_carregamento_harness.js",
+      "segundos": 0.082,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/fidelidade_numeracao_harness.js",
+      "segundos": 0.095,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/prazo_lista_local_harness.js",
+      "segundos": 0.058,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/foto_piloto_harness.js",
+      "segundos": 0.053,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/foto_lib_harness.js",
+      "segundos": 0.15,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/selecao_piloto_harness.js",
+      "segundos": 0.114,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/integridade_impressao_harness.js",
+      "segundos": 0.139,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/token_estacao_harness.js",
+      "segundos": 0.099,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/ticket_condicoes_harness.js",
+      "segundos": 1.577,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/ticket_previas_harness.js",
+      "segundos": 0.062,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/numeracao_compatibilidade_harness.js",
+      "segundos": 1.336,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/mapas_teatro_harness.js",
+      "segundos": 0.671,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/mapas_teatro_browser_harness.js",
+      "segundos": 10.995,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/teatro_snapshot_harness.js",
+      "segundos": 0.093,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/teatro_vertical_modelo_harness.js",
+      "segundos": 0.114,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/gabarito_vinculado_pedido_harness.js",
+      "segundos": 0.716,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/status_impressao_rede_harness.js",
+      "segundos": 0.108,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/status_impressao_retorno_harness.js",
+      "segundos": 0.268,
+      "sucesso": true
+    },
+    {
+      "etapa": "producao/offline_painel_harness.js",
+      "segundos": 1.177,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/pytest",
+      "segundos": 158.816,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/estatisticas_piloto_harness.js",
+      "segundos": 7.418,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/montagem_harness.js",
+      "segundos": 0.173,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/montagem_local_harness.cjs",
+      "segundos": 0.112,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/montagem_estacao_harness.cjs",
+      "segundos": 0.052,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/historico_impressao_harness.js",
+      "segundos": 0.076,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/gestao_estacoes_harness.js",
+      "segundos": 18.914,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/modelos_pedido_carregamento_harness.js",
+      "segundos": 0.082,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/fidelidade_numeracao_harness.js",
+      "segundos": 0.087,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/prazo_lista_local_harness.js",
+      "segundos": 0.058,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/foto_piloto_harness.js",
+      "segundos": 0.046,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/foto_lib_harness.js",
+      "segundos": 0.146,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/selecao_piloto_harness.js",
+      "segundos": 0.103,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/integridade_impressao_harness.js",
+      "segundos": 0.134,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/token_estacao_harness.js",
+      "segundos": 0.093,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/ticket_condicoes_harness.js",
+      "segundos": 1.501,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/ticket_previas_harness.js",
+      "segundos": 0.061,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/numeracao_compatibilidade_harness.js",
+      "segundos": 1.372,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/mapas_teatro_harness.js",
+      "segundos": 0.665,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/mapas_teatro_browser_harness.js",
+      "segundos": 11.216,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/teatro_snapshot_harness.js",
+      "segundos": 0.09,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/teatro_vertical_modelo_harness.js",
+      "segundos": 0.107,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/gabarito_vinculado_pedido_harness.js",
+      "segundos": 0.69,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/status_impressao_rede_harness.js",
+      "segundos": 0.099,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/status_impressao_retorno_harness.js",
+      "segundos": 0.243,
+      "sucesso": true
+    },
+    {
+      "etapa": "piloto/offline_painel_harness.js",
+      "segundos": 1.157,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/pytest",
+      "segundos": 156.081,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/estatisticas_piloto_harness.js",
+      "segundos": 7.425,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/montagem_harness.js",
+      "segundos": 0.177,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/montagem_local_harness.cjs",
+      "segundos": 0.111,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/montagem_estacao_harness.cjs",
+      "segundos": 0.052,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/historico_impressao_harness.js",
+      "segundos": 0.079,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/gestao_estacoes_harness.js",
+      "segundos": 18.955,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/modelos_pedido_carregamento_harness.js",
+      "segundos": 0.079,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/fidelidade_numeracao_harness.js",
+      "segundos": 0.084,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/prazo_lista_local_harness.js",
+      "segundos": 0.055,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/foto_piloto_harness.js",
+      "segundos": 0.05,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/foto_lib_harness.js",
+      "segundos": 0.149,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/selecao_piloto_harness.js",
+      "segundos": 0.107,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/integridade_impressao_harness.js",
+      "segundos": 0.133,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/token_estacao_harness.js",
+      "segundos": 0.093,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/ticket_condicoes_harness.js",
+      "segundos": 1.558,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/ticket_previas_harness.js",
+      "segundos": 0.06,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/numeracao_compatibilidade_harness.js",
+      "segundos": 1.357,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/mapas_teatro_harness.js",
+      "segundos": 0.664,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/mapas_teatro_browser_harness.js",
+      "segundos": 11.171,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/teatro_snapshot_harness.js",
+      "segundos": 0.102,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/teatro_vertical_modelo_harness.js",
+      "segundos": 0.118,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/gabarito_vinculado_pedido_harness.js",
+      "segundos": 0.694,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/status_impressao_rede_harness.js",
+      "segundos": 0.093,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/status_impressao_retorno_harness.js",
+      "segundos": 0.251,
+      "sucesso": true
+    },
+    {
+      "etapa": "oficial/offline_painel_harness.js",
+      "segundos": 1.142,
+      "sucesso": true
+    }
+  ],
+  "pytest_por_perfil": {
+    "aprovados": 1409,
+    "ignorados": 3,
+    "subtestes_aprovados": 2
+  },
+  "metadados_1418_testes_aprovados": 119,
+  "regressoes_novas": 56,
+  "pedido_25345": {
+    "paginas": 369,
+    "giro_folha": 90,
+    "erro_visual_maximo": 0.0,
+    "original_preservado": true,
+    "impressao_fisica": false
+  }
+}
