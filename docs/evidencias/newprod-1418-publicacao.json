@@ -1,0 +1,46 @@
+{
+  "versao": "1.4.18",
+  "commit_fonte": "d1dad1cb0e3a9308152616b87b1db3fca289a326",
+  "download_publico_conferido": true,
+  "msi": {
+    "arquivo": "NewProdPiloto_Oficial_v1.4.18.msi",
+    "version": "1.4.18",
+    "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}",
+    "bytes": 196886528,
+    "sha256": "40192a58d18a8c60892eac0d5a1f00ceb07db04084750a11f6017f6e62df1a8a"
+  },
+  "manifestos": {
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.4.18",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.18.msi",
+      "sha256": "40192a58d18a8c60892eac0d5a1f00ceb07db04084750a11f6017f6e62df1a8a",
+      "bytes": 196886528,
+      "size": 196886528,
+      "notes": "NewProd: publicacao no canal producao."
+    },
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.4.18",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.18.msi",
+      "sha256": "40192a58d18a8c60892eac0d5a1f00ceb07db04084750a11f6017f6e62df1a8a",
+      "bytes": 196886528,
+      "size": 196886528,
+      "notes": "NewProd: publicacao no canal producao."
+    },
+    "newprod-piloto-teste.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoTeste",
+      "version": "1.3.35",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Teste_v1.3.35.msi",
+      "sha256": "581b7723a1041bcaddf29b36295ad71cf8283658b7e749f9b7091999786c45aa",
+      "bytes": 196792320,
+      "size": 196792320,
+      "notes": "Atualizador com validacao de espaco, download e instalacao; motivo obrigatorio ao selecionar Corrigir Arte, salvo nas observacoes do modelo. Preserva as correcoes publicadas ate 1.3.33."
+    }
+  },
+  "teste_preservado": true,
+  "instalacao_manual": false
+}

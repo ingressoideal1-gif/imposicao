@@ -1,0 +1,50 @@
+{
+  "commit": "d1dad1cb0e3a9308152616b87b1db3fca289a326",
+  "executaveis": [
+    {
+      "arquivo": "dist\\NewProd.exe",
+      "sha256": "16f56d068a0cd1ab02b21b17942b91effc0f2791d317df58954eacdfe256f528",
+      "bytes": 144706037,
+      "versao": "1.4.18",
+      "modulos_identicos_a_fonte": [
+        "agent_version",
+        "pdf_camadas",
+        "engine",
+        "integridade_impressao",
+        "pacotes_api",
+        "retencao_cache",
+        "selecao_piloto",
+        "catalogo_revisoes"
+      ],
+      "painel_arquivos_conferidos": 390,
+      "runtime_win32ui_completo": true,
+      "rotacao270_modulo_empacotado": true
+    },
+    {
+      "arquivo": "dist\\piloto\\NewProdPiloto.exe",
+      "sha256": "f18a8903084b7b80bc13b6b10baa02f5c42735414f31f242af59fda70a5b90d2",
+      "bytes": 144708189,
+      "versao": "1.4.18",
+      "modulos_identicos_a_fonte": [
+        "agent_version",
+        "pdf_camadas",
+        "engine",
+        "integridade_impressao",
+        "pacotes_api",
+        "retencao_cache",
+        "selecao_piloto",
+        "catalogo_revisoes"
+      ],
+      "painel_arquivos_conferidos": 390,
+      "runtime_win32ui_completo": true
+    }
+  ],
+  "msi": {
+    "arquivo": "NewProdPiloto_Oficial_v1.4.18.msi",
+    "version": "1.4.18",
+    "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}",
+    "bytes": 196886528,
+    "sha256": "40192a58d18a8c60892eac0d5a1f00ceb07db04084750a11f6017f6e62df1a8a"
+  },
+  "instalado": false
+}
