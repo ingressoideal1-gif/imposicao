@@ -1,0 +1,173 @@
+{
+  "versao": "1.4.19",
+  "fonte": "f2a911b376e018e918c18a66b71ed03a7301c54d",
+  "msi": {
+    "nome": "NewProdPiloto_Oficial_v1.4.19.msi",
+    "bytes": 196894720,
+    "sha256": "d819771bbf1448f0698d81f8f0e5fce4bb92eef9515b1529699e8478eb08d81c",
+    "ProductVersion": "1.4.19",
+    "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}"
+  },
+  "download_publico_conferido": true,
+  "manifestos": {
+    "newprod-piloto-oficial.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.4.19",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.19.msi",
+      "sha256": "d819771bbf1448f0698d81f8f0e5fce4bb92eef9515b1529699e8478eb08d81c",
+      "bytes": 196894720,
+      "size": 196894720,
+      "notes": "NewProd: publicacao no canal producao."
+    },
+    "latest.json": {
+      "schema": 1,
+      "produto": "NewProdPilotoOficial",
+      "version": "1.4.19",
+      "url": "https://vwbtitjlpelrcnsytzqw.supabase.co/storage/v1/object/public/agent-releases/NewProdPiloto_Oficial_v1.4.19.msi",
+      "sha256": "d819771bbf1448f0698d81f8f0e5fce4bb92eef9515b1529699e8478eb08d81c",
+      "bytes": 196894720,
+      "size": 196894720,
+      "notes": "NewProd: publicacao no canal producao."
+    }
+  },
+  "canal_teste_conferido": "1.3.35",
+  "edge": {
+    "slug": "piloto-local",
+    "version": 41,
+    "status": "ACTIVE",
+    "verify_jwt": false,
+    "ezbr_sha256": "3b2d8b68c99bb6d3a56d3f278270fbbb8ccd92c178e0a2a6bae71a629eada7db",
+    "arquivos_relidos": 18
+  },
+  "web": {
+    "pr": "https://github.com/ingressoideal1-gif/imposicao/pull/306",
+    "head": "a81162e4e8c0d208838b21d94f91cc6ce592006d",
+    "commit": "2cacaf9e65f5f6898e983c73d87816b11e9bee37",
+    "versao": "v20261143",
+    "cloudflare_check_id": 134363881457,
+    "cloudflare_url": "https://dash.cloudflare.com/?to=/456831b331b16e1764f18b39f4e78d4a/pages/view/imposicao/635e883c-901b-4537-bfb8-8d96ecf226f1",
+    "checks_pr_aprovados": [
+      "Windows - seguranca e recuperacao",
+      "NewProd e Piloto - producao",
+      "NewProd e Piloto - oficial",
+      "NewProd e Piloto - piloto",
+      "Piloto - consulta autenticada sem escrita",
+      "Cloudflare Pages"
+    ],
+    "arquivos_publicos": [
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "cliente.html",
+        "versao_url": "20261143",
+        "sha256": "ec280e3a63d27bc6a3cc15910606094d04e06a91b72e831e407d06efc0b6395c",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "controle.html",
+        "versao_url": "20261143",
+        "sha256": "50e6892cc9343195e85ee4899947944af52ad7ccdce40a047051967da59c1f1e",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "impressao-autonoma.js",
+        "versao_url": "20261143-ux1",
+        "sha256": "1eb5c129842039535e7e16c013d697add5c306ec7c3b59c4ffc33e469968db3f",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "index.html",
+        "versao_url": "20261143",
+        "sha256": "3f5583103f56e779b9e927dff45bf3f76a31b275b32bd22981b70c3a744870f2",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "montagem.js",
+        "versao_url": "20261143-ux1",
+        "sha256": "d1760e78b2affdf21a602156aa2f26f64ffb8c9d1f1c13c0c38c79d8c85c4389",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "pedido.js",
+        "versao_url": "20261143-ux2",
+        "sha256": "84b7cbdeca60116312b8b2faa8d7e284f2160c660a72ccde36934c6f9e9381a4",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "producao.html",
+        "versao_url": "20261143",
+        "sha256": "abae134285a10f0084239f9f8bc9075b1f895e18d11ca63d1d4cd1691e159dc2",
+        "confere": true
+      },
+      {
+        "dominio": "imposition.ai-ideal.com.br",
+        "arquivo": "script.js",
+        "versao_url": "20261143-ux1",
+        "sha256": "8d6a6c6b97361ca18a1d25155de053c92c307c8bda95144c04abc6ede2fa60a8",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "cliente.html",
+        "versao_url": "20261143",
+        "sha256": "ec280e3a63d27bc6a3cc15910606094d04e06a91b72e831e407d06efc0b6395c",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "controle.html",
+        "versao_url": "20261143",
+        "sha256": "50e6892cc9343195e85ee4899947944af52ad7ccdce40a047051967da59c1f1e",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "impressao-autonoma.js",
+        "versao_url": "20261143-ux1",
+        "sha256": "1eb5c129842039535e7e16c013d697add5c306ec7c3b59c4ffc33e469968db3f",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "index.html",
+        "versao_url": "20261143",
+        "sha256": "3f5583103f56e779b9e927dff45bf3f76a31b275b32bd22981b70c3a744870f2",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "montagem.js",
+        "versao_url": "20261143-ux1",
+        "sha256": "d1760e78b2affdf21a602156aa2f26f64ffb8c9d1f1c13c0c38c79d8c85c4389",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "pedido.js",
+        "versao_url": "20261143-ux2",
+        "sha256": "84b7cbdeca60116312b8b2faa8d7e284f2160c660a72ccde36934c6f9e9381a4",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "producao.html",
+        "versao_url": "20261143",
+        "sha256": "abae134285a10f0084239f9f8bc9075b1f895e18d11ca63d1d4cd1691e159dc2",
+        "confere": true
+      },
+      {
+        "dominio": "imposicao.pages.dev",
+        "arquivo": "script.js",
+        "versao_url": "20261143-ux1",
+        "sha256": "8d6a6c6b97361ca18a1d25155de053c92c307c8bda95144c04abc6ede2fa60a8",
+        "confere": true
+      }
+    ]
+  }
+}
