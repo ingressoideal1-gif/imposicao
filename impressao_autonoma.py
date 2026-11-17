@@ -14,6 +14,8 @@ class Cancelado(Exception):
 
 
 class Trabalhos:
+    _ativos = "json_extract(dados, '$.estado') IN ('aceito','gerando','enviando','cancelando')"
+
     def __init__(self, caminho):
         self.caminho = Path(caminho)
         self.caminho.parent.mkdir(parents=True, exist_ok=True)
@@ -21,11 +23,12 @@ class Trabalhos:
         self.threads = {}
         with self.conexao() as db:
             db.execute('CREATE TABLE IF NOT EXISTS trabalhos (id TEXT PRIMARY KEY, assinatura TEXT NOT NULL, dados TEXT NOT NULL)')
-            for ident, texto in db.execute('SELECT id,dados FROM trabalhos').fetchall():
+            db.execute("CREATE INDEX IF NOT EXISTS trabalhos_recentes ON trabalhos(json_extract(dados,'$.atualizado') DESC)")
+            db.execute(f"CREATE INDEX IF NOT EXISTS trabalhos_em_curso ON trabalhos(id) WHERE {self._ativos}")
+            for (texto,) in db.execute(f'SELECT dados FROM trabalhos WHERE {self._ativos}').fetchall():
                 dados = json.loads(texto)
-                if dados['estado'] in ('aceito', 'gerando', 'enviando', 'cancelando'):
-                    dados.update(estado='conferencia', motivo='reinicio', atualizado=time.time())
-                    self.gravar(db, dados)
+                dados.update(estado='conferencia', motivo='reinicio', atualizado=time.time())
+                self.gravar(db, dados)
 
     @contextmanager
     def conexao(self):
@@ -53,8 +56,8 @@ class Trabalhos:
 
     def listar(self):
         with self.lock, self.conexao() as db:
-            rows = [json.loads(r[0]) for r in db.execute('SELECT dados FROM trabalhos')]
-            return sorted(rows, key=lambda r: r['atualizado'], reverse=True)[:30]
+            rows = db.execute("SELECT dados FROM trabalhos ORDER BY json_extract(dados,'$.atualizado') DESC, rowid LIMIT 30")
+            return [json.loads(texto) for (texto,) in rows]
 
     def atualizar(self, ident, **campos):
         with self.lock, self.conexao() as db:
@@ -83,7 +86,7 @@ class Trabalhos:
                 raise ValueError('Este trabalho nao esta aguardando conferencia.')
             return self.atualizar(ident, estado='encerrado', motivo='conferido_pelo_operador')
 
-    def iniciar(self, ident, assinatura, produzir, enviar, finalizar, reservar):
+    def iniciar(self, ident, assinatura, produzir, enviar, finalizar, reservar, *, destino=None):
         ident = str(uuid.UUID(ident))
         with self.lock, self.conexao() as db:
             anterior = db.execute('SELECT assinatura,dados FROM trabalhos WHERE id=?', (ident,)).fetchone()
@@ -91,13 +94,15 @@ class Trabalhos:
                 if anterior[0] != assinatura:
                     raise ValueError('Identificador ja usado para outro trabalho.')
                 return json.loads(anterior[1]), False
-            for texto, in db.execute('SELECT dados FROM trabalhos'):
-                if json.loads(texto)['estado'] in ('aceito','gerando','enviando','cancelando'):
-                    raise ValueError('Aguarde o envio em andamento terminar.')
+            if db.execute(f'SELECT 1 FROM trabalhos WHERE {self._ativos} LIMIT 1').fetchone():
+                raise ValueError('Aguarde o envio em andamento terminar.')
+            from historico_impressao import contexto_validado
+            contexto = contexto_validado((destino or {}).get('historico_contexto'))
             reserva = reservar()
             if reserva is None:
                 raise ValueError('Agente ocupado com outro trabalho ou atualizacao. Aguarde.')
             dados = dict(id=ident, estado='aceito', cancelar=False, gerados=0, enviados=0,
+                         impressora=(destino or {}).get('printerName'), alvos=contexto['alvos'],
                          paginas_enviadas=0, lotes=[], motivo=None, atualizado=time.time())
             try:
                 db.execute('INSERT INTO trabalhos VALUES (?,?,?)', (ident, assinatura, json.dumps(dados)))

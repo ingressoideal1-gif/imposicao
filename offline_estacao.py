@@ -35,11 +35,26 @@ class OfflineEstacao:
             if not forcar and anterior and (datetime.now(timezone.utc) -
                     datetime.fromisoformat(anterior['coletado_em'])).total_seconds() <= 1800:
                 return anterior
-            dados = cliente.chamar('catalogos-offline', {'empresa': self.servico.empresa})
             tabelas = ('formatos', 'saidas', 'cores', 'modelos_imposicao')
+            def hash_local(catalogo):
+                conteudo = [catalogo.get(k) for k in ('empresa', 'revisao_catalogo', *tabelas)]
+                return hashlib.sha256(json.dumps(conteudo, separators=(',', ':')).encode()).hexdigest()
+            pedido = {'empresa': self.servico.empresa}
+            if (anterior and anterior.get('empresa') == self.servico.empresa
+                    and anterior.get('revisao_catalogo') and anterior.get('_hash_local') == hash_local(anterior)):
+                pedido['revisao_catalogo'] = anterior['revisao_catalogo']
+            dados = cliente.chamar('catalogos-offline', pedido)
+            reutilizado = dados.get('sem_mudanca') is True
+            if reutilizado:
+                if (not pedido.get('revisao_catalogo') or dados.get('empresa') != self.servico.empresa
+                        or dados.get('revisao_catalogo') != pedido['revisao_catalogo']):
+                    raise ValueError('Revisão do catálogo não confirmada.')
+                dados = dict(anterior)
             if (dados.get('empresa') != self.servico.empresa
                     or any(not isinstance(dados.get(t), list) for t in tabelas)):
                 raise ValueError('Catalogo da estacao incompleto.')
+            if not reutilizado and dados.get('revisao_catalogo'):
+                dados['_hash_local'] = hash_local(dados)
             dados['coletado_em'] = datetime.now(timezone.utc).isoformat()
             with self.banco() as con:
                 con.execute('INSERT OR REPLACE INTO offline_catalogos VALUES (1,?)', (json.dumps(dados),))
@@ -278,11 +293,15 @@ class OfflineEstacao:
                         (dados['id'],json.dumps(corpo),'pendente',time.time()))
         return {'id':dados['id'], 'registrado_localmente':True}
 
-    def confirmacoes(self):
+    def confirmacoes(self, pedido=None):
+        sql = "SELECT id,dados,estado FROM offline_confirmacoes WHERE estado != 'cancelada'"
+        parametros = ()
+        if pedido is not None:
+            sql += " AND CAST(json_extract(dados, '$.pedido') AS TEXT) = ?"
+            parametros = (str(pedido),)
         with self.banco() as con:
-            registros = [{'id':r[0], 'dados':json.loads(r[1]), 'estado':r[2]}
-                    for r in con.execute("SELECT id,dados,estado FROM offline_confirmacoes WHERE estado != 'cancelada' ORDER BY criado DESC, rowid DESC")]
-        return registros
+            linhas = con.execute(sql + " ORDER BY criado DESC, rowid DESC", parametros)
+            return [{'id':r[0], 'dados':json.loads(r[1]), 'estado':r[2]} for r in linhas]
 
     def decisao_manual(self, dados, operador):
         """Suspende recibos antigos antes da escrita online, sem apagar o historico.

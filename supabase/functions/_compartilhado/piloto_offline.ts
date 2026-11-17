@@ -3,7 +3,7 @@ import { Recusa } from './sessao.ts';
 import { conferirPedidoPiloto } from './piloto_pedido.ts';
 
 export async function catalogosOffline(entrada:any, operador:any, consultar=banco,
-  empresa=Deno.env.get('PILOTO_LOCAL_EMPRESA'), empresaId=Deno.env.get('PILOTO_LOCAL_EMPRESA_ID')) {
+  empresa=Deno.env.get('PILOTO_LOCAL_EMPRESA'), empresaId=Deno.env.get('PILOTO_LOCAL_EMPRESA_ID'), revisaoAnterior='') {
   if (!empresa || entrada?.empresa !== empresa || Object.keys(entrada).join(',') !== 'empresa'
       || operador?.perm_producao_view !== true || operador?.perm_imprimir !== true
       || ((operador.empresa_id ?? operador.id_empresa) != null && String(operador.empresa_id ?? operador.id_empresa)!==empresaId)) throw new Recusa(403,'acesso recusado');
@@ -22,7 +22,11 @@ export async function catalogosOffline(entrada:any, operador:any, consultar=banc
     }
     if (!resultado[nome]) throw new Recusa(413,'catalogo excede limite');
   }
-  return resultado;
+  const bytes = new TextEncoder().encode(JSON.stringify(resultado));
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  const revisao = Array.from(hash, b => b.toString(16).padStart(2, '0')).join('');
+  if (revisao === revisaoAnterior) return {empresa, revisao_catalogo: revisao, sem_mudanca: true};
+  return {...resultado, revisao_catalogo: revisao};
 }
 
 export async function confirmarOffline(entrada:any, operador:any, consultar=banco,

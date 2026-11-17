@@ -47,6 +47,33 @@ def test_abertura_atualiza_catalogo_recente_sem_mudanca_no_pedido(tmp_path):
     assert o.catalogos_para_pedido({'execucao_offline':True})['saidas'] == novo['saidas']
 
 
+def test_catalogo_compacto_exige_mesma_revisao_e_copia_integra(tmp_path):
+    s, _, _, offline, _ = ambiente(tmp_path)
+    cliente = s.coleta_autonoma.cliente
+    rev = 'a' * 64
+    catalogo = dict(empresa='teste', revisao_catalogo=rev, formatos=[{'id':'f'}],
+                    saidas=[], cores=[], modelos_imposicao=[])
+    corpos = []
+    def chamar(acao, corpo):
+        corpos.append(corpo)
+        if corpo.get('revisao_catalogo') == rev:
+            return dict(empresa='teste', revisao_catalogo=rev, sem_mudanca=True)
+        return dict(catalogo)
+    cliente.chamar = chamar
+    for _ in range(2):
+        assert offline.catalogos_para_pedido({})['formatos'] == [{'id':'f'}]
+    assert [c.get('revisao_catalogo') for c in corpos] == [None, rev]
+    with offline.banco() as db:
+        modificado = offline.catalogos()
+        modificado['formatos'] = []
+        db.execute('UPDATE offline_catalogos SET dados=? WHERE id=1', (json.dumps(modificado),))
+    assert offline.catalogos_para_pedido({})['formatos'] == [{'id':'f'}]
+    assert 'revisao_catalogo' not in corpos[-1]
+    cliente.chamar = lambda *_: dict(empresa='teste', revisao_catalogo='b'*64, sem_mudanca=True)
+    with pytest.raises(ValueError):
+        offline.catalogos_para_pedido({})
+
+
 def test_catalogo_invalido_ou_recusa_preserva_copia_sem_liberar_abertura_online(tmp_path):
     s, _, _, o, _ = ambiente(tmp_path)
     o.ciclo(); anterior = o.catalogos()

@@ -102,7 +102,9 @@ def criar_router_estatisticas(servico):
     @router.get('/api/pacotes-locais/offline-painel')
     def offline_painel(request: Request):
         exigir_painel(request)
-        return Response(json.dumps(offline.bootstrap()), media_type='application/json', headers={'Cache-Control':'no-store'})
+        pedido = request.query_params.get('confirmacoes_pedido')
+        dados = offline.bootstrap() if pedido is None else {'confirmacoes':offline.confirmacoes(pedido)}
+        return Response(json.dumps(dados), media_type='application/json', headers={'Cache-Control':'no-store'})
 
     @router.post('/api/pacotes-locais/conferencia-trabalho-painel')
     @router.post('/api/pacotes-locais/confirmar-impressao-painel')

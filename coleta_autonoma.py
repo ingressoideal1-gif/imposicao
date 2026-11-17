@@ -40,10 +40,14 @@ class ClienteAutonomo:
                 codigo = 'credencial_ausente'
                 raise ValueError()
             from agent_version import AGENT_VERSION
+            cabecalhos = {'Content-Type':'application/json', 'X-Agente-Segredo':segredo,
+                          'X-NewProd-Versao': AGENT_VERSION.split('-')[0]}
+            if acao == 'catalogos-offline' and 'revisao_catalogo' in corpo:
+                corpo = dict(corpo)
+                cabecalhos['X-NewProd-Catalogo'] = corpo.pop('revisao_catalogo')
             req = urllib.request.Request(self.base + acao,
                 data=json.dumps({**corpo, 'estacao': self.estacao}).encode(), method='POST',
-                headers={'Content-Type':'application/json', 'X-Agente-Segredo':segredo,
-                         'X-NewProd-Versao': AGENT_VERSION.split('-')[0]})
+                headers=cabecalhos)
             with self.abrir(req, timeout=5 if acao == 'abrir-pedido' else 20) as resposta:
                 if getattr(resposta, 'status', 200) != 200:
                     raise urllib.error.HTTPError('', resposta.status, '', {}, None)

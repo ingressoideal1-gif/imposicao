@@ -25,6 +25,10 @@ function extrair(nome) {
    chamadas.push(req.url);
    if(req.url.startsWith('/api/pacotes-locais/')) {
      res.setHeader('Content-Type','application/json');
+     if(req.url.includes('offline-painel?confirmacoes_pedido=')) {
+       const pedido = new URL(req.url, 'http://localhost').searchParams.get('confirmacoes_pedido');
+       return res.end(JSON.stringify({confirmacoes:(dados.confirmacoes || []).filter(c => String(c.dados.pedido) === pedido)}));
+     }
      if(req.url.endsWith('offline-painel')) return res.end(JSON.stringify(dados));
      let body=''; for await (const part of req) body+=part;
      if(req.url.endsWith('conferencia-trabalho-painel')) return res.end(JSON.stringify(dados));

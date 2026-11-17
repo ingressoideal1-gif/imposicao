@@ -26809,7 +26809,12 @@ function solicitarRecorteDoPainel() {
 window.solicitarRecorteDoPainel = solicitarRecorteDoPainel;
 
 function pesquisarPedidosNoPainelProducao() {
-    renderOrdens();
+    if (!pesquisarPedidosNoPainelProducao.desenho) {
+        pesquisarPedidosNoPainelProducao.desenho = requestAnimationFrame(() => {
+            pesquisarPedidosNoPainelProducao.desenho = 0;
+            renderOrdens();
+        });
+    }
     clearTimeout(pesquisarPedidosNoPainelProducao.timer);
     pesquisarPedidosNoPainelProducao.timer = setTimeout(() => {
         if (document.getElementById('view-lista-impressao')?.classList.contains('active')) solicitarRecorteDoPainel();
@@ -31725,10 +31730,16 @@ function previewDaArteDoPedidoHtml(os, modelo = null) {
         return m ? parseInt(m[0], 10) : 999999;
     };
 
-    const candidatosComImagem = todosCandidatos.filter(m => m && (m._foto_produto_url || m.amostra_arte_base64 || m.arte_url || m.pdf_url));
-    candidatosComImagem.sort((a, b) => getModeloNumSort(a) - getModeloNumSort(b));
-
-    const modeloPreviewItem = candidatosComImagem[0];
+    let modeloPreviewItem = null;
+    let menorOrdem = Infinity;
+    for (const candidato of todosCandidatos) {
+        if (!candidato || !(candidato._foto_produto_url || candidato.amostra_arte_base64 || candidato.arte_url || candidato.pdf_url)) continue;
+        const ordem = getModeloNumSort(candidato);
+        if (!modeloPreviewItem || ordem < menorOrdem) {
+            modeloPreviewItem = candidato;
+            menorOrdem = ordem;
+        }
+    }
     let previewSrc = modeloPreviewItem ? (modeloPreviewItem._foto_produto_url || modeloPreviewItem.amostra_arte_base64 || modeloPreviewItem.arte_url || modeloPreviewItem.pdf_url || '') : '';
     const previewEhProduto = !!(modeloPreviewItem && modeloPreviewItem._produto_prateleira && modeloPreviewItem._foto_produto_url);
     if (!previewSrc && state.todasArtes && !todosCandidatos.some(m => m && m._produto_prateleira)) {
@@ -31744,7 +31755,7 @@ function previewDaArteDoPedidoHtml(os, modelo = null) {
     // icones; e `#084065` e' o proprio fundo do arquivo, o que faz a sobra dos
     // lados desaparecer em vez de virar moldura.
     let previewHtml = `
-        <img src="${IMAGEM_SEM_ARTE}" alt="Sem arte cadastrada"
+        <img loading="lazy" decoding="async" src="${IMAGEM_SEM_ARTE}" alt="Sem arte cadastrada"
              style="width: 126px; height: 42px; object-fit: contain; background: #084065; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); display: block; margin: 0 auto;"
              title="Sem arte cadastrada" />
     `;
@@ -31758,7 +31769,7 @@ function previewDaArteDoPedidoHtml(os, modelo = null) {
             `;
         } else {
             previewHtml = `
-                <img src="${previewSrc}" 
+                <img loading="lazy" decoding="async" src="${previewSrc}"
                      style="width: 126px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); cursor: zoom-in; display: block; margin: 0 auto;" 
                      onclick="event.stopPropagation(); abrirLightboxImagem('${previewSrc}', '${previewEhProduto ? 'Foto do produto' : 'Arte do pedido'}')"
                      title="${previewEhProduto ? 'Foto do produto de prateleira' : 'Clique para ampliar a arte'}" />
@@ -32329,6 +32340,7 @@ function renderOrdens() {
             if (emptyImpressao) emptyImpressao.style.display = 'none';
             if (tableImpressao) tableImpressao.style.display = '';
 
+            const linhaEmFoco = document.activeElement?.dataset?.pedidoProducao;
             tbodyImpressao.innerHTML = impressaoNaTela.map(os => {
                 const isExpanded = state.osExpandedId === os.id;
                 const osItensList = state.osItens[os.id] || [];
@@ -32385,7 +32397,7 @@ function renderOrdens() {
                 }
 
                 return `
-                    <tr class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="abrirImposicaoDoPedido('${os.id}', '${os.numero}')" style="cursor: pointer;">
+                    <tr tabindex="-1" data-pedido-producao="${escapeHtml(String(os.id))}" class="os-row ${isExpanded ? 'os-row-expanded' : ''}" onclick="abrirImposicaoDoPedido('${os.id}', '${os.numero}')" style="cursor: pointer;">
                         <td>
                             <span style="font-size: 1.35rem; font-weight: 900; color: #ffffff; background: linear-gradient(135deg, var(--blue), #2563eb); padding: 4px 12px; border-radius: 6px; display: inline-block; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.2);">${os.numero}</span>
                         </td>
@@ -32414,6 +32426,7 @@ function renderOrdens() {
                 `;
 
             }).join('');
+            if (linhaEmFoco) tbodyImpressao.querySelector('[data-pedido-producao="' + CSS.escape(linhaEmFoco) + '"]')?.focus({preventScroll:true});
         }
     }
 
@@ -33954,11 +33967,20 @@ async function carregarModeloParaImposicao(itemId, osId, switchTab = true, conte
 // -------------------------------------------------------------------------------
 /**
  * O VOLTAR do cabeçalho do Pedido (28/08/2026): devolve ao Painel de Produção
- * pelo mesmo caminho do menu, para a lista reabrir na página inicial dela.
+ * pelo mesmo caminho do menu e devolve o foco ao pedido conferido.
  */
 function voltarAoPainelDeProducao() {
     const nav = document.getElementById('nav-lista-impressao');
-    if (nav) nav.click();
+    const osId = state.pedidoAberto?.osId;
+    if (!nav) return;
+    nav.click();
+    if (osId != null) requestAnimationFrame(() => {
+        const linha = document.querySelector('[data-pedido-producao="' + CSS.escape(String(osId)) + '"]');
+        if (linha) {
+            linha.focus({preventScroll:true});
+            linha.scrollIntoView({block:'nearest'});
+        }
+    });
 }
 window.voltarAoPainelDeProducao = voltarAoPainelDeProducao;
 
@@ -34858,6 +34880,9 @@ window.showView = function(viewId) {
     // A lista e os modelos compartilham o mesmo elemento de rolagem.
     // Guardar antes de esconder a lista, quando sua altura ainda está disponível.
     const conteudoPrincipal = document.querySelector('.main-content');
+    if (viewAnterior?.id === 'view-lista-impressao' && viewId === 'view-pedido' && conteudoPrincipal) {
+        state.posicaoPainelProducao = conteudoPrincipal.scrollTop;
+    }
     if (viewAnterior?.id === 'view-lista-arte' && viewId !== viewAnterior.id && conteudoPrincipal) {
         state.posicaoListaArte = conteudoPrincipal.scrollTop;
     }
@@ -34899,6 +34924,9 @@ window.showView = function(viewId) {
     }
  else if (viewId === 'view-lista-impressao' || viewId === 'view-dashboard-producao') {
         renderOrdens();
+        if (viewId === 'view-lista-impressao' && viewAnterior?.id === 'view-pedido' && conteudoPrincipal) {
+            conteudoPrincipal.scrollTop = state.posicaoPainelProducao || 0;
+        }
         loadOrdens();
     }
     else if (viewId === 'view-producao-cor' && window.ProducaoPorCorPainel) {

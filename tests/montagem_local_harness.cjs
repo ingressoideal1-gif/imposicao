@@ -72,6 +72,11 @@ function extract(file, name) {
     const alvos=[{osId:'a',itemId:10},{osId:'b',itemId:20}];
     assert.equal(c.PilotoSelecao.referencias(alvos).length,2);
     await c.PilotoSelecao.lerUrl('https://synthetic.test/1',{},alvos);
+    const recurso = c.PilotoSelecao.recursoDaMontagem('https://synthetic.test/1',10,'a','front');
+    assert.equal(recurso.chave,'/api/pacotes-locais/recurso-painel/10/'+'b'.repeat(64)+'/frente');
+    await recurso.ler();
+    assert.equal(c.reads.at(-1),recurso.chave);
+    assert.equal(c.PilotoSelecao.recursoDaMontagem('https://synthetic.test/1',20,'b','front'),null);
     await assert.rejects(c._mtgPrepararPedidoLocal('ausente'),/indisponível/);
     c.getOSItens('a')[0]._modeloOnline.id_int=99;
     assert.throws(()=>c.PilotoSelecao.referencias(alvos),/Reabra/);

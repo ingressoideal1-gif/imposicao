@@ -70,7 +70,8 @@ export async function operarPilotoEstacao(acao: string, req: Request,
     Deno.env.get('PILOTO_LOCAL_EMPRESA'));
   if (acao === 'base-qr-v2') return await fornecerBaseQrV2(corpo, operador, estacao);
   if (acao === 'listar') return await listarPiloto(corpo, operador);
-  if (acao === 'catalogos-offline') return await catalogosOffline(corpo, operador);
+  if (acao === 'catalogos-offline') return await catalogosOffline(corpo, operador, banco, undefined, undefined,
+    req.headers.get('X-NewProd-Catalogo') || '');
   if (acao === 'lista-offline') return await listaOffline(corpo, operador);
   if (acao === 'estado-cache') return await estadoCache(corpo, operador);
   if (acao === 'confirmar-offline') return await confirmarOffline(corpo, operador);

@@ -31,7 +31,7 @@ function ok(cond, oque, detalhe) {
 }
 
 function extrair(nome) {
-    const fonte = ['escapeHtml', 'formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao'].includes(nome) ? SCRIPT : PEDIDO;
+    const fonte = ['escapeHtml', 'formatoDoProduto', 'prepararFormatosDaFila', 'rotuloStatusComHora', 'formatarDataHoraStatus', 'horaStatusImpressao', 'rotuloDoModoDeImpressao'].includes(nome) ? SCRIPT : PEDIDO;
     const i = fonte.indexOf('\nfunction ' + nome + '(');
     if (i < 0) throw new Error('nao achei a funcao ' + nome + ' no pedido.js');
     const fim = fonte.indexOf('\n}', i);
@@ -40,7 +40,7 @@ function extrair(nome) {
 
 // As funcoes de verdade que decidem o que a fila mostra. As outras (salvar
 // campo, redesenhar barra, mover a janela) sao dubles: nao mudam o desenho.
-const REAIS = ['escapeHtml', 'formatoDoProduto', 'prepararFormatosDaFila', 'rotuloDoModoDeImpressao', 'renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
+const REAIS = ['escapeHtml', 'formatoDoProduto', 'prepararFormatosDaFila', 'rotuloStatusComHora', 'formatarDataHoraStatus', 'horaStatusImpressao', 'rotuloDoModoDeImpressao', 'renderPedOSQueue', 'contaDoProduto', 'resolverCorDoModelo',
                'modeloEhCamarote', 'textoLegivelSobre',
                'coresDoFormato', 'numeracoesDoFormato',
                'opcoesDeCorDaFila', 'opcoesDeNumeracaoDaFila', 'encherSeletorDaFila',

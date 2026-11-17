@@ -101,7 +101,7 @@ async function testar() {
     contexto.escapeHtml = String;
     contexto.renderMontagem = () => {};
     contexto.toast = m => avisos.push(m);
-    contexto.garantirBancosDoTrabalho = async () => {};
+    contexto.garantirBancosDoTrabalho = async ([id]) => { contexto.state._bancosPedidoDe = id; };
     contexto.loadOSItens = id => new Promise(r => { pendentes[id] = r; });
     const a = contexto.onMontagemPedidoChange();
     pedido.value = 'B';
@@ -109,6 +109,7 @@ async function testar() {
     await contexto.gerarPdfDaMontagem();
     assert.match(avisos[0], /Aguarde o carregamento/);
     pendentes.B(); await b;
+    assert.equal(contexto.state.montagem.carregando, 0, 'pedido escolhido pronto mesmo com a carga anterior pendente');
     pendentes.A(); await a;
     assert.equal(contexto.state.montagem.carregando, 0);
     assert.match(modelo.innerHTML, /MB/);

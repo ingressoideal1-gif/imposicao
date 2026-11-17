@@ -1,0 +1,78 @@
+{
+  "base": "agente-v1.4.18",
+  "pacote": {
+    "dist\\NewProd.exe": {
+      "sha256": "fedb3e07a2221805f697d3f876dde80aa21e618b379ea41d315caaab46c2ab1e",
+      "bytes": 144715215,
+      "modulos": [
+        "engine",
+        "color_profiles",
+        "app",
+        "agent_version",
+        "coleta_autonoma",
+        "estatisticas_piloto",
+        "impressao_autonoma",
+        "offline_estacao",
+        "pdf_camadas"
+      ],
+      "arquivos_painel": 390,
+      "dlls_win32ui": 3
+    },
+    "dist\\piloto\\NewProdPiloto.exe": {
+      "sha256": "ca2912f1514298053c33f943e35ca9d4997844a584569645118b42535fa1b2df",
+      "bytes": 144715980,
+      "modulos": [
+        "engine",
+        "color_profiles",
+        "app",
+        "agent_version",
+        "coleta_autonoma",
+        "estatisticas_piloto",
+        "impressao_autonoma",
+        "offline_estacao",
+        "pdf_camadas"
+      ],
+      "arquivos_painel": 390,
+      "dlls_win32ui": 3
+    },
+    "msi": {
+      "nome": "NewProdPiloto_Oficial_v1.4.19.msi",
+      "bytes": 196894720,
+      "sha256": "d819771bbf1448f0698d81f8f0e5fce4bb92eef9515b1529699e8478eb08d81c",
+      "ProductVersion": "1.4.19",
+      "UpgradeCode": "{A7F3C2D1-8B4E-4F6A-9C2D-1E5F7A8B3C4D}"
+    }
+  },
+  "canais": {
+    "producao": {
+      "pytest_aprovados": 1422,
+      "pytest_ignorados": 3,
+      "subtestes_aprovados": 2,
+      "etapas_aprovadas": 26
+    },
+    "piloto": {
+      "pytest_aprovados": 1422,
+      "pytest_ignorados": 3,
+      "subtestes_aprovados": 2,
+      "etapas_aprovadas": 26
+    },
+    "oficial": {
+      "pytest_aprovados": 1422,
+      "pytest_ignorados": 3,
+      "subtestes_aprovados": 2,
+      "etapas_aprovadas": 26
+    }
+  },
+  "validacao_cor": {
+    "perfil": "Coated FOGRA39",
+    "bytes": 654352,
+    "sha256_preservado": "da2b9b593e27cba2563cbc8596071c5c8f2395d3dbb4434538bac2bc9d58ce77",
+    "arte_vetorial": true
+  },
+  "edge": {
+    "funcao": "piloto-local",
+    "base_remota": 40,
+    "arquivos_remotos_conferidos": 18,
+    "testes_locais": 56
+  }
+}

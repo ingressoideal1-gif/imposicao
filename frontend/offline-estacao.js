@@ -188,8 +188,8 @@
         return true;
     }
     async function aplicarConfirmacoes(osId) {
-        const b = await bootstrap();
         const numero=String(osId).replace(/^vibe_/, '');
+        const b = pendente ? await bootstrap() : await pedir('offline-painel?confirmacoes_pedido=' + encodeURIComponent(numero));
         await lerStatusDaRede((state.osItens[osId] || []).map(m => { m.id_int ??= Number(numero); return m; }));
         aplicarConfirmacoesDoPedido(osId, b);
     }

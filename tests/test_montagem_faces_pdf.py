@@ -8,8 +8,9 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[1]
 
 
-def test_regras_e_filtro_de_faces():
-    r = subprocess.run(["node", str(RAIZ / "tests/montagem_faces_pdf_harness.js")],
+@pytest.mark.parametrize("harness", ["montagem_faces_pdf_harness.js", "montagem_abertura_browser_harness.js"])
+def test_regras_selecao_e_previa(harness):
+    r = subprocess.run(["node", str(RAIZ / "tests" / harness)],
                        cwd=RAIZ, capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "OK:" in r.stdout

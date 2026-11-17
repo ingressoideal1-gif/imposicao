@@ -42,7 +42,7 @@ def gerar(tmp_path, cols, rows, rotacao, tipo, conjunto, quantidade):
     if tipo == 'CAMAROTE':
         # Inclui todos os camarotes na camada sintetica sem mudar a unidade.
         cfg.sheets_per_block = quantidade
-    engine = object.__new__(ImpositionEngine)
+    engine = ImpositionEngine(cfg)
     engine.rotate_angle = rotacao
     engine.generated_files = []
     engine._generate_capa_for_chunk(0, 0, plano, cfg, items)

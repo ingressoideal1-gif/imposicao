@@ -7,7 +7,7 @@
     const revisoesPedidos = new Map();
     let pedidoAtual = null;
     let popupConferencia = null;
-    function mostrarConferencia() {
+    function mostrarConferencia(osId, numero) {
         if (popupConferencia) {
             popupConferencia.close();
             popupConferencia.remove();
@@ -44,8 +44,30 @@
         const mensagem = document.createElement('p');
         mensagem.id = 'piloto-conferencia-mensagem';
         mensagem.setAttribute('role', 'status');
-        mensagem.textContent = 'Aguarde, conferencia de dados';
+        mensagem.textContent = 'Conferindo os dados e os arquivos do pedido…';
         dialogo.append(logo, indicador, mensagem);
+        const pedido = typeof findOSInState === 'function' && findOSInState(osId);
+        if (pedido || numero) {
+            const titulo = document.createElement('h2');
+            titulo.textContent = 'Pedido ' + String(pedido?.numero || numero || osId);
+            dialogo.insertBefore(titulo, indicador);
+            const itens = typeof getOSItens === 'function' && getOSItens(osId) || [];
+            const confirmados = itens.filter(i => i._dbLoaded === true);
+            const modelos = confirmados.length ? confirmados
+                : (typeof state !== 'undefined' && state.modelosGlobais?.[pedido?.numero || numero]) || [];
+            if (modelos.length) {
+                const resumo = document.createElement('div');
+                resumo.style.cssText = 'max-height:25vh;overflow:auto;text-align:left;margin-top:12px';
+                resumo.setAttribute('aria-label', 'Modelos conhecidos antes da conferência');
+                for (const modelo of modelos) {
+                    const linha = document.createElement('div');
+                    const qtd = modelo.qtd ?? modelo.quantidade;
+                    linha.textContent = [modelo.id, modelo.nome_modelo || modelo.produto, qtd != null ? qtd + ' un.' : ''].filter(Boolean).join(' · ');
+                    resumo.appendChild(linha);
+                }
+                dialogo.appendChild(resumo);
+            }
+        }
         // Escape não deve esconder uma conferência que continua em andamento.
         dialogo.addEventListener('cancel', evento => evento.preventDefault());
         document.body.appendChild(dialogo);
@@ -304,19 +326,32 @@
             return {modelo:p.modelo, revisao:p.revisao};
         });
     }
+    // A miniatura pertence à célula da Montagem, mesmo com outro pedido aberto no painel.
+    function recursoDaMontagem(url, itemId, osId, face) {
+        const registro = liberados.get(chave(itemId, osId));
+        if (!registro) return null;
+        validarTrabalho([{itemId, osId}]);
+        const pacote = registro.pacote;
+        const nomes = Object.keys(pacote.fontes || {}).filter(n => pacote.fontes[n] === url);
+        const preferido = face === 'back' ? 'verso' : 'frente';
+        const nome = nomes.includes(preferido) ? preferido : nomes[0];
+        if (!nome) return null;
+        return {chave: pacote.recursos[nome], ler: () => lerArte(pacote, nome, url)};
+    }
     function chaveRecurso(url) {
         const locais = [...liberados.values()].flatMap(({pacote:p}) => Object.entries(p.fontes || {})
             .filter(([,u]) => u === url).map(([n]) => ({chave:p.recursos[n], hash:p.hashes?.[n]})));
         if (new Set(locais.map(l => l.hash)).size > 1) throw Error('Revisões locais divergentes. Reabra o pedido.');
         return locais[0]?.chave || url;
     }
-    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, revisaoPedido, iniciarPedido, conferirPedido, conferir, motivoConsulta, lerArte, lerUrl, lerUrlParaConsulta, validarTrabalho, referencias, chaveRecurso};
+    window.PilotoSelecao = {carregarPedidoLocal, snapshotPedido, revisaoPedido, iniciarPedido, conferirPedido, conferir, motivoConsulta, lerArte, lerUrl, lerUrlParaConsulta, validarTrabalho, referencias, chaveRecurso, recursoDaMontagem};
     // A injeção exclusiva do Piloto ocorre depois do script principal. Manter
     // o fluxo original e acompanhar também seus retornos antecipados e erros.
     const abrirPedido = window.abrirImposicaoDoPedido;
     if (typeof abrirPedido === 'function') {
         window.abrirImposicaoDoPedido = async function (...argumentos) {
-            const fechar = mostrarConferencia();
+            if (typeof podeAbrirView === 'function' && !podeAbrirView('view-pedido')) return;
+            const fechar = mostrarConferencia(...argumentos);
             try {
                 return await abrirPedido.apply(this, argumentos);
             } finally {

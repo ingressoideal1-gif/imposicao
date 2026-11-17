@@ -52,6 +52,16 @@ def test_envia_sem_navegador_e_nao_gera_antes_do_envio(tmp_path):
         fila.iniciar(dados['id'],'diferente',None,None,None,controle.reservar)
 
 
+def test_listagem_limita_historico_antigo_e_preserva_desempate(tmp_path):
+    fila = Trabalhos(tmp_path / 'jobs.sqlite')
+    linhas = [{'id':str(uuid.uuid4()), 'atualizado':n // 2, 'estado':'enviado'} for n in range(81)]
+    with fila.conexao() as db:
+        db.executemany('INSERT INTO trabalhos VALUES (?,?,?)',
+                       [(d['id'], 'teste', json.dumps(d)) for d in linhas])
+    reaberto = Trabalhos(fila.caminho)
+    assert reaberto.listar() == sorted(linhas, key=lambda d: d['atualizado'], reverse=True)[:30]
+
+
 def test_cancelamento_explicito_espera_lote_em_curso(tmp_path):
     fila=Trabalhos(tmp_path/'jobs.sqlite');entrou=threading.Event();liberar=threading.Event()
     gerados=[]

@@ -60,6 +60,11 @@ def test_rotas_offline_confirmacao_exige_origem_e_permissao(tmp_path):
         assert c.post(decisao,json=d,headers=h).status_code==200
         assert c.post(decisao,json={**d,'acao':'concluir'},headers=h).status_code==200
         assert c.get('/api/pacotes-locais/offline-painel',headers=h).json()['confirmacoes'][0]['dados']['status']=='Aguardando'
+        numero = d['pedido']
+        rota = '/api/pacotes-locais/offline-painel'
+        recorte = c.get(rota, params={'confirmacoes_pedido': numero}, headers=h).json()
+        assert set(recorte) == {'confirmacoes'} and recorte['confirmacoes'][0]['dados']['pedido'] == numero
+        assert c.get(rota, params={'confirmacoes_pedido': 'outro'}, headers=h).json() == {'confirmacoes': []}
         assert c.post('/api/pacotes-locais/conferencia-trabalho-painel',json=[{'pedido':'99','revisao':'b'*64}],headers=h).status_code==409
 
 

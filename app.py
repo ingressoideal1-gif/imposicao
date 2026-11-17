@@ -15,14 +15,16 @@ def _patched_init(self, *args, **kwargs):
 starlette.formparsers.MultiPartParser.__init__ = _patched_init
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, BackgroundTasks
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import io
 
+from concurrent.futures import ThreadPoolExecutor
 from collections import deque
 DIAG_LOGS = deque(maxlen=500)
 _IMPOSE_TASKS = set()
+_motor_pdf_completo = ThreadPoolExecutor(max_workers=1, thread_name_prefix="MontagemPDF")
 def log_diag(msg: str):
     import datetime
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1670,7 +1672,7 @@ async def impose_file(
                 data['integridade']['job_id'], autonomo.assinatura(data), produzir_autonomo,
                 lambda arquivo, envio, numero: destino_autonomo.enviar(
                     arquivo, pedido_impressao, config.print_mode, envio, numero),
-                temporarios.close, controle.reservar_impressao)
+                temporarios.close, controle.reservar_impressao, destino=pedido_impressao)
             # A thread passa a ser dona dos temporarios; a resposta HTTP nao a controla.
             streaming_iniciado = novo
             return JSONResponse({'type': 'impressao_autonoma', 'trabalho': resultado}, status_code=202)
@@ -1827,41 +1829,68 @@ async def impose_file(
                 background=BackgroundTask(cliente_saiu.set),
             )
 
-        # Fluxo síncrono original (fallback)
-        engine = ImpositionEngine(config, resolver_recurso=resolver_local)
-        print(f"[DIAG impose] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r} sheets_per_block={data.get('sheets_per_block')!r} multi_artes_count={len(multi_artes_list)} has_cover={formato.get('has_cover')}")
-        engine.process()
-        _publicar_faixa_qr_ideal(config, data)
+        # PDFs completos continuam em série. Somente o executor usa os arquivos
+        # após o despacho, inclusive quando o cliente perde a conexão.
+        import asyncio
+        reserva_pdf = controle_producao_local.reservar()
+        if reserva_pdf is None:
+            raise HTTPException(503, 'Estação ocupada. Aguarde o trabalho atual.')
 
-        suffix_fn = f"CSV_{len(csv_data)}" if csv_data else f"{data.get('seq_start', 1)}-{data.get('seq_end', 100)}"
-        download_name = f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
+        def gerar_resposta_pdf():
+            try:
+                engine = ImpositionEngine(config, resolver_recurso=resolver_local)
+                print(f"[DIAG impose] schema={data.get('schema')!r} cut_stack_mode={data.get('cut_stack_mode')!r} sheets_per_block={data.get('sheets_per_block')!r} multi_artes_count={len(multi_artes_list)} has_cover={formato.get('has_cover')}")
+                engine.process()
+                _publicar_faixa_qr_ideal(config, data)
 
-        import base64
-        if getattr(engine, "generated_files", None) and len(engine.generated_files) > 1:
-            multi_files = []
-            for gf in engine.generated_files:
-                if os.path.exists(gf["path"]):
-                    with open(gf["path"], "rb") as f_pdf:
-                        b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
-                        multi_files.append({"name": gf["name"], "data": b64_data})
-            return {"type": "multi_file", "files": multi_files}
+                suffix_fn = f"CSV_{len(csv_data)}" if csv_data else f"{data.get('seq_start', 1)}-{data.get('seq_end', 100)}"
+                download_name = f"VDP_{formato['name'].replace(' ', '_')}_{suffix_fn}.pdf"
 
-        # Lógica original (arquivo único)
-        out_pdf_to_read = out_pdf_path
-        if getattr(engine, "generated_files", None) and len(engine.generated_files) == 1:
-            out_pdf_to_read = engine.generated_files[0]["path"]
+                import base64
+                if getattr(engine, "generated_files", None) and len(engine.generated_files) > 1:
+                    multi_files = []
+                    for gf in engine.generated_files:
+                        if os.path.exists(gf["path"]):
+                            with open(gf["path"], "rb") as f_pdf:
+                                b64_data = base64.b64encode(f_pdf.read()).decode("utf-8")
+                                multi_files.append({"name": gf["name"], "data": b64_data})
+                    return {"type": "multi_file", "files": multi_files}
 
-        with open(out_pdf_to_read, "rb") as f_pdf:
-            pdf_bytes = f_pdf.read()
+                # Lógica original (arquivo único)
+                out_pdf_to_read = out_pdf_path
+                if getattr(engine, "generated_files", None) and len(engine.generated_files) == 1:
+                    out_pdf_to_read = engine.generated_files[0]["path"]
 
-        return StreamingResponse(
-            io.BytesIO(pdf_bytes),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{download_name}"',
-                "Content-Length": str(len(pdf_bytes))
-            }
-        )
+                with open(out_pdf_to_read, "rb") as f_pdf:
+                    pdf_bytes = f_pdf.read()
+
+                # O arquivo já está em memória; BytesIO em streaming envia um fragmento por quebra de linha.
+                return Response(
+                    content=pdf_bytes,
+                    media_type="application/pdf",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="{download_name}"',
+                        "Content-Length": str(len(pdf_bytes))
+                    }
+                )
+            finally:
+                try:
+                    temporarios.close()
+                finally:
+                    reserva_pdf.liberar()
+
+        try:
+            resultado_pdf = asyncio.get_running_loop().run_in_executor(_motor_pdf_completo, gerar_resposta_pdf)
+        except BaseException:
+            reserva_pdf.liberar()
+            raise
+        streaming_iniciado = True  # limpeza transferida ao executor
+        try:
+            return await asyncio.shield(resultado_pdf)
+        except asyncio.CancelledError:
+            # O motor termina no executor após a desconexão; observar eventuais erros.
+            resultado_pdf.add_done_callback(lambda concluido: concluido.exception() if not concluido.cancelled() else None)
+            raise
 
     except HTTPException:
         raise

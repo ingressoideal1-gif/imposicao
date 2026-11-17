@@ -71,6 +71,20 @@ function func(nome, source = src) {
             if (!avisos.at(-1).includes('modelo selecionado')) throw Error('geração não respeitou identidade ausente');
             return 'clique imediato bloqueado; arte e numeração aguardadas; erro bloqueia; resposta antiga descartada; identidade preservada';
         });
-        console.log('OK browser Pedido: ' + resultado);
+        await page.evaluate(() => {
+            window.findOSInState = () => ({id:'os',numero:'001'});
+            state.modelosGlobais = {'001':[{id:42, nome_modelo:'Ingresso', quantidade:50}]};
+            window.abrirImposicaoDoPedido = async () => new Promise(r => { window.conferido = r; });
+        });
+        await page.addScriptTag({path:path.join(__dirname,'../frontend/selecao-piloto.js')});
+        await page.evaluate(() => { window.abertura = abrirImposicaoDoPedido('os','001'); });
+        await page.waitForSelector('#piloto-conferencia[open]');
+        const resumo = await page.$eval('#piloto-conferencia', el => el.textContent);
+        if (!resumo.includes('Pedido 001') || !resumo.includes('Ingresso · 50 un.')) throw Error('Resumo inicial ausente');
+        await page.evaluate(async () => { conferido(); await abertura; });
+        if (await page.$('#piloto-conferencia')) throw Error('Diálogo permaneceu após a conferência');
+        await page.evaluate(async () => { window.podeAbrirView = () => false; await abrirImposicaoDoPedido('os','001'); });
+        if (await page.$('#piloto-conferencia')) throw Error('Resumo exibido sem permissão');
+        console.log('OK browser Pedido: ' + resultado + '; resumo imediato respeita permissão');
     } finally { if (browser) await browser.close(); server.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

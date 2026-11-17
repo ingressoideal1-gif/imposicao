@@ -2,6 +2,7 @@
 import ast
 import asyncio
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 import os
@@ -210,10 +211,10 @@ def test_fila_limpa_download_incompleto_e_excecao(raiz, falha):
 
 def ambiente_impose(engine):
     from fastapi import HTTPException
-    from starlette.responses import StreamingResponse
+    from starlette.responses import Response, StreamingResponse
     return dict(temp_manager=tm, json=json, os=os, io=io, base64=base64,
                 db=SimpleNamespace(get_mapa_teatro_para_conferencia=lambda *_: pytest.fail('Payload sintetico sem mapa nao deve consultar banco')),
-                HTTPException=HTTPException, StreamingResponse=StreamingResponse,
+                HTTPException=HTTPException, Response=Response, StreamingResponse=StreamingResponse,
                 security_config=SimpleNamespace(is_cloud_runtime=lambda: False),
                 _embed_system_fonts=lambda *_, resolver_recurso=None: None, _pool_qr_ou_none=lambda: None,
                 log_diag=lambda *_: None,
@@ -292,19 +293,65 @@ def test_impose_sincrono_limpa_pdf_e_erro(raiz, falha):
         def process(self):
             Path(self.cfg.out_pdf).write_bytes(b"PDF sintetico")
             if falha: raise ValueError("falha sintetica")
-    ns = ambiente_impose(Motor)
+    from controle_producao import ControleProducao
+    controle = ControleProducao()
+    executor = ThreadPoolExecutor(max_workers=1)
+    ns = dict(ambiente_impose(Motor), controle_producao_local=controle, _motor_pdf_completo=executor)
     func = carregar_funcao("app.py", "impose_file", ns)
     async def form(): return {}
     async def rodar():
         resposta = await func(SimpleNamespace(form=form), payload=json.dumps(PAYLOAD))
-        return b"".join([v async for v in resposta.body_iterator])
+        assert resposta.media_type == "application/pdf"
+        assert resposta.headers["content-length"] == str(len(resposta.body))
+        assert "attachment;" in resposta.headers["content-disposition"]
+        return resposta.body
     if falha:
         with pytest.raises(HTTPException) as erro: asyncio.run(rodar())
         assert erro.value.status_code == 400
         assert erro.value.detail == "falha sintetica"
     else:
         assert asyncio.run(rodar()) == b"PDF sintetico"
+    executor.shutdown()
+    assert not controle.ocupado()
     assert not list(raiz.iterdir())
+
+
+def test_pdf_completo_mantem_painel_responsivo_e_reserva_apos_desconexao(raiz):
+    from controle_producao import ControleProducao
+    controle = ControleProducao()
+    inicio = threading.Event()
+    continuar = threading.Event()
+
+    class Motor:
+        def __init__(self, cfg, resolver_recurso=None):
+            self.destino = Path(cfg.out_pdf)
+
+        def process(self):
+            self.destino.write_bytes(b"PDF sintetico")
+            inicio.set()
+            assert continuar.wait(5)
+            assert self.destino.exists()
+
+    async def form():
+        return {}
+
+    async def simular(executor):
+        ns = dict(ambiente_impose(Motor), controle_producao_local=controle, _motor_pdf_completo=executor)
+        impor = carregar_funcao("app.py", "impose_file", ns)
+        tarefa = asyncio.create_task(impor(SimpleNamespace(form=form), payload=json.dumps(PAYLOAD)))
+        try:
+            assert await asyncio.to_thread(inicio.wait, 4)
+            assert controle.ocupado() and list(raiz.iterdir())
+            tarefa.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await tarefa
+            assert controle.ocupado() and list(raiz.iterdir())
+        finally:
+            continuar.set()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        asyncio.run(simular(executor))
+    assert not controle.ocupado() and not list(raiz.iterdir())
 
 
 def test_fontes_reutilizadas_e_removidas_no_final_do_motor(raiz, tmp_path, monkeypatch):

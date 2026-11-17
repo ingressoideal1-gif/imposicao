@@ -1088,18 +1088,13 @@ def _vincular_fonte_da_pagina(page, font_name, font_xref):
         doc.xref_set_key(alvo, caminho, referencia)
 
 
-def _salvar_pdf(doc, out_name):
-    """Funil unico de gravacao dos PDFs de saida do engine.
-
-    Embute o OutputIntent sRGB (declara ao RIP o que o RGB significa) e so
-    entao grava. Falha no metadado nao pode parar a producao: o PDF sai sem
-    intent e o aviso vai para o log.
-    """
+def _salvar_pdf(doc, out_name, perfis=None):
+    """Grava a imposicao vetorial com a condicao de saida das artes."""
     try:
-        color_profiles.embutir_output_intent(
-            doc, color_profiles.srgb_icc_bytes(), "sRGB IEC61966-2.1", "RGB")
+        if doc.xref_get_key(doc.pdf_catalog(), "OutputIntents")[0] == "null":
+            (perfis or color_profiles.IntencoesDaImposicao()).aplicar(doc)
     except Exception as e:
-        print(f"[engine] aviso: OutputIntent sRGB nao embutido: {e}")
+        print(f"[engine] aviso: OutputIntent nao embutido: {e}")
     doc.save(out_name, garbage=4, deflate=True)
 
 
@@ -1579,6 +1574,7 @@ def _validar_extremos_refazer(folhas_por_set, set_de, folha_de, set_ate, folha_a
 class ImpositionEngine:
     def __init__(self, config: ImpositionConfig, on_file_generated=None, *, resolver_recurso=None):
         self.cfg = config
+        self._perfis_saida = color_profiles.IntencoesDaImposicao()
         # Piloto: resolução explícita, sem fallback de rede em caso de ausência.
         self._resolver_recurso = resolver_recurso
         from integridade_impressao import RecursosDoTrabalho
@@ -1698,7 +1694,7 @@ class ImpositionEngine:
         self.folhas_entregues += folhas
         sufixo = 'folha' if cfg.folha_a_folha else 'miolo_lote'
         path = cfg.out_pdf.replace(".pdf", f"_{sufixo}{self.folhas_entregues:06d}.pdf")
-        _salvar_pdf(doc, path)
+        _salvar_pdf(doc, path, self._perfis_saida)
         doc.close()
         self.generated_files.append({
             "type": "lote" if cfg.folha_a_folha else "miolo", "path": path, "name": os.path.basename(path),
@@ -1931,6 +1927,8 @@ class ImpositionEngine:
         sai por `show_pdf_page`, vetorial, igual à frente.
         """
         doc = self._abrir_arquivo_como_pdf(self.cfg.base_file)
+        if not self.cfg.multi_artes:
+            self._perfis_saida.registrar(doc)
         verso_path = getattr(self.cfg, "base_file_verso", None)
         if doc is None:
             if not verso_path or not tem_verso(self.cfg.print_mode):
@@ -1946,6 +1944,8 @@ class ImpositionEngine:
             try:
                 verso_doc = self._abrir_arquivo_como_pdf(verso_path)
                 if verso_doc:
+                    if not self.cfg.multi_artes:
+                        self._perfis_saida.registrar(verso_doc)
                     if len(verso_doc) > 1:
                         print(f"[engine] {self.cfg.print_mode}: o arquivo de verso tem "
                               f"{len(verso_doc)} paginas; so a primeira sera usada.")
@@ -2948,9 +2948,11 @@ class ImpositionEngine:
         self._embedded_font_paths.clear()
 
     def process(self):
+        self._perfis_saida = color_profiles.IntencoesDaImposicao()
         try:
             return self._process()
         finally:
+            self._perfis_saida.fechar()
             self._fechar_fontes_temporarias()
             if hasattr(getattr(self, "_url_cache", None), "close"):
                 self._url_cache.close()
@@ -3376,6 +3378,8 @@ class ImpositionEngine:
                             art_doc = fitz.open()
                             art_doc.new_page(width=cfg.item_w, height=cfg.item_h)
                             pdf_cache[("frente_vazia", model_idx)] = art_doc
+                        if local_path or pdf_url:
+                            self._perfis_saida.registrar(art_doc)
                         art_front_pages = len(art_doc)
                         if pdf_verso_url and art_doc:
                             chave_verso = (local_path or pdf_url, pdf_verso_url)
@@ -3393,6 +3397,7 @@ class ImpositionEngine:
                                 verso_doc = _load_art_as_pdf(pdf_verso_url, is_url=not bool(art.get("local_verso_path")))
                                 pdf_cache[("verso", model_idx)] = verso_doc
                                 if verso_doc:
+                                    self._perfis_saida.registrar(verso_doc)
                                     # Nunca alterar a fonte guardada por URL.
                                     # Se as duas URLs forem iguais, `verso_doc`
                                     # e `art_doc` sao o MESMO objeto do cache;
@@ -3679,7 +3684,7 @@ class ImpositionEngine:
                     doc_out = self._entregar_folha(doc_out, cfg, math.ceil(len(itens) / poses_per_sheet), is_duplex, forcar=True)
                 if len(doc_out) > 0:
                     out_name = cfg.out_pdf.replace(".pdf", "_02_miolo.pdf")
-                    _salvar_pdf(doc_out, out_name)
+                    _salvar_pdf(doc_out, out_name, self._perfis_saida)
                     self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                 doc_out.close()
 
@@ -3763,7 +3768,7 @@ class ImpositionEngine:
                         doc_out = self._entregar_folha(doc_out, cfg, total_sheets, is_duplex, forcar=True)
                     if len(doc_out) > 0:
                         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_02_miolo.pdf")
-                        _salvar_pdf(doc_out, out_name)
+                        _salvar_pdf(doc_out, out_name, self._perfis_saida)
                         doc_out.close()
                         self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                     else:
@@ -3830,7 +3835,7 @@ class ImpositionEngine:
                     # em silêncio sempre que um filtro deixasse mais de um set passar.
                     if len(doc_out) > 0 and cfg.has_cover:
                         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
-                        _salvar_pdf(doc_out, out_name)
+                        _salvar_pdf(doc_out, out_name, self._perfis_saida)
                         self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                         if not refazendo:
                             self._generate_contracapa(set_idx_current, cfg, doc_base)
@@ -3843,7 +3848,7 @@ class ImpositionEngine:
                         # O nome leva o numero com tres zeros porque a ordem em
                         # que os arquivos entram no RIP e a ordem do papel.
                         out_name = cfg.out_pdf.replace(".pdf", f"_lote{set_idx_current + 1:03d}.pdf")
-                        _salvar_pdf(doc_out, out_name)
+                        _salvar_pdf(doc_out, out_name, self._perfis_saida)
                         # `folhas` acompanha o lote ate a tela: e com ele que o
                         # operador que cancelar no meio sabe ate onde ja saiu
                         # papel. Papel entregue nao volta.
@@ -4297,7 +4302,7 @@ class ImpositionEngine:
             if set_idx_current != -1 and doc_out:
                 if len(doc_out) > 0:
                     out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx_current + 1}_02_miolo.pdf")
-                    _salvar_pdf(doc_out, out_name)
+                    _salvar_pdf(doc_out, out_name, self._perfis_saida)
                     self.generated_files.append({"type": "miolo", "path": out_name, "name": os.path.basename(out_name)})
                     if not refazendo:
                         self._generate_contracapa(set_idx_current, cfg, doc_base)
@@ -4305,7 +4310,7 @@ class ImpositionEngine:
             # O resto: o ultimo lote quase nunca fecha certo no numero do bloco.
             if len(doc_out) > 0:
                 out_name = cfg.out_pdf.replace(".pdf", f"_lote{set_idx_current + 1:03d}.pdf")
-                _salvar_pdf(doc_out, out_name)
+                _salvar_pdf(doc_out, out_name, self._perfis_saida)
                 self.folhas_entregues += len(doc_out)
                 self.generated_files.append({
                     "type": "lote", "path": out_name, "name": os.path.basename(out_name),
@@ -4316,7 +4321,7 @@ class ImpositionEngine:
                   f"{self.folhas_entregues} folha(s) entregue(s) de {total_sheets}")
         else:
             if len(doc_out) > 0:
-                _salvar_pdf(doc_out, cfg.out_pdf)
+                _salvar_pdf(doc_out, cfg.out_pdf, self._perfis_saida)
                 self.generated_files.append({"type": "single", "path": cfg.out_pdf, "name": os.path.basename(cfg.out_pdf)})
         
         self._avisar_refazer_vazio(
@@ -4339,7 +4344,7 @@ class ImpositionEngine:
         p = doc_c.new_page(width=cfg.sheet_w, height=cfg.sheet_h)
         if self.rotate_angle > 0: p.set_rotation(self.rotate_angle)
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_03_contracapa.pdf")
-        _salvar_pdf(doc_c, out_name)
+        _salvar_pdf(doc_c, out_name, self._perfis_saida)
         doc_c.close()
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
@@ -4487,7 +4492,7 @@ class ImpositionEngine:
                                  fitz.Rect(cell_x0, cell_y0, cell_x1, cell_y1))
 
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_01_capa.pdf")
-        _salvar_pdf(doc_c, out_name)
+        _salvar_pdf(doc_c, out_name, self._perfis_saida)
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 
@@ -4803,7 +4808,7 @@ class ImpositionEngine:
             if self.rotate_angle > 0:
                 p.set_rotation(self.rotate_angle)
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_03_contracapa.pdf")
-        _salvar_pdf(doc_c, out_name)
+        _salvar_pdf(doc_c, out_name, self._perfis_saida)
         doc_c.close()
         self.generated_files.append({"type": "contracapa", "path": out_name, "name": os.path.basename(out_name)})
 
@@ -5040,7 +5045,7 @@ class ImpositionEngine:
                 )
 
         out_name = cfg.out_pdf.replace(".pdf", f"_set{set_idx + 1}_{layer_idx + 1:02d}_01_capa.pdf")
-        _salvar_pdf(doc_c, out_name)
+        _salvar_pdf(doc_c, out_name, self._perfis_saida)
         doc_c.close()
         self.generated_files.append({"type": "capa", "path": out_name, "name": os.path.basename(out_name)})
 

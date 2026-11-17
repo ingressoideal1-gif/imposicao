@@ -9,7 +9,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),puppeteer=requi
   window.resultado=null;
   window.promessa=ImpressaoAutonoma.iniciar({baseUrl:location.origin,formData,headers:{},
    destino:{printerName:'sintetica',options:{experimental:true,modo:'experimental_gdi',copies:1}},
-   face:'both',rotacionarPares:false,historicoContexto:{reimpressao:capas}})
+   face:'both',rotacionarPares:false,historicoContexto:{reimpressao:capas,alvos:[{pedido:'99',modelo:'22'}]}})
    .then(ok=>window.resultado={ok},e=>window.resultado={erro:e.message});
   return id;
  },capas);}
@@ -21,17 +21,27 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),puppeteer=requi
   await p.close(); // Desapareceu o cliente que iniciou a impressao.
   p=await abrir();
   await p.evaluate(()=>ImpressaoAutonoma.consultar());
-  assert.match(await p.$eval('#impressao-autonoma-andamento',e=>e.textContent),/Impressão na estação/);
+  assert.match(await p.$eval('#impressao-autonoma-andamento',e=>e.textContent),/Pedido 99 · Modelo 22 · sintetica/);
   let final=await esperar(id,s=>s.estado==='enviado');
   assert.equal(final.enviados,15);assert.equal(final.paginas_enviadas,110);
   assert.equal(new Set(final.lotes.map(l=>l.envio)).size,15);
   assert.deepEqual(final.lotes.filter(l=>['capa','contracapa'].includes(l.tipo)).map(l=>l.tipo),['capa','contracapa','capa','contracapa']);
   await p.evaluate(()=>ImpressaoAutonoma.consultar());
+  await p.evaluate(()=>{
+    const original=window.fetch;
+    window.posts=0;
+    window.fetch=async(url,...args)=>{
+      const r=await original(url,...args);
+      if(String(url).endsWith('/api/impose') && ++window.posts===1) throw Error('Resposta perdida');
+      return r;
+    };
+  });
   id=await iniciar(p,true);
   final=await esperar(id,s=>s.estado==='enviado');
   assert.equal(final.enviados,2);assert.ok(final.lotes.every(l=>l.tipo==='capa'));
   // Espere a promessa da tela terminar antes de iniciar o proximo trabalho.
-  await p.evaluate(()=>window.promessa);
+  assert.equal((await p.evaluate(()=>window.promessa)).ok,true);
+  assert.equal(await p.evaluate(()=>window.posts),1);
   id=await iniciar(p);
   await esperar(id,s=>s.estado==='enviando');
   await p.evaluate(()=>ImpressaoAutonoma.cancelar());

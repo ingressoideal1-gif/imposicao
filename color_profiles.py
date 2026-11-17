@@ -2,8 +2,7 @@
 """Gerenciamento de cores: perfis ICC (.icm/.icc) por impressora.
 
 A cor e tratada em dois momentos, sem tocar no desenho do motor:
-- na GERACAO o engine embute um OutputIntent sRGB no PDF imposto, declarando a
-  qualquer RIP o que o RGB significa;
+- na GERACAO o engine respeita a condicao de saida comum das artes;
 - na IMPRESSAO o print_service aplica o perfil da impressora de destino, do
   jeito certo para cada estrategia (GDI, Ghostscript, PDF RAW).
 
@@ -15,6 +14,7 @@ Regra de ouro: sem perfil configurado, NADA muda — quem chama recebe None e
 imprime como sempre imprimiu. Perfil sumido ou corrompido na hora de imprimir
 gera aviso e imprime sem gerenciamento; nunca bloqueia a producao.
 """
+import hashlib
 import json
 import os
 import tempfile
@@ -229,6 +229,73 @@ def resolver_config(printer_name: str):
         return (so_ajustes if ajustes else None), aviso
     return {"path": path, "intento": intento, "classe": info["classe"],
             "nome": info["nome"], "ajustes": ajustes}, None
+
+
+def _catalogo_pdf(doc):
+    pdf = fitz._as_pdf_document(doc)
+    return fitz.mupdf.pdf_dict_gets(fitz.mupdf.pdf_trailer(pdf), "Root")
+
+
+class IntencoesDaImposicao:
+    """Conserva o OutputIntents completo antes de mesclar as paginas das artes."""
+
+    def __init__(self):
+        self.visitadas = set()
+        self.assinatura = None
+        self.referencia = None
+        self.incompativeis = False
+
+    def registrar(self, doc):
+        if doc is None or self.incompativeis or doc._graft_id in self.visitadas:
+            return
+        self.visitadas.add(doc._graft_id)
+        m = fitz.mupdf
+        try:
+            intents = m.pdf_dict_gets(_catalogo_pdf(doc), "OutputIntents")
+            assinatura = []
+            for i in range(m.pdf_array_len(intents)):
+                intent = m.pdf_array_get(intents, i)
+                perfil = m.pdf_dict_gets(intent, "DestOutputProfile")
+                digest = None
+                if m.pdf_is_stream(perfil):
+                    digest = hashlib.sha256(doc.xref_stream(m.pdf_to_num(perfil))).digest()
+                assinatura.append((
+                    m.pdf_to_name(m.pdf_dict_gets(intent, "S")),
+                    m.pdf_to_text_string(m.pdf_dict_gets(intent, "OutputConditionIdentifier")),
+                    digest,
+                ))
+            if self.assinatura is not None and self.assinatura != assinatura:
+                self.incompativeis = True
+            elif self.assinatura is None:
+                self.assinatura = assinatura
+                if assinatura:
+                    # O verso separado pode ser fechado logo depois do insert_pdf.
+                    self.referencia = fitz.open()
+                    self._copiar(intents, self.referencia)
+        except Exception as exc:
+            self.incompativeis = True
+            print(f"[engine] aviso: perfil de saida da arte ilegivel: {exc}")
+
+    @staticmethod
+    def _copiar(intents, destino):
+        m = fitz.mupdf
+        copia = m.pdf_graft_object(fitz._as_pdf_document(destino), intents)
+        m.pdf_dict_puts(_catalogo_pdf(destino), "OutputIntents", copia)
+
+    def aplicar(self, doc):
+        if self.incompativeis:
+            # Um unico perfil de uma arte nao descreve a combinacao inteira.
+            return
+        if self.referencia is not None:
+            intents = fitz.mupdf.pdf_dict_gets(_catalogo_pdf(self.referencia), "OutputIntents")
+            self._copiar(intents, doc)
+        else:
+            embutir_output_intent(doc, srgb_icc_bytes(), "sRGB IEC61966-2.1", "RGB")
+
+    def fechar(self):
+        if self.referencia is not None:
+            self.referencia.close()
+            self.referencia = None
 
 
 def embutir_output_intent(doc, icc_bytes: bytes, nome: str, classe: str) -> None:

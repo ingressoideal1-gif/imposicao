@@ -6,6 +6,11 @@ Deno.test('offline: catalogos paginados filtram empresa e recusam operador sem p
  const consultar=async()=>[{id:1,empresa_id:'1'},{id:2,empresa_id:'2'},{id:3}];
  const r=await catalogosOffline({empresa:'teste'},op,consultar,'teste','1');
  assert.equal(r.formatos.length,2);
+ const compacto=await catalogosOffline({empresa:'teste'},op,consultar,'teste','1',r.revisao_catalogo);
+ assert.deepEqual(compacto,{empresa:'teste',revisao_catalogo:r.revisao_catalogo,sem_mudanca:true});
+ const mudou=await catalogosOffline({empresa:'teste'},op,async()=>[{id:1,name:'alterado'}],'teste','1',r.revisao_catalogo);
+ assert.notEqual(mudou.revisao_catalogo,r.revisao_catalogo);
+ assert.equal(mudou.formatos[0].name,'alterado');
  await assert.rejects(()=>catalogosOffline({empresa:'teste'},{},consultar,'teste','1'));
 });
 
