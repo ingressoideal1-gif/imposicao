@@ -51,10 +51,11 @@ function fixture(options={}) {
     vm.runInContext(main.slice(main.indexOf('function populateImpMapasTeatro('), main.indexOf('function onImpNumeracaoSelect()')), c);
     vm.runInContext(extract(pedido,'faceDeImpressaoDoPedido'),c);
     vm.runInContext(extract(pedido,'folha1DoPedido'),c);
-    const rotacaoInicio=pedido.indexOf('async function rotacionarPaginasParesDoPedido(');
-    vm.runInContext(pedido.slice(rotacaoInicio,pedido.indexOf('\n}',rotacaoInicio)+2),c);
-    const faceStart = pedido.indexOf('async function selecionarFacesDoPdfDoPedido(');
-    vm.runInContext(pedido.slice(faceStart,pedido.indexOf('\n}',faceStart)+2),c);
+    for (const nome of ['rotacionarPaginasParesDoPedido', 'selecionarFacesDoPdfDoPedido', 'entregarLoteComAcompanhamento']) {
+        const inicio = pedido.indexOf('async function ' + nome + '(');
+        assert(inicio >= 0, nome);
+        vm.runInContext(pedido.slice(inicio,pedido.indexOf('\n}',inicio)+2),c);
+    }
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../frontend/arte-de-impressao.js'), 'utf8'),c);
     c.confirmarIntegridadeDoTrabalho=async()=>{}; // Preparação real coberta pelo harness de integridade.
     const executarInicio=pedido.indexOf('async function executarPedImposition(');
@@ -90,6 +91,28 @@ async function tests() {
             await f.c.runPedImposition('print');
             assert.equal(f.calls.requests.length,1,JSON.stringify(f.calls.notices));
             assert.equal(f.calls.confirmed.length,ok?1:0,modo + ': só pergunta após sucesso');
+        }
+    }
+    // O painel web usa o destino escolhido no formulário de impressão.
+    for (const [campo, opcao] of [['ped-entregar-por-bloco','entregar_por_bloco'],['ped-print-sheet-by-sheet','folha_a_folha']]) {
+        for (const caso of ['concluido','interrompido','erro','refazer','folha1']) {
+            const f = fixture();
+            f.elements[campo] = {checked:true};
+            if (caso === 'folha1') f.elements['ped-print-first-front'] = {checked:true};
+            f.c.getPedPrintOptions = () => ({printerName:'Simulada',options:{modo:'gdi_atual',[opcao]:true}});
+            const envios = [];
+            f.c.ImpressaoAutonoma = {ocupada:()=>false, iniciar:async ({destino,formData}) => {
+                envios.push([destino.options[opcao], JSON.parse(formData.get('payload')).confirmar_entrega]);
+                f.c.state.selectedOSItems = [];
+                f.c.state.activeOSItem = {itemId:'outro',osId:'outro'};
+                if (caso === 'erro') throw Error('Falha simulada no envio');
+                return caso !== 'interrompido';
+            }};
+            await f.c.runPedImposition('print',caso === 'refazer');
+            assert.deepEqual(envios,[[true,true]],JSON.stringify(f.calls.notices));
+            assert.equal(f.calls.printed.length,0,'não inicia outro envio');
+            assert.deepEqual(f.calls.confirmed.map(lista=>lista.map(a=>a.itemId)),
+                caso === 'concluido' ? [['96','97','98']] : [], campo + '/' + caso);
         }
     }
     const erro=fixture();
@@ -187,7 +210,7 @@ async function tests() {
         x.c.PDFLib=PDFLib; x.c.TextDecoder=TextDecoder; x.c.atob=atob;
         if (mode==='print') {
             x.c.NewProdTesteModelo={capturar:async()=>({printerName:'Simulada',options:{modo:'gdi_atual'}})};
-            x.c.getPedPrintOptions=()=>({});
+            x.c.getPedPrintOptions=()=>({printerName:'Simulada',options:{modo:'gdi_atual'}});
             if (kind==='stream') x.c.criarEntregaDeImpressao=()=>({
                 entregar:async jobs=>x.calls.printed.push(...jobs),
                 finalizar:async()=>true,

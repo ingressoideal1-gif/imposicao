@@ -26,8 +26,23 @@
             const linha = document.createElement('div'); linha.style.marginTop = '8px';
             const texto = document.createElement('div');
             const estado = {aceito:'Aceito',gerando:'Gerando',enviando:'Enviando',enviado:'Enviado ao Windows',
-                cancelado:'Cancelado após o último envio',conferencia:'Interrompido',encerrado:'Conferido'}[item.estado] || item.estado;
+                cancelado:'Cancelado após o último envio',conferencia:'Interrompido',encerrado:'Conferido pelo operador'}[item.estado] || item.estado;
             texto.textContent = `${item.id.slice(0,8)} — ${estado}. ${item.enviados} lote(s), ${item.paginas_enviadas} página(s) enviadas.`;
+            const ultimoLote = item.lotes?.at(-1);
+            if (ultimoLote) {
+                const situacao = ultimoLote.estado === 'enviado' ? ' enviado ao Windows.'
+                    : item.estado === 'conferencia' || item.estado === 'encerrado' ? ' com envio sem confirmação.' : ' em envio.';
+                texto.textContent += ' Lote ' + ultimoLote.numero + situacao;
+            }
+            const alvos = item.alvos || [];
+            if (alvos.length || item.impressora) {
+                const contexto = document.createElement('div');
+                const pedidos = [...new Set(alvos.map(a => a.pedido))];
+                contexto.textContent = [pedidos.length && 'Pedido ' + pedidos.join(', '),
+                    alvos.length && 'Modelo ' + alvos.map(a => a.modelo).join(', '), item.impressora]
+                    .filter(Boolean).join(' · ');
+                linha.appendChild(contexto);
+            }
             linha.appendChild(texto);
             if (ativos.has(item.estado)) {
                 const botao = document.createElement('button');
@@ -84,13 +99,28 @@
         try {
             // Uma unica submissao. Resposta perdida e reconciliada pela consulta;
             // nunca repetir POST /impose ou interpretar uma queda como cancelamento.
-            const resposta = await fetch(base + '/api/impose', {method:'POST',headers,body:formData});
-            if (!resposta.ok) {
+            let resposta;
+            try {
+                resposta = await fetch(base + '/api/impose', {method:'POST',headers,body:formData});
+            } catch (_) { /* O aceite pode ter sido gravado antes da queda. */ }
+            if (resposta && !resposta.ok && resposta.status < 500) {
                 const erro = await resposta.json().catch(() => ({}));
                 throw new Error(erro.detail || 'Trabalho não aceito; consulte o andamento da estação.');
             }
-            const aceite = await resposta.json();
-            if (aceite.type !== 'impressao_autonoma') throw new Error('Resposta inesperada. Confira o andamento antes de iniciar novamente.');
+            const aceite = resposta?.ok ? await resposta.json().catch(() => null) : null;
+            if (aceite?.type !== 'impressao_autonoma') {
+                let recebido;
+                for (let tentativa = 0; tentativa < 3 && !recebido; tentativa++) {
+                    if (tentativa) await pausa(1000);
+                    recebido = await api('/' + atual.id).catch(() => null);
+                }
+                if (recebido?.id !== atual.id) {
+                    const erro = resposta && !resposta.ok ? await resposta.json().catch(() => null) : null;
+                    const detalhe = typeof erro?.detail === 'string' ? erro.detail + ' ' : '';
+                    throw new Error(detalhe + 'Aceite não confirmado. Confira o trabalho '
+                        + atual.id.slice(0,8) + ' na estação antes de iniciar outro envio.');
+                }
+            }
             root.toast?.('Trabalho aceito pelo agente. Fechar o painel não cancela a impressão.', 'info');
             while (true) {
                 try {

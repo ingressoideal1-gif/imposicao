@@ -96,7 +96,7 @@ const FUNCOES = [
     // A tela.
     '_mtgCelulasPorFolha', '_mtgSaidaDaFolha', '_mtgNumeroDoPedido', '_mtgLinhaAtiva',
     '_mtgHtmlDaRecusa', '_mtgAlvosDoGesto', '_mtgIndiceDoModelo',
-    '_mtgModeloDoItem', '_mtgChaveDoCandidato', '_mtgModelosFixosDoSeletor',
+    'modeloTemDadoVariavel', '_mtgModeloDoItem', '_mtgModeloEscolhido', '_mtgChaveDoCandidato', '_mtgModelosFixosDoSeletor',
     'melhoresCombinacoesDeModelosDaMontagem',
     'alternarSeletorDeModelosDaMontagem', 'buscarModelosDaMontagem', 'marcarModeloDaMontagem',
     'limparSelecaoDeModelosDaMontagem', 'marcarTodosModelosCompativeisDaMontagem', 'usarCombinacaoDeModelosDaMontagem',
@@ -1345,7 +1345,9 @@ const PECAS = [
         const doc = await PDFLib.PDFDocument.create();
         for (let i = 0; i < 4; i++) doc.addPage([300 + i, 400]);
         const blob = new Blob([await doc.save()], {type:'application/pdf'});
-        const entregues = [], gravados = [];
+        const entregues = [], gravados = [], visualizados = [];
+        document.getElementById('mtg-abrir').checked = true;
+        window.abrirPdfDaMontagemNaTela = (blob,nome) => visualizados.push({blob,nome});
         let confirmacoes = 0, chamadas = 0;
         window.fetch = async () => { chamadas++; return {ok:true,blob:async()=>blob}; };
         window.baixarPdfDaMontagem = (blob,nome) => entregues.push({blob,nome});
@@ -1354,6 +1356,11 @@ const PECAS = [
         mudarSaidaDaMontagem('separados',true);
         mudarSaidaDaMontagem('rotacionarVerso',true);
         await gerarPdfDaMontagem();
+        const botoes = [...document.querySelectorAll('#mtg-arquivos-gerados button')];
+        botoes.forEach(b => b.click());
+        const visualizouFaces = botoes.map(b => b.textContent).join(',') === 'Visualizar frente,Visualizar verso'
+            && visualizados.length === 3 && visualizados[0].blob === entregues[0].blob
+            && visualizados[1].blob === entregues[0].blob && visualizados[2].blob === entregues[1].blob;
         const paginas = [];
         for (const e of entregues) paginas.push((await PDFLib.PDFDocument.load(await e.blob.arrayBuffer())).getPages().map(p=>p.getWidth()));
         const select = document.getElementById('mtg-pasta');
@@ -1367,8 +1374,9 @@ const PECAS = [
         await gerarPdfDaMontagem();
         const recusou = entregues.length === antes.entregues && confirmacoes === antes.confirmacoes;
         window.confirmarImpressaoModelos = confirmar; window.gravarPdfNaEstacao = gravar; select.value = '';
-        return {nomes:entregues.map(e=>e.nome),paginas,gravados,confirmacoes,chamadas,recusou};
+        return {nomes:entregues.map(e=>e.nome),paginas,gravados,confirmacoes,chamadas,recusou,visualizouFaces};
     }, PECAS);
+    ok(saidaSeparada.visualizouFaces, 'cada botão abre o PDF da face indicada', saidaSeparada);
     ok(saidaSeparada.nomes.length === 2 && saidaSeparada.nomes[0].endsWith('_frente.pdf')
         && saidaSeparada.nomes[1].endsWith('_verso.pdf') && saidaSeparada.paginas[0].join() === '300,302'
         && saidaSeparada.paginas[1].join() === '301,303', 'Separados entrega dois PDFs com páginas e nomes corretos', saidaSeparada);

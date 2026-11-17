@@ -358,6 +358,7 @@ async function guardarPdfDoVersoDaPrevia(pdfV) {
     if (!pdfV) return;
     try {
         const vp = (await pdfV.getPage(1)).getViewport({ scale: 1 });
+        if (state.pedArtVersoPdfDoc !== pdfV) return;
         state.pedArtVersoWidth = vp.width;    // em pt
         state.pedArtVersoHeight = vp.height;  // em pt
     } catch (e) {
@@ -470,22 +471,12 @@ async function loadPedArtFile(file, aindaAtual = () => true) {
             if (!aindaAtual()) return;
 
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            if (!aindaAtual()) return;
+            if (!aindaAtual()) { await pdf.destroy(); return; }
 
             
 
-            // Salvar documento PDF e inicializar caches para paginação especial de Pdf Múltiplo
-
-            state.pedArtPdfDoc = pdf;
-
-            state.pedArtPagesCache = {};
-
-            state.pedArtPagesRendering = {};
-
-
-
             const page = await pdf.getPage(1);
-            if (!aindaAtual()) return;
+            if (!aindaAtual()) { await pdf.destroy(); return; }
 
             const vp = page.getViewport({ scale: 1 });
 
@@ -506,10 +497,11 @@ async function loadPedArtFile(file, aindaAtual = () => true) {
             octx.fillRect(0, 0, off.width, off.height);
 
             await page.render({ canvasContext: octx, viewport: page.getViewport({ scale }) }).promise;
-            if (!aindaAtual()) return;
+            if (!aindaAtual()) { await pdf.destroy(); return; }
 
-
-
+            state.pedArtPdfDoc = pdf;
+            state.pedArtPagesCache = {};
+            state.pedArtPagesRendering = {};
             state.pedArtImage = off;
 
             state.pedArtWidth = vp.width; // em pt
@@ -4423,7 +4415,7 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
     if (!item) throw new Error('O modelo selecionado não está mais carregado. Feche e reabra o pedido.');
 
     // Guardar referência ao item ativo para atualização automática pós-imposição
-    const trocouDeModelo = !state.activeOSItem
+    const trocouDeModelo = !state.activeOSItem || String(state.activeOSItem.osId) !== String(osId)
         || String(state.activeOSItem.itemId) !== String(item.id);
     state.activeOSItem = { itemId: item.id, osId };
 
@@ -4438,7 +4430,14 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
 
     // A previa se apaga AGORA, antes de qualquer espera, para nunca mostrar a
     // folha do modelo anterior debaixo do nome do modelo novo.
-    if (trocouDeModelo) limparPreviaEnquantoCarrega();
+    if (trocouDeModelo) {
+        state.pedArtImage = null;
+        state.pedArtPdfDoc = null;
+        state.pedArtFile = null;
+        state.pedArtVersoFile = null;
+        guardarPdfDoVersoDaPrevia(null);
+        limparPreviaEnquantoCarrega();
+    }
     atualizarIndicadorModeloComVerso(item);
 
     // O cabecalho da janela diz DE QUE MODELO ela e'. Com a janela abrindo
@@ -4641,6 +4640,16 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
             const filenameFromUrl = decodeURIComponent(arteUrl.split('/').pop().split('?')[0]);
             const filename = filenameFromUrl || item.nome_arquivo_arte || `Arte_${item.modelo || 'Modelo'}.pdf`;
             
+            // A leitura do verso local pode avançar enquanto a frente é desenhada.
+            // Só instalar o arquivo após confirmar que o modelo continua selecionado.
+            let leituraVerso;
+            const lerVerso = async () => {
+                const res = contexto.pacoteLocal
+                    ? await window.PilotoSelecao.lerArte(contexto.pacoteLocal, 'verso', item.verso_arte_url)
+                    : await fetch(item.verso_arte_url);
+                if (!res.ok) throw new Error('Download do verso recusado: HTTP ' + res.status);
+                return {blob: await res.blob(), ct: res.headers.get('content-type') || ''};
+            };
             await (contexto.pacoteLocal ? window.PilotoSelecao.lerArte(contexto.pacoteLocal, 'frente', arteUrl) : fetch(arteUrl))
                 .then(res => {
                     if (!res.ok) throw new Error('Download da arte recusado: HTTP ' + res.status);
@@ -4657,6 +4666,9 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
                     }
                     const file = new File([blob], filename, { type: ct || (isPdf ? 'application/pdf' : 'image/png') });
                     state.expectedArteName = filename;
+                    if (contexto.pacoteLocal && item.verso_arte_url) {
+                        leituraVerso = lerVerso().catch(erro => ({erro}));
+                    }
                     await loadPedArtFile(file, aindaAtual);
                     if (!aindaAtual()) return;
                     
@@ -4675,13 +4687,12 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
             state.pedArtVersoFile = null;
             if (item.verso_arte_url) {
                 const filenameV = item.nome_arquivo_arte_verso || `Arte_verso_${item.modelo || 'Modelo'}.pdf`;
-                await (contexto.pacoteLocal ? window.PilotoSelecao.lerArte(contexto.pacoteLocal, 'verso', item.verso_arte_url) : fetch(item.verso_arte_url))
-                    .then(res => {
-                        if (!res.ok) throw new Error('Download do verso recusado: HTTP ' + res.status);
-                        const ct = res.headers.get('content-type') || '';
-                        return res.blob().then(blob => ({ blob, ct }));
-                    })
-                    .then(async ({ blob, ct }) => {
+                const infoFrente = document.getElementById('ped-file-info');
+                const textoFrente = infoFrente?.textContent;
+                if (infoFrente) infoFrente.textContent = textoFrente + ' · Carregando verso…';
+                await (leituraVerso || lerVerso())
+                    .then(async ({ blob, ct, erro }) => {
+                        if (erro) throw erro;
                         if (!aindaAtual()) return;
                         const isPdf = ct.includes('pdf') || filenameV.toLowerCase().endsWith('.pdf');
                         // O ARQUIVO, e nao so o documento da previa: um modelo
@@ -4693,14 +4704,19 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
                             return blob.arrayBuffer().then(arrayBuffer => {
                                 if (!aindaAtual()) return;
                                 return pdfjsLib.getDocument({ data: arrayBuffer }).promise
-                                    .then(pdfV => { if (aindaAtual()) guardarPdfDoVersoDaPrevia(pdfV); })
+                                    .then(pdfV => aindaAtual() ? guardarPdfDoVersoDaPrevia(pdfV) : pdfV.destroy())
                                     .then(() => {
                                     agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
                                 }).catch(e => { console.error('[OS→Ped] Erro ao carregar PDF de verso da arte:', e); if (contexto.aindaAtual) throw e; });
                             });
                         }
                     })
-                    .catch(err => { console.warn('[OS→Ped] Erro ao baixar arte de verso via URL:', err); if (contexto.aindaAtual) throw err; });
+                    .then(() => { if (aindaAtual() && infoFrente) infoFrente.textContent = textoFrente + ' · Verso pronto'; })
+                    .catch(err => {
+                        if (aindaAtual() && infoFrente) infoFrente.textContent = textoFrente + ' · Falha ao carregar verso';
+                        console.warn('[OS→Ped] Erro ao baixar arte de verso via URL:', err);
+                        if (contexto.aindaAtual) throw err;
+                    });
             }
         } else if (corObj && corObj.pdf_base64) {
             state.isColorTemplate = true;
@@ -4732,7 +4748,7 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
                         { type: 'application/pdf' }
                     );
                     await pdfjsLib.getDocument({ data: bytesV }).promise
-                        .then(pdfV => { if (aindaAtual()) guardarPdfDoVersoDaPrevia(pdfV); })
+                        .then(pdfV => aindaAtual() ? guardarPdfDoVersoDaPrevia(pdfV) : pdfV.destroy())
                         .then(() => {
                         agendar(() => { if (typeof drawPedPreview === 'function') drawPedPreview(); }, 300);
                     }).catch(e => { console.error('[OS→Ped] Erro ao carregar PDF de verso da cor:', e); if (contexto.aindaAtual) throw e; });
@@ -4767,7 +4783,7 @@ async function carregarModeloParaPedido(itemId, osId, contexto = {}) {
                 const doc = await documentoDaArteParaPrevia(arquivo);
                 if (!aindaAtual()) { await doc.destroy(); return; }
                 state.pedArtVersoFile = arquivo;
-                guardarPdfDoVersoDaPrevia(doc);
+                await guardarPdfDoVersoDaPrevia(doc);
             }
         }
     }, 700);
@@ -5378,19 +5394,17 @@ function renderPedOSQueue(opcoes = {}) {
         // A conta faz sentido: aqueles campos guardam numeros de tres ou quatro
         // digitos e nunca precisaram do espaco que ocupavam, enquanto o nome do
         // modelo — que e' por onde o operador reconhece a peca — vinha cortado.
-        // Os 230 px liberados vao inteiros para ele: 150 px viram 380.
         const L_NUM = 72;    // era 110 — os quatro campos numericos
         const L_COR = 124;   // era 190
-        const L_NOME = 380;  // era 150
 
         const th = (txt, largura) =>
-            `<th style="padding:3px 8px; width:${largura}px; font-size:0.72rem; font-weight:700; color:#94a3b8;
+            `<th style="padding:3px 8px; width:${largura == null ? 'auto' : largura + 'px'}; font-size:0.72rem; font-weight:700; color:#94a3b8;
                         text-transform:uppercase; letter-spacing:0.06em; text-align:left; white-space:nowrap;">${txt}</th>`;
 
         const cabecalhoDaTabela = comRotulosNaLinha ? '' : `
                     <thead>
                         <tr>
-                            ${th('', 34)}${th('Código', 84)}${th('Modelo', L_NOME)}
+                            ${th('', 34)}${th('Código', 84)}${th('Modelo')}
                             ${temCamarote
                                 ? th('Q_CAM', L_NUM) + th('L_CAM', L_NUM) + th('C_INI', L_NUM) + th('Bloco', L_NUM)
                                 : th('Qtd', L_NUM) + th('N. inicial', L_NUM) + th('N. final', L_NUM) + th('Bloco', L_NUM)}
@@ -5560,7 +5574,7 @@ function renderPedOSQueue(opcoes = {}) {
                     <td style="padding: 6px; font-size: 0.92rem; font-weight:600; color:#ffffff; min-width:84px;" title="Código do Modelo">
                         ${item.modelo || '--'}
                     </td>
-                    <td style="padding: 6px; font-size: 0.92rem; font-weight:600; color:#ffffff; min-width:${L_NOME}px;" title="Nome do Modelo">
+                    <td style="padding: 6px; font-size: 0.92rem; font-weight:600; color:#ffffff; min-width:0; overflow-wrap:anywhere;" title="Nome do Modelo">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="width: 18px; height: 18px; min-width: 18px; min-height: 18px; border-radius: 50%; background-color: ${corRefHex || 'transparent'}; border: ${corRefHex ? '2px solid rgba(255, 255, 255, 0.8)' : '2px dashed #918f8c'}; display: inline-block; box-shadow: 0 1px 3px rgba(0,0,0,0.4);" title="Cor de referência: ${corRefHex || 'Nenhuma'}"></span>
                             <span>${nomeDoModelo}</span>
