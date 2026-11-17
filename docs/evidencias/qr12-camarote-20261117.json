@@ -1,0 +1,78 @@
+{
+  "date": "2026-11-17",
+  "target": "vwbtitjlpelrcnsytzqw",
+  "before": {
+    "contracts": 0,
+    "credentials": 0,
+    "functions": [
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body_hash": "0c046feddbdf4aa57bd71643da8b9fbc",
+        "config": [
+          "search_path=public"
+        ],
+        "name": "producao_acesso_qr_contratos_obter",
+        "owner": "postgres",
+        "security_definer": false
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body_hash": "b7dc88327f7ea008cfe56036c11e2a08",
+        "config": [
+          "search_path=public"
+        ],
+        "name": "producao_acesso_qr_fonte",
+        "owner": "postgres",
+        "security_definer": false
+      }
+    ],
+    "models_hash": "5d8e876237f9704986ca0b6544a477c4",
+    "reservations": 0
+  },
+  "after": {
+    "contracts": 0,
+    "credentials": 0,
+    "functions": [
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body_hash": "ea9c70ee27c01e38d6ea732b2a98d662",
+        "config": [
+          "search_path=public"
+        ],
+        "name": "producao_acesso_qr_contratos_obter",
+        "owner": "postgres",
+        "security_definer": false
+      },
+      {
+        "acl": [
+          "postgres=X/postgres",
+          "service_role=X/postgres"
+        ],
+        "body_hash": "b7dc88327f7ea008cfe56036c11e2a08",
+        "config": [
+          "search_path=public"
+        ],
+        "name": "producao_acesso_qr_fonte",
+        "owner": "postgres",
+        "security_definer": false
+      }
+    ],
+    "models_hash": "5d8e876237f9704986ca0b6544a477c4",
+    "reservations": 0
+  },
+  "tests": {
+    "python_producao": 26,
+    "python_piloto": 26,
+    "pglite": 18
+  },
+  "physical_validation": false
+}

@@ -1,0 +1,4 @@
+# Os hashes de prosrc destas migracoes precisam ser estaveis no Windows e no CI.
+/sql/qr12_camarote_20261117.sql text eol=lf
+/sql/qr12_camarote_20261117_rollback.sql text eol=lf
+/tests/fixtures/qr12_pre_camarote.sql text eol=lf
