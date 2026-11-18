@@ -92,6 +92,10 @@
     if(data.gabarito&&!health.features?.includes('gabaritos'))throw Error('Atualize a Ponte Imposition para utilizar Gab.');
     if(action==='attachment'&&!health.features?.includes('anexos-corel'))throw Error('Atualize a Ponte Imposition para a versão 1.10.0 ou superior para importar anexos.');
     if(!health.ready)throw Error(health.message||'A ponte precisa de atenção.');
+    if(action==='prepare' && data.use_open_editor && !health.features?.includes('atualizar-tracedraw')) {
+      if(health.editors?.includes('coreldraw') && !health.editors.includes('tracedraw')) data={...data,editor:'coreldraw'};
+      else throw Error('Atualize a Ponte Imposition para usar o último editor aberto ao atualizar a arte.');
+    }
     if(action==='open_cdr' && !health.editors?.includes('tracedraw'))
       throw Error('TraceDraw indisponível. Confira a instalação do TraceDraw e reinicie a Ponte.');
     if(action==='open_cdr' && !health.features?.includes('tracedraw-cdr'))

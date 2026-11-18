@@ -24,7 +24,7 @@ class Element {
    }});
  api.mount(container,123,[{id:7}],'vibe_123');api.mount(container,123,[{id:7}],'vibe_123');
  assert.equal(host.children.length,3);assert.equal(host.children[0],original);
- const [gabLabel,open,update,trace,badge,feedback]=host.children[2].children;
+ const [gabLabel,open,trace,update,badge,feedback]=host.children[2].children;
  assert.equal(gabLabel.children[0].checked,false);
  await open.onclick();assert.equal(calls.at(-1).data.gabarito,undefined);gabLabel.children[0].checked=true;await open.onclick();assert.equal(calls.at(-1).data.gabarito,true);calls.shift();assert.equal(reloads,0);assert.equal(badge.hidden,true);
  await update.onclick();assert.equal(reloads,1);assert.match(badge.textContent,/TraceDraw.*1/);
@@ -33,12 +33,12 @@ class Element {
  assert.match(feedback.textContent,/incompleta/);assert.equal(badge.hidden,false);
  composeFails=false;confirmed=false;await update.onclick();assert.equal(reloads,1);assert.match(feedback.textContent,/não confirmada/);
  legacy=true;calls=[];await update.onclick();assert.deepEqual(calls.map(c=>c.action),['prepare']);assert.match(feedback.textContent,/versão antiga/);
- assert.equal(trace.textContent,'Abrir TraceDraw');
+ assert.deepEqual([open,trace,update].map(b=>b.textContent),['CorelDRAW','TraceDraw','Atualizar']);
  const other=new Element();api.mount({id:'cliente-amostras-itens-container',querySelector:()=>({parentElement:other})},123,[{id:7}]);
  assert.equal(other.children.length,0);
  await open.onclick();assert.equal(calls.at(-1).data.editor,'coreldraw');
  assert.match(api.label({art_origin:'tracedraw',art_revision:2,manifesto:{editor:'coreldraw'}}),/CorelDRAW/);
- assert(calls.every(c=>c.data.editor==='coreldraw'));
+ assert(calls.every(c=>c.action==='prepare'?c.data.use_open_editor && !c.data.editor:c.data.editor==='coreldraw'));
  await api.artRemoved('vibe_123',7,'verso');
  assert.equal(calls.at(-1).action,'clear');assert.equal(calls.at(-1).data.face,'back');
  await api.artRemoved('vibe_123',7,'frente');
