@@ -61,8 +61,10 @@
       let result;
       if (name === 'update') {
         if ([...mounted.values()].some(b => b.order === binding.order && pendingPaste(b)))
-          throw Error('Há arte colada neste pedido. Abra os modelos colados pelo botão CorelDRAW e confira as páginas antes de Atualizar.');
-        const draft = await adapter.request('prepare', identity);
+          throw Error('Há arte colada neste pedido. Abra os modelos colados no editor escolhido e confira as páginas antes de Atualizar.');
+        delete identity.editor;
+        const draft = await adapter.request('prepare', {...identity,use_open_editor:true});
+        identity.editor = draft.editor || 'coreldraw';
         const preparedAt=Date.now();
         if(!Array.isArray(draft.drafts))throw Error('A ponte está executando a versão antiga, que atualiza apenas um modelo. Reinicie a ponte antes de publicar o documento.');
         if (draft.unchanged === true) {
@@ -137,7 +139,7 @@
         // Apenas o recibo confirmado permite atualizar a interface oficial.
         await adapter.reload(binding);
       }
-      if (name === 'open' && editor !== 'tracedraw') {
+      if (name === 'open' && (editor !== 'tracedraw' || result.document_models?.length)) {
         const opened = new Set((result.document_models || [identity.model]).map(String));
         for (const member of mounted.values())
           if (member.order === binding.order && opened.has(member.model)) markPaste(member, false);
@@ -164,20 +166,20 @@
       if (old) {old.controls.remove();mounted.delete(host);}
       const controls=document.createElement('span');
       controls.dataset.tracedrawControls='producao';
-      controls.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;margin-left:auto;flex:1 1 200px;min-width:200px;padding-top:26px;align-self:flex-start';
+      controls.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) repeat(3,max-content);gap:6px;align-items:center;margin-left:auto;flex:1 1 310px;min-width:min(100%,310px);padding-top:26px;align-self:flex-start';
       const open=document.createElement('button'),update=document.createElement('button');
       const trace=document.createElement('button');
-      trace.textContent='Abrir TraceDraw';
+      trace.textContent='TraceDraw';
       trace.title='Abrir uma cópia editável do CDR no TraceDraw';
-      trace.style.cssText='grid-column:2 / -1;justify-self:end;white-space:nowrap';
-      for (const button of [open,trace,update]) {button.type='button';button.className='btn btn-sm btn-secondary';}
-      open.style.cssText='grid-column:3;height:36px;white-space:nowrap';
-      update.style.cssText='grid-column:4;height:36px;white-space:nowrap';
+      for (const button of [open,trace,update]) {
+        button.type='button';button.className='btn btn-sm btn-secondary';
+        button.style.cssText='height:36px;white-space:nowrap';
+      }
       open.textContent='CorelDRAW';update.textContent='Atualizar';
       open.setAttribute('data-corel-conferencia','');
-      update.title='Atualiza o documento do CorelDRAW. Salve suas edições antes de atualizar.';
+      update.title='Atualiza o documento do último editor aberto para este modelo. Salve suas edições antes de atualizar.';
       const gab=document.createElement('input'),gabLabel=document.createElement('label');
-      gab.type='checkbox';gab.checked=false;gabLabel.style.cssText='grid-column:2;white-space:nowrap';
+      gab.type='checkbox';gab.checked=false;gabLabel.style.cssText='justify-self:end;white-space:nowrap';
       gabLabel.title='Adicionar gabarito editável às páginas deste modelo. Desmarcar não remove elementos já inseridos.';
       gabLabel.append(gab,document.createTextNode(' Gab.'));
       const badge=document.createElement('span'), feedback=document.createElement('span');
@@ -188,7 +190,7 @@
       trace.onclick=()=>action(binding,'open','tracedraw');
       open.onclick=()=>action(binding,'open','coreldraw');update.onclick=()=>action(binding,'update');
       const toolbar=host.closest?.('[data-tracedraw-toolbar]')||host;
-      controls.append(gabLabel,open,update,trace,badge,feedback);toolbar.append(controls);mounted.set(host,binding);
+      controls.append(gabLabel,open,trace,update,badge,feedback);toolbar.append(controls);mounted.set(host,binding);
       if (typeof adapter.status==='function') {
         const poll=()=>adapter.status(binding).then(entry=>{binding.entry=entry;refresh();
           if(entry.backup_pending&&host.isConnected)setTimeout(poll,5000);

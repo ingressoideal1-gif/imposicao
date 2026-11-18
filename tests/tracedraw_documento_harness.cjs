@@ -7,8 +7,9 @@ class Element{constructor(){this.children=[];this.dataset={};this.style={};this.
  const container={id:'amostras-itens-container',querySelector:s=>anchors[Number(s.split('-').at(-1))]};
  let calls=[],reloads=0,fail=false,atomic=false;
  window.ImpositionTraceDraw.configure({canEdit:()=>true,
- request:async(action,data)=>{calls.push([action,data.model]);if(action==='prepare')return {atomic_document:atomic,drafts:[{model:7,operation:'a',files:{front:'a'}},{model:8,operation:'b',files:{front:'b'}}]};
+ request:async(action,data)=>{calls.push([action,data.model]);if(action==='prepare'){assert.equal(data.editor,undefined);assert.equal(data.use_open_editor,true);return {editor:'tracedraw',atomic_document:atomic,drafts:[{model:7,operation:'a',files:{front:'a'}},{model:8,operation:'b',files:{front:'b'}}]};}
  if(action==='publish_document') {
+   assert.equal(data.editor,'tracedraw');
    assert.deepEqual(Array.from(data.parts,p=>p.model),[7,8]);
    if(fail)throw Error('Conflito no lote');
    return {confirmed:true,pedido:123,receipts:[{modelo:7,pedido:123,operacao:'a'},{modelo:8,pedido:123,operacao:'b'}]};
@@ -16,17 +17,17 @@ class Element{constructor(){this.children=[];this.dataset={};this.style={};this.
  if(fail&&data.model===8)throw Error('Falha simulada');return {confirmed:true,pedido:123,modelo:data.model};},
  compose:async(binding)=>{calls.push(['compose',Number(binding.model)]);return {front:'sample'+binding.model};},reload:async()=>reloads++});
  window.ImpositionTraceDraw.mount(container,123,[{id:7},{id:8}],'order');
- await hosts[0].children[1].children[2].onclick();
+ await hosts[0].children[1].children.find(b=>b.textContent==='Atualizar').onclick();
  assert.deepEqual(calls,[['prepare',7],['compose',7],['compose',8],['publish',7],['publish',8]]);
  assert.equal(reloads,1);
- fail=true;calls=[];await hosts[0].children[1].children[2].onclick();
+ fail=true;calls=[];await hosts[0].children[1].children.find(b=>b.textContent==='Atualizar').onclick();
  assert.match(hosts[0].children[1].children[5].textContent,/1\/2 modelos confirmados/);
  assert.equal(reloads,2);
  atomic=true;fail=false;calls=[];
- await hosts[1].children[1].children[2].onclick();
+ await hosts[1].children[1].children.find(b=>b.textContent==='Atualizar').onclick();
  assert.deepEqual(calls,[['prepare',8],['compose',7],['compose',8],['publish_document',8]],'qualquer modelo publica o documento inteiro uma vez');
  assert.equal(reloads,3);
- fail=true;calls=[];await hosts[0].children[1].children[2].onclick();
+ fail=true;calls=[];await hosts[0].children[1].children.find(b=>b.textContent==='Atualizar').onclick();
  assert.match(hosts[0].children[1].children[5].textContent,/0\/2 modelos confirmados/);
  assert.equal(reloads,3,'erro atomico nao recarrega como publicacao parcial');
  fail=false;calls=[];
