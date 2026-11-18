@@ -29,6 +29,7 @@
       if (!host.isConnected) {mounted.delete(host);continue;}
       b.open.disabled = busy || pasting || !adapter.canEdit();
       const consulta = somenteConferencia(b.item);
+      b.trace.disabled = b.open.disabled || consulta;
       b.gab.disabled = b.update.disabled = b.open.disabled || consulta;
       b.open.title = consulta ? 'Baixar o CDR do Drive para conferência' : 'Abrir no CorelDRAW';
       b.badge.textContent = label(b.entry);
@@ -42,7 +43,7 @@
   async function action(binding, name, editor, face) {
     if (busy || pasting || !adapter.canEdit()) return;
     const consulta = somenteConferencia(binding.item);
-    if (consulta && name !== 'open') return;
+    if (consulta && (name !== 'open' || editor === 'tracedraw')) return;
     const started=Date.now();
     busy = true; refresh();
     binding.feedback.textContent = name === 'open' ? `Abrindo no ${editor==='coreldraw'?'CorelDRAW':'TraceDraw'}…` : 'Preparando…';
@@ -56,7 +57,7 @@
       }
       if(name==='clear')identity.face=face;
       if(editor)identity.editor=editor;
-      if(name==='open'&&binding.gab.checked)identity.gabarito=true;
+      if(name==='open'&&editor==='coreldraw'&&binding.gab.checked)identity.gabarito=true;
       let result;
       if (name === 'update') {
         if ([...mounted.values()].some(b => b.order === binding.order && pendingPaste(b)))
@@ -125,9 +126,9 @@
           return;
         }
       } else {
-        if (name === 'open' && pendingPaste(binding) && adapter.confirmPasted
+        if (name === 'open' && editor === 'coreldraw' && pendingPaste(binding) && adapter.confirmPasted
             && !await adapter.confirmPasted(binding)) return;
-        result = await adapter.request(name==='clear'?'clear':'open', identity);
+        result = await adapter.request(editor === 'tracedraw' ? 'open_cdr' : name, identity);
       }
       if (name !== 'open' && name !== 'clear') {
         if (result.confirmed !== true || Number(result.modelo) !== identity.model || Number(result.pedido) !== identity.order) {
@@ -136,7 +137,7 @@
         // Apenas o recibo confirmado permite atualizar a interface oficial.
         await adapter.reload(binding);
       }
-      if (name === 'open') {
+      if (name === 'open' && editor !== 'tracedraw') {
         const opened = new Set((result.document_models || [identity.model]).map(String));
         for (const member of mounted.values())
           if (member.order === binding.order && opened.has(member.model)) markPaste(member, false);
@@ -165,12 +166,16 @@
       controls.dataset.tracedrawControls='producao';
       controls.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;margin-left:auto;flex:1 1 200px;min-width:200px;padding-top:26px;align-self:flex-start';
       const open=document.createElement('button'),update=document.createElement('button');
-      for (const button of [open,update]) {button.type='button';button.className='btn btn-sm btn-secondary';}
+      const trace=document.createElement('button');
+      trace.textContent='Abrir TraceDraw';
+      trace.title='Abrir uma cópia editável do CDR no TraceDraw';
+      trace.style.cssText='grid-column:2 / -1;justify-self:end;white-space:nowrap';
+      for (const button of [open,trace,update]) {button.type='button';button.className='btn btn-sm btn-secondary';}
       open.style.cssText='grid-column:3;height:36px;white-space:nowrap';
       update.style.cssText='grid-column:4;height:36px;white-space:nowrap';
       open.textContent='CorelDRAW';update.textContent='Atualizar';
       open.setAttribute('data-corel-conferencia','');
-      update.title='Atualiza o documento do editor escolhido pelo Imposition. Salve suas edições antes de atualizar.';
+      update.title='Atualiza o documento do CorelDRAW. Salve suas edições antes de atualizar.';
       const gab=document.createElement('input'),gabLabel=document.createElement('label');
       gab.type='checkbox';gab.checked=false;gabLabel.style.cssText='grid-column:2;white-space:nowrap';
       gabLabel.title='Adicionar gabarito editável às páginas deste modelo. Desmarcar não remove elementos já inseridos.';
@@ -179,10 +184,11 @@
       badge.className='badge badge-teal';feedback.setAttribute('role','status');
       badge.style.cssText='grid-column:1 / -1;justify-self:end';
       feedback.style.cssText='grid-column:1 / -1;text-align:right;overflow-wrap:anywhere;min-width:0';
-      const binding={order:String(order),model:String(item.id),osId,index:i,item,gab,open,update,badge,feedback,controls,entry:null};
+      const binding={order:String(order),model:String(item.id),osId,index:i,item,gab,open,trace,update,badge,feedback,controls,entry:null};
+      trace.onclick=()=>action(binding,'open','tracedraw');
       open.onclick=()=>action(binding,'open','coreldraw');update.onclick=()=>action(binding,'update');
       const toolbar=host.closest?.('[data-tracedraw-toolbar]')||host;
-      controls.append(gabLabel,open,update,badge,feedback);toolbar.append(controls);mounted.set(host,binding);
+      controls.append(gabLabel,open,update,trace,badge,feedback);toolbar.append(controls);mounted.set(host,binding);
       if (typeof adapter.status==='function') {
         const poll=()=>adapter.status(binding).then(entry=>{binding.entry=entry;refresh();
           if(entry.backup_pending&&host.isConnected)setTimeout(poll,5000);

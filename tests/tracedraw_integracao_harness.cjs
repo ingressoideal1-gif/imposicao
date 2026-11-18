@@ -24,7 +24,7 @@ class Element {
    }});
  api.mount(container,123,[{id:7}],'vibe_123');api.mount(container,123,[{id:7}],'vibe_123');
  assert.equal(host.children.length,3);assert.equal(host.children[0],original);
- const [gabLabel,open,update,badge,feedback]=host.children[2].children;
+ const [gabLabel,open,update,trace,badge,feedback]=host.children[2].children;
  assert.equal(gabLabel.children[0].checked,false);
  await open.onclick();assert.equal(calls.at(-1).data.gabarito,undefined);gabLabel.children[0].checked=true;await open.onclick();assert.equal(calls.at(-1).data.gabarito,true);calls.shift();assert.equal(reloads,0);assert.equal(badge.hidden,true);
  await update.onclick();assert.equal(reloads,1);assert.match(badge.textContent,/TraceDraw.*1/);
@@ -33,7 +33,7 @@ class Element {
  assert.match(feedback.textContent,/incompleta/);assert.equal(badge.hidden,false);
  composeFails=false;confirmed=false;await update.onclick();assert.equal(reloads,1);assert.match(feedback.textContent,/não confirmada/);
  legacy=true;calls=[];await update.onclick();assert.deepEqual(calls.map(c=>c.action),['prepare']);assert.match(feedback.textContent,/versão antiga/);
- assert.equal(host.children[2].children.length,5,'CorelDRAW e Atualizar, selo e mensagem');
+ assert.equal(trace.textContent,'Abrir TraceDraw');
  const other=new Element();api.mount({id:'cliente-amostras-itens-container',querySelector:()=>({parentElement:other})},123,[{id:7}]);
  assert.equal(other.children.length,0);
  await open.onclick();assert.equal(calls.at(-1).data.editor,'coreldraw');
@@ -51,7 +51,7 @@ class Element {
  assert.equal(calls.at(-1).action,'clear');assert.equal(calls.at(-1).data.face,'back');
  calls=[];
  const finishPaste=api.assertCanPaste();
- assert.equal(open.disabled,true,'aguarda gravacao da colagem');
+ assert.equal(trace.disabled,true);assert.equal(open.disabled,true,'aguarda gravacao da colagem');
  await open.onclick();assert.equal(calls.length,0);
  assert.throws(()=>api.assertCanPaste(),/Aguarde/);
  await finishPaste();assert.equal(open.disabled,false);
@@ -61,6 +61,8 @@ class Element {
  assert.equal(open.disabled,false,'colagem preserva o botao CorelDRAW');
  await update.onclick();assert.equal(calls.length,0,'nao publicar CDR anterior sobre a colagem');
  assert.match(feedback.textContent,/arte colada/);
+ await trace.onclick();assert.equal(calls[0].action,'open_cdr');assert.equal(calls[0].data.editor,'tracedraw');
+ assert.equal(calls[0].data.gabarito,undefined);assert.equal(storage.get('imposition_corel_colagem_123_7'),'1');calls=[];
  allowPasteOpen=false;
  await open.onclick();assert.equal(calls.length,0,'cancelar preserva documento');
  await update.onclick();assert.equal(calls.length,0,'cancelar nao libera publicacao');
@@ -78,7 +80,7 @@ class Element {
    api.mount(container,123,[{id:7,...status}],'vibe_123');
    calls=[];api.artPasted('vibe_123',7);
    assert.equal(open.disabled,false);assert.equal(update.disabled,true);
-   await update.onclick();await open.onclick();
+   assert.equal(trace.disabled,true);await trace.onclick();await update.onclick();await open.onclick();
    assert.deepEqual(calls,[{action:'download',model:'7'}]);
    assert.equal(storage.get('imposition_corel_colagem_123_7'),'1');
  }
