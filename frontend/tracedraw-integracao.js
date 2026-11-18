@@ -27,18 +27,33 @@
   function refresh() {
     for (const [host, b] of mounted) {
       if (!host.isConnected) {mounted.delete(host);continue;}
-      b.gab.disabled = b.open.disabled = b.update.disabled = busy || pasting || !adapter.canEdit();
+      b.open.disabled = busy || pasting || !adapter.canEdit();
+      const consulta = somenteConferencia(b.item);
+      b.gab.disabled = b.update.disabled = b.open.disabled || consulta;
+      b.open.title = consulta ? 'Baixar o CDR do Drive para conferência' : 'Abrir no CorelDRAW';
       b.badge.textContent = label(b.entry);
       b.badge.hidden = !b.badge.textContent;
     }
   }
+  function somenteConferencia(item) {
+    return window.modeloEstaAprovado?.(item) || [item.status_impressao, item.impressao]
+      .some(status => String(status || '').trim().toUpperCase() === 'IMPRESSO');
+  }
   async function action(binding, name, editor, face) {
     if (busy || pasting || !adapter.canEdit()) return;
+    const consulta = somenteConferencia(binding.item);
+    if (consulta && name !== 'open') return;
     const started=Date.now();
     busy = true; refresh();
     binding.feedback.textContent = name === 'open' ? `Abrindo no ${editor==='coreldraw'?'CorelDRAW':'TraceDraw'}…` : 'Preparando…';
     try {
       const identity = {order:Number(binding.order), model:Number(binding.model),editor:'coreldraw'};
+      if (consulta) {
+        binding.feedback.textContent = 'Buscando o CDR no Drive…';
+        await adapter.baixarCdr(binding);
+        binding.feedback.textContent = 'Download do CDR de conferência iniciado.';
+        return;
+      }
       if(name==='clear')identity.face=face;
       if(editor)identity.editor=editor;
       if(name==='open'&&binding.gab.checked)identity.gabarito=true;
@@ -68,11 +83,14 @@
             ids.add(String(part.model));
             const member=[...mounted.values()].find(b=>b.order===binding.order&&b.model===String(part.model)&&b.osId===binding.osId&&b.controls.isConnected);
             if(!member)throw Error('Abra todos os modelos do documento antes de atualizar.');
+            if(somenteConferencia(member.item))throw Error('Documento contém uma atualização para modelo aprovado ou impresso.');
             binding.feedback.textContent=`Gerando amostra ${prepared.length+1}/${draft.drafts.length}…`;
             prepared.push({part,member,samples:await adapter.compose(member,part)});
           }
           const composedAt=Date.now();
           try {
+            if (prepared.some(({member}) => somenteConferencia(member.item)))
+              throw Error('Um dos modelos foi aprovado ou impresso durante a preparação. Reabra o pedido.');
             if(draft.atomic_document===true) {
               binding.feedback.textContent=`Publicando documento com ${prepared.length} modelo(s)…`;
               const receipt=await adapter.request('publish_document',{...identity,parts:prepared.map(({part,samples})=>({model:Number(part.model),operation:part.operation,samples}))});
@@ -137,7 +155,7 @@
       const item=items[i], anchor=container.querySelector(`#amostra-item-arte-${i}`);
       if (!anchor || !item.id || item._produto_prateleira) continue;
       const host=anchor.parentElement, old=mounted.get(host);
-      if (old?.model===String(item.id) && old.order===String(order)) continue;
+      if (old?.model===String(item.id) && old.order===String(order)) {old.item=item;continue;}
       if (old) {old.controls.remove();mounted.delete(host);}
       const controls=document.createElement('span');
       controls.dataset.tracedrawControls='producao';
@@ -147,6 +165,7 @@
       open.style.cssText='grid-column:3;height:36px;white-space:nowrap';
       update.style.cssText='grid-column:4;height:36px;white-space:nowrap';
       open.textContent='CorelDRAW';update.textContent='Atualizar';
+      open.setAttribute('data-corel-conferencia','');
       update.title='Atualiza o documento do editor escolhido pelo Imposition. Salve suas edições antes de atualizar.';
       const gab=document.createElement('input'),gabLabel=document.createElement('label');
       gab.type='checkbox';gab.checked=false;gabLabel.style.cssText='grid-column:2;white-space:nowrap';
@@ -156,7 +175,7 @@
       badge.className='badge badge-teal';feedback.setAttribute('role','status');
       badge.style.cssText='grid-column:1 / -1;justify-self:end';
       feedback.style.cssText='grid-column:1 / -1;text-align:right;overflow-wrap:anywhere;min-width:0';
-      const binding={order:String(order),model:String(item.id),osId,index:i,gab,open,update,badge,feedback,controls,entry:null};
+      const binding={order:String(order),model:String(item.id),osId,index:i,item,gab,open,update,badge,feedback,controls,entry:null};
       open.onclick=()=>action(binding,'open','coreldraw');update.onclick=()=>action(binding,'update');
       const toolbar=host.closest?.('[data-tracedraw-toolbar]')||host;
       controls.append(gabLabel,open,update,badge,feedback);toolbar.append(controls);mounted.set(host,binding);

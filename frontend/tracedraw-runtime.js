@@ -192,6 +192,25 @@
     throw Error('Backup no Drive continua pendente. O PDF está atualizado; tente concluir novamente em instantes.');
   };
   window.ImpositionTraceDraw.configure({request,compose,
+    async baixarCdr({order,model,item}) {
+      const {data,error}=await supabaseClient.auth.getSession();
+      if(error||!data?.session?.access_token)throw Error('Entre novamente no Imposition.');
+      const documento=item.modo_pdf === true ? 'modelo-'+model : 'produto-'+(item.id_produto || item._vibe_id_produto);
+      const query=new URLSearchParams({pedido:order,modelo:model,documento});
+      const response=await fetch(API_PAINEL+'/api/corel/conferencia?'+query,{
+        headers:{Authorization:'Bearer '+data.session.access_token},cache:'no-store'});
+      if(!response.ok) {
+        const erro=await response.json().catch(()=>null);
+        throw Error(erro?.detail||'Não foi possível baixar o CDR do Drive.');
+      }
+      if(response.headers.get('Content-Type')!=='application/octet-stream')
+        throw Error('O serviço não retornou um CDR.');
+      const url=URL.createObjectURL(await response.blob());
+      const link=document.createElement('a');
+      link.href=url;link.download=`Pedido-${order}-Modelo-${model}-conferencia.cdr`;
+      document.body.append(link);
+      try {link.click();} finally {link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+    },
     async confirmPasted(binding) {
       return confirmarNaTela({
         titulo:'Abrir a arte colada no CorelDRAW?',

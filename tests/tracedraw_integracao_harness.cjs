@@ -8,13 +8,13 @@ class Element {
 (async()=>{
  const storage=new Map();
  const localStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
- const window={},document={createElement:()=>new Element(),createTextNode:text=>({textContent:text})};
+ const window={modeloEstaAprovado:item=>item.status_arte==='APROVADA_CLIENTE'},document={createElement:()=>new Element(),createTextNode:text=>({textContent:text})};
  vm.runInNewContext(fs.readFileSync('frontend/tracedraw-integracao.js','utf8'),{window,document,localStorage});
  const api=window.ImpositionTraceDraw,host=new Element(),anchor=new Element(),original=new Element();host.append(original,anchor);
  const container={id:'amostras-itens-container',querySelector:()=>anchor};
  let allowPasteOpen=true;
  let calls=[],reloads=0,composeFails=false,confirmed=true,legacy=false,waitOpen=null,entry={art_origin:'tracedraw',art_revision:1,operation:'rev1',restorable:true};
- api.configure({confirmPasted:async()=>allowPasteOpen,canEdit:()=>true,compose:async()=>{if(composeFails)throw Error('Composição incompleta');return {front:'sample'};},
+ api.configure({baixarCdr:async b=>calls.push({action:'download',model:b.model}),confirmPasted:async()=>allowPasteOpen,canEdit:()=>true,compose:async()=>{if(composeFails)throw Error('Composição incompleta');return {front:'sample'};},
    reload:async()=>{reloads++;},request:async(action,data)=>{
     calls.push({action,data});
     if(action==='prepare')return legacy?{operation:'draft',files:{front:'pdf'}}:{drafts:[{model:7,operation:'draft',files:{front:'pdf'}}]};
@@ -67,5 +67,13 @@ class Element {
  await open.onclick();assert.equal(calls.at(-1).action,'open');
  assert.equal(storage.has('imposition_corel_colagem_123_7'),false);
  await update.onclick();assert.equal(calls.at(-1).action,'publish');
+ for (const status of [{status_arte:'APROVADA_CLIENTE'},{impressao:'Impresso'}]) {
+   api.mount(container,123,[{id:7,...status}],'vibe_123');
+   calls=[];api.artPasted('vibe_123',7);
+   assert.equal(open.disabled,false);assert.equal(update.disabled,true);
+   await update.onclick();await open.onclick();
+   assert.deepEqual(calls,[{action:'download',model:'7'}]);
+   assert.equal(storage.get('imposition_corel_colagem_123_7'),'1');
+ }
  console.log('CorelDRAW: abrir, preparar, compor, publicar, erros e portal OK');
 })().catch(error=>{console.error(error);process.exitCode=1;});
