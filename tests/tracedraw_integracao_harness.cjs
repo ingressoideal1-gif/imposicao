@@ -13,12 +13,13 @@ class Element {
  const api=window.ImpositionTraceDraw,host=new Element(),anchor=new Element(),original=new Element();host.append(original,anchor);
  const container={id:'amostras-itens-container',querySelector:()=>anchor};
  let allowPasteOpen=true;
+ let openedModels;
  let calls=[],reloads=0,composeFails=false,confirmed=true,legacy=false,waitOpen=null,entry={art_origin:'tracedraw',art_revision:1,operation:'rev1',restorable:true};
  api.configure({baixarCdr:async b=>calls.push({action:'download',model:b.model}),confirmPasted:async()=>allowPasteOpen,canEdit:()=>true,compose:async()=>{if(composeFails)throw Error('Composição incompleta');return {front:'sample'};},
    reload:async()=>{reloads++;},request:async(action,data)=>{
     calls.push({action,data});
     if(action==='prepare')return legacy?{operation:'draft',files:{front:'pdf'}}:{drafts:[{model:7,operation:'draft',files:{front:'pdf'}}]};
-    if(action==='open'){if(waitOpen)await waitOpen;return {message:'aberto'};}
+    if(action==='open'){if(waitOpen)await waitOpen;return {message:'aberto',document_models:openedModels};}
     return {confirmed,pedido:123,modelo:7,state:action==='restore'?{restorable:false}:entry};
    }});
  api.mount(container,123,[{id:7}],'vibe_123');api.mount(container,123,[{id:7}],'vibe_123');
@@ -67,6 +68,12 @@ class Element {
  await open.onclick();assert.equal(calls.at(-1).action,'open');
  assert.equal(storage.has('imposition_corel_colagem_123_7'),false);
  await update.onclick();assert.equal(calls.at(-1).action,'publish');
+ const host8=new Element(),anchor8=new Element();host8.append(anchor8);
+ api.mount({id:'amostras-itens-container',querySelector:()=>anchor8},123,[{id:8}],'vibe_123');
+ api.artPasted('vibe_123',7);api.artPasted('vibe_123',8);
+ openedModels=[7,8];await open.onclick();
+ assert.equal(storage.has('imposition_corel_colagem_123_7'),false);
+ assert.equal(storage.has('imposition_corel_colagem_123_8'),false,'abrir CDR do produto confirma todos os modelos incorporados');
  for (const status of [{status_arte:'APROVADA_CLIENTE'},{impressao:'Impresso'}]) {
    api.mount(container,123,[{id:7,...status}],'vibe_123');
    calls=[];api.artPasted('vibe_123',7);
