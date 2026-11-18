@@ -23469,6 +23469,7 @@ function travarCardsDeModelosAprovados(container) {
         card.querySelectorAll('input, select, textarea, button').forEach(el => {
             // Folhear a arte aprovada é leitura; a escala continua bloqueada.
             if (el.hasAttribute('data-navegacao-pdf') || el.hasAttribute('data-recarregar-previa')) return;
+            if (el.hasAttribute('data-corel-conferencia')) return;
             // Duas saídas, com listas de gente diferentes: `data-libera-aprovado`
             // é o que ALTERA o modelo (a anotação e a volta para alteração), e
             // `data-libera-copia` é o que só o LÊ (copiar o link da arte).

@@ -24,4 +24,25 @@ async function scenario(mode='ok') {
   assert.equal(calls.length,mode==='denied'?2:1);
  }
 }
-(async()=>{for(const mode of ['ok','session','old','offline','denied','gabarito'])await scenario(mode);console.log('Transporte direto: sem janelas, sem cookies, sem retry de escrita e com recusas preservadas OK');})().catch(e=>{console.error(e);process.exitCode=1;});
+async function conferirDownload(multipaginas) {
+ let adapter, baixados=0;
+ const link={click(){baixados++;},remove(){}};
+ vm.runInNewContext(fs.readFileSync('frontend/tracedraw-runtime.js','utf8'),{
+  window:{ImpositionTraceDraw:{configure:v=>adapter=v}},API_PAINEL:'https://painel.invalid',
+  URLSearchParams,URL:{createObjectURL:()=> 'blob:teste',revokeObjectURL(){}},setTimeout:fn=>fn(),
+  document:{body:{append(){}},createElement:()=>link},
+  supabaseClient:{auth:{getSession:async()=>({data:{session:{access_token:'synthetic'}}})}},
+  fetch:async(url,opts)=>{
+   const pedido=new URL(url);
+   assert.equal(pedido.pathname,'/api/corel/conferencia');
+   assert.equal(pedido.searchParams.get('documento'),multipaginas?'modelo-7':'produto-45');
+   assert.equal(opts.headers.Authorization,'Bearer synthetic');
+   return new Response('cdr',{headers:{'Content-Type':'application/octet-stream'}});
+  }
+ });
+ await adapter.baixarCdr({order:'123',model:'7',item:{id_produto:45,modo_pdf:multipaginas}});
+ assert.equal(baixados,1);assert.equal(link.download,'Pedido-123-Modelo-7-conferencia.cdr');
+}
+(async()=>{for(const mode of ['ok','session','old','offline','denied','gabarito'])await scenario(mode);
+ await conferirDownload(false);await conferirDownload(true);
+ console.log('Transporte da Ponte e download do CDR para conferência OK');})().catch(e=>{console.error(e);process.exitCode=1;});

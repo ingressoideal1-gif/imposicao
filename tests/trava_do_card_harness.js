@@ -59,6 +59,8 @@ const PAGINA = `
     <textarea id="a-obs" data-libera-aprovado="1"></textarea>
     <button id="a-alteracao" data-libera-aprovado="1">EM ALTERACAO</button>
     <button id="a-copy" data-libera-copia="1">Copiar link da arte</button>
+    <button id="a-corel" data-corel-conferencia>CorelDRAW</button>
+    <button id="a-corel-update">Atualizar</button>
   </div>
   <div class="card">
     <select id="b-cor"><option>Cor</option></select>
@@ -141,6 +143,7 @@ async function travados(page, papel, containerId) {
     ok(designer['a-alteracao'], 'e o botao Em Alteracao trava');
     ok(designer['a-colar'], 'e colar a arte trava');
     ok(!designer['a-copy'], 'mas copiar o link da arte fica liberado para ele');
+    ok(!designer['a-corel'] && designer['a-corel-update'], 'conferência do CDR liberada e atualização bloqueada');
     ok(!designer['b-cor'], 'o card livre continua livre para ele');
 
     // Quem nao esta na lista dos tres nao ganha nem a copia.
