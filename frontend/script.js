@@ -49962,22 +49962,20 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
 // FIM GESTAO ENTREGAS
 
 
-/* Contato selecionado na Lista de Arte. Cache curto em memória; gravação confirmada pelo servidor. */
+/* Contato selecionado na Lista de Arte. Leitura da seleção do Vibe com cache curto. */
 (function () {
-    const cache = new Map(), pendentes = new Set(), salvando = new Set();
-    let versao = 0;
-    const podeEditar = () => window._currentPerms?.perm_lista_arte_edit === true;
-    async function api(acao, dados) {
+    const cache = new Map(), pendentes = new Set();
+    async function consultar(pedidos) {
         const sessao = await supabaseClient.auth.getSession();
         const token = sessao?.data?.session?.access_token;
         if (!token) throw new Error('Entre na sua conta do painel.');
         let r;
         try {
-            r = await fetch(API_PAINEL + '/api/contatos-arte/' + acao, {
+            r = await fetch(API_PAINEL + '/api/contatos-arte/consultar', {
                 method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-                body: JSON.stringify(dados), signal: AbortSignal.timeout(20000)
+                body: JSON.stringify({ pedidos }), signal: AbortSignal.timeout(20000)
             });
-        } catch { throw new Error('Não foi possível confirmar a operação. Reabra o contato para conferir.'); }
+        } catch { throw new Error('Não foi possível consultar o comprador. Recarregue o contato.'); }
         const corpo = await r.json();
         if (!r.ok) throw new Error(typeof corpo.detail === 'string' ? corpo.detail : 'Não foi possível confirmar o contato.');
         return corpo;
@@ -49989,12 +49987,12 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         if (!item) return '<span style="color:var(--text-dim)">Carregando contato…</span>';
         if (item.erro) return `<button class="btn btn-sm" onclick="ContatosListaArte.recarregar('${n}')" title="Tentar consultar novamente">Recarregar contato</button>`;
         const c = item.dados, opcoes = c?.opcoes || [];
-        if (!opcoes.length) return '<span style="color:#fbbf24">Sem contato no Guru 3478</span>';
+        if (!opcoes.length) return '<span style="color:#fbbf24">Sem contato no Guru 3478. Confira o comprador no Vibe.</span>';
         const atributo = v => escapeHtml(String(v)).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        return `<select class="form-control" aria-label="Contato WhatsApp do pedido ${n}" style="width:100%;min-width:170px;max-width:260px;min-height:36px" ${!podeEditar() || salvando.has(n) ? 'disabled' : ''} onchange="ContatosListaArte.selecionar('${n}',this.value)">` +
-            (!c.valido ? '<option value="" selected disabled>Selecione um contato do Guru</option>' : '') +
+        return `<select class="form-control" aria-label="Contato WhatsApp do pedido ${n}" style="width:100%;min-width:170px;max-width:260px;min-height:36px" disabled>` +
+            (!c.valido ? '<option value="" selected>Confira o comprador no Vibe</option>' : '') +
             opcoes.map(o => `<option value="${atributo(o.contato_id)}" ${o.contato_id === c.contato_id ? 'selected' : ''}>${escapeHtml(o.nome || 'Sem nome')} — ${escapeHtml(o.whatsapp)}</option>`).join('') +
-            `</select><span role="status" style="display:block;font-size:.75rem;color:var(--text-dim)">${salvando.has(n) ? 'Salvando seleção…' : 'WhatsApp 3478'}</span>`;
+            '</select>' + (c.valido ? '<span role="status" style="display:block;font-size:.75rem;color:var(--text-dim)">Comprador definido no Vibe</span>' : '');
     }
 
     function pintar() {
@@ -50005,54 +50003,26 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
     }
     async function carregar(ordens) {
         const ids = [...new Set(ordens.filter(o => /^vibe_[1-9]\d*$/.test(String(o.id))).map(o => String(o.numero)))]
-            .filter(n => /^[1-9]\d*$/.test(n) && !pendentes.has(n) && !salvando.has(n) && Date.now() - (cache.get(n)?.hora || 0) > 55000);
+            .filter(n => /^[1-9]\d*$/.test(n) && !pendentes.has(n) && Date.now() - (cache.get(n)?.hora || 0) > 55000);
         ids.forEach(n => pendentes.add(n));
-        const atual = versao;
         try {
             for (let i = 0; i < ids.length; i += 200) {
                 const lote = ids.slice(i, i + 200);
                 try {
-                    const linhas = await api('consultar', { pedidos: lote });
+                    const linhas = await consultar(lote);
                     if (!Array.isArray(linhas)) throw new Error('Resposta inválida.');
-                    if (atual !== versao) continue;
                     lote.forEach(n => cache.set(n, { dados: linhas.find(c => String(c.pedido) === n) || null, hora: Date.now() }));
                 } catch {
-                    if (atual === versao) lote.forEach(n => cache.set(n, { erro: true, hora: Date.now() }));
+                    lote.forEach(n => cache.set(n, { erro: true, hora: Date.now() }));
                 }
             }
         } finally { ids.forEach(n => pendentes.delete(n)); if (ids.length) pintar(); }
     }
-    async function selecionar(n, contatoId) {
-        n = String(n);
-        const original = cache.get(n)?.dados;
-        if (!podeEditar() || salvando.has(n) || !original || !original.opcoes?.some(o => o.contato_id === contatoId)) return;
-        if (contatoId === original.contato_id) return;
-        salvando.add(n); versao++; pintar();
-        try {
-            const salvo = await api('selecionar', { pedido: n, contato_id: contatoId, revisao: original.revisao });
-            if (!salvo || String(salvo.pedido) !== n || salvo.contato_id !== contatoId || salvo.valido !== true || !Array.isArray(salvo.opcoes)) throw new Error('O banco não confirmou a seleção. Recarregue os contatos.');
-            versao++;
-            cache.set(n, { dados: salvo, hora: Date.now() });
-            toast('Contato selecionado para a arte deste pedido.', 'success');
-        } catch (erro) {
-            cache.delete(n);
-            toast(erro.message, 'error');
-            try {
-                const linhas = await api('consultar', { pedidos: [n] });
-                if (!Array.isArray(linhas) || linhas.length !== 1 || String(linhas[0].pedido) !== n) throw new Error();
-                cache.set(n, { dados: linhas[0], hora: Date.now() });
-            } catch { cache.set(n, { erro: true, hora: Date.now() }); }
-        } finally { salvando.delete(n); pintar(); }
-    }
-    function enviar(n, id) {
-        if (salvando.has(String(n))) { toast('Aguarde a confirmação do contato.', 'error'); return; }
-        abrirWhatsappArte(id);
-    }
     function botaoWhatsapp(os) {
         if (!/^vibe_[1-9]\d*$/.test(String(os.id))) return '';
-        return `<button class="btn btn-sm" onclick="event.stopPropagation();ContatosListaArte.enviar('${escapeJsAttr(String(os.numero))}','${escapeJsAttr(os.id)}')" title="Enviar link pelo WhatsApp" aria-label="Enviar link pelo WhatsApp" style="padding:4px 7px;min-width:30px;min-height:28px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.4);border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.7 7.4L3 20l1.1-4.8A8.5 8.5 0 1 1 20.5 11.5Z"/><path d="M8 7.5c-.7 0-1.2.8-1 1.7.6 3.4 3.3 6.1 6.7 6.7.9.2 1.7-.3 1.7-1l-2.2-1.5-1 1c-1.5-.7-2.7-1.9-3.4-3.4l1-1L8 7.5Z"/></svg></button>`;
+        return `<button class="btn btn-sm" onclick="event.stopPropagation();abrirWhatsappArte('${escapeJsAttr(os.id)}')" title="Enviar link pelo WhatsApp" aria-label="Enviar link pelo WhatsApp" style="padding:4px 7px;min-width:30px;min-height:28px;background:rgba(37,211,102,.12);color:#25d366;border:1px solid rgba(37,211,102,.4);border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8.5 8.5 0 0 1-12.7 7.4L3 20l1.1-4.8A8.5 8.5 0 1 1 20.5 11.5Z"/><path d="M8 7.5c-.7 0-1.2.8-1 1.7.6 3.4 3.3 6.1 6.7 6.7.9.2 1.7-.3 1.7-1l-2.2-1.5-1 1c-1.5-.7-2.7-1.9-3.4-3.4l1-1L8 7.5Z"/></svg></button>`;
     }
-    window.ContatosListaArte = { html, carregar, selecionar, enviar, botaoWhatsapp, recarregar(n) { cache.delete(String(n)); return carregar([{ id: 'vibe_' + n, numero: n }]); } };
+    window.ContatosListaArte = { html, carregar, botaoWhatsapp, recarregar(n) { cache.delete(String(n)); return carregar([{ id: 'vibe_' + n, numero: n }]); } };
 })();
 
 /* Envio do link pelo contato selecionado no pedido; sem credenciais no cliente. */
@@ -50088,7 +50058,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         modal.setAttribute('aria-label', 'Enviar arte pelo WhatsApp');
         modal.style.cssText = 'width:min(560px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid #475569;border-radius:14px;padding:24px;background:#172033;color:#fff;';
         modal.innerHTML = `<h3>Enviar arte pelo WhatsApp</h3>
-            <p data-contato></p><p>Destinatário: contato do Guru selecionado na Lista de Arte. Para trocar, escolha outro contato na coluna Contato / WhatsApp e reabra esta janela.</p>
+            <p data-contato></p><p>O destinatário é o comprador selecionado no Vibe. Se mudar o comprador, reabra esta janela.</p>
             <pre data-texto style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit"></pre>
             <p data-status role="status" aria-live="polite"></p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">

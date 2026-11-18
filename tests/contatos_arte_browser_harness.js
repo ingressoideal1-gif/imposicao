@@ -9,24 +9,17 @@ const moduleSource=source.slice(source.indexOf('/* Contato selecionado na Lista 
  await page.addScriptTag({content:`
  const API_PAINEL='https://synthetic.example';
  const supabaseClient={auth:{getSession:async()=>({data:{session:{access_token:'synthetic'}}})}};
- window._currentPerms={perm_lista_arte_view:true,perm_lista_arte_edit:true};
  function escapeHtml(s){const e=document.createElement('span');e.textContent=String(s);return e.innerHTML;}
  function escapeJsAttr(s){return s;}
- window.avisos=[];function toast(m,t){avisos.push({m,t});}
  window.abriu=null;function abrirWhatsappArte(id){abriu=id;}
- window.chamadas=[];window.conflito=false;window.vazio=false;
+ window.chamadas=[];window.erroNaConsulta=false;
  const a={contato_id:'guru#'+'a'.repeat(24),nome:'Contato A',whatsapp:'5511999990000'};
  const b={contato_id:'guru#'+'b'.repeat(24),nome:'<img src=x onerror=alert(1)>',whatsapp:'5511888880000'};
- window.cadastros={11:{pedido:11,...a,valido:true,opcoes:[a,b],revisao:'c'.repeat(32)},12:{pedido:12,...a,valido:true,opcoes:[a,b],revisao:'c'.repeat(32)},13:{pedido:13,valido:false,opcoes:[]}};
+ window.cadastros={11:{pedido:11,...b,valido:true,opcoes:[a,b]},12:{pedido:12,valido:false,opcoes:[a,b]},13:{pedido:13,valido:false,opcoes:[]}};
  window.fetch=async(url,op)=>{
   const acao=url.split('/').pop(),dados=JSON.parse(op.body);chamadas.push({acao,dados});
-  if(acao==='consultar')return {ok:true,json:async()=>dados.pedidos.map(p=>cadastros[p])};
-  await new Promise(r=>setTimeout(r,80));
-  if(conflito)return {ok:false,json:async()=>({detail:'Lista alterada; recarregue.'})};
-  if(vazio)return {ok:true,json:async()=>[]};
-  const escolhido=cadastros[dados.pedido].opcoes.find(o=>o.contato_id===dados.contato_id);
-  cadastros[dados.pedido]={...cadastros[dados.pedido],...escolhido,revisao:'d'.repeat(32)};
-  return {ok:true,json:async()=>cadastros[dados.pedido]};
+  if(erroNaConsulta)return {ok:false,json:async()=>({detail:'Erro simulado'})};
+  return {ok:true,json:async()=>dados.pedidos.map(p=>cadastros[p])};
  };
  `+moduleSource});
  await page.evaluate(async()=>{
@@ -35,24 +28,26 @@ const moduleSource=source.slice(source.indexOf('/* Contato selecionado na Lista 
   await ContatosListaArte.carregar(ordens);await ContatosListaArte.carregar(ordens);
  });
  assert.equal(await page.evaluate(()=>chamadas.length),1);
- assert.equal(await page.$$eval('select',s=>s.length),2);
+ assert.equal(await page.$$eval('select:disabled',s=>s.length),2);
  assert.equal(await page.$$eval('input,dialog,img',s=>s.length),0);
  assert.ok(await page.$eval('[data-contato-arte="13"]',e=>e.textContent.includes('Sem contato no Guru 3478')));
  assert.equal(await page.$eval('select',e=>e.options.length),2);
- await page.evaluate(()=>{const id=cadastros[11].opcoes[1].contato_id;ContatosListaArte.selecionar('11',id);ContatosListaArte.selecionar('11',id);ContatosListaArte.enviar('11','vibe_11');});
- assert.equal(await page.evaluate(()=>abriu),null);
- await page.waitForFunction(()=>avisos.some(a=>a.t==='success'));
- assert.equal(await page.evaluate(()=>chamadas.filter(c=>c.acao==='selecionar').length),1);
  assert.equal(await page.$eval('[data-contato-arte="11"] select',e=>e.value),'guru#'+'b'.repeat(24));
- assert.equal(await page.$eval('[data-contato-arte="12"] select',e=>e.value),'guru#'+'a'.repeat(24));
- assert.equal(await page.$$eval('img',s=>s.length),0);
- await page.evaluate(async()=>{conflito=true;await ContatosListaArte.selecionar('11',cadastros[11].opcoes[0].contato_id);});
- assert.equal(await page.$eval('[data-contato-arte="11"] select',e=>e.value),'guru#'+'b'.repeat(24));
- await page.evaluate(async()=>{conflito=false;vazio=true;await ContatosListaArte.selecionar('11',cadastros[11].opcoes[0].contato_id);});
- assert.equal(await page.evaluate(()=>avisos.filter(a=>a.t==='success').length),1);
- await page.evaluate(async()=>{_currentPerms.perm_lista_arte_edit=false;await ContatosListaArte.recarregar('11');});
- assert.equal(await page.$eval('[data-contato-arte="11"] select',e=>e.disabled),true);
+ assert.match(await page.$eval('[data-contato-arte="11"] [role="status"]',e=>e.textContent),/Comprador definido no Vibe/);
+ assert.equal(await page.$eval('[data-contato-arte="12"] select',e=>e.value),'');
+ assert.match(await page.$eval('[data-contato-arte="12"] select',e=>e.selectedOptions[0].textContent),/Confira o comprador no Vibe/);
+ assert.equal(await page.$$eval('select[onchange]',s=>s.length),0);
+ await page.evaluate(async()=>{erroNaConsulta=true;await ContatosListaArte.recarregar('11');});
+ assert.match(await page.$eval('[data-contato-arte="11"]',e=>e.textContent),/Recarregar contato/);
+ await page.evaluate(()=>{
+  erroNaConsulta=false;
+  cadastros[11]={...cadastros[11],...cadastros[11].opcoes[0]};
+ });
+ await page.click('[data-contato-arte="11"] button');
+ await page.waitForSelector('[data-contato-arte="11"] select');
+ assert.equal(await page.$eval('[data-contato-arte="11"] select',e=>e.value),'guru#'+'a'.repeat(24));
+ assert.ok(await page.evaluate(()=>chamadas.every(c=>c.acao==='consultar')));
  await page.click('[aria-label="Enviar link pelo WhatsApp"]');assert.equal(await page.evaluate(()=>abriu),'vibe_11');
  assert.deepEqual(errors,[]);
- console.log('OK: dropdown automático, vazio, seleção isolada, confirmação, XSS, conflito, permissão e envio');
+ console.log('OK: dropdown somente leitura, comprador do Vibe, vazio, recarga, XSS e abertura do envio');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

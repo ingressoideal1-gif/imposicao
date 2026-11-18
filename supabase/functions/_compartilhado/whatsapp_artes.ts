@@ -58,7 +58,7 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   if (phone !== "6071afff6e66fe3fadecd101") throw new Recusa(503, "Configure o remetente 3478 para os contatos da Lista de Arte.");
   const contato = uma(await db("POST", "rpc/imposition_arte_guru_ler", { p_pedidos: [Number(link.numero_pedido)] }), "Contato da Lista de Arte indisponível.");
   if (Number(contato.pedido) !== Number(link.numero_pedido) || contato.valido !== true || !contato.contato_id) {
-    throw new Recusa(422, "Selecione um contato disponível no Guru 3478 na Lista de Arte.");
+    throw new Recusa(422, "Confira o comprador do pedido no Vibe. O destinatário precisa estar disponível no Guru 3478.");
   }
   const contatoId = contato.contato_id;
   const numero = telefoneWhatsApp(contato.whatsapp, ler("CHATGURU_DEFAULT_DDI") || "");
