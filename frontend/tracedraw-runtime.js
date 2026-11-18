@@ -92,6 +92,10 @@
     if(data.gabarito&&!health.features?.includes('gabaritos'))throw Error('Atualize a Ponte Imposition para utilizar Gab.');
     if(action==='attachment'&&!health.features?.includes('anexos-corel'))throw Error('Atualize a Ponte Imposition para a versão 1.10.0 ou superior para importar anexos.');
     if(!health.ready)throw Error(health.message||'A ponte precisa de atenção.');
+    if(action==='open_cdr' && !health.editors?.includes('tracedraw'))
+      throw Error('TraceDraw indisponível. Confira a instalação do TraceDraw e reinicie a Ponte.');
+    if(action==='open_cdr' && !health.features?.includes('tracedraw-cdr'))
+      throw Error('Atualize a Ponte Imposition para abrir o CDR no TraceDraw.');
     if(data.editor==='coreldraw'&&!health.editors?.includes('coreldraw'))
       throw Error('CorelDRAW indisponível na ponte. Confira a instalação do programa e atualize a Ponte Imposition.');
     const {data:auth,error}=await supabaseClient.auth.getSession();

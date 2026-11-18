@@ -8,12 +8,20 @@ async function scenario(mode='ok') {
   fetch:async(url,opts)=>{
    calls.push(url);assert.equal(opts.credentials,'omit');
    if(mode==='offline')throw TypeError('network');
-   if(url.endsWith('/health'))return {ok:true,json:async()=>({application:'Ponte Imposition',protocol:1,ready:true,direct_transport:mode!=='old'})};
+   if(url.endsWith('/health'))return {ok:true,json:async()=>({application:'Ponte Imposition',protocol:1,ready:true,editors:['tracedraw'],features:mode==='trace-old'?[]:['tracedraw-cdr'],direct_transport:mode!=='old'})};
    assert.equal(opts.method,'POST');assert.equal(JSON.parse(opts.body).token,'synthetic');
    return {ok:mode!=='denied',json:async()=>({message:mode==='denied'?'Acesso recusado':'aberto'})};
   }
  });
- if(mode==='gabarito') {
+ if(mode==='trace' || mode==='trace-old') {
+  const data={order:123,model:7,editor:'tracedraw'};
+  if(mode==='trace-old'){
+   await assert.rejects(adapter.request('open_cdr',data),/Atualize a Ponte/);assert.equal(calls.length,1);
+  }else{
+   assert.equal((await adapter.request('open_cdr',data)).message,'aberto');
+   assert.match(calls[1],/producao\/open_cdr$/);
+  }
+ } else if(mode==='gabarito') {
   await assert.rejects(adapter.request('open',{gabarito:true}),/Atualize.*Gab/);assert.equal(calls.length,1);
  } else if(mode==='ok') {
   assert.equal((await adapter.request('open',{order:123,model:7})).message,'aberto');
@@ -43,6 +51,6 @@ async function conferirDownload(multipaginas) {
  await adapter.baixarCdr({order:'123',model:'7',item:{id_produto:45,modo_pdf:multipaginas}});
  assert.equal(baixados,1);assert.equal(link.download,'Pedido-123-Modelo-7-conferencia.cdr');
 }
-(async()=>{for(const mode of ['ok','session','old','offline','denied','gabarito'])await scenario(mode);
+(async()=>{for(const mode of ['ok','session','old','offline','denied','gabarito','trace','trace-old'])await scenario(mode);
  await conferirDownload(false);await conferirDownload(true);
  console.log('Transporte da Ponte e download do CDR para conferência OK');})().catch(e=>{console.error(e);process.exitCode=1;});

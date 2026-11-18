@@ -20,14 +20,14 @@ class Element{constructor(){this.children=[];this.dataset={};this.style={};this.
  assert.deepEqual(calls,[['prepare',7],['compose',7],['compose',8],['publish',7],['publish',8]]);
  assert.equal(reloads,1);
  fail=true;calls=[];await hosts[0].children[1].children[2].onclick();
- assert.match(hosts[0].children[1].children[4].textContent,/1\/2 modelos confirmados/);
+ assert.match(hosts[0].children[1].children[5].textContent,/1\/2 modelos confirmados/);
  assert.equal(reloads,2);
  atomic=true;fail=false;calls=[];
  await hosts[1].children[1].children[2].onclick();
  assert.deepEqual(calls,[['prepare',8],['compose',7],['compose',8],['publish_document',8]],'qualquer modelo publica o documento inteiro uma vez');
  assert.equal(reloads,3);
  fail=true;calls=[];await hosts[0].children[1].children[2].onclick();
- assert.match(hosts[0].children[1].children[4].textContent,/0\/2 modelos confirmados/);
+ assert.match(hosts[0].children[1].children[5].textContent,/0\/2 modelos confirmados/);
  assert.equal(reloads,3,'erro atomico nao recarrega como publicacao parcial');
  fail=false;calls=[];
  await window.ImpositionTraceDraw.artRemoved('order',7);
