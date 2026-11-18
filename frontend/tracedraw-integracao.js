@@ -136,7 +136,11 @@
         // Apenas o recibo confirmado permite atualizar a interface oficial.
         await adapter.reload(binding);
       }
-      if (name === 'open') markPaste(binding, false);
+      if (name === 'open') {
+        const opened = new Set((result.document_models || [identity.model]).map(String));
+        for (const member of mounted.values())
+          if (member.order === binding.order && opened.has(member.model)) markPaste(member, false);
+      }
       binding.entry = result.state || binding.entry;
       binding.feedback.textContent = result.message || 'Concluído.';
     } catch (error) {
