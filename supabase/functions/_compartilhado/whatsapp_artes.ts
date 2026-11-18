@@ -62,7 +62,9 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   }
   const contatoId = contato.contato_id;
   const numero = telefoneWhatsApp(contato.whatsapp, ler("CHATGURU_DEFAULT_DDI") || "");
-  const url = `${PORTAL}/cliente/${link.numero_pedido}-${link.token}`;
+  // O template do Guru já contém o prefixo do portal; o campo recebe só o sufixo.
+  const sufixo = `${link.numero_pedido}-${link.token}`;
+  const url = `${PORTAL}/cliente/${sufixo}`;
   const nome = String(contato.nome || "Cliente").replace(/[\r\n\x00-\x1f]/g, " ").slice(0, 150);
   const texto = `O modelo de mensagem configurado no ChatGuru será enviado com este link de aprovação:\n${url}`;
   // Um envio por versão da arte, contato, destino e remetente. Sem dados pessoais na chave.
@@ -126,7 +128,7 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   const sucesso = (r: any) => r.http >= 200 && r.http < 300 && r.data.result === "success" && r.data.code === 200;
   const rejeitado = (r: any) => r.http < 500 && r.data.result === "error" && r.data.code === 400;
   try {
-    const campo = await chamar("chat_update_custom_fields", { chat_number: numero, field__Link_do_Cliente: url, field__Pedido_Atual: String(link.numero_pedido) });
+    const campo = await chamar("chat_update_custom_fields", { chat_number: numero, field__Link_do_Cliente: sufixo, field__Pedido_Atual: String(link.numero_pedido) });
     if (sucesso(campo)) {
       const dialogo = await chamar("dialog_execute", { chat_number: numero, dialog_id: DIALOGO });
       estado = sucesso(dialogo) ? "aguardando" : rejeitado(dialogo) ? "falhou" : "desconhecido";

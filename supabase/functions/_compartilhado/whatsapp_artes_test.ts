@@ -65,7 +65,7 @@ Deno.test("whatsapp: destinatário selecionado, aceite e status sem novo envio",
   const r = await f.executar("enviar", { confirmacao: p.confirmacao });
   assert.equal(r.estado, "aguardando"); assert.equal(r.aceito, true);
   assert.equal(f.c.chamadas[0].get("chat_number"), "5511999990000");
-  assert.equal(f.c.chamadas[0].get("field__Link_do_Cliente"), "https://imposition.ai-ideal.com.br/cliente/11-abc123");
+  assert.equal(f.c.chamadas[0].get("field__Link_do_Cliente"), "11-abc123");
   assert.equal(f.c.chamadas[0].get("field__Pedido_Atual"), "11");
   assert.equal(f.c.chamadas[1].get("dialog_id"), "6aef191d04236cee4e7075c1");
   assert.equal(r.dialogo_executado, true);
@@ -199,6 +199,8 @@ Deno.test("whatsapp: reenvio explícito depois de 120s, sem duplicar cliques", a
   const entrada = { confirmacao: p.confirmacao, reenvio_confirmacao: r.reenvio_confirmacao };
   await Promise.all([f.executar("reenviar", entrada), f.executar("reenviar", entrada)]);
   assert.equal(f.c.chamadas.length, 4);
+  assert.equal(f.c.chamadas[2].get("field__Link_do_Cliente"), "11-abc123");
+  assert.equal(f.c.chamadas[2].get("field__Pedido_Atual"), "11");
   await assert.rejects(() => f.executar("reenviar", entrada), /120 segundos/);
 });
 Deno.test("whatsapp: prazo não libera resultado desconhecido", async () => {
