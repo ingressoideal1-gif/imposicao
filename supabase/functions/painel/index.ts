@@ -39,6 +39,7 @@ import { conferirSenha, senhaAtual } from "../_compartilhado/senha_liberacao.ts"
 import { Recusa, usuarioDoJwt } from "../_compartilhado/sessao.ts";
 import { operarGabaritos } from "../_compartilhado/gabaritos.ts";
 import { operarFontesCorel } from "../_compartilhado/fontes_corel.ts";
+import { baixarCdrConferencia } from "./corel_conferencia.ts";
 import { operarWhatsappArtes } from "../_compartilhado/whatsapp_artes.ts";
 import { operarContatosArte } from "../_compartilhado/contatos_arte.ts";
 import { operarEmailArtes } from "../_compartilhado/email_artes.ts";
@@ -260,6 +261,11 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       throw new Recusa(422, "corpo invalido: esperava JSON");
     }
   };
+
+  if (p.length === 2 && p[0] === "corel" && p[1] === "conferencia") {
+    if (req.method !== "GET") recusaDeRotaDesconhecida(req.method);
+    return await baixarCdrConferencia(req, Deno.env.get("SUPABASE_URL")!);
+  }
 
   // Conferencia do painel web. Somente leitura de protocolo/identidade:
   // nao reserva emissoes nem expoe codigos, base privada ou sal do evento.
