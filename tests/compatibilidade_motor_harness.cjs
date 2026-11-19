@@ -10,6 +10,7 @@ const conferir = contexto.conferirRecursosDoMotor;
 const atualizado = { capabilities: ['texto_banco_contorno_v1', 'escala_modelo_blocos_v1'] };
 const num = { elements: [{ type: 'TEXT', database_text: true, text_stroke_mm: 0.4 }] };
 const bloco = { schema: 'cut_stack', cut_stack_mode: 'strict_assembly', arte_escala_h: 104 };
+const barras = { elements: [{ type: 'BARCODE', barcode_background: 'transparent' }] };
 
 for (const print_mode of ['front', 'duplex', 'duplex_unico', 'pdf_odd_even']) {
     for (const chave of ['numeracao', 'numeracao_2']) {
@@ -35,12 +36,21 @@ for (const payload of [
     { numeracao: { elements: [{ ...num.elements[0], text_stroke_mm: 0 }] } },
     { numeracao: { elements: [{ ...num.elements[0], database_text: false }] } },
     { numeracao: { elements: [{ ...num.elements[0], type: 'FIXED' }] } },
+    { numeracao: { elements: [{ type: 'BARCODE' }] } },
+    { numeracao: { elements: [{ type: 'BARCODE', barcode_background: 'white' }] } },
 ]) assert.doesNotThrow(() => conferir(payload, {}));
+
+for (const modelo of [{ numeracao: barras }, { numeracao_2: barras }]) {
+    for (const payload of [modelo, { multi_artes: [{}, modelo] }]) {
+        assert.throws(() => conferir(payload, atualizado), /fundo transparente/);
+        assert.doesNotThrow(() => conferir(payload, { capabilities: ['barcode_fundo_transparente_v1'] }));
+    }
+}
 
 (async () => {
     // A recusa ocorre na barreira real, antes de consultar pedidos, baixar
     // artes ou enviar ao motor. Nenhuma conexao real e feita neste teste.
-    for (const payload of [bloco, { numeracao: num }, { numeracao_2: num }]) {
+    for (const payload of [bloco, { numeracao: num }, { numeracao_2: num }, { multi_artes: [{ numeracao_2: barras }] }]) {
         const chamadas = [];
         contexto.fetch = async url => {
             chamadas.push(url);
@@ -56,5 +66,5 @@ for (const payload of [
         assert.equal(fd.get('payload'), original);
         assert.equal(chamadas.length, 1);
     }
-    console.log('OK: compatibilidade de contorno, escala, faces e recusa antes do envio');
+    console.log('OK: compatibilidade de contorno, escala, fundo transparente, faces e recusa antes do envio');
 })().catch(error => { console.error(error); process.exitCode = 1; });

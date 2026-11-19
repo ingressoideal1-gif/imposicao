@@ -190,6 +190,11 @@
         const versao = String(info?.version || '').replace(/^NewProd\s+/i, '');
         const artes = dados.multi_artes || [];
         const alvos = artes.length ? artes : [dados];
+        if (!capacidades.includes('barcode_fundo_transparente_v1') && alvos.some(a =>
+            [a.numeracao, a.numeracao_2].some(n => (n?.elements || []).some(e =>
+                e?.type === 'BARCODE' && e.barcode_background === 'transparent')))) {
+            throw new Error('Atualize o NewProd desta estação para gerar códigos de barras com fundo transparente.');
+        }
         const contorno = alvos.some(a => [a.numeracao, a.numeracao_2].some(n =>
             (n?.elements || []).some(e => e?.type === 'TEXT' && e.database_text
                 && Number(e.text_stroke_mm) > 0)));
