@@ -27,8 +27,8 @@ tamanho exato do elemento. Três ganhos de uma vez:
     o recorte sozinho somaria mais de três minutos, numa gráfica em que o tempo
     de imposição é o motivo de o agente existir.
 
-O fundo branco continua: ele é o contraste que o leitor precisa quando o código
-cai sobre arte colorida.
+O fundo branco é o padrão. O modo transparente deixa a arte visível entre as
+barras do código.
 
 Conferido antes de trocar: em todas as simbologias que o motor aceita, a imagem
 antiga desenhava TODAS as barras com a mesma altura (linhas 11 a 188 de 200), sem
@@ -110,33 +110,32 @@ def test_o_codigo_sai_vetorial():
     assert imagens == [], f"o codigo de barras ainda entra como imagem: {imagens}"
 
 
-def test_o_fundo_branco_continua():
-    """Sem ele, um codigo sobre arte colorida perde o contraste que o leitor pede.
-
-    A conferencia e sobre ARTE ESCURA de proposito: numa pagina em branco o
-    fundo transparente e o fundo branco sao indistinguiveis, e o teste passaria
-    dos dois jeitos.
-    """
+@pytest.mark.parametrize("config_fundo, esperado", [
+    ({}, (255, 255, 255)),
+    ({"barcode_background": "white"}, (255, 255, 255)),
+    ({"barcode_background": "transparent"}, (0, 0, 255)),
+    ({"barcode_background": "green"}, (255, 255, 255)),
+])
+def test_o_fundo_do_codigo_sobre_arte_colorida(config_fundo, esperado):
+    """Confere a arte entre as barras e a tinta da barra sobre a arte."""
     import barcode
-    doc = fitz.open()
-    page = doc.new_page(width=400, height=300)
-    page.draw_rect(page.rect, color=None, fill=(0, 0, 0))   # a arte por baixo
-    eng = object.__new__(ImpositionEngine)
-    eng._font_buffer_cache = {}
-    eng._render_element(page, _el(), 0, 0, 1, None)
+    with fitz.open() as doc:
+        page = doc.new_page(width=400, height=300)
+        page.draw_rect(page.rect, color=None, fill=(0, 0, 1))
+        eng = object.__new__(ImpositionEngine)
+        eng._font_buffer_cache = {}
+        eng._render_element(page, _el(**config_fundo), 0, 0, 1, None)
+        pix = page.get_pixmap(dpi=300, colorspace=fitz.csRGB)
 
     padrao = barcode.get("code128", "12345678").build()[0]
-    i_claro = padrao.index("0")
     largura_modulo = LARG_MM * MM2PT / len(padrao)
-    x_pt = CX_PT - (LARG_MM / 2) * MM2PT + (i_claro + 0.5) * largura_modulo
-
-    pix = page.get_pixmap(dpi=300, colorspace=fitz.csRGB)
+    x_inicio = CX_PT - LARG_MM * MM2PT / 2
     esc = 300 / 72.0
-    i = (int(CY_PT * esc) * pix.width + int(x_pt * esc)) * pix.n
-    cor = tuple(pix.samples[i:i + 3])
-    doc.close()
-    assert cor == (255, 255, 255), (
-        f"o espaco entre barras deixou a arte escura aparecer: {cor}")
+    y = int(CY_PT * esc)
+    x_espaco = int((x_inicio + (padrao.index("0") + 0.5) * largura_modulo) * esc)
+    x_barra = int((x_inicio + (padrao.index("1") + 0.5) * largura_modulo) * esc)
+    assert pix.pixel(x_espaco, y) == esperado
+    assert pix.pixel(x_barra, y) == (0, 0, 0)
 
 
 @pytest.mark.parametrize("fmt,dado", [

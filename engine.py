@@ -2684,11 +2684,10 @@ class ImpositionEngine:
             morph = ((fitz.Point(cx, cy), fitz.Matrix(-angle)) if angle else None)
             extra = {"morph": morph} if morph else {}
 
-            # O fundo branco e o contraste que o leitor pede quando o codigo cai
-            # sobre arte colorida. Ele sempre esteve ali (a imagem tinha fundo
-            # branco); some-lo agora seria mudar o papel sem pedir.
-            page.draw_rect(fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt),
-                           color=None, fill=(1, 1, 1), **extra)
+            # Branco por padrao, inclusive nas numeracoes salvas sem a opcao.
+            if el.get("barcode_background") != "transparent":
+                page.draw_rect(fitz.Rect(el_x, el_y, el_x + w_pt, el_y + h_pt),
+                               color=None, fill=(1, 1, 1), **extra)
 
             # Barras vizinhas viram UM retangulo: menos objetos na pagina e, mais
             # importante, sem a fresta que o arredondamento deixaria entre elas.

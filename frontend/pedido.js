@@ -2310,7 +2310,7 @@ function drawPedPreview() {
                         // codifica. O rotulo com o nome da simbologia saiu junto
                         // com o padrao falso: era desenhado FORA da caixa do
                         // elemento, num lugar onde o papel nao tem nada.
-                        window.renderBarcodeOnCtx(ctx, val_str, 0, 0, bw, bh, color, el.barcode_format);
+                        window.renderBarcodeOnCtx(ctx, val_str, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
 
                     } else if (el.type === 'FOTO') {
 

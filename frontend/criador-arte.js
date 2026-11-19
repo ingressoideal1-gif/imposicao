@@ -740,7 +740,7 @@ function renderEditorLayer2Numeracao(num, fmt, face) {
                 const raw = padVal > 0 ? String(start).padStart(padVal, '0') : String(start);
                 bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
-            window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
+            window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
         } else if (el.type === 'PICOTE') {
             ctx.strokeStyle = color;
             ctx.lineWidth = 2.0;

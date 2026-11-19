@@ -5803,7 +5803,7 @@ if (typeof window.renderBarcodeOnCtx !== 'function') {
     window.modulosDoBarcode = function () { return ''; };
     window.renderBarcodeOnCtx = function (ctx, texto, x, y, w, h, cor, formato, corFundo) {
         if (corFundo !== 'transparent') {
-            ctx.fillStyle = corFundo || '#ffffff';
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(x - w / 2, y - h / 2, w, h);
         }
         ctx.strokeStyle = '#ef4444';
@@ -6445,7 +6445,7 @@ function drawElement(ctx, el, S) {
             const raw = padVal > 0 ? String(el.ticket_pos || 1).padStart(padVal, '0') : String(el.ticket_pos || 1);
             bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
         }
-        window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
+        window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
 
         if (isSelected) {
 
@@ -8468,6 +8468,13 @@ function renderElementsList() {
 
                     </select>
 
+                </div>
+
+                <div class="form-group"><label for="barcode-fundo-${el.id}">Fundo</label>
+                    <select id="barcode-fundo-${el.id}" class="form-control" onchange="updateEl('${el.id}','barcode_background',this.value)">
+                        <option value="white" ${el.barcode_background !== 'transparent' ? 'selected' : ''}>Branco</option>
+                        <option value="transparent" ${el.barcode_background === 'transparent' ? 'selected' : ''}>Transparente</option>
+                    </select>
                 </div>
 
                 <div class="form-group"><label>Largura (mm)</label><input class="form-control" type="number" value="${el.width_mm}" min="10" max="200" step="0.5" onchange="updateEl('${el.id}','width_mm',+this.value)"></div>
@@ -12010,7 +12017,7 @@ function drawPreview() {
                         // codifica. O rotulo com o nome da simbologia saiu junto
                         // com o padrao falso: ele era desenhado FORA da caixa do
                         // elemento, num lugar onde o papel nao tem nada.
-                        window.renderBarcodeOnCtx(ctx, val_str, 0, 0, bw, bh, color, el.barcode_format);
+                        window.renderBarcodeOnCtx(ctx, val_str, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
 
                     } else if (el.type === 'FOTO') {
 
@@ -24848,7 +24855,7 @@ window.onAmostraNumeracaoSelect = function() {
                     const raw = padVal > 0 ? String(1).padStart(padVal, '0') : '1';
                     bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
-                window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
+                window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
 
             } else if (el.type === 'PICOTE') {
 
@@ -39038,7 +39045,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
                 bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
-            window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
+            window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
         } else if (el.type === 'PICOTE') {
             ctx.strokeStyle = color;
             ctx.lineWidth = 2.0;
@@ -40109,7 +40116,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     const raw = padVal > 0 ? String(val).padStart(padVal, '0') : String(val);
                     bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
-                window.renderBarcodeOnCtx(numCtx, bcText, 0, 0, bw, bh, color, el.barcode_format);
+                window.renderBarcodeOnCtx(numCtx, bcText, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
             } else if (el.type === 'PICOTE') {
                 numCtx.strokeStyle = color;
                 numCtx.lineWidth = 2.0;
