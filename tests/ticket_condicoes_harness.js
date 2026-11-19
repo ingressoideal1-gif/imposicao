@@ -23,6 +23,7 @@ function assignment(name) {
             await page.setRequestInterception(true);
             page.on('request', r => r.abort());
             await page.setContent(fs.readFileSync(path.join(root, 'frontend', file), 'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
+            await page.addScriptTag({path: path.join(root, 'frontend/barcode-canvas.js')});
             await page.addScriptTag({content:`
                 const state = {numElements:[],numElCounter:0,selectedElIds:[],numHistory:[],numHistoryIndex:-1,numCsvHeaders:[]};
                 const messages = []; function toast(m) {messages.push(m);}
@@ -32,7 +33,7 @@ function assignment(name) {
                 function mountFontPickers() {} function renderBoxArquivos() {}
                 function escapeHtml(s) {return s;} function isElSelected() {return false;}
                 function boxEspacoDoTextoHTML() {return '';}
-                ${['familiaDoElementoDeNumeracao','familiasDaNumeracao','elementoUsaPosicaoTicket','erroDaNumeracaoTicket','atualizarCompatibilidadeDosElementos','prepararTipoParaNovoElemento','renderElementsList'].map(extract).join('\n')}
+                ${['familiaDoElementoDeNumeracao','familiasDaNumeracao','elementoUsaPosicaoTicket','erroDaNumeracaoTicket','atualizarCompatibilidadeDosElementos','prepararTipoParaNovoElemento','renderElementsList','drawElement'].map(extract).join('\n')}
                 ${['onTipoSelect','onTicketQtdChange','addElement','saveNumHistory','undoNumHistory','redoNumHistory','updateEl','duplicateSelectedElements','saveNumeracao'].map(assignment).join('\n')}
             `});
             const result = await page.evaluate(async () => {
@@ -87,8 +88,46 @@ function assignment(name) {
             assert.match(result.invalidDisplayed,/Posição inválida/);
             assert.deepEqual(result.repaired,['2',2,'']);
             assert.equal(result.specialRefused,'TEATRO');
+
+            const barras = await page.evaluate(() => {
+                const elemento = {
+                    id: 'legacy-barcode', type: 'BARCODE', x_mm: 25, y_mm: 10,
+                    width_mm: 40, height_mm: 10, barcode_format: 'code128',
+                    fixed: true, fixed_value: '0001', color: '#183153',
+                };
+                state.numElements = [elemento];
+                renderElementsList();
+                const fundo = document.getElementById('barcode-fundo-legacy-barcode');
+                const canvas = document.createElement('canvas');
+                canvas.width = 500;
+                canvas.height = 200;
+                const ctx = canvas.getContext('2d');
+                const pattern = modulosDoBarcode(elemento.fixed_value, elemento.barcode_format);
+                const pixel = module => Array.from(ctx.getImageData(
+                    50 + Math.floor((pattern.indexOf(module) + 0.5) * 400 / pattern.length), 100, 1, 1
+                ).data);
+                const draw = () => {
+                    ctx.fillStyle = '#80c0e0';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    drawElement(ctx, elemento, 10);
+                    return [pixel('0'), pixel('1')];
+                };
+                const padrao = fundo.value;
+                const branco = draw();
+                fundo.value = 'transparent';
+                fundo.dispatchEvent(new Event('change'));
+                const transparente = draw();
+                renderElementsList();
+                const reaberto = document.getElementById(fundo.id).value;
+                return {padrao, branco, transparente, reaberto, persistido: elemento.barcode_background};
+            });
+            assert.equal(barras.padrao, 'white');
+            assert.equal(barras.persistido, 'transparent');
+            assert.equal(barras.reaberto, 'transparent');
+            assert.deepEqual(barras.branco, [[255,255,255,255], [24,49,83,255]]);
+            assert.deepEqual(barras.transparente, [[128,192,224,255], [24,49,83,255]]);
             await page.close();
         }
-        console.log('OK: condições Ticket, propriedades, redução, histórico e salvamento nas duas páginas.');
+        console.log('OK: condições Ticket e troca do fundo do código de barras nas duas páginas.');
     } finally {await browser.close();}
 })().catch(e => {console.error(e);process.exitCode=1;});

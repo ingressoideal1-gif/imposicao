@@ -2777,7 +2777,7 @@ if (typeof window.renderBarcodeOnCtx !== 'function') {
     window.modulosDoBarcode = function () { return ''; };
     window.renderBarcodeOnCtx = function (ctx, texto, x, y, w, h, cor, formato, corFundo) {
         if (corFundo !== 'transparent') {
-            ctx.fillStyle = corFundo || '#ffffff';
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(x - w / 2, y - h / 2, w, h);
         }
         ctx.strokeStyle = '#ef4444';
@@ -3707,7 +3707,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     const raw = padVal > 0 ? String(val).padStart(padVal, '0') : String(val);
                     bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
                 }
-                window.renderBarcodeOnCtx(numCtx, bcText, 0, 0, bw, bh, color, el.barcode_format);
+                window.renderBarcodeOnCtx(numCtx, bcText, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
             } else if (el.type === 'PICOTE') {
                 numCtx.strokeStyle = color;
                 numCtx.lineWidth = 2.0;
@@ -4396,7 +4396,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 const raw = padVal > 0 ? String(current_val).padStart(padVal, '0') : String(current_val);
                 bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
             }
-            window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format);
+            window.renderBarcodeOnCtx(ctx, bcText, 0, 0, bw, bh, color, el.barcode_format, el.barcode_background);
         } else if (el.type === 'PICOTE') {
             ctx.strokeStyle = color;
             ctx.lineWidth = 2.0;

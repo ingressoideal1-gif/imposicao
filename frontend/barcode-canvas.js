@@ -280,18 +280,15 @@
     /**
      * O codigo de barras centrado em (x, y), ocupando a caixa INTEIRA.
      *
-     * Fundo branco e barras cheias, de ponta a ponta da altura - que e o que o
-     * motor imprime desde que o desenho dele virou vetorial. A caixa e a caixa
+     * Fundo branco por padrao e barras cheias, de ponta a ponta da altura.
+     * Com fundo transparente, a arte aparece entre as barras. A caixa e a caixa
      * das barras: quem pede 12 mm de altura ve 12 mm aqui e recebe 12 mm no
      * papel.
      */
     function renderBarcodeOnCtx(ctx, texto, x, y, w, h, cor, formato, corFundo) {
         var meiaL = w / 2, meiaA = h / 2;
-        // `corFundo === 'transparent'` e para o PDF Gabarito, que e uma folha
-        // transparente por contrato: ali um retangulo branco esconderia a arte
-        // que o gabarito existe para ser sobreposto.
         if (corFundo !== 'transparent') {
-            ctx.fillStyle = corFundo || '#ffffff';
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(x - meiaL, y - meiaA, w, h);
         }
         var padrao;
