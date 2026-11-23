@@ -63,7 +63,9 @@ Onde:
 
 Em **Gerenciamento de Bancos de Dados → Importar CSV por via de Ticket**, selecione o
 modelo TICKET. O CSV precisa conter exatamente `QTD × ticket_qtd` linhas de
-dados após o cabeçalho. A ordem do arquivo define a associação. No Ticket 5,
+dados. Marque **CSV sem cabeçalho** quando a primeira linha já for um
+registro, por exemplo, um arquivo com um link de ticket em cada linha.
+A ordem do arquivo define a associação. No Ticket 5,
 as linhas 1 a 5 alimentam as vias da primeira célula e as linhas 6 a 10
 alimentam as da segunda. Linhas vazias são recusadas para evitar deslocar as vias.
 

@@ -34,9 +34,9 @@ async function verificarImportacao() {
         `let _bancoPedidoPendente; ${funcoes.join('\n')} return { ${nomes.join(', ')} };`)(
         window, state, documento, FileReader, item => item ? num : null,
         item => item?.quantidade || 0, criar, () => 321, () => input, () => {}, () => {});
-    const importar = (texto, modeloId = '101') => {
+    const importar = (texto, semCabecalho = false) => {
         arquivo.texto = texto;
-        teste.subirBancoPeloBox('pedido', modeloId);
+        teste.subirBancoPeloBox('pedido', '101', semCabecalho);
         return teste.subirBancoDoPedido();
     };
     const linhas = Array.from({ length: 10 }, (_, i) => `QR-${i + 1};00${i + 1}`);
@@ -66,6 +66,14 @@ async function verificarImportacao() {
     await teste.subirBancoDoPedido();
     assert.deepEqual(chamadas[1].headers, ['QR', 'Texto']);
     assert.equal(chamadas[1].rows.length, 2);
+
+    const links = linhas.map((_, i) => `https://example.invalid/ticket/${i + 1}`);
+    await assert.rejects(importar([...links, links[0]].join('\n')), /parece conter um link/);
+    await assert.rejects(importar([...links, links[0], links[1]].join('\n'), true), /tem 12.*Sobram 2/);
+    assert.equal(chamadas.length, 2);
+    await importar(links.join('\n'), true);
+    assert.equal(chamadas[2].rows[0]['Ticket 1 · Coluna 1'], links[0]);
+    assert.equal(chamadas[2].rows[1]['Ticket 5 · Coluna 1'], links[9]);
 
     for (const [celulas, vias] of [[1000, 7], [8000, 5]]) {
         const total = celulas * vias;

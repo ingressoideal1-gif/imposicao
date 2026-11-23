@@ -209,6 +209,19 @@
         return mapaLimpo(novo, pedidas, elementos);
     }
 
+    function mostrarCampoNaPrevia(num, item, el, linha, total) {
+        if (num?.tipo !== 'TICKET' || el.fixed || el.source !== 'database'
+                || (el.type !== 'QR' && el.type !== 'TEXT')) return true;
+
+        // Cada linha da prévia representa uma célula física. Um CSV ainda
+        // organizado por via não serve para desenhar a célula do pedido.
+        const qtd = Number(item?.qtd ?? item?.quantidade);
+        if (Number.isSafeInteger(qtd) && qtd > 0 && total !== qtd) return false;
+        const coluna = el.csv_column;
+        return Boolean(coluna && linha && Object.prototype.hasOwnProperty.call(linha, coluna)
+            && String(linha[coluna] ?? '').trim());
+    }
+
     escopo.BancoDoModelo = {
         bancoDoModelo: bancoDoModelo,
         colunaDoModelo: colunaDoModelo,
@@ -216,6 +229,7 @@
         elementosDoModelo: elementosDoModelo,
         elementosSemColunaNoBanco: elementosSemColunaNoBanco,
         numeracaoResolvida: numeracaoResolvida,
+        mostrarCampoNaPrevia: mostrarCampoNaPrevia,
         colunasQueAPecaPede: colunasQueAPecaPede,
         colunasQueFaltam: colunasQueFaltam,
         mapaLimpo: mapaLimpo,

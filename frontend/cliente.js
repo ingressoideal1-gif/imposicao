@@ -3534,11 +3534,12 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // A linha do banco que esta face vai mostrar. Resolvida UMA vez: todos
         // os elementos variaveis da face leem a mesma linha, senao o ingresso
         // sairia com a fila de uma linha e o assento de outra.
-        const _linhaCsv = linhaDaAmostra(item, num);
         // E a PAGINA, pelo mesmo motivo: folhear os ingressos folheia a peca
         // inteira, e nao so os campos que vem do banco. O ingresso 3 do cliente
         // tem a linha 3 do banco E o numero 3 -- e assim que sai no papel.
-        const _pagAmostra = paginaDaAmostra(item, linhasDaAmostra(item, num).length);
+        const linhas = linhasDaAmostra(item, num);
+        const _pagAmostra = paginaDaAmostra(item, linhas.length);
+        const _linhaCsv = linhas[_pagAmostra] || null;
         const _niAmostra = parseInt(
             item?.numeracao_inicio || item?.num_inicial ||
             item?.NUMERACAO_INICIO || 1
@@ -3572,6 +3573,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             } else {
                 if (elFace !== 'front' && elFace !== 'both' && el.type !== 'PICOTE') return;
             }
+            if (window.BancoDoModelo?.mostrarCampoNaPrevia?.(num, item, el, _linhaCsv, linhas.length) === false) return;
 
             let x = el.x_mm * S;
             const y = el.y_mm * S;
@@ -4263,6 +4265,8 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     const seqStart = parseInt(
         item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1
     ) || 1;
+    const linhas = linhasDaAmostra(item, num);
+    const csvRow = linhas[pageNum - 1] || null;
 
     elementosNaOrdemDeComposicao(num.elements).forEach(el => {
         const elFace = el.type === 'PICOTE' ? 'both' : (el.face || 'both');
@@ -4270,6 +4274,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ? (elFace === 'back' || elFace === 'both')
             : (elFace === 'front' || elFace === 'both');
         if (!visivel) return;
+        if (window.BancoDoModelo?.mostrarCampoNaPrevia?.(num, item, el, csvRow, linhas.length) === false) return;
 
         const x = el.x_mm * Sx;
         const y = el.y_mm * Sy;
@@ -4310,11 +4315,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = `${el.prefix || ''}${String(pageNum).padStart(el.pad || 0, '0')}/${String(_lCamB).padStart(el.pad || 0, '0')}`;
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                // A pagina N do PDF mostra a linha N da FATIA deste modelo. Antes
-                // indexava o banco inteiro: um modelo cuja fatia comeca na linha
-                // 601 exibia a linha 1 na primeira pagina.
-                const csvData = linhasDaAmostra(item, num);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (el.database_text) {
                     label = window.formatarTextoDoBanco(el, csvRow ? csvRow[colName] : (el.exemplo || `[${colName || 'coluna'}]`));
                 } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
@@ -4354,8 +4354,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 qrText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = linhasDaAmostra(item, num);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -4381,8 +4379,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 bcText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = linhasDaAmostra(item, num);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -4409,11 +4405,8 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
         } else if (el.type === 'FOTO') {
             // Modo PDF (multipaginas): a pagina N mostra a linha N da FATIA deste
             // modelo, como o texto variavel logo acima.
-            const _linhasFoto = (typeof linhasDaAmostra === 'function')
-                ? linhasDaAmostra(item, num)
-                : (num?.csv_data || item?.csv_data || []);
             if (typeof window.desenharElementoFoto === 'function') {
-                window.desenharElementoFoto(ctx, el, S, false, _linhasFoto[pageNum - 1] || null, null);
+                window.desenharElementoFoto(ctx, el, S, false, csvRow, null);
             }
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             // Sem este ramo, o modo PDF (multipaginas) desenhava todos os outros tipos
