@@ -1,3 +1,6 @@
+import { conteudoDoIngresso, type PlanoModelo } from "../_compartilhado/preparacao_codigos.ts";
+import { hashCodigo } from "../_compartilhado/hash.ts";
+
 /**
  * As pecas da publicacao da faixa que nao tocam em rede nem em banco.
  *
@@ -99,6 +102,34 @@ export function conferirItens(
     }
   }
   return null;
+}
+
+/** A estação envia um ordinal físico por célula. O servidor resolve as vias
+ * convencionais com o mesmo gabarito e ordenação usados na preparação em nuvem.
+ */
+export async function expandirItensTicket(
+  pedido: number,
+  itens: unknown[],
+  planos: ReadonlyMap<number, PlanoModelo>,
+  sal: string,
+): Promise<unknown[]> {
+  const resultado: unknown[] = [];
+  for (const bruto of itens) {
+    const item = bruto as { modelo_id: number; numero: number };
+    const plano = planos.get(Number(item.modelo_id));
+    if (!plano) {
+      resultado.push(item);
+      continue;
+    }
+    const vias = plano.vias?.length ?? 1;
+    const celulas = plano.quantidade / vias;
+    for (let via = 0; via < vias; via++) {
+      const numero = Number(item.numero) + via * celulas;
+      const codigo = conteudoDoIngresso(null, pedido, plano, numero - 1);
+      resultado.push({ modelo_id: plano.modelo, numero, hash: await hashCodigo(codigo, sal) });
+    }
+  }
+  return resultado;
 }
 
 /**

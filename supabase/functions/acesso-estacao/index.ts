@@ -66,12 +66,13 @@ import {
 } from "../_compartilhado/validacao.ts";
 import {
   abrirPedido,
-  modelosLegiveis,
+  fonteDosCodigos,
+  quantidadeDeCredenciais,
   setoresDoPedido,
-  tiragemDoPedido,
 } from "../_compartilhado/pedidos.ts";
 import {
   conferirItens,
+  expandirItensTicket,
   itensDoCorpo,
   linhasDeCredencial,
   LOTE_MAXIMO,
@@ -80,7 +81,7 @@ import {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 import { basePrivada } from "../_compartilhado/preparacao_nuvem.ts";
-import { conteudoDoIngresso } from "../_compartilhado/preparacao_codigos.ts";
+import { conteudoDoIngresso, planoDoModelo, type PlanoModelo } from "../_compartilhado/preparacao_codigos.ts";
 import { hashCodigo } from "../_compartilhado/hash.ts";
 
 const SEGREDO_AGENTE = "ACESSO_AGENTE_SEGREDO";
@@ -119,7 +120,9 @@ async function gravarLote(pedidoIdInt: number, itens: unknown[]): Promise<number
     throw new Recusa(409, "publicacao ja fechada; reabra antes de enviar mais lotes");
   }
 
-  const recusa = conferirItens(pedidoIdInt, itens, await tiragemDoPedido(pedidoIdInt));
+  const fonte = await fonteDosCodigos(pedidoIdInt);
+  const tiragem = Object.fromEntries(fonte.map((m: any) => [m.id, Number(m.quantidade ?? 0)]));
+  const recusa = conferirItens(pedidoIdInt, itens, tiragem);
   if (recusa) throw new Recusa(recusa.status, recusa.detail);
   const contratos = await banco("POST", "rpc/producao_acesso_qr_contratos_obter", { p_pedido: pedidoIdInt });
   const v2 = contratos.filter((c: any) => c.versao === 2);
@@ -142,10 +145,18 @@ async function gravarLote(pedidoIdInt: number, itens: unknown[]): Promise<number
   // entao o item 1 dos tres saiu impresso com o mesmo `000001`. Texto igual e
   // sal igual -- o sal e por pedido -- dao hash igual, e o banco aceitou a
   // IMPRENSA e descartou em silencio a PISTA e o CAMAROTE.
+  const tickets = new Map<number, PlanoModelo>();
+  const selecionados = new Set(itens.map((item: any) => Number(item.modelo_id)));
+  for (const m of fonte) {
+    if (!selecionados.has(Number(m.id)) || m.numeracao?.tipo !== "TICKET") continue;
+    const plano = planoDoModelo(m);
+    if (plano && plano.tipo !== "QR_IDEAL") tickets.set(plano.modelo, plano);
+  }
+  const credenciais = await expandirItensTicket(pedidoIdInt, itens, tickets, linha.sal);
   await banco(
     "POST",
     "producao_acesso_credenciais?on_conflict=chave_dedup",
-    linhasDeCredencial(pedidoIdInt, itens, await setoresDoPedido(pedidoIdInt)),
+    linhasDeCredencial(pedidoIdInt, credenciais, await setoresDoPedido(pedidoIdInt)),
     "resolution=ignore-duplicates,return=minimal",
   );
   return itens.length;
@@ -168,9 +179,9 @@ async function fecharPedido(pedidoIdInt: number): Promise<unknown> {
   const total = await contar(
     `producao_acesso_credenciais?pedido_id_int=eq.${pedidoIdInt}`,
   );
-  const esperado = (await modelosLegiveis(pedidoIdInt))
-    .reduce((s, m) => s + m.quantidade, 0);
+  const esperado = await quantidadeDeCredenciais(pedidoIdInt);
 
+  if (total !== esperado) return { total, esperado, completo: false };
   await banco("PATCH", `producao_acesso_pedidos?pedido_id_int=eq.${pedidoIdInt}`, {
     publicado_em: "now()",
     total_credenciais: total,
@@ -178,7 +189,7 @@ async function fecharPedido(pedidoIdInt: number): Promise<unknown> {
 
   // `completo` e o que o agente olha para decidir se tenta de novo: um lote
   // perdido por rede nao pode passar por publicacao terminada.
-  return { total, esperado, completo: total === esperado };
+  return { total, esperado, completo: true };
 }
 
 /**

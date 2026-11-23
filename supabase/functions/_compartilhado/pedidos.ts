@@ -14,6 +14,7 @@
  */
 import { banco } from "./banco.ts";
 import { idDeNumeracao, numeracaoDoModelo } from "./modelos.ts";
+import { planoDoModelo } from "./preparacao_codigos.ts";
 
 /**
  * 32 bytes sorteados, em hexadecimal. Porte de `qr_ideal.gerar_sal`.
@@ -116,28 +117,11 @@ export async function setoresDoPedido(
   return dono;
 }
 
-/**
- * Os modelos do pedido que a portaria TEM COMO LER, na ordem do ERP.
- *
- * Modelo cuja numeracao nao tem QR, QR Ideal nem codigo de barras nao sobe ao
- * Ideal Control. Regra do usuario, 15/08/2026, sobre o modelo 1000283 do pedido
- * 20508 -- cinquenta ingressos com numeracao que so tem texto e um PDF.
- *
- * Nao e otimizacao: e o que impede o sistema de mentir. Sem o filtro, o modelo
- * aparece como um setor com cinquenta lugares que nunca serao preenchidos, e o
- * pedido se declara ETERNAMENTE INCOMPLETO -- mandando reimprimir papel que
- * esta do jeito que foi contratado.
- *
- * Quem decide o que e legivel e `numeracaoDoModelo`, a MESMA regra que o agente
- * usa para decidir o que publicar.
- */
-export async function modelosLegiveis(pedidoIdInt: number): Promise<
-  { modelo_id: number; nome: string; quantidade: number }[]
-> {
+export async function fonteDosCodigos(pedidoIdInt: number) {
   const modelos = (await banco(
     "GET",
     `pedidos_modelos?id_int=eq.${pedidoIdInt}` +
-      "&select=id,nome_modelo,quantidade,amostra_num_id&order=ordem.asc",
+      "&select=id,nome_modelo,quantidade,numeracao_inicio,amostra_num_id&order=ordem.asc",
   )) ?? [];
 
   const ids: string[] = [...new Set<string>(
@@ -149,15 +133,34 @@ export async function modelosLegiveis(pedidoIdInt: number): Promise<
     for (
       const n of (await banco(
         "GET",
-        `producao_numeracoes?id=in.(${lista})&select=id,elements`,
+        `producao_numeracoes?id=in.(${lista})&select=id,elements,tipo,ticket_qtd`,
       )) ?? []
     ) {
-      numeracoes[String(n.id)] = n.elements;
+      numeracoes[String(n.id)] = n;
     }
   }
 
-  return modelos
-    .filter((m: any) => numeracaoDoModelo(numeracoes[String(m.amostra_num_id)]))
+  return modelos.map((m: any) => ({
+    ...m, inicio: m.numeracao_inicio, numeracao: numeracoes[String(m.amostra_num_id)],
+  }));
+}
+
+/** Quantidade de credenciais da publicação. A tiragem dos setores é física. */
+export async function quantidadeDeCredenciais(pedidoIdInt: number): Promise<number> {
+  return (await fonteDosCodigos(pedidoIdInt)).reduce((total: number, m: any) => {
+    if (!numeracaoDoModelo(m.numeracao?.elements)) return total;
+    const celulas = Number(m.quantidade ?? 0);
+    const plano = m.numeracao?.tipo === "TICKET" && celulas > 0 ? planoDoModelo(m) : null;
+    return total + (plano?.quantidade ?? celulas);
+  }, 0);
+}
+
+/** Os modelos com QR, QR Ideal ou código de barras, na ordem do ERP. */
+export async function modelosLegiveis(pedidoIdInt: number): Promise<
+  { modelo_id: number; nome: string; quantidade: number }[]
+> {
+  return (await fonteDosCodigos(pedidoIdInt))
+    .filter((m: any) => numeracaoDoModelo(m.numeracao?.elements))
     .map((m: any) => ({
       modelo_id: Number(m.id),
       // O setor do evento sai de `nome_modelo`. O campo `setor` de

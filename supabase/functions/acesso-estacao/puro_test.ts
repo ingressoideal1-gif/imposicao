@@ -7,11 +7,14 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
   conferirItens,
+  expandirItensTicket,
   itensDoCorpo,
   linhasDeCredencial,
   LOTE_MAXIMO,
   pedacosDaRota,
 } from "./puro.ts";
+import { hashCodigo } from "../_compartilhado/hash.ts";
+import { planoDoModelo } from "../_compartilhado/preparacao_codigos.ts";
 
 Deno.test("rota: os formatos que o Supabase entrega", () => {
   assertEquals(
@@ -48,6 +51,27 @@ Deno.test("o lote maximo e o mesmo do agente", () => {
 });
 
 const TIRAGEM = { 1000283: 50, 1000284: 3000 };
+
+Deno.test("Ticket: a estação publica as vias a partir de um ordinal físico", async () => {
+  const plano = planoDoModelo({
+    id: 1000283, quantidade: 50, inicio: 1,
+    numeracao: { tipo: "TICKET", ticket_qtd: 2, elements: [
+      { type: "QR", ticket_pos: 2, pad: 4 },
+      { type: "QR", ticket_pos: 1, pad: 4 },
+    ] },
+  })!;
+  const sal = "ab".repeat(32);
+  const outroModelo = { modelo_id: 1000284, numero: 1, hash: "recebido" };
+  const planos = new Map([[plano.modelo, plano]]);
+  const itens = [{ modelo_id: plano.modelo, numero: 50, hash: "legado" }, outroModelo];
+  const esperado = [
+    { modelo_id: plano.modelo, numero: 50, hash: await hashCodigo("0100", sal) },
+    { modelo_id: plano.modelo, numero: 100, hash: await hashCodigo("0099", sal) },
+    outroModelo,
+  ];
+  assertEquals(await expandirItensTicket(20508, itens, planos, sal), esperado);
+  assertEquals(await expandirItensTicket(20508, itens, planos, sal), esperado);
+});
 
 Deno.test("trava: modelo de outro pedido e recusado", () => {
   const r = conferirItens(20508, [{ modelo_id: 999, numero: 1, hash: "x" }], TIRAGEM);
