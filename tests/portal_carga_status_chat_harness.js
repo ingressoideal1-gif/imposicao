@@ -88,7 +88,7 @@ function ambiente(opcoes = {}) {
     vm.createContext(c);
     const regras = cliente.slice(cliente.indexOf('const STATUS_MODELO_APROVADO_PARA_PEDIDO'),
         cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
-    vm.runInContext(regras + '\n' + ['numeracoesDoCliente', 'rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
+    vm.runInContext(regras + '\n' + ['numeracoesDoCliente', 'idClienteTitularPortal', 'rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
         'desenharSecaoArte', 'registrarChatCliente', 'clienteFinalizarFluxo', 'decisionAmostraItem',
         'saveAmostraToDB', 'sincronizarStatusConsolidadoPedidoArteCliente'].map(n => funcao(cliente, n)).join('\n')
         + '\n' + ['semAcento', 'seloDoStatus'].map(n => funcao(shell, n)).join('\n'), c);
@@ -105,9 +105,15 @@ async function testar(nome, executar) { await executar(); total++; console.log('
                 { id_cliente: 14, tipo_relacao: 'Titular' }
             ]
         } });
+        a.tabelas.producao_numeracoes.push(
+            { id: 'do-titular', Cli_Num: 14, is_custom: true },
+            { id: 'do-fiscal', Cli_Num: 99, is_custom: true }
+        );
         await a.c.initClientePage('123', 'sintetico');
         assert.equal(a.campos['cliente-pedido-cliente'].textContent, 'Cliente Exemplo - 14');
         assert.equal(a.c.state.ordens[0].cliente, 'Cliente Exemplo');
+        assert.ok(a.c.state.numeracoes.some(n => n.id === 'do-titular'));
+        assert.ok(!a.c.state.numeracoes.some(n => n.id === 'do-fiscal'));
         a.c.state.osItens[a.osId] = [];
         vm.runInContext(funcao(cliente, 'renderAmostrasOSItens'), a.c);
         await a.c.renderAmostrasOSItens(a.osId);
@@ -117,6 +123,7 @@ async function testar(nome, executar) { await executar(); total++; console.log('
         const a = ambiente();
         await a.c.initClientePage('123', 'sintetico');
         assert.equal(a.campos['cliente-pedido-cliente'].textContent, 'Cliente teste');
+        assert.equal(a.c.clienteState.idCliente, null);
     });
     for (const opcoes of [{ portalNulo: true }, { erroLink: true }, { miolo: true }, { mioloVazio: true },
         ...['pedidos_modelos', 'pedidos_artes', 'produtos_proposta', 'producao_cores', 'producao_numeracoes',

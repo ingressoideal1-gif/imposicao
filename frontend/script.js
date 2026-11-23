@@ -10000,6 +10000,14 @@ function numeracaoEhCompartilhadaDoCliente(n) {
 }
 window.numeracaoEhCompartilhadaDoCliente = numeracaoEhCompartilhadaDoCliente;
 
+/** O painel normaliza o comprador em numero_cliente. Pedidos brutos e IdGen trazem id_cliente. */
+function idClienteComercialDoPedido(os) {
+    if (!os) return null;
+    return Object.prototype.hasOwnProperty.call(os, 'numero_cliente')
+        ? (os.numero_cliente ?? null)
+        : (os.id_cliente ?? null);
+}
+
 /**
  * ── A numeração exclusiva sai LARANJA no dropdown do modelo (28/09/2026) ────
  *
@@ -27411,11 +27419,8 @@ async function carregarOrdensDados(opcoes = {}) {
                     cliente: clienteProposta,
                     vendedor: vendedorProposta,
                     id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
-                    // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
-                    // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
-                    // existe, porque serve para buscar dados de faturamento e para casar as
-                    // numerações do cliente. Os dois quase sempre coincidem, mas divergem
-                    // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
+                    // Cadastro comercial usado no título e no vínculo de numerações.
+                    // O id_cliente da ordem normalizada atende os fluxos de faturamento.
                     numero_cliente: propReal?.id_cliente ?? null,
                     data_liberacao: os.data_liberacao || os.created_at,
                     // Sem prazo real, a coluna mostra "--". Ver propostas_os acima.
@@ -27443,11 +27448,7 @@ async function carregarOrdensDados(opcoes = {}) {
                         cliente: clienteProposta,
                         vendedor: vendedorProposta,
                         id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
-                        // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
-                        // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
-                        // existe, porque serve para buscar dados de faturamento e para casar as
-                        // numerações do cliente. Os dois quase sempre coincidem, mas divergem
-                        // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
+                        // Cadastro comercial usado no título e no vínculo de numerações.
                         numero_cliente: propReal?.id_cliente ?? null,
                         status_arte: pedidoReal?.status_arte || os.status_arte || null,
                         status_interno: propReal?.status_interno || os.status_interno || null
@@ -28120,11 +28121,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
                 cliente: cliente,
                 vendedor: vendedor,
                 id_cliente: propReal?.id_faturado || propReal?.id_cliente || null,
-                // O NÚMERO do cliente, que é o que aparece ao lado do nome. Não é o
-                // mesmo que o `id_cliente` acima: aquele cai no `id_faturado` quando
-                // existe, porque serve para buscar dados de faturamento e para casar as
-                // numerações do cliente. Os dois quase sempre coincidem, mas divergem
-                // de verdade — o pedido 20940 é do cliente 43520 e fatura no 66163.
+                // Cadastro comercial usado no título e no vínculo de numerações.
                 numero_cliente: propReal?.id_cliente ?? null,
                 data_liberacao: dataLiberacao,
                 data_pedido: dataPedido,
@@ -36033,7 +36030,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
     const osNum = os ? (os.numero || os.id_int || os.id) : osId;
     const containerId = state.amostrasContainerId || 'amostras-itens-container';
     const container = document.getElementById(containerId);
-    const idCliente = os ? os.id_cliente : null;
+    const idCliente = idClienteComercialDoPedido(os);
 
     const banner = document.getElementById(containerId === 'amostras-itens-container' ? 'amostras-os-banner' : 'cliente-os-banner');
     const avulsa = document.getElementById('amostra-combinada-avulsa');
@@ -37836,7 +37833,7 @@ function onItemCorSelect(idx, osId, itemId, isInitialLoad = false) {
     const curNumVal = numSelect.value;
     const corFormatoId = cor ? cor.formato_id : null;
     const os = typeof findOSInState === 'function' ? findOSInState(osId) : state.ordens.find(o => o.id === osId);
-    const idCliente = os ? os.id_cliente : null;
+    const idCliente = idClienteComercialDoPedido(os);
 
     const filteredNums = (state.numeracoes || []).filter(n => {
         // Sempre exibe a numeração atualmente selecionada (para não sumir do select)
@@ -41200,7 +41197,7 @@ function editCustomNumeracao(idx, osId, itemId) {
     
     const os = window.IDGEN_CONTEXTO ? window.IdGenEditor.pedido(osId)
         : (state.ordens || []).find(o => String(o.id) === String(osId) || String(o.id_int) === String(osId));
-    const cliNum = os ? os.id_cliente : null;
+    const cliNum = idClienteComercialDoPedido(os);
 
     // Set custom state
     window.customNumeracaoEditState = {
@@ -41591,7 +41588,7 @@ window.showClienteNumeracoesModal = function(fieldId, forceIdCliente = null) {
         if (activeOSItem) {
             const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
             console.log('[showClienteNumeracoesModal] Found OS:', os);
-            if (os) idCliente = os.id_cliente;
+            idCliente = idClienteComercialDoPedido(os);
         }
     }
     
@@ -41666,7 +41663,7 @@ window.editImposicaoCustomNumeracao = async function(fieldId) {
     let cliNum = null;
     if (activeOSItem) {
         const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
-        if (os) cliNum = os.id_cliente;
+        cliNum = idClienteComercialDoPedido(os);
     }
 
     // Configura o state para que no saveNumeracao volte para Imposição

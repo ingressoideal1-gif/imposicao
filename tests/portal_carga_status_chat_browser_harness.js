@@ -15,7 +15,7 @@ function funcao(nome) {
 }
 const regras = cliente.slice(cliente.indexOf('const STATUS_MODELO_APROVADO_PARA_PEDIDO'),
     cliente.indexOf('async function sincronizarStatusConsolidadoPedidoArteCliente'));
-const codigo = regras + '\n' + ['numeracoesDoCliente', 'rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
+const codigo = regras + '\n' + ['numeracoesDoCliente', 'idClienteTitularPortal', 'rotuloClientePortal', 'initClientePage', 'mostrarErroDeCargaCliente', 'carregarMioloDasNumeracoes',
     'desenharSecaoArte', 'avisoDaArte', 'registrarChatCliente', 'clienteFinalizarFluxo', 'clienteAprovarTudo',
     'saveAmostraToDB', 'sincronizarStatusConsolidadoPedidoArteCliente', 'escapeHtml',
     'decisionAmostraItem', 'seguirSozinhoSeAprovouTudo', 'mostrarProximaEtapaAposArte'].map(funcao).join('\n');

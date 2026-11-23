@@ -163,16 +163,13 @@ function populatePedNumeracoes() {
     if (activeOSItem) {
         currentItemId = activeOSItem.itemId;
         const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
-        if (os) {
-            currentClientId = os.id_cliente;
-        }
+        currentClientId = idClienteComercialDoPedido(os);
     }
 
     const item = typeof itemAtivoDoPedido === 'function' ? itemAtivoDoPedido() : null;
     const vinculadaId = typeof numeracaoIdDoItem === 'function' ? numeracaoIdDoItem(item) : null;
 
-    // O cliente de faturamento pode diferir do dono do gabarito ja vinculado.
-    // Preserve somente esse vinculo, sem dispensar a compatibilidade de formato.
+    // O vínculo persistido tem prioridade. O formato continua sendo conferido.
     let filteredNums = state.numeracoes.filter(n => {
         const vinculada = vinculadaId != null && String(n.id) === String(vinculadaId);
         // Filtro de customizada por cliente / item
@@ -5919,7 +5916,7 @@ window.editPedidoCustomNumeracao = async function(fieldId) {
     if (activeOSItem) {
         const os = (state.ordens || []).find(o => String(o.id) === String(activeOSItem.osId) || String(o.id_int) === String(activeOSItem.osId));
         console.log('[editPedidoCustomNumeracao] Found OS:', os);
-        if (os) cliNum = os.id_cliente;
+        cliNum = idClienteComercialDoPedido(os);
     }
     console.log('[editPedidoCustomNumeracao] resolved cliNum:', cliNum);
 

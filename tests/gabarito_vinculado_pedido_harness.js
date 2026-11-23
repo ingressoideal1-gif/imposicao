@@ -17,15 +17,17 @@ function extract(file, name) {
         page.on('request', r => r.abort());
         await page.setContent('<select id="ped-formato"><option value="f">Formato</option><option value="outro">Outro</option></select><select id="ped-numeracao"></select><select id="ped-numeracao-2"></select>');
         await page.addScriptTag({content: `
-            const state = {ordens:[{id:1, id_cliente:20}], formatos:[{id:'f',name:'Formato'}],
+            const state = {ordens:[{id:1, numero_cliente:20, id_cliente:40}], formatos:[{id:'f',name:'Formato'}],
                 osItens:{1:[{id:1,amostra_num_id:'nomes'}, {id:2,amostra_num_id:'sem'},
                     {id:3,amostra_num_id:'nomes'}, {id:4,amostra_num_id:'sem'}, {id:5,amostra_num_id:'vip'}]},
                 numeracoes:['nomes','sem','vip','alheio'].map(id => ({id,name:id,is_custom:true,Cli_Num:10,formato_id:'f'}))};
             state.numeracoes.push({id:'comum',name:'Comum',formato_id:'f'},
                 {id:'do-cliente',name:'Cliente atual',Cli_Num:20,formato_ids:['f']},
+                {id:'do-faturamento',name:'Faturamento',Cli_Num:40,formato_ids:['f']},
                 {id:'por-item',name:'Item',is_custom:true,os_item_id:1,formato_id:'f'});
             ${extract('script.js', 'itemAtivoDoPedido')}
             ${extract('script.js', 'numeracaoIdDoItem')}
+            ${extract('script.js', 'idClienteComercialDoPedido')}
             ${extract('pedido.js', 'populatePedNumeracoes')}
             window.s = state;
         `});
@@ -42,6 +44,7 @@ function extract(file, name) {
             }, itemId);
             assert.equal(result.selected, result.id, 'gabarito vinculado permanece selecionavel');
             assert(!result.options.includes('alheio'));
+            assert(!result.options.includes('do-faturamento'));
             assert(result.options.includes('comum') && result.options.includes('do-cliente'));
             assert.equal(result.options.includes('por-item'), itemId === 1);
             assert.deepEqual(result.second, result.options);
