@@ -4,6 +4,7 @@ const path = require('node:path');
 
 global.window = {};
 require('../frontend/csv-editor.js');
+require('../frontend/banco-do-modelo.js');
 const script = fs.readFileSync(path.join(__dirname, '../frontend/script.js'), 'utf8');
 const nomes = ['agruparBancoPorViaDeTicket', 'subirBancoPeloBox', 'subirBancoDoPedido'];
 const funcoes = nomes.map(nome => {
@@ -84,6 +85,14 @@ async function verificarImportacao() {
         assert.equal(agrupado.rows.length, celulas);
         assert.equal(agrupado.rows.at(-1)[`Ticket ${vias} · QR`], String(total));
     }
+    const seteVias = { tipo: 'TICKET', ticket_qtd: 7, elements:
+        [7, 3, 4, 5, 2, 6, 1].map(ticket_pos => ({ type: 'QR', source: 'database', csv_column: 'QR', ticket_pos })) };
+    const registros = Array.from({ length: 7000 }, (_, i) => ({ QR: 'código-' + (i + 1) }));
+    const resolvida = window.BancoDoModelo.numeracaoResolvida(seteVias,
+        { csv_headers: ['QR'], csv_data: registros }, null, { quantidade: 1000 });
+    assert.equal(resolvida.csv_data.length, 1000);
+    assert.equal(resolvida.csv_data.at(-1)[resolvida.elements[0].csv_column], 'código-7000');
+    assert.equal(resolvida.csv_data[0][resolvida.elements[1].csv_column], 'código-3');
     process.stdout.write(JSON.stringify(banco));
 }
 

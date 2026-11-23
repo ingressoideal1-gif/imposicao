@@ -35,6 +35,24 @@ const a = { id: 501 }, b = { id: 502 };
     assert.notEqual(na, nb, 'modelos isolados');
     assert.equal(p.resolver({ id: 503 }, num), num, 'legado conserva referência');
     assert.equal(p.problema(a, num), '');
+    const ticket = { id: 'ticket', tipo: 'TICKET', ticket_qtd: 2, elements: [2, 1].map(via => ({
+        id: 'q' + via, type: 'QR', source: 'database', ticket_pos: via
+    })) };
+    const bancoTicket = { csv_headers: ['Link'], csv_data: [100, 101, 102, 103, 104].map(n =>
+        ({ Link: 'https://example.invalid/ticket/' + n })) };
+    const respostaTicket = rows => ({ ...resposta(), modelos: [{
+        modelo_id: '501', banco: { ...bancoTicket, csv_data: rows },
+        csv_mapa: { 'el:q1': 'Link', 'el:q2': 'Link' }
+    }] });
+    const itemTicket = { ...a, quantidade: 2, numeracao_inicio: 100 };
+    await p.carregar('123', 'sintetico', async () => respostaTicket(bancoTicket.csv_data));
+    const elaborada = p.resolver(itemTicket, ticket);
+    assert.equal(elaborada.csv_data.length, 2);
+    assert.equal(elaborada.elements[0].csv_column, 'Ticket 2 · Link');
+    assert.match(elaborada.csv_data[1][elaborada.elements[0].csv_column], /103$/);
+    assert.equal(p.problema(itemTicket, elaborada), '');
+    assert.match(p.problema({ ...itemTicket, numeracao_inicio: 98 }, ticket), /excedentes/);
+    await p.carregar('123', 'sintetico', async () => resposta());
     assert.ok(p.problema({ id: 999 }, num), 'modelo não autorizado');
     const semColuna = { ...num, elements: [{ id: 'desconhecido', source: 'database' }] };
     assert.ok(p.problema(a, semColuna), 'mapa incompleto bloqueia conferência');
