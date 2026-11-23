@@ -15,7 +15,15 @@ const moduleSource=source.slice(source.indexOf('/* Contato selecionado na Lista 
  window.chamadas=[];window.erroNaConsulta=false;
  const a={contato_id:'guru#'+'a'.repeat(24),nome:'Contato A',whatsapp:'5511999990000'};
  const b={contato_id:'guru#'+'b'.repeat(24),nome:'<img src=x onerror=alert(1)>',whatsapp:'5511888880000'};
- window.cadastros={11:{pedido:11,...b,valido:true,opcoes:[a,b]},12:{pedido:12,valido:false,opcoes:[a,b]},13:{pedido:13,valido:false,opcoes:[]}};
+ const pedido={nome:'<img src=x onerror=alert(1)> Contato do cadastro',whatsapp:'5511955550000'};
+ const contatoConfirmado={...a,nome:'Nome registrado no pedido'};
+ window.cadastros={
+  11:{pedido:11,...b,valido:true,opcoes:[a,b]},
+  12:{pedido:12,valido:false,opcoes:[a,b]},
+  13:{pedido:13,valido:false,opcoes:[]},
+  14:{pedido:14,...pedido,valido:false,opcoes:[{...pedido,origem:'pedido'}]},
+  15:{pedido:15,...contatoConfirmado,valido:true,opcoes:[{...contatoConfirmado,origem:'pedido'}]}
+ };
  window.fetch=async(url,op)=>{
   const acao=url.split('/').pop(),dados=JSON.parse(op.body);chamadas.push({acao,dados});
   if(erroNaConsulta)return {ok:false,json:async()=>({detail:'Erro simulado'})};
@@ -23,7 +31,7 @@ const moduleSource=source.slice(source.indexOf('/* Contato selecionado na Lista 
  };
  `+moduleSource});
  await page.evaluate(async()=>{
-  const ordens=[11,12,13].map(numero=>({id:'vibe_'+numero,numero}));
+  const ordens=[11,12,13,14,15].map(numero=>({id:'vibe_'+numero,numero}));
   document.querySelector('#linhas').innerHTML=ordens.map(o=>'<tr><td data-contato-os="'+o.id+'" data-contato-arte="'+o.numero+'">'+ContatosListaArte.html(o)+'</td><td>'+ContatosListaArte.botaoWhatsapp(o)+'</td></tr>').join('');
   await ContatosListaArte.carregar(ordens);await ContatosListaArte.carregar(ordens);
  });
@@ -36,6 +44,10 @@ const moduleSource=source.slice(source.indexOf('/* Contato selecionado na Lista 
  assert.match(await page.$eval('[data-contato-arte="11"] [role="status"]',e=>e.textContent),/Comprador definido no Vibe/);
  assert.equal(await page.$eval('[data-contato-arte="12"] select',e=>e.value),'');
  assert.match(await page.$eval('[data-contato-arte="12"] select',e=>e.selectedOptions[0].textContent),/Confira o comprador no Vibe/);
+ assert.match(await page.$eval('[data-contato-arte="14"]',e=>e.textContent),/Contato do cadastro — 5511955550000/);
+ assert.match(await page.$eval('[data-contato-arte="14"] [role="status"]',e=>e.textContent),/Envio indisponível no 3478/);
+ assert.match(await page.$eval('[data-contato-arte="15"]',e=>e.textContent),/Nome registrado no pedido — 5511999990000/);
+ assert.equal(await page.$eval('[data-contato-arte="15"] [role="status"]',e=>e.textContent),'Contato do pedido');
  assert.equal(await page.$$eval('select[onchange]',s=>s.length),0);
  await page.evaluate(async()=>{erroNaConsulta=true;await ContatosListaArte.recarregar('11');});
  assert.match(await page.$eval('[data-contato-arte="11"]',e=>e.textContent),/Recarregar contato/);
@@ -49,5 +61,5 @@ const moduleSource=source.slice(source.indexOf('/* Contato selecionado na Lista 
  assert.ok(await page.evaluate(()=>chamadas.every(c=>c.acao==='consultar')));
  await page.click('[aria-label="Enviar link pelo WhatsApp"]');assert.equal(await page.evaluate(()=>abriu),'vibe_11');
  assert.deepEqual(errors,[]);
- console.log('OK: dropdown somente leitura, comprador do Vibe, vazio, recarga, XSS e abertura do envio');
+ console.log('OK: comprador do Vibe, contato do pedido, envio indisponível, recarga, XSS e diálogo');
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exitCode=1;});

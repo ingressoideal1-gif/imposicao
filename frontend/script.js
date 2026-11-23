@@ -49994,6 +49994,11 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         if (!item) return '<span style="color:var(--text-dim)">Carregando contato…</span>';
         if (item.erro) return `<button class="btn btn-sm" onclick="ContatosListaArte.recarregar('${n}')" title="Tentar consultar novamente">Recarregar contato</button>`;
         const c = item.dados, opcoes = c?.opcoes || [];
+        if (opcoes[0]?.origem === 'pedido') {
+            const contato = [c.nome, c.whatsapp].filter(Boolean).map(escapeHtml).join(' — ');
+            const origem = c.valido ? 'Contato do pedido' : 'Contato do pedido · Envio indisponível no 3478';
+            return `<span>${contato}</span><span role="status" style="display:block;font-size:.75rem;color:var(--text-dim)">${origem}</span>`;
+        }
         if (!opcoes.length) return '<span style="color:#fbbf24">Sem contato no Guru 3478. Confira o comprador no Vibe.</span>';
         const atributo = v => escapeHtml(String(v)).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         return `<select class="form-control" aria-label="Contato WhatsApp do pedido ${n}" style="width:100%;min-width:170px;max-width:260px;min-height:36px" disabled>` +
@@ -50065,7 +50070,7 @@ window.EntregasAcesso = { consultar:false, editar:false, geracao:0,
         modal.setAttribute('aria-label', 'Enviar arte pelo WhatsApp');
         modal.style.cssText = 'width:min(560px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid #475569;border-radius:14px;padding:24px;background:#172033;color:#fff;';
         modal.innerHTML = `<h3>Enviar arte pelo WhatsApp</h3>
-            <p data-contato></p><p>O destinatário é o comprador selecionado no Vibe. Se mudar o comprador, reabra esta janela.</p>
+            <p data-contato></p><p>Confira o destinatário. Se o contato do pedido mudar, reabra esta janela.</p>
             <pre data-texto style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit"></pre>
             <p data-status role="status" aria-live="polite"></p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">

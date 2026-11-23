@@ -3,11 +3,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
 (async()=>{const db=await PGlite.create();try{
  await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role BYPASSRLS;
  CREATE TABLE propostas(id_int bigint PRIMARY KEY,id_cliente bigint,id_contato text,chatguru_chat_id text);
- CREATE TABLE contatos(id bigint PRIMARY KEY,id_cliente bigint,whats text);
+ CREATE TABLE contatos(id bigint PRIMARY KEY,id_cliente bigint,whats text,nome_contato text);
  CREATE TABLE chatguru_contatos_importados(fonte text,chat_id text,telefone_valido boolean,cadastro timestamp,ultima_mensagem timestamp,origem_em timestamptz);
  CREATE TABLE chatguru_contatos_3478(fonte text,chat_id text,codigo_cliente text,nome_chatguru text,telefone_normalizado text,whatsapp_remetente text);
  INSERT INTO propostas(id_int,id_cliente,id_contato) VALUES(11,1,'7'),(12,1,'7'),(13,2,NULL),(14,3,NULL);
- INSERT INTO contatos VALUES(7,1,'11999990000');
+ INSERT INTO contatos VALUES(7,1,'11999990000','Contato comercial A');
  INSERT INTO chatguru_contatos_3478 VALUES
  ('guru','aaaaaaaaaaaaaaaaaaaaaaaa','1','Contato A','5511999990000','555195343478'),
  ('guru','bbbbbbbbbbbbbbbbbbbbbbbb','1','Contato B','5511888880000','555195343478'),
@@ -59,8 +59,63 @@ const fs=require('node:fs'),assert=require('node:assert/strict');
  assert.equal((await read()).valido,false,'contato removido exige conferência no Vibe');
  await db.exec("UPDATE propostas SET chatguru_chat_id='bbbbbbbbbbbbbbbbbbbbbbbb' WHERE id_int=11");
  assert.equal((await read()).nome,'Contato B','a leitura reflete uma nova escolha no Vibe');
+
+ await db.exec('RESET ROLE');
+ await db.exec(fs.readFileSync('sql/lista_arte_contatos_guru_contato_pedido.sql','utf8'));
+ await db.exec(`
+  UPDATE chatguru_contatos_3478 SET codigo_cliente='1' WHERE chat_id='aaaaaaaaaaaaaaaaaaaaaaaa';
+  UPDATE propostas SET chatguru_chat_id='   ' WHERE id_int=12;
+  INSERT INTO contatos VALUES
+   (8,1,'(11) 95555-0000','Contato sem conversa no Guru'),
+   (9,2,'+55 11 99999-0000','Contato de outro cliente'),
+   (10,1,'00000000000','Contato com telefone inválido'),
+   (11,3,'+55 (11) 94444-0000','Contato de cliente sem opções');
+  INSERT INTO propostas(id_int,id_cliente,id_contato) VALUES
+   (15,1,'8'),(16,1,'9'),(17,1,'10'),(18,1,'999'),(19,3,'11');
+  SET ROLE service_role;
+ `);
+ const apenasContatoPedido = await read(15);
+ assert.equal(apenasContatoPedido.nome,'Contato sem conversa no Guru');
+ assert.equal(apenasContatoPedido.whatsapp,'5511955550000');
+ assert.equal(apenasContatoPedido.valido,false);
+ assert.equal(apenasContatoPedido.contato_id,null);
+ assert.equal(apenasContatoPedido.opcoes[0].origem,'pedido');
+ const contatoConfirmado = await read(12);
+ assert.equal(contatoConfirmado.nome,'Contato comercial A');
+ assert.equal(contatoConfirmado.whatsapp,'5511999990000');
+ assert.equal(contatoConfirmado.contato_id,'guru#aaaaaaaaaaaaaaaaaaaaaaaa');
+ assert.equal(contatoConfirmado.guru_disponivel,true);
+ assert.equal(contatoConfirmado.valido,true);
+ assert.equal(contatoConfirmado.opcoes[0].origem,'pedido');
+ assert.equal((await read(11)).nome,'Contato B','Vibe válido prevalece sobre o contato do pedido');
+ for (const pedido of [16,18]) {
+  const semContato = await read(pedido);
+  assert.equal(semContato.nome,null);
+  assert.equal(semContato.whatsapp,null);
+  assert.equal(semContato.valido,false);
+ }
+ assert.equal((await read(17)).nome,'Contato com telefone inválido');
+ assert.equal((await read(17)).whatsapp,null);
+ assert.equal((await read(19)).whatsapp,'5511944440000','exibe o cadastro mesmo sem opções 3478');
+ await db.exec("UPDATE propostas SET chatguru_chat_id='dddddddddddddddddddddddd' WHERE id_int=12");
+ assert.equal((await read(12)).nome,'Contato comercial A');
+ assert.equal((await read(12)).valido,false,'Vibe selecionado fora do 3478 bloqueia o envio');
+ await db.exec('RESET ROLE');
+ await db.exec(`
+  UPDATE propostas SET chatguru_chat_id=NULL WHERE id_int=12;
+  INSERT INTO chatguru_contatos_3478 VALUES ('guru','eeeeeeeeeeeeeeeeeeeeeeee','1','Chat duplicado','5511999990000','555195343478');
+  INSERT INTO chatguru_contatos_importados VALUES ('guru','eeeeeeeeeeeeeeeeeeeeeeee',true,'2020-01-01',NULL,'2026-01-01');
+  SET ROLE service_role;
+ `);
+ assert.equal((await read(12)).valido,false,'duas conversas com o mesmo número bloqueiam o envio');
+ assert.equal((await read(12)).nome,'Contato comercial A');
+ await assert.rejects(()=>select(contatoConfirmado,contatoConfirmado.contato_id),/Altere o comprador no Vibe/);
  for(const role of ['anon','authenticated']){
   await db.exec('RESET ROLE;SET ROLE '+role);await assert.rejects(()=>read(),/permission denied/);
  }
- console.log('OK: comprador exclusivo do Vibe, cliente e remetente 3478, vínculo removido, histórico preservado e escrita recusada');
+ await db.exec('RESET ROLE');
+ await db.exec(fs.readFileSync('sql/lista_arte_contatos_guru_vibe.sql','utf8'));
+ await db.exec('SET ROLE service_role');
+ assert.equal((await read(12)).nome,null,'reaplicar a versão anterior reverte o contato do pedido');
+ console.log('OK: comprador do Vibe, contato do pedido, validação do destinatário, permissões e reversão');
 }finally{await db.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
