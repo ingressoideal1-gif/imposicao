@@ -1399,13 +1399,16 @@ async function registrarChatCliente(mensagem) {
     }
 }
 
-/** Nome comercial e número do titular; pedido.id_cliente é o cadastro fiscal. */
-function rotuloClientePortal(portal) {
-    const nome = String(portal?.pedido?.cliente || '').trim();
+function idClienteTitularPortal(portal) {
     const cadastros = Array.isArray(portal?.cadastros_faturamento) ? portal.cadastros_faturamento : [];
     const titular = cadastros.find(c => String(c?.tipo_relacao || '').trim().toLowerCase() === 'titular');
-    const numero = String(titular?.id_cliente ?? '').trim();
-    return nome && numero ? `${nome} - ${numero}` : nome || numero;
+    return String(titular?.id_cliente ?? '').trim() || null;
+}
+
+function rotuloClientePortal(portal) {
+    const nome = String(portal?.pedido?.cliente || '').trim();
+    const numero = idClienteTitularPortal(portal);
+    return nome && numero ? `${nome} - ${numero}` : nome || numero || '';
 }
 
 /**
@@ -1485,7 +1488,7 @@ async function initClientePage(numero, token) {
         await window.PortalBancos.carregar(numero, token, carregarBancosDoPortal);
         bancoDesenhosCliente.clear();
         const osCliente = (portal && portal.pedido && portal.pedido.cliente) || '';
-        clienteState.idCliente = (portal && portal.pedido && portal.pedido.id_cliente) || null;
+        clienteState.idCliente = idClienteTitularPortal(portal);
 
         const clienteCabecalho = rotuloClientePortal(portal);
         if (clienteEl) clienteEl.textContent = clienteCabecalho;

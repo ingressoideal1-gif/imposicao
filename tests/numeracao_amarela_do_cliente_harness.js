@@ -38,12 +38,26 @@ function extrair(nome) {
     return SCRIPT.slice(i, fim + 2);
 }
 
-const NOMES = ['numeracaoEhDoCliente', 'opcaoDeNumeracaoDoModelo', 'pintarSelectDeNumeracao'];
+const NOMES = ['idClienteComercialDoPedido', 'numeracaoEhDoCliente', 'opcaoDeNumeracaoDoModelo', 'pintarSelectDeNumeracao'];
 const api = new Function('window',
     NOMES.map(extrair).join('\n') + '\nreturn { ' + NOMES.join(', ') + ' };'
 )({});
 
-const { numeracaoEhDoCliente, opcaoDeNumeracaoDoModelo, pintarSelectDeNumeracao } = api;
+const { idClienteComercialDoPedido, numeracaoEhDoCliente, opcaoDeNumeracaoDoModelo, pintarSelectDeNumeracao } = api;
+
+(function buscaPeloCompradorDoPedido() {
+    const a = { numero_cliente: 30, id_cliente: 51 };
+    const b = { numero_cliente: '30', id_cliente: 52 };
+    const numeracao = { id: 'n1', Cli_Num: 30 };
+    for (const pedido of [a, b]) {
+        ok(numeracaoEhDoCliente(numeracao, idClienteComercialDoPedido(pedido)),
+            'mesma numeração nos pedidos do comprador com faturamento diferente');
+    }
+    ok(idClienteComercialDoPedido({ numero_cliente: null, id_cliente: 51 }) === null,
+        'comprador ausente em ordem normalizada não usa o cadastro fiscal');
+    ok(idClienteComercialDoPedido({ id_cliente: 30 }) === 30,
+        'pedido bruto usa seu próprio cliente');
+})();
 
 // ─── Quem e do cliente ───────────────────────────────────────────────────────
 
