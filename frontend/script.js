@@ -19547,7 +19547,9 @@ async function subirBancoDoPedido() {
 
     const porVia = alvo.modeloTicketId != null;
     const parsed = porVia
-        ? window.CsvEditor.parseCsv(texto, undefined, { preservarLinhasVazias: true })
+        ? window.CsvEditor.parseCsv(texto, undefined, {
+            preservarLinhasVazias: true, semCabecalho: alvo.semCabecalho
+        })
         : window.CsvEditor.parseCsv(texto);
     let dados = parsed;
     if (porVia) {
@@ -19557,6 +19559,9 @@ async function subirBancoDoPedido() {
         if (num?.tipo !== 'TICKET' || String(num.id) !== alvo.numeracaoId
                 || Number(num.ticket_qtd) !== alvo.vias || qtd !== alvo.celulas) {
             throw new Error('A quantidade ou a numeração do modelo mudou. Escolha o modelo novamente.');
+        }
+        if (!alvo.semCabecalho && parsed.headers.some(coluna => /^https?:\/\//i.test(coluna))) {
+            throw new Error('A primeira linha parece conter um link de ticket. Se ela já for um dado, marque "CSV sem cabeçalho" e importe novamente.');
         }
         dados = agruparBancoPorViaDeTicket(parsed, qtd, alvo.vias);
     }
@@ -19588,7 +19593,11 @@ function agruparBancoPorViaDeTicket({ headers, rows }, celulas, vias) {
         throw new Error('Confira a quantidade de células e as vias do gabarito TICKET.');
     }
     if (!headers.length || rows.length !== esperado) {
-        throw new Error(`Este modelo exige ${esperado} linhas de dados (${celulas} células × ${vias} vias). O CSV tem ${rows.length}.`);
+        const diferenca = esperado - rows.length;
+        const complemento = diferenca > 0
+            ? ` Faltam ${diferenca}.`
+            : diferenca < 0 ? ` Sobram ${-diferenca}.` : '';
+        throw new Error(`Este modelo exige ${esperado} linhas de dados (${celulas} células × ${vias} vias). O CSV tem ${rows.length}.${complemento}`);
     }
 
     const colunas = Array.from({ length: vias }, (_, via) =>
@@ -19611,7 +19620,7 @@ function agruparBancoPorViaDeTicket({ headers, rows }, celulas, vias) {
 }
 
 /** O botao 📤 do box: abre o seletor de arquivo para criar um banco do pedido. */
-function subirBancoPeloBox(osId, modeloTicketId) {
+function subirBancoPeloBox(osId, modeloTicketId, semCabecalho = false) {
     const alvo = { osId };
     if (modeloTicketId !== undefined) {
         const modelo = (state.osItens[osId] || []).find(item => String(item.id) === modeloTicketId);
@@ -19622,7 +19631,7 @@ function subirBancoPeloBox(osId, modeloTicketId) {
             toast('Escolha um modelo TICKET com quantidade e vias definidas.', 'error');
             return;
         }
-        Object.assign(alvo, { modeloTicketId, numeracaoId: String(num.id), celulas, vias });
+        Object.assign(alvo, { modeloTicketId, numeracaoId: String(num.id), celulas, vias, semCabecalho });
     }
     _bancoPedidoPendente = alvo;
     const inp = _inputDoBancoDoPedido();
@@ -19644,19 +19653,29 @@ function formularioBancoPorViaDeTicket(osId) {
     });
     if (!opcoes.length) return '';
     return `
-        <details style="margin:8px 16px;">
+        <details id="banco-ticket-${escDoBanco(osId)}" style="margin:8px 16px;">
             <summary>Importar CSV por via de Ticket</summary>
             <form style="display:flex; flex-wrap:wrap; align-items:end; gap:8px; margin-top:8px;"
-                onsubmit="event.preventDefault(); subirBancoPeloBox('${escapeJsAttr(osId)}', this.elements.modeloTicket.value)">
+                onsubmit="event.preventDefault(); subirBancoPeloBox('${escapeJsAttr(osId)}', this.elements.modeloTicket.value, this.elements.semCabecalho.checked)">
                 <label style="flex:1; min-width:180px;">
                     Modelo e quantidade de linhas esperada
                     <select class="form-control" name="modeloTicket" required>${opcoes.join('')}</select>
                 </label>
+                <label><input type="checkbox" name="semCabecalho"> CSV sem cabeçalho</label>
                 <button class="btn btn-sm btn-secondary" type="submit">Escolher CSV</button>
             </form>
             <small>Ordene as linhas por célula e por via, começando pelo Ticket 1 de cada célula.</small>
         </details>`;
 }
+
+window.abrirBancoPorViaDeTicket = function (osId, modeloId) {
+    const detalhes = document.getElementById(`banco-ticket-${osId}`);
+    if (!detalhes) return;
+    detalhes.open = true;
+    const seletor = detalhes.querySelector('select[name="modeloTicket"]');
+    seletor.value = modeloId;
+    seletor.focus();
+};
 
 async function carregarImportadorExcel() {
     if (window.BancoExcel) return window.BancoExcel;
@@ -36370,12 +36389,20 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     <button class="btn btn-sm btn-secondary" style="margin-top:8px;" onclick="removerDistribuicaoDoModelo(${idx}, '${osId}')">🧹 Remover a distribuição</button></span>
                 </div>` : '';
 
+        const pecaComDivergencia = travaDeCelulas ? pecaDoModelo(item) : null;
+        const viasDoBanco = pecaComDivergencia?.tipo === 'TICKET' ? Number(pecaComDivergencia.ticket_qtd) : 0;
+        const linhasPorVia = divergenciaCelulas?.qtd * viasDoBanco;
+        const orientacaoBancoTicket = viasDoBanco > 1 && Number.isSafeInteger(linhasPorVia) && linhasPorVia > 0
+            ? `<br>Para arquivo com uma linha por via, o CSV precisa ter ${linhasPorVia.toLocaleString('pt-BR')} linhas de dados.
+                <button class="btn btn-sm btn-secondary" type="button" style="margin-top:8px;"
+                    onclick="abrirBancoPorViaDeTicket('${escapeJsAttr(osId)}', '${escapeJsAttr(item.id)}')">Importar CSV por via de Ticket</button>`
+            : '';
         const faixaDivergenciaCelulas = travaDeCelulas ? `
                 <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
                     <span style="font-size: 1rem;">⚠️</span>
                     <span>O banco não fecha com a quantidade do pedido, então este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}</span><br>
-                    Corrija as linhas em <b>📊 Ver / editar</b> ou <b>🧩 Linhas</b>. A quantidade do pedido não se altera aqui — ela vem do sistema comercial.</span>
+                    Corrija as linhas em <b>📊 Ver / editar</b> ou <b>🧩 Linhas</b>. A quantidade do pedido não se altera aqui — ela vem do sistema comercial.${orientacaoBancoTicket}</span>
                 </div>` : '';
 
         const faixaBancoIncompleto = travaDeBanco ? `
@@ -39249,6 +39276,10 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     const seqStart = parseInt(
         item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1
     ) || 1;
+    const linhas = typeof linhasDaAmostra === 'function'
+        ? linhasDaAmostra(item, num)
+        : (num.csv_data || item?.csv_data || []);
+    const csvRow = linhas[pageNum - 1] || null;
 
     elementosNaOrdemDeComposicao(num.elements).forEach(el => {
         const elFace = el.type === 'PICOTE' ? 'both' : (el.face || 'both');
@@ -39256,6 +39287,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ? (elFace === 'back' || elFace === 'both')
             : (elFace === 'front' || elFace === 'both');
         if (!visivel) return;
+        if (window.BancoDoModelo?.mostrarCampoNaPrevia?.(num, item, el, csvRow, linhas.length) === false) return;
 
         const x = el.x_mm * Sx;
         const y = el.y_mm * Sy;
@@ -39296,13 +39328,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = `${el.prefix || ''}${String(pageNum).padStart(el.pad || 0, '0')}/${String(_lCamB).padStart(el.pad || 0, '0')}`;
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                // A pagina N do PDF mostra a linha N da FATIA deste modelo. Antes
-                // indexava o banco inteiro: um modelo cuja fatia comeca na linha
-                // 601 exibia a linha 1 na primeira pagina.
-                const csvData = (typeof linhasDaAmostra === 'function')
-                    ? linhasDaAmostra(item, num)
-                    : (num?.csv_data || item?.csv_data || []);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (el.database_text && csvRow) {
                     label = window.formatarTextoDoBanco(el, csvRow[colName]);
                 } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
@@ -39348,10 +39373,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 qrText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = (typeof linhasDaAmostra === 'function')
-                    ? linhasDaAmostra(item, num)
-                    : (num?.csv_data || item?.csv_data || []);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -39377,10 +39398,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 bcText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = (typeof linhasDaAmostra === 'function')
-                    ? linhasDaAmostra(item, num)
-                    : (num?.csv_data || item?.csv_data || []);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -39409,10 +39426,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             // modelo, nao do banco inteiro — a mesma regra do texto variavel logo
             // acima. Indexar o banco inteiro faria o modelo cuja fatia comeca na
             // linha 601 estampar o rosto da pessoa 1.
-            const _linhasFoto = (typeof linhasDaAmostra === 'function')
-                ? linhasDaAmostra(item, num)
-                : (num?.csv_data || item?.csv_data || []);
-            desenharElementoFoto(ctx, el, S, false, _linhasFoto[pageNum - 1] || null, null);
+            desenharElementoFoto(ctx, el, S, false, csvRow, null);
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             // Sem este ramo, o modo PDF (multipaginas) desenhava todos os outros tipos
             // e simplesmente pulava SVG e PDF: o forEach caia fora de todos os else-if
@@ -40304,10 +40318,9 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // uma vez, antes do laco: todos os elementos variaveis leem a mesma
         // pagina, senao a tela mostraria a linha 3 do banco no ingresso 1 --
         // uma peca que o motor nunca vai imprimir.
-        const _linhaCsv = (typeof linhaDaAmostra === 'function') ? linhaDaAmostra(item, num, osId) : null;
-        const _pagAmostra = (typeof paginaDaAmostra === 'function' && typeof linhasDaAmostra === 'function')
-            ? paginaDaAmostra(item, linhasDaAmostra(item, num).length, osId)
-            : 0;
+        const linhas = typeof linhasDaAmostra === 'function' ? linhasDaAmostra(item, num) : [];
+        const _pagAmostra = typeof paginaDaAmostra === 'function' ? paginaDaAmostra(item, linhas.length, osId) : 0;
+        const _linhaCsv = linhas[_pagAmostra] || null;
         // O numero inicial do modelo (NI), base de tudo o que anda com a pagina.
         const _niAmostra = parseInt(
             item?.numeracao_inicio || item?.num_inicial ||
@@ -40324,6 +40337,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             } else {
                 if (elFace !== 'front' && elFace !== 'both' && el.type !== 'PICOTE') return;
             }
+            if (window.BancoDoModelo?.mostrarCampoNaPrevia?.(num, item, el, _linhaCsv, linhas.length) === false) return;
 
             let x = el.x_mm * S;
             const y = el.y_mm * S;
