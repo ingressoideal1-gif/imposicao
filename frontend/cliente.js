@@ -3075,6 +3075,7 @@ function numDoItem(item) {
 
 /** As linhas que a visualizacao deste modelo pode mostrar. */
 function linhasDaAmostra(item, num) {
+    if (num?.erro_banco_ticket) return [];
     if (num && num.csv_data && num.csv_data.length) return fatiaCsvDoItem(item, num);
     if (item && item.csv_data && item.csv_data.length) return linhasAtivasCsv(item.csv_data);
     return [];

@@ -94,6 +94,57 @@ for(const file of ['script.js','cliente.js']) {
         }
     }
 
+    const csvPorVia = { csv_headers: ['Link', 'Observação'], csv_data: [
+        ...urls.map(Link => ({ Link, Observação: '' })),
+        { Link: 'https://example.invalid/ticket/200013', Observação: 'Fora da faixa' },
+    ] };
+    const camposPorVia = elementos.map((el, i) => ({ ...el, csv_column: 'Link',
+        ticket_pos: el.type === 'QR' && i > 1 ? Math.floor(i / 2) + 1 : null }));
+    const porVia = { ...peca, elements: camposPorVia };
+    const convertida = window.BancoDoModelo.numeracaoResolvida(porVia, csvPorVia, null, modelo);
+    assert.deepEqual(convertida.banco_ticket_por_via, { linhas: 10, celulas: 2, excedentes: 1 });
+    assert.equal(csvPorVia.csv_data.length, 11);
+    linhas = convertida.csv_data;
+    for (const pagina of [1, 2]) {
+        const grupo = urls.slice((pagina - 1) * 5, pagina * 5);
+        for (const renderizar of [() => draw(ctx, convertida, modelo, pagina, 1000, 500, 'back'),
+            () => card(convertida, pagina)]) {
+            renderizar();
+            assert.deepEqual(values.qr.splice(0), grupo, file + ': QR por linha do anexo');
+            assert.deepEqual(values.text.splice(0), grupo, file + ': texto por linha do anexo');
+            checks++;
+        }
+    }
+    const posicaoEditada = { ...porVia, elements: camposPorVia.map(el =>
+        el.id === 'TEXT-0' ? { ...el, ticket_pos: 2 } : el.id === 'TEXT-1' ? { ...el, ticket_pos: 1 } : el) };
+    const editada = window.BancoDoModelo.numeracaoResolvida(posicaoEditada, csvPorVia, null, modelo);
+    card(editada, 1);
+    assert.deepEqual(values.qr.splice(0), urls.slice(0, 5));
+    assert.deepEqual(values.text.splice(0), [urls[1], urls[0], ...urls.slice(2, 5)]);
+    const wide = window.BancoDoModelo.numeracaoResolvida(posicaoEditada, banco, mapa, modelo);
+    assert.equal(wide.elements.find(el => el.id === 'TEXT-0').csv_column, 'Ticket 2 · Link');
+    const excessoSemFaixa = { ...csvPorVia, csv_data: csvPorVia.csv_data.slice(0, -1).concat({ Link: 'OPACO' }) };
+    const recusada = window.BancoDoModelo.numeracaoResolvida(porVia, excessoSemFaixa, null, modelo);
+    assert.match(recusada.erro_banco_ticket, /excedentes/);
+    assert.deepEqual(recusada.csv_data, []);
+    const semVias = { ...porVia, elements: camposPorVia.map(el => ({ ...el, ticket_pos: null })) };
+    assert.match(window.BancoDoModelo.numeracaoResolvida(semVias, csvPorVia, null, modelo).erro_banco_ticket, /posição/);
+    if (file === 'script.js') {
+        const payload = new Function('window', 'state', 'vinculoDeBancoDoModelo', 'fatiaCsvDoItem',
+            ['resolverNumeracaoParaModelo', 'quantidadeContratada', 'linhasDoModeloNoPayload',
+                'numeracaoConfirmadaDoModelo'].map(n => extract(src, n)).join('\n') +
+                '\nreturn numeracaoConfirmadaDoModelo;')(
+            window, { bancosDoPedido: [{ ...csvPorVia, id: 'banco' }] },
+            () => ({ banco_id: 'banco', csv_mapa: null }), (_item, num) => num.csv_data);
+        const paraImpressao = payload(posicaoEditada, modelo);
+        assert.equal(paraImpressao.csv_data.length, 2);
+        const texto1 = paraImpressao.elements.find(el => el.id === 'TEXT-0');
+        assert.equal(paraImpressao.csv_data[1][texto1.csv_column], urls[6]);
+        assert.throws(() => payload(semVias, modelo), /posição/);
+        checks += 3;
+    }
+    checks += 4;
+    linhas = banco.csv_data;
     draw(ctx, peca, modelo, 1, 1000, 500, 'back');
     card(peca, 1);
     assert.deepEqual(values.qr, [], file + ': QR sem mapeamento');

@@ -65,11 +65,13 @@
         if (!num || !escopo.BancoDoModelo) return null;
         const chave = String(item.id);
         const cache = atual.cache.get(chave);
-        if (cache && cache.num === num) return cache.resolvida;
-        const resolvida = escopo.BancoDoModelo.numeracaoResolvida(num, m.banco, m.csv_mapa);
+        const assinatura = JSON.stringify([item.qtd ?? item.quantidade,
+            item.numeracao_inicio ?? item.num_inicial ?? item.NUMERACAO_INICIO, item.csv_selecao]);
+        if (cache?.num === num && cache.assinatura === assinatura) return cache.resolvida;
+        const resolvida = escopo.BancoDoModelo.numeracaoResolvida(num, m.banco, m.csv_mapa, item);
         // Os caches de PDF/SVG e as falhas de preload também pertencem ao modelo.
         resolvida.elements = (resolvida.elements || []).map(el => el && Object.assign({}, el));
-        atual.cache.set(chave, { num, resolvida });
+        atual.cache.set(chave, { num, assinatura, resolvida });
         return resolvida;
     }
 
@@ -84,7 +86,10 @@
         if (escopo.TeatroSnapshot?.tem(item)) return escopo.TeatroSnapshot.problema(item, num);
         if (!m.banco) return '';
         if (!num || !escopo.BancoDoModelo) return 'A numeração deste modelo não foi carregada. Tente novamente.';
-        if (escopo.BancoDoModelo.elementosSemColunaNoBanco(num, m.banco, m.csv_mapa).length) {
+        const resolvida = num.banco_ticket_por_via || num.erro_banco_ticket
+            ? num : escopo.BancoDoModelo.numeracaoResolvida(num, m.banco, m.csv_mapa, item);
+        if (resolvida.erro_banco_ticket) return resolvida.erro_banco_ticket;
+        if (escopo.BancoDoModelo.elementosSemColunaNoBanco(resolvida, resolvida, null).length) {
             return 'Há campos desta arte sem coluna correspondente no banco. Solicite a conferência à gráfica.';
         }
         if (!m.banco.csv_data.length) return 'O banco deste modelo está vazio. Solicite a conferência à gráfica.';

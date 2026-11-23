@@ -1525,9 +1525,9 @@ function modelosComElementoSemColuna() {
             if (!v) return;
             const banco = window.BancoDoModelo.bancoDoModelo(v, state.bancosDoPedido || []);
             if (!banco) return;   // esse caso e da trava do banco nao baixado
-            const soltos = window.BancoDoModelo.elementosSemColunaNoBanco(
-                pecaDoModelo(it), banco, v.csv_mapa);
-            if (soltos.length) fora.push(it);
+            const num = numeracaoDoModelo(it);
+            const soltos = window.BancoDoModelo.elementosSemColunaNoBanco(num, num || banco, null);
+            if (num?.erro_banco_ticket || soltos.length) fora.push(it);
         });
     });
     return fora;
@@ -5207,8 +5207,7 @@ function familiasDaNumeracao(elementos) {
 }
 
 function elementoUsaPosicaoTicket(el) {
-    return el.type === 'QR_IDEAL' || (['TEXT', 'QR', 'BARCODE'].includes(el.type)
-        && !el.fixed && el.source !== 'database' && !el.database_text);
+    return el.type === 'QR_IDEAL' || (['TEXT', 'QR', 'BARCODE'].includes(el.type) && !el.fixed);
 }
 
 function erroDaNumeracaoTicket(tipo, quantidade, elementos) {
@@ -5217,7 +5216,7 @@ function erroDaNumeracaoTicket(tipo, quantidade, elementos) {
     if (typeof quantidade === 'boolean' || !Number.isSafeInteger(qtd) || qtd < 1) return 'Informe uma quantidade inteira de Tickets por célula, maior que zero.';
     if (familiasDaNumeracao(elementos).length) return 'Remova os elementos de Teatro ou Camarote antes de usar o tipo Ticket.';
     const invalidos = (elementos || []).filter(el => {
-        const pos = el.ticket_pos === undefined ? 1 : el.ticket_pos;
+        const pos = el.ticket_pos ?? 1;
         return elementoUsaPosicaoTicket(el) && (typeof pos === 'boolean'
             || !Number.isSafeInteger(Number(pos)) || Number(pos) < 1 || Number(pos) > qtd);
     });
@@ -8505,7 +8504,8 @@ function renderNavegacaoDosElementosDaNumeracao() {
         nome.textContent = (el.name || rotulo) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
         const detalhe = document.createElement('small');
         const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
-        detalhe.textContent = rotulo + ' · ' + face + (tipo === 'TICKET' && elementoUsaPosicaoTicket(el) ? ' · Ticket ' + (el.ticket_pos ?? 1) : '');
+        detalhe.textContent = rotulo + ' · ' + face + (tipo === 'TICKET' && elementoUsaPosicaoTicket(el)
+            ? ((el.source === 'database' || el.database_text) && el.ticket_pos == null ? ' · Posição automática' : ' · Ticket ' + (el.ticket_pos ?? 1)) : '');
         texto.append(nome, detalhe);
         botao.append(ponto, texto);
         botao.onclick = event => selectEl(el.id, event);
@@ -8529,7 +8529,8 @@ function atualizarSelecaoVisualDaNumeracao() {
             botao.querySelector('strong').textContent = (el.name || botao.dataset.elementLabel) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
             const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
             const ticket = document.getElementById('num-tipo')?.value === 'TICKET' && elementoUsaPosicaoTicket(el);
-            botao.querySelector('small').textContent = botao.dataset.elementLabel + ' · ' + face + (ticket ? ' · Ticket ' + (el.ticket_pos ?? 1) : '');
+            botao.querySelector('small').textContent = botao.dataset.elementLabel + ' · ' + face + (ticket
+                ? ((el.source === 'database' || el.database_text) && el.ticket_pos == null ? ' · Posição automática' : ' · Ticket ' + (el.ticket_pos ?? 1)) : '');
         }
     });
     const vazio = document.getElementById('num-properties-empty');
@@ -8950,8 +8951,11 @@ function renderElementsList() {
         const numTipoSelect = document.getElementById('num-tipo');
         if (numTipoSelect && numTipoSelect.value === 'TICKET' && elementoUsaPosicaoTicket(el)) {
             const ticketQtd = parseInt(document.getElementById('num-ticket-qtd').value) || 1;
-            const pos = Number(el.ticket_pos === undefined ? 1 : el.ticket_pos);
-            let options = typeof el.ticket_pos !== 'boolean' && Number.isSafeInteger(pos) && pos >= 1 && pos <= ticketQtd ? ''
+            const automatico = (el.source === 'database' || el.database_text) && el.ticket_pos == null;
+            const pos = automatico ? null : Number(el.ticket_pos ?? 1);
+            let options = automatico
+                ? '<option value="" selected disabled>Posição automática do gabarito</option>'
+                : typeof el.ticket_pos !== 'boolean' && Number.isSafeInteger(pos) && pos >= 1 && pos <= ticketQtd ? ''
                 : '<option value="" selected disabled>Posição inválida — selecione um Ticket</option>';
             for (let i = 1; i <= ticketQtd; i++) {
                 options += `<option value="${i}" ${pos === i ? 'selected' : ''}>Ticket ${i}</option>`;
@@ -8964,8 +8968,9 @@ function renderElementsList() {
                     </select>
                 </div>
             `;
-        } else if (numTipoSelect?.value === 'TICKET' && (el.source === 'database' || el.database_text || el.type === 'FOTO')) {
-            ticketPosHTML = '<div class="form-group el-full"><small>Banco: uma linha por célula, compartilhada entre os Tickets. Para dados diferentes nas vias, selecione colunas diferentes da mesma linha.</small></div>';
+        }
+        if (numTipoSelect?.value === 'TICKET' && (el.source === 'database' || el.database_text) && elementoUsaPosicaoTicket(el)) {
+            ticketPosHTML += '<div class="form-group el-full"><small>A posição indica qual via fornece os dados deste campo.</small></div>';
         }
 
         return `
@@ -18283,6 +18288,7 @@ async function salvarCamposDaNumeracao(numId, patch) {
  * do modelo que esta sendo desenhado.
  */
 function linhasDaAmostra(item, num) {
+    if (num?.erro_banco_ticket) return [];
 
     if (num && num.csv_data && num.csv_data.length) {
 
@@ -19595,36 +19601,7 @@ async function subirBancoDoPedido() {
 window.subirBancoDoPedido = subirBancoDoPedido;
 
 function agruparBancoPorViaDeTicket({ headers, rows }, celulas, vias) {
-    const esperado = celulas * vias;
-    if (!Number.isSafeInteger(celulas) || celulas < 1 || !Number.isSafeInteger(vias)
-            || vias < 1 || !Number.isSafeInteger(esperado)) {
-        throw new Error('Confira a quantidade de células e as vias do gabarito TICKET.');
-    }
-    if (!headers.length || rows.length !== esperado) {
-        const diferenca = esperado - rows.length;
-        const complemento = diferenca > 0
-            ? ` Faltam ${diferenca}.`
-            : diferenca < 0 ? ` Sobram ${-diferenca}.` : '';
-        throw new Error(`Este modelo exige ${esperado} linhas de dados (${celulas} células × ${vias} vias). O CSV tem ${rows.length}.${complemento}`);
-    }
-
-    const colunas = Array.from({ length: vias }, (_, via) =>
-        headers.map(origem => ({ origem, destino: `Ticket ${via + 1} · ${origem}` })));
-    const agrupadas = [];
-    for (let inicio = 0; inicio < rows.length; inicio += vias) {
-        const celula = {};
-        for (let via = 0; via < vias; via++) {
-            const linha = rows[inicio + via];
-            if (!headers.some(coluna => String(linha[coluna] ?? '').trim() !== '')) {
-                throw new Error(`A linha de dados ${inicio + via + 1} (Ticket ${via + 1}) está vazia.`);
-            }
-            for (const { origem, destino } of colunas[via]) {
-                celula[destino] = linha[origem];
-            }
-        }
-        agrupadas.push(celula);
-    }
-    return { headers: colunas.flat().map(coluna => coluna.destino), rows: agrupadas };
+    return window.BancoDoModelo.agruparPorVia({ headers, rows }, celulas, vias);
 }
 
 /** O botao 📤 do box: abre o seletor de arquivo para criar um banco do pedido. */
@@ -19817,6 +19794,7 @@ function numeracaoConfirmadaDoModelo(num, item) {
     if (!num) return null;
     let copia = JSON.parse(JSON.stringify(resolverNumeracaoParaModelo(num, item)));
     if (copia.teatro_snapshot_erro) throw Error(copia.teatro_snapshot_erro);
+    if (copia.erro_banco_ticket) throw Error(copia.erro_banco_ticket);
     if (copia.csv_data?.length) {
         if (item?.csv_selecao) copia.csv_data = fatiaCsvDoItem(item, copia);
         else if (vinculoDeBancoDoModelo(item)) copia.csv_data = linhasDoModeloNoPayload(item, copia);
@@ -19992,7 +19970,8 @@ function resolverNumeracaoParaModelo(num, item) {
     return window.BancoDoModelo.numeracaoResolvida(
         num,
         window.BancoDoModelo.bancoDoModelo(vinculo, state.bancosDoPedido || []),
-        vinculo.csv_mapa
+        vinculo.csv_mapa,
+        item
     );
 }
 window.resolverNumeracaoParaModelo = resolverNumeracaoParaModelo;
@@ -20444,6 +20423,7 @@ function bancoDeDadosIncompletoDoModelo(item) {
         } catch (e) { return { motivo: 'mapa_teatro', texto: e.message }; }
     }
     if (!num) return null;
+    if (num.erro_banco_ticket) return { motivo: 'ticket_banco', texto: num.erro_banco_ticket };
     const deBanco = (num.elements || []).filter(el => el && el.source === 'database');
     if (!deBanco.length) return null;
     const rows = Array.isArray(num.csv_data) ? num.csv_data : [];
@@ -36354,6 +36334,10 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
         // o card avisa e o PRONTO fica trancado, como na regra de células.
         const bancoIncompleto = ehTelaDoCliente ? null : bancoDeDadosIncompletoDoModelo(item);
         const travaDeBanco = !!bancoIncompleto;
+        const ticketPorVia = ehTelaDoCliente ? null : numeracaoDoModelo(item)?.banco_ticket_por_via;
+        const resumoTicketPorVia = ticketPorVia ? `<div class="amostra-banco-ticket" style="font-size:.8rem;color:var(--text-dim);margin-bottom:8px;">
+            ${ticketPorVia.linhas.toLocaleString('pt-BR')} vias em ${ticketPorVia.celulas.toLocaleString('pt-BR')} células
+            ${ticketPorVia.excedentes ? ` · ${ticketPorVia.excedentes.toLocaleString('pt-BR')} linha(s) fora da faixa, disponíveis no banco original` : ''}</div>` : '';
         // ── Caractere que a fonte não desenha ──
         // O buraco do nome estrangeiro: a tela mostra "Ondřej Pek" porque o
         // navegador cobre o `ř` com outra fonte; o papel sai "Ond ej Pek".
@@ -36407,7 +36391,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     <span style="font-size: 1rem;">⚠️</span>
                     <span>A numeração usa banco de dados, mas ele não está completo — este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(bancoIncompleto.texto)}</span><br>
-                    ${bancoIncompleto.motivo === 'mapa_teatro'
+                    ${bancoIncompleto.motivo === 'ticket_banco' ? '' : bancoIncompleto.motivo === 'mapa_teatro'
                         ? 'Confira o setor associado em <b>Mapa de Teatro</b>, sua quantidade no ERP e os elementos de teatro da numeração.'
                         : 'Adicione o banco em <b>Gerenciamento de Bancos de Dados</b> do pedido, selecione-o em <b>Vem de:</b> e associe as colunas no modelo.'}</span>
                 </div>` : '';
@@ -36700,6 +36684,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                         ${faixaDistribuicaoOrfa}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
+                        ${resumoTicketPorVia}
                         ${faixaMapaERP}
                         ${faixaSemGlifo}
                         ${faixaCelulasRepetidas}
