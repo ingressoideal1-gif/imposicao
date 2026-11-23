@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const assert = require('node:assert/strict');
 require('../frontend/banco-do-modelo.js');
+require('../frontend/numero-da-pagina.js');
 function extract(src,name) {
     const start=src.indexOf('function '+name+'(');
     assert(start>=0,name);
@@ -16,6 +17,7 @@ for(const file of ['script.js','cliente.js']) {
     let linhas = [{Codigo:'BANCO1'}, {Codigo:'BANCO2'}];
     const window={
         BancoDoModelo: global.BancoDoModelo,
+        NumeroDaPagina: global.NumeroDaPagina,
         formatarTextoDoBanco: (_el, valor) => String(valor ?? ''),
         desenharTextoAjustado(_ctx,_el,label){values.text.push(label)},
         renderBarcodeOnCtx(_ctx,label,_x,_y,_w,_h,_cor,_formato,fundo){
@@ -61,10 +63,26 @@ for(const file of ['script.js','cliente.js']) {
     assert(inicioDoCard >= 0, file + ': função de desenho do card');
     const fimDoCard = src.indexOf('\n        };', inicioDoCard) + '\n        };'.length;
     const desenharCard = new Function('window', 'num', 'item', 'face', 'numCtx', 'S', 'buildCanvasFont',
-        'renderQRCodeOnCtx', 'linhas', '_linhaCsv',
+        'renderQRCodeOnCtx', 'linhas', '_linhaCsv', '_niAmostra', '_pagAmostra', '_ticketQtdAmostra',
         src.slice(inicioDoCard, fimDoCard) + '\nnum.elements.forEach(desenharElementoDaFace);');
     const card = (num, pagina) => desenharCard(window, num, modelo, 'back', ctx, 1, () => '',
-        (_ctx, label) => values.qr.push(label), linhas, linhas[pagina - 1]);
+        (_ctx, label) => values.qr.push(label), linhas, linhas[pagina - 1],
+        modelo.numeracao_inicio, pagina - 1, num.ticket_qtd);
+
+    const ticket = { tipo: 'TICKET', ticket_qtd: 2, elements: [2, 1].flatMap(ticket_pos =>
+        ['TEXT', 'QR', 'BARCODE'].map(type => ({ type, ticket_pos, pad: 4, x_mm: 10, y_mm: 10 }))) };
+    const anterior = modelo.numeracao_inicio;
+    linhas = [];
+    for (const [inicio, pagina, esperado] of [[1, 1, ['0002', '0001']], [1, 2, ['0004', '0003']],
+        [0, 1, ['0001', '0000']]]) {
+        modelo.numeracao_inicio = inicio;
+        card(ticket, pagina);
+        for (const tipo of Object.keys(values)) assert.deepEqual(values[tipo].splice(0), esperado, file + ': ' + tipo);
+        fundos.length = 0;
+        checks++;
+    }
+    modelo.numeracao_inicio = anterior;
+    linhas = banco.csv_data;
     for (const pagina of [1, 2]) {
         const grupo = urls.slice((pagina - 1) * 5, pagina * 5);
         for (const renderizar of [() => draw(ctx, resolvida, modelo, pagina, 1000, 500, 'back'),

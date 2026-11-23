@@ -10,9 +10,12 @@ export function indiceQr(pedido: number, modelo: number, numero: number): number
   return ((((diferenca || 100) - 1) * 30000 + numero - 1) % 3000000 + 3000000) % 3000000;
 }
 
-export type PlanoModelo = {
+type Via = { posicao: number; prefix: string; suffix: string; pad: number };
+
+export type PlanoModelo = Via & {
   modelo: number; setor: string; quantidade: number; inicio: number;
-  passo: number; posicao: number; tipo: string; prefix: string; suffix: string; pad: number;
+  passo: number; tipo: string;
+  vias?: Via[];
   qr_contrato?: ContratoQr;
 };
 
@@ -33,39 +36,59 @@ export function indiceContrato(pedido: number, modelo: number, valor: number, c:
   return offset + pos;
 }
 
-export function planejar(fonte: any[]): PlanoModelo[] {
-  const planos: PlanoModelo[] = [];
-  for (const m of fonte) {
-    const n = m.numeracao;
-    if (!n || !Array.isArray(n.elements)) continue;
-    let el: any;
-    for (const tipo of ["QR_IDEAL", "QR", "BARCODE"]) {
-      el = n.elements.find((e: any) => e?.type === tipo && e.source !== "database" && !e.fixed);
-      if (el) break;
+const TIPOS = ["QR_IDEAL", "QR", "BARCODE"];
+
+export function planoDoModelo(m: any): PlanoModelo | null {
+  const n = m.numeracao;
+  if (!Array.isArray(n?.elements)) return null;
+  const codigos = TIPOS.flatMap(tipo => n.elements.filter((e: any) =>
+    e?.type === tipo && e.source !== "database" && !e.fixed));
+  const primeiro = codigos[0];
+  if (!primeiro) return null;
+
+  const ticket = n.tipo === "TICKET";
+  const passo = ticket ? Number(n.ticket_qtd || 1) : 1;
+  const inicio = Number(m.inicio ?? 1);
+  const celulas = Number(m.quantidade);
+  const porVia = new Map<number, Via>();
+  const elementos = ticket && primeiro.type !== "QR_IDEAL" ? codigos : [primeiro];
+  for (const el of elementos) {
+    const posicao = ticket ? Number(el.ticket_pos || 1) : 1;
+    if (!Number.isSafeInteger(posicao) || posicao < 1 || posicao > passo) {
+      throw new Error("Posição TICKET inválida. Confira a numeração na gráfica.");
     }
-    if (!el) continue;
-    const quantidade = Number(m.quantidade), inicio = Number(m.inicio ?? 1);
-    const passo = n.tipo === "TICKET" ? Number(n.ticket_qtd || 1) : 1;
-    const posicao = n.tipo === "TICKET" ? Number(el.ticket_pos || 1) : 1;
-    if (!Number.isSafeInteger(quantidade) || quantidade < 1 ||
-        !Number.isSafeInteger(inicio) || inicio < 0 ||
-        !Number.isSafeInteger(passo) || passo < 1 ||
-        !Number.isSafeInteger(posicao) || posicao < 1 || posicao > passo ||
-        !m.setor || !Number.isSafeInteger(Number(m.id))) {
-      throw new Error("Modelo sem quantidade, numeração ou setor válido. Confira o pedido na gráfica.");
-    }
-    // QTD continua sendo células físicas; nunca dividir por ticket_qtd.
-    planos.push({ modelo: Number(m.id), setor: m.setor, quantidade, inicio, passo, posicao,
-      tipo: el.type, prefix: String(el.prefix ?? ""), suffix: String(el.suffix ?? ""),
-      pad: Math.max(0, Math.min(100, Number(el.pad) || 0)) });
+    if (!porVia.has(posicao)) porVia.set(posicao, {
+      posicao, prefix: String(el.prefix ?? ""), suffix: String(el.suffix ?? ""),
+      pad: Math.max(0, Math.min(100, Number(el.pad) || 0)),
+    });
   }
+  const vias = [...porVia.values()];
+  const quantidade = celulas * vias.length;
+  if (!Number.isSafeInteger(celulas) || celulas < 1 || !Number.isSafeInteger(quantidade) ||
+      !Number.isSafeInteger(inicio) || inicio < 0 || !Number.isSafeInteger(passo) || passo < 1 ||
+      !Number.isSafeInteger(inicio + celulas * passo - 1) ||
+      !Number.isSafeInteger(Number(m.id))) {
+    throw new Error("Modelo sem quantidade ou numeração válida. Confira o pedido na gráfica.");
+  }
+  return { modelo: Number(m.id), setor: m.setor ?? "", quantidade, inicio, passo, tipo: primeiro.type,
+    ...vias[0], ...(vias.length > 1 ? { vias } : {}) };
+}
+
+export function planejar(fonte: any[]): PlanoModelo[] {
+  const planos = fonte.map(planoDoModelo).filter((p): p is PlanoModelo => p !== null);
   if (!planos.length) throw new Error("O evento não tem modelos com códigos disponíveis.");
+  if (planos.some(p => !p.setor)) throw new Error("Modelo sem setor válido. Confira o pedido na gráfica.");
   return planos;
 }
 
 export function conteudoDoIngresso(pool: Uint8Array | null, pedido: number, m: PlanoModelo, i: number): string {
-  const valor = m.inicio + i * m.passo + m.posicao - 1;
-  if (m.tipo !== "QR_IDEAL") return m.prefix + String(valor).padStart(m.pad, "0") + m.suffix;
+  // A via já adotada mantém os ordinais 1..QTD. As demais ocupam os blocos
+  // seguintes, com numeração contínua exigida pela RPC de preparação.
+  const celulas = m.quantidade / (m.vias?.length ?? 1);
+  const via = m.vias?.[Math.floor(i / celulas)] ?? m;
+  const celula = m.vias ? i % celulas : i;
+  const valor = m.inicio + celula * m.passo + via.posicao - 1;
+  if (m.tipo !== "QR_IDEAL") return via.prefix + String(valor).padStart(via.pad, "0") + via.suffix;
   if (!pool || pool.byteLength !== POOL_BYTES) throw new Error("Base privada indisponível.");
   const offset = (m.qr_contrato ? indiceContrato(pedido, m.modelo, valor, m.qr_contrato) : indiceQr(pedido, m.modelo, valor)) * 8;
   const prefixo = m.qr_contrato?.versao === 2 ? String(m.modelo).slice(-4).padStart(4,"0") : String(pedido);

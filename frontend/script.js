@@ -40322,10 +40322,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         const _pagAmostra = typeof paginaDaAmostra === 'function' ? paginaDaAmostra(item, linhas.length, osId) : 0;
         const _linhaCsv = linhas[_pagAmostra] || null;
         // O numero inicial do modelo (NI), base de tudo o que anda com a pagina.
-        const _niAmostra = parseInt(
-            item?.numeracao_inicio || item?.num_inicial ||
-            item?.NUMERACAO_INICIO || 1
-        ) || 1;
+        const _niAmostra = item?.numeracao_inicio ?? item?.num_inicial ?? item?.NUMERACAO_INICIO ?? 1;
         const _ticketQtdAmostra = parseInt(num?.ticket_qtd || item?.ticket_qtd || 1) || 1;
         // Desenhar cada elemento da numeração
         const desenharElementoDaFace = el => {
@@ -40448,10 +40445,9 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                     }
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
-                    // Mesma conta do texto sequencial: o QR da pagina N carrega
-                    // o numero do ingresso N.
                     const val = window.NumeroDaPagina.sequencial({
-                        start: _niAmostra, pagina: _pagAmostra
+                        start: _niAmostra, pagina: _pagAmostra,
+                        tipo: num.tipo, ticketPos: el.ticket_pos, ticketQtd: _ticketQtdAmostra
                     });
                     const raw = padVal > 0 ? String(val).padStart(padVal, '0') : String(val);
                     qrText = `${el.prefix || ''}${raw}${el.suffix || ''}`;
@@ -40474,7 +40470,8 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
                 } else {
                     const padVal = typeof el.pad !== 'undefined' ? parseInt(el.pad) : 4;
                     const val = window.NumeroDaPagina.sequencial({
-                        start: _niAmostra, pagina: _pagAmostra
+                        start: _niAmostra, pagina: _pagAmostra,
+                        tipo: num.tipo, ticketPos: el.ticket_pos, ticketQtd: _ticketQtdAmostra
                     });
                     const raw = padVal > 0 ? String(val).padStart(padVal, '0') : String(val);
                     bcText = `${el.prefix || ''}${raw}${el.suffix || ''}`;

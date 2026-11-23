@@ -4,6 +4,29 @@ import { hashCodigo } from "../supabase/functions/_compartilhado/hash.ts";
 import { usarQrEvento } from "../supabase/functions/_compartilhado/qr_evento.ts";
 function assert(v: unknown) { if (!v) throw new Error("Contrato de preparação violado"); }
 const fonte = [{id:1000160,quantidade:250,inicio:7,setor:"setor-sintetico",numeracao:{elements:[{type:"QR",prefix:"X",pad:4,suffix:"Z"}]}}];
+const ticketDuasVias = [{
+  ...fonte[0], inicio: 1, quantidade: 75,
+  numeracao: { tipo: "TICKET", ticket_qtd: 2, elements: [
+    { type: "QR", ticket_pos: 2, pad: 4 },
+    { type: "QR", ticket_pos: 1, pad: 4 },
+    { type: "BARCODE", ticket_pos: 2, pad: 4 },
+    { type: "QR", source: "database", ticket_pos: 2 },
+  ] },
+}];
+
+Deno.test("Ticket convencional publica cada via legível e conserva os ordinais da via já usada", () => {
+  const [plano] = planejar(ticketDuasVias);
+  assert(plano.quantidade === 150);
+  const codigo = (indice: number) => conteudoDoIngresso(null, 123, plano, indice);
+  assert(codigo(0) === "0002" && codigo(74) === "0150");
+  assert(codigo(75) === "0001" && codigo(149) === "0149");
+  const [ideal] = planejar([{
+    ...ticketDuasVias[0], numeracao: { ...ticketDuasVias[0].numeracao, elements: [
+      ...ticketDuasVias[0].numeracao.elements, { type: "QR_IDEAL", ticket_pos: 1 },
+    ] },
+  }]);
+  assert(ideal.tipo === "QR_IDEAL" && ideal.quantidade === 75 && ideal.vias === undefined);
+});
 Deno.test("posição, virada de coluna, início, TICKET e formato iguais à impressão", () => {
  assert(indiceQr(19521,1000160,1) === 1800000);
  assert(indiceQr(20272,1000072,30001) === 0);
@@ -18,7 +41,7 @@ Deno.test("posição, virada de coluna, início, TICKET e formato iguais à impr
 
 Deno.test("lotes retomáveis só devolvem progresso; QR inválido não acessa fonte nem base", async () => {
  const original=globalThis.fetch, vars=["SUPABASE_URL","SUPABASE_SERVICE_ROLE_KEY"], before=vars.map(n=>Deno.env.get(n));
- const plano=planejar(fonte), sal="00".repeat(32);let cursor=0, fechado=false, consultas=0;
+ const plano=planejar(ticketDuasVias), sal="00".repeat(32);let cursor=0, fechado=false, consultas=0;
  try {
   Deno.env.set(vars[0],"https://sintetico.invalid");Deno.env.set(vars[1],"ficticia");
   globalThis.fetch=(async (url:any,opts:any)=>{
@@ -31,16 +54,16 @@ Deno.test("lotes retomáveis só devolvem progresso; QR inválido não acessa fo
     if(c.p_itens){
      assert(c.p_offset===cursor && c.p_itens.length<=100);
      for(const item of c.p_itens){assert(item.numero===cursor+1);assert(item.hash===await hashCodigo(conteudoDoIngresso(null,19521,plano[0],cursor),sal));cursor++;}
-     fechado=cursor===250;
+     fechado=cursor===150;
     }
-    body={concluida:fechado,prontos:cursor,total:250,plano,fonte,sal,fonte_hash:"sintetico"};
+    body={concluida:fechado,prontos:cursor,total:150,plano,fonte:ticketDuasVias,sal,fonte_hash:"sintetico"};
    }else throw new Error("Rede inesperada");
    return new Response(JSON.stringify(body));
   }) as typeof fetch;
   const a=await prepararEvento("evento");assert(!a.concluida&&a.prontos===100);
-  const b=await prepararEvento("evento");assert(!b.concluida&&b.prontos===200);
-  await prepararEvento("evento");const fim=await prepararEvento("evento");
-  assert(fim.concluida&&fim.total===250&&Object.keys(fim).length===3);
+  const b=await prepararEvento("evento");assert(!b.concluida&&b.prontos===150);
+  const fim=await prepararEvento("evento");
+  assert(fim.concluida&&fim.total===150&&Object.keys(fim).length===3);
   const antes=consultas;let recusou=false;
   try {await usarQrEvento({segredo:"ab".repeat(32)},false,true);}catch{recusou=true;}
   assert(recusou&&consultas===antes+1);
