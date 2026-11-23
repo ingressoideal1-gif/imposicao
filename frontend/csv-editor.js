@@ -125,7 +125,7 @@
      * quebra de linha dentro, BOM, e CRLF ou LF. Devolve
      * { headers, rows, delimitador }.
      */
-    function parseCsv(texto, delimitadorForcado) {
+    function parseCsv(texto, delimitadorForcado, { preservarLinhasVazias = false } = {}) {
         if (typeof texto !== 'string') return { headers: [], rows: [], delimitador: ',' };
         if (texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1);   // BOM
         const D = delimitadorForcado || detectarDelimitador(texto);
@@ -159,8 +159,8 @@
         }
         if (campo !== '' || linha.length) fecharLinha();
 
-        // Descarta linhas totalmente vazias (arquivo terminado em quebra de linha).
-        const util = matriz.filter(l => l.some(v => String(v).trim() !== ''));
+        // Na importação por via, uma linha vazia precisa manter sua posição até a validação.
+        const util = preservarLinhasVazias ? matriz : matriz.filter(l => l.some(v => String(v).trim() !== ''));
         if (!util.length) return { headers: [], rows: [], delimitador: D };
 
         const headers = normalizarCabecalhos(util[0]);

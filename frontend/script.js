@@ -19535,6 +19535,7 @@ async function subirBancoDoPedido() {
     const alvo = _bancoPedidoPendente;
     const inp = document.getElementById('banco-pedido-file');
     if (!alvo || !inp || !inp.files || !inp.files.length) return;
+    _bancoPedidoPendente = null;
     const file = inp.files[0];
 
     const texto = await new Promise((ok, err) => {
@@ -19544,32 +19545,118 @@ async function subirBancoDoPedido() {
         r.readAsText(file);
     });
 
-    const parsed = window.CsvEditor.parseCsv(texto);
-    if (!parsed.rows.length) throw new Error('O arquivo não tem nenhuma linha.');
+    const porVia = alvo.modeloTicketId != null;
+    const parsed = porVia
+        ? window.CsvEditor.parseCsv(texto, undefined, { preservarLinhasVazias: true })
+        : window.CsvEditor.parseCsv(texto);
+    let dados = parsed;
+    if (porVia) {
+        const modelo = (state.osItens[alvo.osId] || []).find(item => String(item.id) === alvo.modeloTicketId);
+        const num = pecaDoModelo(modelo);
+        const qtd = quantidadeContratada(modelo);
+        if (num?.tipo !== 'TICKET' || String(num.id) !== alvo.numeracaoId
+                || Number(num.ticket_qtd) !== alvo.vias || qtd !== alvo.celulas) {
+            throw new Error('A quantidade ou a numeração do modelo mudou. Escolha o modelo novamente.');
+        }
+        dados = agruparBancoPorViaDeTicket(parsed, qtd, alvo.vias);
+    }
+    if (!dados.rows.length) throw new Error('O arquivo não tem nenhuma linha.');
 
     const idInt = idIntDoPedido(alvo.osId);
-    const banco = await criarBancoDoPedido(idInt, file.name.replace(/\.csv$/i, ''),
-        parsed.headers, parsed.rows, file.name);
+    const nome = file.name.replace(/\.csv$/i, '') + (porVia ? ` (Ticket ${alvo.vias})` : '');
+    const banco = await criarBancoDoPedido(idInt, nome, dados.headers, dados.rows, file.name);
 
     // Criar NAO vincula (28/08/2026, redesenho do usuario): o banco e do
     // pedido, e a adocao e sempre uma escolha feita no card, no "Vem de:".
     // Sem vinculo automatico tambem nao ha vinculo acidental — e nao ha o que
     // desfazer se algo falhar depois do insert.
-    _bancoPedidoPendente = null;
-    toast(`Banco "${banco.nome}" criado com ${parsed.rows.length} linha(s). `
-        + 'Escolha-o no "Vem de:" dos modelos que vão ler dele.', 'success');
+    if (porVia) {
+        toast(`${parsed.rows.length} vias agrupadas em ${dados.rows.length} células. `
+            + 'Escolha o banco no "Vem de:" do modelo e associe as vias em "Colunas".', 'success');
+    } else {
+        toast(`Banco "${banco.nome}" criado com ${dados.rows.length} linha(s). `
+            + 'Escolha-o no "Vem de:" dos modelos que vão ler dele.', 'success');
+    }
     renderAmostrasOSItens(alvo.osId);
 }
 window.subirBancoDoPedido = subirBancoDoPedido;
 
+function agruparBancoPorViaDeTicket({ headers, rows }, celulas, vias) {
+    const esperado = celulas * vias;
+    if (!Number.isSafeInteger(celulas) || celulas < 1 || !Number.isSafeInteger(vias)
+            || vias < 1 || !Number.isSafeInteger(esperado)) {
+        throw new Error('Confira a quantidade de células e as vias do gabarito TICKET.');
+    }
+    if (!headers.length || rows.length !== esperado) {
+        throw new Error(`Este modelo exige ${esperado} linhas de dados (${celulas} células × ${vias} vias). O CSV tem ${rows.length}.`);
+    }
+
+    const colunas = Array.from({ length: vias }, (_, via) =>
+        headers.map(origem => ({ origem, destino: `Ticket ${via + 1} · ${origem}` })));
+    const agrupadas = [];
+    for (let inicio = 0; inicio < rows.length; inicio += vias) {
+        const celula = {};
+        for (let via = 0; via < vias; via++) {
+            const linha = rows[inicio + via];
+            if (!headers.some(coluna => String(linha[coluna] ?? '').trim() !== '')) {
+                throw new Error(`A linha de dados ${inicio + via + 1} (Ticket ${via + 1}) está vazia.`);
+            }
+            for (const { origem, destino } of colunas[via]) {
+                celula[destino] = linha[origem];
+            }
+        }
+        agrupadas.push(celula);
+    }
+    return { headers: colunas.flat().map(coluna => coluna.destino), rows: agrupadas };
+}
+
 /** O botao 📤 do box: abre o seletor de arquivo para criar um banco do pedido. */
-function subirBancoPeloBox(osId) {
-    _bancoPedidoPendente = { osId };
+function subirBancoPeloBox(osId, modeloTicketId) {
+    const alvo = { osId };
+    if (modeloTicketId !== undefined) {
+        const modelo = (state.osItens[osId] || []).find(item => String(item.id) === modeloTicketId);
+        const num = pecaDoModelo(modelo);
+        const celulas = quantidadeContratada(modelo);
+        const vias = Number(num?.ticket_qtd);
+        if (num?.tipo !== 'TICKET' || celulas < 1 || !Number.isSafeInteger(vias) || vias < 1) {
+            toast('Escolha um modelo TICKET com quantidade e vias definidas.', 'error');
+            return;
+        }
+        Object.assign(alvo, { modeloTicketId, numeracaoId: String(num.id), celulas, vias });
+    }
+    _bancoPedidoPendente = alvo;
     const inp = _inputDoBancoDoPedido();
     inp.value = '';
     inp.click();
 }
 window.subirBancoPeloBox = subirBancoPeloBox;
+
+function formularioBancoPorViaDeTicket(osId) {
+    const opcoes = (state.osItens[osId] || []).flatMap((item, idx) => {
+        const num = pecaDoModelo(item);
+        if (num?.tipo !== 'TICKET') return [];
+        const celulas = quantidadeContratada(item);
+        const vias = Number(num.ticket_qtd);
+        const linhas = celulas * vias;
+        if (celulas < 1 || vias < 1 || !Number.isSafeInteger(vias) || !Number.isSafeInteger(linhas)) return [];
+        const rotulo = `${rotuloDoModelo(item, idx)} · Ticket ${vias} · ${linhas.toLocaleString('pt-BR')} linhas`;
+        return [`<option value="${escDoBanco(String(item.id))}">${escDoBanco(rotulo)}</option>`];
+    });
+    if (!opcoes.length) return '';
+    return `
+        <details style="margin:8px 16px;">
+            <summary>Importar CSV por via de Ticket</summary>
+            <form style="display:flex; flex-wrap:wrap; align-items:end; gap:8px; margin-top:8px;"
+                onsubmit="event.preventDefault(); subirBancoPeloBox('${escapeJsAttr(osId)}', this.elements.modeloTicket.value)">
+                <label style="flex:1; min-width:180px;">
+                    Modelo e quantidade de linhas esperada
+                    <select class="form-control" name="modeloTicket" required>${opcoes.join('')}</select>
+                </label>
+                <button class="btn btn-sm btn-secondary" type="submit">Escolher CSV</button>
+            </form>
+            <small>Ordene as linhas por célula e por via, começando pelo Ticket 1 de cada célula.</small>
+        </details>`;
+}
 
 async function carregarImportadorExcel() {
     if (window.BancoExcel) return window.BancoExcel;
@@ -36756,6 +36843,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                                 <button class="btn btn-sm btn-secondary" onclick="criarColunasDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;" title="Criar um banco ou acrescentar colunas a um CSV deste pedido">➕ Criar colunas</button>
                             </div>
                         </div>
+                        ${formularioBancoPorViaDeTicket(osId)}
                         <div class="card-body" style="padding: 12px 16px 16px 16px; display: flex; flex-direction: column; gap: 8px;" id="bancos-pedido-lista-${osId}"></div>
                     </div>
 
