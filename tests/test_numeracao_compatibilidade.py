@@ -2,6 +2,7 @@
 import base64
 import copy
 import io
+import json
 import socket
 import subprocess
 from pathlib import Path
@@ -10,6 +11,7 @@ import fitz
 from PIL import Image
 import pytest
 
+import engine as motor
 import newprod_temp
 from engine import ImpositionConfig, ImpositionEngine, MM2PT
 
@@ -177,6 +179,51 @@ def test_ticket_comuns_graficos_e_banco_compartilhado(tmp_path, modo):
             assert [entry[1] for entry in entries] == expected
             if tipo == 'QR_IDEAL':
                 assert [entry[2] for entry in entries] == [f'SYNTHETIC-99999-9999999-{v}' for v in expected]
+
+
+def test_ticket_banco_importado_por_via_no_pdf_duplex(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[1]
+    importacao = subprocess.run(
+        ['node', str(root / 'tests/ticket_banco_por_via_harness.js')],
+        cwd=root, capture_output=True, text=True, encoding='utf-8', timeout=20,
+    )
+    assert importacao.returncode == 0, importacao.stdout + importacao.stderr
+    banco = json.loads(importacao.stdout)
+    elementos_ticket = []
+    for via in range(1, 6):
+        x = via * 30 - 20
+        elementos_ticket.extend([
+            dict(type='TEXT', ticket_pos=via, face='front', x_mm=x,
+                 y_mm=35, font_size=8, pad=0, prefix='N:'),
+            dict(type='QR', source='database', csv_column=f'Ticket {via} · QR',
+                 face='back', x_mm=x, y_mm=25, size_mm=10),
+            dict(type='TEXT', source='database', database_text=True,
+                 csv_column=f'Ticket {via} · Texto', face='back',
+                 x_mm=x, y_mm=50, font_size=8),
+        ])
+
+    codigos = []
+    gerar_qr = motor._generate_qr
+
+    def capturar_qr(dado, cor):
+        codigos.append(dado)
+        return gerar_qr(dado, cor)
+
+    monkeypatch.setattr(motor, '_generate_qr', capturar_qr)
+    cfg = config(tmp_path, 'TICKET', 'duplex', elementos_ticket, banco['rows'], ticket_qtd=5)
+    engine = ImpositionEngine(cfg)
+    engine.process()
+    textos = []
+    for saida in engine.generated_files:
+        with fitz.open(saida['path']) as pdf:
+            textos.extend(pagina.get_text().splitlines() for pagina in pdf)
+    assert cfg.total_items == 2
+    assert len(textos) == 4
+    assert all(f'N:{n}' in textos[0] for n in range(10, 15))
+    assert all(f'00{n}' in textos[1] for n in range(1, 6))
+    assert all(f'N:{n}' in textos[2] for n in range(15, 20))
+    assert all(f'00{n}' in textos[3] for n in range(6, 11))
+    assert codigos == [f'QR-{n}' for n in range(1, 11)]
 
 
 @pytest.mark.parametrize('tipo', ['TEXT', 'QR', 'BARCODE', 'QR_IDEAL'])

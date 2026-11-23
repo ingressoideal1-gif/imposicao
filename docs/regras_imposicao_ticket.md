@@ -59,6 +59,22 @@ Onde:
 
 ---
 
+## Banco de dados com uma linha por via
+
+Em **Gerenciamento de Bancos de Dados → Importar CSV por via de Ticket**, selecione o
+modelo TICKET. O CSV precisa conter exatamente `QTD × ticket_qtd` linhas de
+dados após o cabeçalho. A ordem do arquivo define a associação. No Ticket 5,
+as linhas 1 a 5 alimentam as vias da primeira célula e as linhas 6 a 10
+alimentam as da segunda. Linhas vazias são recusadas para evitar deslocar as vias.
+
+A importação salva uma linha por célula, com colunas como `Ticket 1 · Código`
+e `Ticket 5 · Código`. Escolha o banco em **Vem de** e associe cada elemento
+à coluna da sua via em **Colunas**. O mesmo banco alimenta a prévia e a
+imposição. A importação comum continua disponível para arquivos que já têm
+uma linha por célula.
+
+---
+
 ## 4. Integração com Esquema de Corte e Empilhamento (`cut_stack`)
 
 Quando combinados com o esquema de imposição `cut_stack` (principalmente no modo `strict_assembly`), os blocos físicos são fatiados com base nas folhas físicas do papel de saída.
