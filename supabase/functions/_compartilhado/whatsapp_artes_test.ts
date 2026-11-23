@@ -7,7 +7,8 @@ function fixture() {
   const env: Record<string, string> = { CHATGURU_ENDPOINT: "https://s1.chatguru.app/api/v1", CHATGURU_KEY: "sintetica", CHATGURU_ACCOUNT_ID: "conta", CHATGURU_PHONE_ID: "6071afff6e66fe3fadecd101", CHATGURU_DEFAULT_DDI: "55" };
   const c = { env, registros, chamadas: [] as URLSearchParams[], recusado: false, timeout: false, falharPersistencia: false,
     status: "scheduled", ocupado: false, timeoutDialogo: false,
-    guru: {pedido:11,contato_id:"guru#"+"a".repeat(24),nome:"Contato no Guru",whatsapp:"5511999990000",valido:true},
+    guru: {pedido:11,contato_id:"guru#"+"a".repeat(24),nome:"Contato no Guru",whatsapp:"5511999990000",valido:true,
+      opcoes: [] as { origem: string }[]},
     link: { os_id: "vibe_11", numero_pedido: 11, token: "abc123", arte_pronta_em: "2026-11-06T12:00:00Z" } };
   const deps = {
     ambiente: (k: string) => env[k],
@@ -114,6 +115,20 @@ Deno.test("whatsapp: sem contato ou vínculo inválido não usa cadastro geral",
   f.c.guru.valido = true; f.c.guru.pedido = 99;
   await assert.rejects(f.preparar, Recusa);
   assert.equal(f.c.chamadas.length, 0);
+});
+Deno.test("whatsapp: contato gravado no pedido exige conversa confirmada", async () => {
+  const f = fixture();
+  f.c.guru.nome = "Contato do pedido";
+  f.c.guru.opcoes = [{ origem: "pedido" }];
+  f.c.guru.valido = false;
+  await assert.rejects(f.preparar, /Envio indisponível para o contato do pedido/);
+  assert.equal(f.c.chamadas.length, 0);
+  f.c.guru.valido = true;
+  const p = await f.preparar();
+  assert.deepEqual(p.contato, { nome: "Contato do pedido", whatsapp: "5511999990000" });
+  assert.equal(f.c.chamadas.length, 0);
+  assert.equal((await f.executar("enviar", { confirmacao: p.confirmacao })).aceito, true);
+  assert.equal(f.c.chamadas[1].get("chat_number"), p.contato.whatsapp);
 });
 Deno.test("whatsapp: sessão, permissão e campos livres recusados", async () => {
   const f = fixture();

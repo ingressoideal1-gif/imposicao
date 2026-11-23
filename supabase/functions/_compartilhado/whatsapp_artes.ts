@@ -58,6 +58,9 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
   if (phone !== "6071afff6e66fe3fadecd101") throw new Recusa(503, "Configure o remetente 3478 para os contatos da Lista de Arte.");
   const contato = uma(await db("POST", "rpc/imposition_arte_guru_ler", { p_pedidos: [Number(link.numero_pedido)] }), "Contato da Lista de Arte indisponível.");
   if (Number(contato.pedido) !== Number(link.numero_pedido) || contato.valido !== true || !contato.contato_id) {
+    if (contato.opcoes?.[0]?.origem === "pedido") {
+      throw new Recusa(422, "Envio indisponível para o contato do pedido. Confira o comprador no Vibe e a conversa no Guru 3478.");
+    }
     throw new Recusa(422, "Confira o comprador do pedido no Vibe. O destinatário precisa estar disponível no Guru 3478.");
   }
   const contatoId = contato.contato_id;
