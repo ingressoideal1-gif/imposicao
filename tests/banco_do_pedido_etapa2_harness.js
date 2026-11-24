@@ -520,8 +520,24 @@ function cenario(mapas) {
 
     const corpo = script.slice(script.indexOf('function desenharColunasDoModeloNoCard'),
                                script.indexOf('window.desenharColunasDoModeloNoCard'));
-    ok(/colunaDoElemento\(mapa, el\)/.test(corpo),
-        'cada ficha le a coluna do ELEMENTO — chave el:<id> primeiro, csv_column legado depois');
+    const item = {id: 'm-ticket', quantidade: 2, numeracao_inicio: 101};
+    const dados = {id: 'b-ticket', csv_headers: ['Link'], csv_data: [101, 102, 103, 104].map(n => ({Link: String(n)}))};
+    const peca = {tipo: 'TICKET', ticket_qtd: 2, elements: [1, 2].map(via => ({
+        type: 'QR', source: 'database', ticket_pos: via, id: 'qr-' + via
+    }))};
+    const badge = {style: {}, innerHTML: ''};
+    const desenhar = new Function('window', 'state', 'escDoBanco', 'pecaDoModelo',
+        corpo + '\nreturn desenharColunasDoModeloNoCard;')(
+        window, {bancosDoPedido: [dados]}, String, () => peca);
+    const vinculo = {banco_id: dados.id, csv_mapa: null};
+    const card = {querySelector: () => badge};
+    desenhar(0, item, card, vinculo);
+    ok(badge.innerHTML.includes('Ticket 1 · Link') && badge.innerHTML.includes('Ticket 2 · Link')
+        && !badge.innerHTML.includes('sem coluna'),
+        'fichas mostram as colunas resolvidas para cada via do Ticket');
+    vinculo.csv_mapa = {'el:qr-1': 'Ausente'};
+    desenhar(0, item, card, vinculo);
+    ok(badge.innerHTML.includes('sem coluna'), 'campo com coluna ausente continua destacado');
     ok(/if \(!banco \|\| !elementos\.length\)/.test(corpo) && /display = 'none'/.test(corpo),
         'sem banco do pedido (ou sem elemento de banco) a faixa fica escondida');
     ok(/sem coluna/.test(corpo) && /var\(--red,#ef4444\)/.test(corpo),
