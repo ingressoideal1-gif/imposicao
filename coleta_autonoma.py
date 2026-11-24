@@ -1,6 +1,9 @@
 """Descoberta no agente, sem navegador, sem sessão persistida e sem impressão."""
 from datetime import datetime
+from hashlib import sha256
+from http.client import IncompleteRead
 import json
+import re
 import time
 import threading
 import urllib.request
@@ -10,6 +13,40 @@ from diagnostico_estacao import registrar as registrar_diagnostico
 
 from conferencia_piloto import ConferidorPiloto, ConferenciaIndisponivel, ConexaoPilotoIndisponivel
 from pacotes_download import SemRedirecionamento
+
+
+# Mesmo contrato de piloto-local/index.ts.
+BLOCO_PEDIDO = 512 * 1024
+LIMITE_PEDIDO_EM_PARTES = 32 * 1024 * 1024
+PROTOCOLO_PEDIDO_EM_PARTES = 'X-NewProd-Pedido-Partes'
+
+
+def _ler_pedido_em_partes(resposta, headers):
+    tamanho = headers.get('X-NewProd-Pedido-Bytes', '')
+    esperado = headers.get('X-NewProd-Pedido-SHA256', '')
+    if (not re.fullmatch('[1-9][0-9]{0,7}', tamanho) or int(tamanho) > LIMITE_PEDIDO_EM_PARTES
+            or not re.fullmatch('[a-f0-9]{64}', esperado)):
+        raise ValueError('Metadados da transferencia do pedido invalidos.')
+
+    tamanho = int(tamanho)
+    raw = bytearray()
+    try:
+        while len(raw) < tamanho:
+            parte = resposta.read(min(BLOCO_PEDIDO, tamanho - len(raw)))
+            if not parte:
+                raise ValueError('Transferencia do pedido incompleta.')
+            raw.extend(parte)
+        excedente = resposta.read(1)
+    except (IncompleteRead, OSError) as erro:
+        # O envio de um snapshot novo invalida o recibo anterior mesmo se a rede cair.
+        raise ValueError('Transferencia do pedido interrompida.') from erro
+
+    if excedente or len(raw) != tamanho or sha256(raw).hexdigest() != esperado:
+        raise ValueError('Integridade da transferencia do pedido divergente.')
+    dados = json.loads(raw)
+    if not isinstance(dados, dict) or dados.get('protocolo') != 2 or dados.get('sem_mudanca') is not False:
+        raise ValueError('Snapshot transferido invalido.')
+    return {**dados, 'recebido_em_partes': True}
 
 
 def segredo_do_agente():
@@ -42,6 +79,8 @@ class ClienteAutonomo:
             from agent_version import AGENT_VERSION
             cabecalhos = {'Content-Type':'application/json', 'X-Agente-Segredo':segredo,
                           'X-NewProd-Versao': AGENT_VERSION.split('-')[0]}
+            if acao == 'abrir-pedido':
+                cabecalhos[PROTOCOLO_PEDIDO_EM_PARTES] = '1'
             if acao == 'catalogos-offline' and 'revisao_catalogo' in corpo:
                 corpo = dict(corpo)
                 cabecalhos['X-NewProd-Catalogo'] = corpo.pop('revisao_catalogo')
@@ -52,6 +91,11 @@ class ClienteAutonomo:
                 if getattr(resposta, 'status', 200) != 200:
                     raise urllib.error.HTTPError('', resposta.status, '', {}, None)
                 codigo = 'resposta_invalida'
+                headers = getattr(resposta, 'headers', {})
+                if acao == 'abrir-pedido' and PROTOCOLO_PEDIDO_EM_PARTES in headers:
+                    if headers[PROTOCOLO_PEDIDO_EM_PARTES] != '1':
+                        raise ValueError('Protocolo de transferencia do pedido desconhecido.')
+                    return _ler_pedido_em_partes(resposta, headers)
                 limite = (8 if acao in ('conferir-pedido', 'abrir-pedido', 'catalogos-offline', 'lista-offline') else 1) * 1024 * 1024
                 raw = resposta.read(limite + 1)
                 if len(raw) > limite: raise ValueError()

@@ -33,10 +33,14 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
     || d.modelos.length>128 || d.pedidos.length !== 1) throw new Recusa(409,'pedido incompleto');
   if (persistida && ['bancos','vinculos','artes','mapas'].some(k=>!Array.isArray(d[k]))) throw new Recusa(503,'snapshot local incompleto');
   const consumidores = new Map<any, any[]>();
+  const bancosVinculados = [];
   if (persistida) for (const b of d.bancos) {
     const links = d.vinculos.filter((v:any)=>String(v.banco_id)===String(b.id));
+    // Bancos arquivados no pedido continuam no snapshot, fora das dependencias.
+    if (!links.length) continue;
+    bancosVinculados.push(b);
     const elementos:any[] = [];
-    let completo = links.length > 0;
+    let completo = true;
     for (const v of links) {
       const modelos = d.modelos.filter((m:any)=>String(m.id)===String(v.modelo_id));
       const numId = modelos[0]?.amostra_num_id || modelos[0]?.numeracao_id;
@@ -78,7 +82,7 @@ export async function conferirPedidoPiloto(entrada: any, permissoes: any, consul
     const produtos = d.produtos.filter((p:any)=>String(p.id_produto)===String(produtoId));
     const produto = produtos.length === 1 ? produtos[0] : null;
     if (produto?.is_estoque === true) continue;
-    const fontes = fontesPiloto(m,persistida ? [...nums,...d.bancos,...d.mapas] : nums,consumidores);
+    const fontes = fontesPiloto(m,persistida ? [...nums,...bancosVinculados,...d.mapas] : nums,consumidores);
     const semArteBase = !fontes.frente && gabaritoSemArteBase(m, nums);
     if (!fontes.frente && !semArteBase) continue;
     const versoes_fontes:Record<string,any> = {};

@@ -7,6 +7,34 @@ import { operarPilotoEstacao } from '../_compartilhado/piloto_estacao.ts';
 import { conferirPiloto } from '../_compartilhado/piloto_local.ts';
 import { exigirVersaoNewprod, VERSAO_MINIMA_PUBLICADA } from '../_compartilhado/newprod_versao.ts';
 
+// Mesmo contrato de coleta_autonoma.py. Uma revisao por resposta e uma consulta ao banco.
+const BLOCO_PEDIDO = 512 * 1024;
+const LIMITE_PEDIDO_EM_PARTES = 32 * 1024 * 1024;
+const PROTOCOLO_PEDIDO_EM_PARTES = 'X-NewProd-Pedido-Partes';
+
+async function responderAberturaPedido(dados: unknown, headers: HeadersInit): Promise<Response> {
+  const bytes = new TextEncoder().encode(JSON.stringify(dados));
+  if (bytes.length <= BLOCO_PEDIDO) return new Response(bytes, {headers});
+  if (bytes.length > LIMITE_PEDIDO_EM_PARTES) throw new Recusa(413,'pedido excede limite de transferencia');
+
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  const resposta = new Headers(headers);
+  resposta.set(PROTOCOLO_PEDIDO_EM_PARTES, '1');
+  resposta.set('X-NewProd-Pedido-Bytes', String(bytes.length));
+  resposta.set('X-NewProd-Pedido-SHA256', Array.from(digest, n => n.toString(16).padStart(2, '0')).join(''));
+
+  let offset = 0;
+  const corpo = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const fim = Math.min(offset + BLOCO_PEDIDO, bytes.length);
+      controller.enqueue(bytes.subarray(offset, fim));
+      offset = fim;
+      if (offset === bytes.length) controller.close();
+    },
+  });
+  return new Response(corpo, {headers:resposta});
+}
+
 async function conferirAgente(req: Request) {
   const esperado = await segredo('ACESSO_AGENTE_SEGREDO');
   const recebido = req.headers.get('x-agente-segredo') || '';
@@ -54,7 +82,7 @@ export async function handler(req: Request): Promise<Response> {
   const permitido = !origin || /^http:\/\/(127\.0\.0\.1|localhost):9001$/.test(origin);
   const headers: Record<string,string> = {'Content-Type':'application/json', 'Cache-Control':'no-store', 'Vary':'Origin'};
   if (origin && permitido) headers['Access-Control-Allow-Origin'] = origin;
-  headers['Access-Control-Allow-Headers'] = 'authorization,apikey,content-type,x-agente-segredo,x-newprod-versao';
+  headers['Access-Control-Allow-Headers'] = 'authorization,apikey,content-type,x-agente-segredo,x-newprod-versao,x-newprod-pedido-partes';
   headers['Access-Control-Allow-Methods'] = 'POST,OPTIONS';
   const resposta = (status:number,body:unknown) => new Response(JSON.stringify(body),{status,headers});
   if (!permitido) return resposta(403,{detail:'origem recusada'});
@@ -69,7 +97,13 @@ export async function handler(req: Request): Promise<Response> {
       if (!(resultado instanceof Response)) throw new Recusa(503, 'base QR indisponivel');
       return resultado;
     }
-    if (['listar','conferir','conferir-pedido','abrir-pedido','catalogos-offline', 'lista-offline','confirmar-offline','estado-cache'].includes(acao || '')) return resposta(200,await operarPilotoEstacao(acao!,req,conferirAgente,VERSAO_MINIMA_PUBLICADA));
+    if (['listar','conferir','conferir-pedido','abrir-pedido','catalogos-offline', 'lista-offline','confirmar-offline','estado-cache'].includes(acao || '')) {
+      const resultado = await operarPilotoEstacao(acao!, req, conferirAgente, VERSAO_MINIMA_PUBLICADA);
+      if (acao === 'abrir-pedido' && req.headers.get(PROTOCOLO_PEDIDO_EM_PARTES) === '1') {
+        return await responderAberturaPedido(resultado, headers);
+      }
+      return resposta(200, resultado);
+    }
     if (acao==='conferir-sessao') return resposta(200,await conferirSessao(req));
     return resposta(404,{detail:'operacao inexistente'});
   } catch(e) {

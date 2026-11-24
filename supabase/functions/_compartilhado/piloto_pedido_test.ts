@@ -26,8 +26,10 @@ Deno.test('pedido v2: 300 links de QR preservados sem virar downloads, com mapa 
   const arquivos = Object.values((await abrir() as any).itens[0].fontes);
   assert.equal(arquivos.length,301);
   assert.ok(arquivos.includes('https://qr.invalid/299'));
-  snapshot.vinculos=[]; // Sem contexto, nao adivinhar que uma URL e apenas conteudo.
-  assert.equal(Object.keys((await abrir() as any).itens[0].fontes).length,301);
+  snapshot.vinculos=[]; // Banco presente, mas sem modelo que consuma suas linhas.
+  const semVinculo:any = await abrir();
+  assert.deepEqual(semVinculo.itens[0].fontes,{frente:a.modelo.arte_url});
+  assert.deepEqual(semVinculo.snapshot.bancos,[b]);
  }
 });
 function ambiente() {

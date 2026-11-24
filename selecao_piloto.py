@@ -237,9 +237,9 @@ class SelecaoPiloto:
             with ThreadPoolExecutor(max_workers=4,thread_name_prefix='RevisaoPedidoPiloto') as pool:
                 for pacote in pool.map(preparar_modelo, preparar):
                     reutilizados[pacote['modelo']] = pacote
-            # Downloads/recursos sem versao exigem uma segunda revisao do pedido
-            # como barreira da corrida. Caminho inteiramente reutilizado: uma so.
-            if preparar:
+            # Reconfirmar apos transferir arquivos ou um snapshot grande, inclusive
+            # quando os PDFs foram reaproveitados e apenas o banco pode ter mudado.
+            if preparar or recibo.get('recebido_em_partes') is True:
                 final = validar_recibo(conferir(pedido,recibo['revisao']),
                                         self.servico.empresa,pedido,recibo['revisao'])
                 if not final['sem_mudanca']:
