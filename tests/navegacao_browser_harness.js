@@ -70,9 +70,21 @@ ${funcao('loadOrdensFromVibecode')}
 ${funcao('clearAmostrasOS')}
 ${showView}
 </script><script>${ler('navegacao-painel.js')}</script><script>
+if (sessionStorage.getItem('simularF5NoPedido')) {
+    window.cargasGerais = 0;
+    window.loadOrdens = async () => { cargasGerais++; };
+    window.prepararRestauracaoDeArte = osId => new Promise(resolve => {
+        window.liberarPedidoDoF5 = () => {
+            const numero = osId.replace('vibe_', '');
+            const os = { id: 'vibe_' + numero, numero };
+            state.ordens.push(os);
+            resolve(os);
+        };
+    });
+}
 function iniciarTeste() {
     NavegacaoPainel.iniciar('view-lista-impressao');
-    NavegacaoPainel.dadosProntos();
+    if (!sessionStorage.getItem('simularF5NoPedido')) NavegacaoPainel.dadosProntos();
 }
 if (!sessionStorage.getItem('aguardarLogin')) iniciarTeste();
 </script>`;
@@ -116,6 +128,25 @@ async function caso(nome, fn) { await fn(); total++; console.log('OK: ' + nome);
             await page.reload();
             await ativa('view-catalogo');
             assert.equal(page.url(), origem + '/?offline=true#ancora-existente');
+        });
+        await caso('F5 em Artes indica o pedido enquanto sua consulta pontual carrega', async () => {
+            const pedido = await nova();
+            try {
+                await pedido.goto(origem + '/pedido/101');
+                await pedido.waitForFunction(() => state.amostrasOSAtivo === 'vibe_101');
+                await pedido.evaluate(() => sessionStorage.setItem('simularF5NoPedido', '1'));
+                await pedido.reload();
+                const status = '#view-amostras [role="status"]';
+                await pedido.waitForSelector(status, { visible: true });
+                assert.match(await pedido.$eval(status, el => el.textContent), /pedido #101/);
+                assert.equal(await pedido.$eval('#view-amostras button', el => el.style.display), 'none');
+                await pedido.evaluate(() => liberarPedidoDoF5());
+                await pedido.waitForFunction(() => desenhos.includes('vibe_101'));
+                assert.equal(await pedido.$(status), null);
+                assert.equal(await pedido.evaluate(() => cargasGerais), 0);
+            } finally {
+                await pedido.close();
+            }
         });
         await caso('Voltar e Avançar percorrem telas sem criar entradas extras', async () => {
             const antes = await page.evaluate(() => history.length);

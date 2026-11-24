@@ -2302,68 +2302,84 @@ async function consultarFotosProdutosComSessao() {
         .order('posicao', { ascending: true });
 }
 
+let _catalogosDaRetomadaArte = null;
+
+function identidadeDaCargaDoPainel() {
+    return window._currentUser?.id || window._acessoLocal || null;
+}
+
+async function carregarCatalogosDeArte() {
+    const identidade = identidadeDaCargaDoPainel();
+    const [fmts, nums, cores, vibeProdutos, vibeProdutoFotos] = await Promise.all([
+        api('GET', '/formatos'),
+        api('GET', '/numeracoes'),
+        api('GET', '/cores').catch(() => []),
+        (typeof vibeClient !== 'undefined' && vibeClient ? vibeClient.from('produtos').select('*') : Promise.resolve({data:[]}))
+            .then(r => {
+                if (r && r.error) {
+                    console.error('[loadAll] Erro ao buscar produtos:', r.error);
+                }
+                console.log('[loadAll] vibeProdutos carregados:', r ? (r.data ? r.data.length : 0) : 0);
+                return r ? r.data : [];
+            })
+            .catch(err => {
+                console.error('[loadAll] Exception ao buscar produtos:', err);
+                return [];
+            }),
+        consultarFotosProdutosComSessao()
+            .then(r => {
+                if (r && r.error) {
+                    console.warn('[loadAll] Fotos dos produtos indisponiveis:', r.error);
+                    return [];
+                }
+                return (r && r.data) || [];
+            })
+            .catch(err => {
+                console.warn('[loadAll] Falha ao buscar fotos dos produtos:', err);
+                return [];
+            })
+    ]);
+
+    if (identidadeDaCargaDoPainel() !== identidade) return;
+    state.formatos = fmts;
+
+    state.numeracoes = nums;
+
+    state.cores = cores || [];
+    try {
+        const localRefMap = JSON.parse(localStorage.getItem('ideal_cores_referencia_map') || '{}');
+        state.cores.forEach(c => {
+            if (localRefMap[c.id]) {
+                c.cor_referencia = localRefMap[c.id];
+            }
+        });
+    } catch(e) {}
+
+    state.produtosGlobais = vibeProdutos || [];
+    state.produtoFotosPorId = {};
+    (vibeProdutoFotos || []).forEach(foto => {
+        const chave = String(foto && foto.id_produto);
+        if (!chave || chave === 'undefined' || !foto.url) return;
+        if (!state.produtoFotosPorId[chave]) state.produtoFotosPorId[chave] = [];
+        state.produtoFotosPorId[chave].push(foto);
+    });
+}
+
 async function loadAll() {
     if (typeof window !== 'undefined' && window.IdGenEditor?.ativo) { window.IdGenEditor.sincronizar(); return; }
 
     try {
-
-        const [fmts, nums, sais, cores, modelos, vibeProdutos, vibeProdutoFotos] = await Promise.all([
-            api('GET', '/formatos'),
-            api('GET', '/numeracoes'),
+        const identidade = identidadeDaCargaDoPainel();
+        const catalogos = _catalogosDaRetomadaArte?.identidade === identidade
+            ? _catalogosDaRetomadaArte.promessa : carregarCatalogosDeArte();
+        const [, saidas, modelos] = await Promise.all([
+            catalogos,
             api('GET', '/saidas'),
-            api('GET', '/cores').catch(() => []),
-            api('GET', '/modelos_imposicao').catch(() => []),
-            (typeof vibeClient !== 'undefined' && vibeClient ? vibeClient.from('produtos').select('*') : Promise.resolve({data:[]}))
-                .then(r => {
-                    if (r && r.error) {
-                        console.error('[loadAll] Erro ao buscar produtos:', r.error);
-                    }
-                    console.log('[loadAll] vibeProdutos carregados:', r ? (r.data ? r.data.length : 0) : 0);
-                    return r ? r.data : [];
-                })
-                .catch(err => {
-                    console.error('[loadAll] Exception ao buscar produtos:', err);
-                    return [];
-                }),
-            consultarFotosProdutosComSessao()
-                .then(r => {
-                    if (r && r.error) {
-                        console.warn('[loadAll] Fotos dos produtos indisponiveis:', r.error);
-                        return [];
-                    }
-                    return (r && r.data) || [];
-                })
-                .catch(err => {
-                    console.warn('[loadAll] Falha ao buscar fotos dos produtos:', err);
-                    return [];
-                })
+            api('GET', '/modelos_imposicao').catch(() => [])
         ]);
-
-        state.formatos = fmts;
-
-        state.numeracoes = nums;
-
-        state.saidas = sais;
-
-        state.cores = cores || [];
-        try {
-            const localRefMap = JSON.parse(localStorage.getItem('ideal_cores_referencia_map') || '{}');
-            state.cores.forEach(c => {
-                if (localRefMap[c.id]) {
-                    c.cor_referencia = localRefMap[c.id];
-                }
-            });
-        } catch(e) {}
-
+        if (identidadeDaCargaDoPainel() !== identidade) return;
+        state.saidas = saidas;
         state.modelosImposicao = modelos || [];
-        state.produtosGlobais = vibeProdutos || [];
-        state.produtoFotosPorId = {};
-        (vibeProdutoFotos || []).forEach(foto => {
-            const chave = String(foto && foto.id_produto);
-            if (!chave || chave === 'undefined' || !foto.url) return;
-            if (!state.produtoFotosPorId[chave]) state.produtoFotosPorId[chave] = [];
-            state.produtoFotosPorId[chave].push(foto);
-        });
 
         // Os itens podem ter sido mapeados antes desta linha — é o caso comum,
         // porque as OS carregam por conta própria. Sem este reparo eles ficam
@@ -20128,7 +20144,7 @@ async function recarregarNumeracoesDoPedido(osId, opcoes) {
     if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { window.IdGenEditor.sincronizar(); return; }
     try {
         if (typeof supabaseClient === 'undefined' || !supabaseClient) throw new Error('Conexão de dados indisponível.');
-        const itens = (state.osItens && state.osItens[osId]) || [];
+        const itens = opcoes?.itens || state.osItens?.[osId] || [];
         const ids = Array.from(new Set(itens.map(it => numeracaoIdDoItem(it)).filter(Boolean).map(String)));
         if (!ids.length) return 0;
         // COM ou SEM o banco de dados de cada numeracao (26/08/2026).
@@ -20149,6 +20165,7 @@ async function recarregarNumeracoesDoPedido(osId, opcoes) {
             .select(comBanco ? '*' : COLUNAS_DA_NUMERACAO_NA_LISTA)
             .in('id', ids), 'numerações do pedido');
         if (error) throw error;
+        if (opcoes?.aindaAtual && !opcoes.aindaAtual()) return 0;
         if (!Array.isArray(state.numeracoes)) state.numeracoes = [];
         // A mesma forma que o api() entrega: sem METADATA, com print_mode. Sem
         // isto o lapis do card abria o editor com um elemento fantasma (v683).
@@ -28001,7 +28018,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         // O dashboard precisa do histórico inteiro para suas métricas, mas não
         // exibe prazo ou rastreio. Seu recorte separado impede reutilizar esta
         // carga como se fosse a lista operacional completa ao sair do dashboard.
-        if (!opcoes.dashboardArte) try {
+        if (!opcoes.dashboardArte && !opcoes.restaurandoArte) try {
             // Os mesmos pedidos da consulta de propostas acima — inclusive os
             // que não têm produto. Sem isso o pedido sem produto entraria na
             // lista sem prazo e sem código de rastreio, que é justamente a
@@ -28029,7 +28046,7 @@ async function loadOrdensFromVibecode(pedidosComerciais = [], produtosPreloaded 
         }
 
         // A data e a hora são campos distintos no ERP. Sem hora, manter só a data.
-        if (!opcoes.dashboardArte) try {
+        if (!opcoes.dashboardArte && !opcoes.restaurandoArte) try {
             // Na estacao, cada hora exige uma ida autenticada ao ERP. Completar
             // depois do primeiro desenho; uma hora lenta nao invalida a lista.
             const horasPorPedido = typeof SERVIDA_PELA_NUVEM !== 'undefined' && SERVIDA_PELA_NUVEM === false && !opcoes.numeroPedido
@@ -28617,32 +28634,28 @@ async function atualizarQuantidadesDoERP(osId, numero) {
 async function loadOSItens(osId, opcoes = {}) {
     if (typeof window !== 'undefined' && window.IDGEN_CONTEXTO) { window.IdGenEditor.sincronizar(); return; }
     // Todos os chamadores aguardam a mesma leitura; a chave canônica evita duplicação.
-    const ordem = typeof findOSInState === 'function' ? findOSInState(osId) : null;
+    const retomada = opcoes.retomada;
+    const ordem = retomada?.os || (typeof findOSInState === 'function' ? findOSInState(osId) : null);
     osId = ordem?.id || osId;
-    const cargas = state._loadingOSItens || (state._loadingOSItens = {});
-    if (cargas[osId] && ((opcoes.atualizar && !cargas[osId].opcoes?.atualizar)
-            || (opcoes.exigirModelos && !cargas[osId].opcoes?.exigirModelos))) {
-        await cargas[osId];
-        return loadOSItens(osId, opcoes);
-    }
-    if (!cargas[osId]) {
-      cargas[osId] = Promise.resolve().then(async () => {
+    const carregar = async () => {
       const anteriores = state.osItens[osId];
       const snapshotLocal = opcoes.snapshotLocal;
+      let itens = anteriores;
       try {
 
-        const os = typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null);
+        const os = retomada?.os || (typeof findOSInState === 'function' ? findOSInState(osId) : (state.ordens ? state.ordens.find(o => o.id === osId || String(o.id) === String(osId) || String(o.numero) === String(osId)) : null));
         if (!os) {
             throw new Error('Pedido não encontrado.');
         }
         const targetId = os.id || osId;
 
         // Se não carregado ainda, ou se tem apenas o cache básico do Vibecode, busca a fonte de dados principal
-        const needsFullLoad = opcoes.atualizar || !state.osItens[osId] || state.osItens[osId].length === 0 || state.osItens[osId].some(i => i._dbLoaded !== true);
+        const needsFullLoad = retomada || opcoes.atualizar || !itens?.length || itens.some(i => i._dbLoaded !== true);
         if (needsFullLoad) {
             if (snapshotLocal || typeof supabaseClient !== 'undefined' && supabaseClient) {
                 const queryNum = parseInt(os.numero);
-                const [modelosResult, produtosResult] = snapshotLocal ? [{data:structuredClone(snapshotLocal.modelos).sort((a,b) => (a.ordem ?? Infinity) - (b.ordem ?? Infinity) || Number(a.id)-Number(b.id))}, {data:structuredClone(snapshotLocal.origens)}] : await Promise.all([
+                const [modelosResult, produtosResult] = retomada ? [{ data: retomada.modelos }, { data: retomada.origens }]
+                    : snapshotLocal ? [{data:structuredClone(snapshotLocal.modelos).sort((a,b) => (a.ordem ?? Infinity) - (b.ordem ?? Infinity) || Number(a.id)-Number(b.id))}, {data:structuredClone(snapshotLocal.origens)}] : await Promise.all([
                     lerDadosLista(supabaseClient.from('pedidos_modelos').select('*')
                         .eq('id_int', queryNum).order('ordem', { ascending: true }), 'modelos do pedido'),
                     lerDadosLista(supabaseClient.from('produtos_proposta').select('*').eq('id_int', queryNum), 'produtos do pedido')
@@ -28668,7 +28681,7 @@ async function loadOSItens(osId, opcoes = {}) {
                     const seguiramOPedido = [];
 
                     // Usar pedidos_modelos como fonte principal
-                    state.osItens[osId] = data.map(item => {
+                    itens = data.map(item => {
                         const prop = propData?.find(p => p.id === item.id_produto_proposta_origem);
                         
                         const idProdutoDoModelo = prop ? prop.id_produto : (item.id_produto || null);
@@ -28769,19 +28782,20 @@ async function loadOSItens(osId, opcoes = {}) {
                     // -1 = não procurar nos selects da tela: no carregamento os selects de amostra
                     // ainda são os do pedido anterior, e ler deles atribuiria a cor errada a este.
                     const SEM_SELECT_NA_TELA = -1;
-                    state.osItens[osId].forEach(it => resolveItemCorNumIds(it, SEM_SELECT_NA_TELA));
+                    itens.forEach(it => resolveItemCorNumIds(it, SEM_SELECT_NA_TELA));
                     // DEBUG: mostrar campos de cor de cada item
-                    state.osItens[osId].forEach(it => {
+                    itens.forEach(it => {
                         console.log(`[COR DEBUG] id=${it.id} padrao=${it.padrao} cor=${it.cor} amostra_cor_id=${it.amostra_cor_id} id_cor=${it.id_cor} cor_raw=${it._rawCor}`);
                     });
 
-                    if (seguiramOPedido.length && typeof toast === 'function') {
+                    if (!retomada && seguiramOPedido.length && typeof toast === 'function') {
                         const lista = seguiramOPedido.slice(0, 3).join(' | ');
                         const resto = seguiramOPedido.length > 3 ? ` (+${seguiramOPedido.length - 3})` : '';
                         toast(`Atualizado conforme o pedido — ${lista}${resto}`, 'info');
                         console.log('[PEDIDO] Cor/numeração seguiram o banco:', seguiramOPedido);
                     }
                 } else if (propData && propData.length > 0) {
+                    if (retomada) throw new Error('Abra o pedido pela Lista de Arte para preparar os modelos antes de editar.');
                     // Fallback: usar produtos_proposta diretamente quando pedidos_modelos está vazio
                     console.log('[loadOSItens] Fallback: usando produtos_proposta para id_int=' + queryNum);
                     const mappedItems = propData.map((pp, idx) => {
@@ -28870,13 +28884,13 @@ async function loadOSItens(osId, opcoes = {}) {
                         console.warn('[loadOSItens] Falha no auto-create de pedidos_modelos:', autoCreateErr);
                     }
 
-                    state.osItens[osId] = mappedItems;
+                    itens = mappedItems;
                 } else {
-                    state.osItens[osId] = [];
+                    itens = [];
                 }
             } else {
                 if (opcoes.exigirModelos) throw new Error('Conexão com os modelos de produção indisponível.');
-                state.osItens[osId] = await lerDadosLista(async signal => {
+                itens = await lerDadosLista(async signal => {
                     const res = await fetch(`${API_BASE_URL}/api/ordens/${osId}/itens`, { signal });
                     if (!res.ok) throw new Error('Não foi possível carregar os modelos.');
                     return await res.json();
@@ -28884,9 +28898,13 @@ async function loadOSItens(osId, opcoes = {}) {
             }
         }
 
+        if (!retomada) state.osItens[osId] = itens;
         // Mesmo com artes/amostras em cache, a tiragem continua vindo do ERP.
-        if (!snapshotLocal && !needsFullLoad && os.numero) await atualizarQuantidadesDoERP(osId, os.numero);
-        if (typeof window !== 'undefined') await window.TeatroSnapshot?.conferirPedido(state.osItens[osId],
+        if (!snapshotLocal && !needsFullLoad && os.numero) {
+            await atualizarQuantidadesDoERP(osId, os.numero);
+            itens = state.osItens[osId];
+        }
+        if (typeof window !== 'undefined') await window.TeatroSnapshot?.conferirPedido(itens,
             typeof supabaseClient === 'undefined' ? null : supabaseClient, snapshotLocal?.mapas);
 
         // Buscar dados dinâmicos da arte (pedidos_artes) e mesclar nos itens
@@ -28894,14 +28912,15 @@ async function loadOSItens(osId, opcoes = {}) {
             try {
                 const queryNum = parseInt(os.numero);
                 if (!isNaN(queryNum)) {
-                    const { data: artes, error: artesError } = snapshotLocal ? {data:structuredClone(snapshotLocal.artes)} : await lerDadosLista(supabaseClient
+                    const { data: artes, error: artesError } = retomada ? { data: retomada.artes }
+                        : snapshotLocal ? {data:structuredClone(snapshotLocal.artes)} : await lerDadosLista(supabaseClient
                         .from('pedidos_artes')
                         .select('*')
                         .eq('id_int', queryNum), 'artes do pedido');
                     if (artesError) throw artesError;
                     
                     if (!artesError && artes && artes.length > 0) {
-                        state.osItens[osId].forEach(item => {
+                        itens.forEach(item => {
                             // Encontrar artes vinculadas a este item
                             const artesDoItem = artes.filter(a => 
                                 String(a.id_modelo) === String(item.id) || 
@@ -28938,20 +28957,29 @@ async function loadOSItens(osId, opcoes = {}) {
             }
         }
 
+        if (retomada) return itens;
         renderOSItens(osId);
         // Não chamar renderOrdens() aqui para evitar re-renderizar a tabela durante a navegação para amostras
         return { ok: true };
       } catch (e) {
+        if (retomada) throw e;
         if (anteriores === undefined) delete state.osItens[osId];
         else state.osItens[osId] = anteriores;
         console.error('Erro ao carregar itens da OS:', e);
         toast('Erro ao carregar itens: ' + e.message, 'error');
         return { ok: false, erro: e };
-      } finally {
-        cargas[osId] = false;
       }
-    });
-      cargas[osId].opcoes = opcoes;
+    };
+    if (retomada) return carregar();
+    const cargas = state._loadingOSItens || (state._loadingOSItens = {});
+    if (cargas[osId] && ((opcoes.atualizar && !cargas[osId].opcoes?.atualizar)
+            || (opcoes.exigirModelos && !cargas[osId].opcoes?.exigirModelos))) {
+        await cargas[osId];
+        return loadOSItens(osId, opcoes);
+    }
+    if (!cargas[osId]) {
+        cargas[osId] = Promise.resolve().then(carregar).finally(() => { cargas[osId] = false; });
+        cargas[osId].opcoes = opcoes;
     }
     const resultado = await cargas[osId];
     if (!resultado.ok && opcoes.obrigatorio) throw resultado.erro;
@@ -35367,6 +35395,75 @@ function findOSInState(osId) {
     ) || null;
 }
 window.findOSInState = findOSInState;
+
+async function prepararRestauracaoDeArte(osId, aindaAtual, catalogosProntos) {
+    const numero = Number(String(osId).replace(/^vibe_/, ''));
+    if (!Number.isSafeInteger(numero) || numero <= 0 || !aindaAtual()) return null;
+    const id = `vibe_${numero}`;
+    // As saídas e os modelos de imposição continuam no carregamento geral.
+    // A retomada compartilha apenas os cadastros utilizados pelo editor.
+    const identidade = identidadeDaCargaDoPainel();
+    if (!catalogosProntos && _catalogosDaRetomadaArte?.identidade !== identidade) {
+        const promessa = carregarCatalogosDeArte().finally(() => {
+            if (_catalogosDaRetomadaArte?.promessa === promessa) _catalogosDaRetomadaArte = null;
+        });
+        _catalogosDaRetomadaArte = { identidade, promessa };
+    }
+    const catalogos = catalogosProntos ? null : _catalogosDaRetomadaArte.promessa;
+    const leitura = Promise.all([
+        lerDadosLista(sinal => consultarPropostas({ tipo: 'numeros', numeros: [numero] }, undefined, 'consultar', sinal), 'proposta do pedido'),
+        lerDadosLista(supabaseClient.from('produtos_proposta').select('*').eq('id_int', numero)
+            .order('created_at', { ascending: false }), 'produtos do pedido'),
+        lerDadosLista(supabaseClient.from('pedidos_modelos').select('*').eq('id_int', numero)
+            .order('ordem', { ascending: true }), 'modelos do pedido'),
+        lerDadosLista(supabaseClient.from('pedidos_artes').select('*').eq('id_int', numero)
+            .order('created_at', { ascending: false }), 'artes do pedido'),
+        lerDadosLista(temSessaoDoSupabase(), 'sessão').then(temSessao => temSessao && aindaAtual()
+            ? lerDadosLista(supabaseClient.from('pedidos_links_cliente')
+                .select('os_id, numero_pedido, token, status_arte, arte_pronta_em, cliente_abriu_em')
+                .eq('os_id', id).eq('ativo', true).order('id'), 'link do pedido')
+            : { data: [] })
+    ]).then(async resultados => {
+        if (!aindaAtual()) return null;
+        const falha = resultados.find(r => r.error);
+        if (falha) throw falha.error;
+        const [propostas, origens, modelos, artes, linksDoPedido] = resultados.map(r => r.data || []);
+        const link = linksDoPedido.at(-1);
+        const resultado = await loadOrdensFromVibecode([], origens, {
+            numeroPedido: numero, propostasPreloaded: propostas, propagarErro: true, restaurandoArte: true,
+            modelos, artes, links: link ? { [id]: link } : {}
+        });
+        const os = resultado?.ordens.find(pedido => pedido.id === id);
+        if (!os) throw new Error('O pedido não está disponível.');
+        return { os, origens, modelos, artes, link };
+    });
+
+    const [dados] = await Promise.all([leitura, catalogos]);
+    if (!dados || !aindaAtual()) return null;
+    const itens = await loadOSItens(id, { retomada: dados });
+    if (!aindaAtual()) return null;
+    await recarregarNumeracoesDoPedido(id, { itens, comBanco: false, obrigatorio: true, aindaAtual });
+    if (!aindaAtual()) return null;
+
+    // Publicar o pedido completo de uma vez, após confirmar o alvo da navegação.
+    state.ordens = [...(state.ordens || []).filter(pedido => String(pedido.numero) !== String(numero)), dados.os]
+        .sort((a, b) => b.numero - a.numero);
+    state.osItens[id] = itens;
+    state.todasArtes = [...(state.todasArtes || []).filter(arte => String(arte.id_int) !== String(numero)), ...dados.artes];
+    if (state.modelosGlobais) delete state.modelosGlobais[numero];
+    state.linksCliente ||= {};
+    state.linksClienteData ||= {};
+    delete state.linksCliente[id];
+    delete state.linksClienteData[id];
+    if (dados.link) {
+        state.linksCliente[id] = `${CLIENTE_BASE_URL}/cliente/${dados.link.numero_pedido}-${dados.link.token}`;
+        state.linksClienteData[id] = dados.link;
+    }
+    return dados.os;
+}
+if (typeof supabaseClient !== 'undefined' && supabaseClient && typeof vibeClient !== 'undefined' && vibeClient) {
+    window.prepararRestauracaoDeArte = prepararRestauracaoDeArte;
+}
 
 /**
  * Helper resiliente para obter os itens de uma OS do state.osItens por qualquer variação da chave de ID
