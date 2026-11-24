@@ -231,27 +231,28 @@ def test_painel_interrompido_nao_exige_conferencia():
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 (async()=>{
   let estado='conferencia',observar;
-  const elementos=[];
-  function elemento(){
-    const e={style:{},children:[],appendChild(c){this.children.push(c);},
-      replaceChildren(){this.children=[];}};
-    elementos.push(e);return e;
-  }
-  const ctx={window:{},document:{readyState:'loading',body:elemento(),
-    createElement:elemento,addEventListener(n,fn){observar=fn;}},
+  const chamadas=[];
+  const ctx={window:{},document:{readyState:'loading',
+    createElement(){assert.fail('O quadro flutuante nao deve ser criado');},
+    addEventListener(n,fn){observar=fn;}},
     location:{hostname:'localhost',origin:'http://localhost:9001'},
     setTimeout(){},AbortSignal,URL,
-    fetch:async()=>({ok:true,json:async()=>({trabalhos:[
-      {id:'teste-antigo',estado,enviados:0,paginas_enviadas:0}]})})};
+    fetch:async(url,opcoes)=>{
+      chamadas.push([new URL(url).pathname,opcoes.method||'GET']);
+      return {ok:true,json:async()=>({trabalhos:[{id:'teste-antigo',estado}]})};
+    }};
   vm.runInNewContext(fs.readFileSync('frontend/impressao-autonoma.js','utf8'),ctx);
   await observar();
   assert.equal(ctx.window.ImpressaoAutonoma.ocupada(),false);
-  assert(!elementos.some(e=>(e.textContent||'').includes('conferi')));
-  assert(!elementos.some(e=>(e.textContent||'').includes('Confira')));
   estado='enviando';
   await ctx.window.ImpressaoAutonoma.consultar();
   assert.equal(ctx.window.ImpressaoAutonoma.ocupada(),true);
-  assert(elementos.some(e=>e.textContent==='Cancelar próximos lotes'));
+  await ctx.window.ImpressaoAutonoma.cancelar();
+  assert.deepEqual(chamadas,[
+    ['/api/print/trabalhos','GET'],
+    ['/api/print/trabalhos','GET'],
+    ['/api/print/trabalhos/teste-antigo/cancelar','POST'],
+  ]);
 })().catch(e=>{console.error(e);process.exit(1);});
 '''
     result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=15)

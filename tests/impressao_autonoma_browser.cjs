@@ -20,9 +20,11 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),puppeteer=requi
   await esperar(id,s=>s.enviados>=2&&s.estado==='enviando');
   await p.close(); // Desapareceu o cliente que iniciou a impressao.
   p=await abrir();
-  await p.evaluate(()=>ImpressaoAutonoma.consultar());
-  assert.match(await p.$eval('#impressao-autonoma-andamento',e=>e.textContent),/Pedido 99 · Modelo 22 · sintetica/);
+  await p.waitForFunction(()=>ImpressaoAutonoma.ocupada());
+  assert.equal(await p.evaluate(()=>Boolean(document.getElementById('impressao-autonoma-andamento'))),false);
   let final=await esperar(id,s=>s.estado==='enviado');
+  assert.equal(final.impressora,'sintetica');
+  assert.ok(final.alvos.some(a=>a.pedido==='99'&&a.modelo==='22'));
   assert.equal(final.enviados,15);assert.equal(final.paginas_enviadas,110);
   assert.equal(new Set(final.lotes.map(l=>l.envio)).size,15);
   assert.deepEqual(final.lotes.filter(l=>['capa','contracapa'].includes(l.tipo)).map(l=>l.tipo),['capa','contracapa','capa','contracapa']);
@@ -44,7 +46,7 @@ const fs=require('node:fs'),assert=require('node:assert/strict'),puppeteer=requi
   assert.equal(await p.evaluate(()=>window.posts),1);
   id=await iniciar(p);
   await esperar(id,s=>s.estado==='enviando');
-  await p.evaluate(()=>ImpressaoAutonoma.cancelar());
+  await p.click('#btn-cancel-imposition');
   final=await esperar(id,s=>s.estado==='cancelado');
   assert.equal(final.enviados,1);assert.equal(final.gerados,1);
   console.log('OK: navegador fechado/reaberto, 110 paginas sem duplicacao, capas por bloco e cancelamento explicito.');
