@@ -72,12 +72,19 @@
         return Number.isSafeInteger(cand.ni) && cand.ni >= 0 ? cand.ni : cand.n;
     }
 
+    function numeroExibido(cand) {
+        var numero = numeroApresentado(cand);
+        return cand && Number.isSafeInteger(cand.ni) && cand.ni >= 0 &&
+            Number.isSafeInteger(cand.np) && cand.np > 0 && cand.np <= 100
+            ? String(numero).padStart(cand.np, '0') : numero;
+    }
+
     function negado(motivo, cand, setor, detalhe) {
         return {
             estado: 'negado',
             motivo: motivo,
             credencial_id: cand ? cand.id : null,
-            numero: numeroApresentado(cand),
+            numero: numeroExibido(cand),
             setor: setor || null,
             detalhe: detalhe || {},
         };
@@ -164,7 +171,7 @@
                         return !porNumero || meus.findIndex(function (outro) { return outro.s === c.s; }) === i;
                     }).map(function (c) {
                         return {
-                            credencial_id: c.id, numero: numeroApresentado(c),
+                            credencial_id: c.id, numero: numeroExibido(c),
                             setor: setorPorId(carga, c.s),
                         };
                     }),
@@ -183,7 +190,7 @@
         // Identifica o ingresso; o servidor decide entrada/saida e restricoes.
         // Isso permite registrar saida mesmo depois de fechar/bloquear o setor.
         if (entrada.presencaOnline && setor && setor.tipo_uso === 'reentrada') {
-            return { estado: 'permitido', credencial_id: cand.id, numero: numeroApresentado(cand), setor: setor };
+            return { estado: 'permitido', credencial_id: cand.id, numero: numeroExibido(cand), setor: setor };
         }
         if (carga.evento && carga.evento.ativo === false) {
             return negado('evento_inativo', cand, setor, {});
@@ -228,7 +235,7 @@
         }
 
         // 7. Passou por todas.
-        return { estado: 'permitido', credencial_id: cand.id, numero: numeroApresentado(cand), setor: setor };
+        return { estado: 'permitido', credencial_id: cand.id, numero: numeroExibido(cand), setor: setor };
     }
 
     window.portariaValidacao = { saisParaTentar: saisParaTentar, decidir: decidir };

@@ -231,8 +231,8 @@ async function publicacaoDoEvento(eventoId: string) {
     if (lote.length < 1000) break;
   }
   return {
-    // Faz cargas antigas baixarem também o número impresso, sem republicar QRs.
-    versao: "numero-impresso-v1:" + JSON.stringify(pedidos.map(p => [p.pedido_id_int, p.publicado_em, p.total_credenciais])),
+    // Faz cargas anteriores baixarem a numeração das vias convencionais.
+    versao: "numero-impresso-v1:vias:" + JSON.stringify(pedidos.map(p => [p.pedido_id_int, p.publicado_em, p.total_credenciais])),
     concluida: pedidos.length > 0 && pedidos.every(p => p.publicado_em && Number(p.total_credenciais) > 0),
     leitor_minimo: await banco("POST", "rpc/producao_acesso_qr_leitor_evento", { p_evento: eventoId }),
   };
@@ -296,10 +296,9 @@ async function faixa(
   )) ?? [];
   const temProxima = paginaMaisUma.length > POR_PAGINA;
   const pagina = paginaMaisUma.slice(0, POR_PAGINA);
-  const impressos = await numerosImpressos(pagina);
-
   const sais: Record<string, string> = {};
   for (const p of pedidos) sais[String(p.pedido_id_int)] = p.sal;
+  const impressos = await numerosImpressos(pagina, sais);
 
   return ok({
     evento: {
@@ -327,8 +326,8 @@ async function faixa(
       h: c.codigo_hash,
       s: c.setor_id,
       n: c.numero,
-      // Só apresentação. `n` permanece ordinal para todas as regras de acesso.
-      ...(impressos.has(c.id) ? { ni: impressos.get(c.id) } : {}),
+      // `ni` é o número impresso, `np` sua largura e `n` o ordinal dos bloqueios.
+      ...impressos.get(c.id),
       id: c.id,
     })),
     proxima: temProxima ? desde + POR_PAGINA : null,
