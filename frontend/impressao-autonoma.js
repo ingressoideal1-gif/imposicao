@@ -1,7 +1,7 @@
 (function (root) {
     'use strict';
     const ativos = new Set(['aceito', 'gerando', 'enviando', 'cancelando']);
-    let base = null, atual = null, registros = [], painel = null, consultando = false;
+    let base = null, atual = null, registros = [], consultando = false;
     const pausa = ms => new Promise(resolve => setTimeout(resolve, ms));
     async function api(caminho, opcoes = {}) {
         const resposta = await fetch(base + '/api/print/trabalhos' + caminho, {
@@ -9,57 +9,6 @@
         });
         if (!resposta.ok) throw new Error('Não foi possível consultar ou alterar o trabalho na estação.');
         return resposta.json();
-    }
-    function mostrar() {
-        if (!painel) {
-            painel = document.createElement('section');
-            painel.id = 'impressao-autonoma-andamento';
-            Object.assign(painel.style, {position:'fixed', right:'16px', bottom:'55px', zIndex:10002,
-                maxWidth:'390px', maxHeight:'45vh', overflow:'auto', padding:'12px', borderRadius:'8px',
-                background:'#172334', color:'#fff', boxShadow:'0 2px 12px #0006'});
-            document.body.appendChild(painel);
-        }
-        painel.replaceChildren();
-        const titulo = document.createElement('strong');
-        titulo.textContent = 'Impressão na estação'; painel.appendChild(titulo);
-        for (const item of registros.slice(0, 3)) {
-            const linha = document.createElement('div'); linha.style.marginTop = '8px';
-            const texto = document.createElement('div');
-            const estado = {aceito:'Aceito',gerando:'Gerando',enviando:'Enviando',enviado:'Enviado ao Windows',
-                cancelado:'Cancelado após o último envio',conferencia:'Interrompido',encerrado:'Conferido pelo operador'}[item.estado] || item.estado;
-            texto.textContent = `${item.id.slice(0,8)} — ${estado}. ${item.enviados} lote(s), ${item.paginas_enviadas} página(s) enviadas.`;
-            const ultimoLote = item.lotes?.at(-1);
-            if (ultimoLote) {
-                const situacao = ultimoLote.estado === 'enviado' ? ' enviado ao Windows.'
-                    : item.estado === 'conferencia' || item.estado === 'encerrado' ? ' com envio sem confirmação.' : ' em envio.';
-                texto.textContent += ' Lote ' + ultimoLote.numero + situacao;
-            }
-            const alvos = item.alvos || [];
-            if (alvos.length || item.impressora) {
-                const contexto = document.createElement('div');
-                const pedidos = [...new Set(alvos.map(a => a.pedido))];
-                contexto.textContent = [pedidos.length && 'Pedido ' + pedidos.join(', '),
-                    alvos.length && 'Modelo ' + alvos.map(a => a.modelo).join(', '), item.impressora]
-                    .filter(Boolean).join(' · ');
-                linha.appendChild(contexto);
-            }
-            linha.appendChild(texto);
-            if (ativos.has(item.estado)) {
-                const botao = document.createElement('button');
-                botao.textContent = 'Cancelar próximos lotes';
-                botao.onclick = async () => {
-                    botao.disabled = true;
-                    try {
-                        await api('/' + item.id + '/cancelar', {method:'POST'});
-                        await consultar();
-                    } catch (e) { root.toast?.(e.message, 'error'); }
-                    finally { botao.disabled = false; }
-                };
-                linha.appendChild(botao);
-            }
-            painel.appendChild(linha);
-        }
-        painel.hidden = !registros.length;
     }
     async function consultar() {
         if (!base || consultando) return;
@@ -70,7 +19,6 @@
                 await api('/' + atual.id + '/cancelar', {method:'POST'});
                 atual.cancelar = false;
             }
-            mostrar();
         } finally { consultando = false; }
     }
     async function cancelar() {
