@@ -83,6 +83,19 @@ Deno.test("whatsapp: concorrência reserva apenas uma chamada", async () => {
   await Promise.all(Array.from({ length: 5 }, () => f.executar("enviar", { confirmacao: p.confirmacao })));
   assert.equal(f.c.chamadas.length, 2);
 });
+Deno.test("whatsapp: preserva o DDI da conversa internacional na prévia e no diálogo", async () => {
+  for (const numero of ["59890000000", "51900000000"]) {
+    const f = fixture();
+    f.c.guru.whatsapp = numero;
+    const p = await f.preparar();
+
+    assert.equal(p.contato.whatsapp, numero);
+    assert.equal(f.c.chamadas.length, 0);
+    assert.equal((await f.executar("enviar", { confirmacao: p.confirmacao })).aceito, true);
+    assert.deepEqual(f.c.chamadas.map(chamada => chamada.get("action")), ["chat_update_custom_fields", "dialog_execute"]);
+    assert.deepEqual(f.c.chamadas.map(chamada => chamada.get("chat_number")), [numero, numero]);
+  }
+});
 Deno.test("whatsapp: timeout preserva reserva e nunca repete disparo", async () => {
   const f = fixture(), p = await f.preparar(); f.c.timeout = true;
   assert.equal((await f.executar("enviar", { confirmacao: p.confirmacao })).estado, "desconhecido");

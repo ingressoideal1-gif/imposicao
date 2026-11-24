@@ -9,13 +9,13 @@ const PORTAL = "https://imposition.ai-ideal.com.br";
 const TABELA = "imposition_whatsapp_artes";
 const DIALOGO = "6aef191d04236cee4e7075c1";
 
-export function telefoneWhatsApp(valor: unknown, ddi: string): string {
+export function telefoneWhatsApp(valor: unknown, ddiCadastro?: string): string {
   if (typeof valor !== "string" || !/^[+\d\s().-]+$/.test(valor)) throw new Recusa(422, "Corrija o WhatsApp do contato selecionado no pedido.");
   let n = valor.replace(/\D/g, "");
-  // DDI nacional somente quando explicitamente configurado pelo administrador.
-  if (!valor.trim().startsWith("+") && /^[1-9]\d{9,10}$/.test(n)) {
-    if (ddi !== "55") throw new Recusa(422, "O contato está sem DDI. Corrija o cadastro ou configure o DDI brasileiro na integração.");
-    n = ddi + n;
+  // O DDI padrão se aplica a telefone de cadastro, que pode vir em formato nacional.
+  if (ddiCadastro !== undefined && !valor.trim().startsWith("+") && /^[1-9]\d{9,10}$/.test(n)) {
+    if (ddiCadastro !== "55") throw new Recusa(422, "O contato está sem DDI. Corrija o cadastro ou configure o DDI brasileiro na integração.");
+    n = ddiCadastro + n;
   }
   if (!/^[1-9]\d{10,14}$/.test(n)) throw new Recusa(422, "Informe o WhatsApp com DDI e DDD no contato do pedido.");
   return n;
@@ -64,7 +64,8 @@ export async function operarWhatsappArtes(acao: string, entrada: unknown, quem: 
     throw new Recusa(422, "Confira o comprador do pedido no Vibe. O destinatário precisa estar disponível no Guru 3478.");
   }
   const contatoId = contato.contato_id;
-  const numero = telefoneWhatsApp(contato.whatsapp, ler("CHATGURU_DEFAULT_DDI") || "");
+  // A conversa confirmada no Guru 3478 já fornece o número de destino.
+  const numero = telefoneWhatsApp(contato.whatsapp);
   // O template do Guru já contém o prefixo do portal; o campo recebe só o sufixo.
   const sufixo = `${link.numero_pedido}-${link.token}`;
   const url = `${PORTAL}/cliente/${sufixo}`;
