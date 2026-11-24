@@ -18680,8 +18680,8 @@ function desenharColunasDoModeloNoCard(idx, item, container, vinculo) {
     const banco = window.BancoDoModelo
         ? window.BancoDoModelo.bancoDoModelo(vinculo, state.bancosDoPedido || [])
         : null;
-    const peca = pecaDoModelo(item);
-    const elementos = ((peca && peca.elements) || []).filter(el => el && el.source === 'database');
+    const num = banco && window.BancoDoModelo.numeracaoResolvida(pecaDoModelo(item), banco, vinculo.csv_mapa, item);
+    const elementos = (num?.elements || []).filter(el => el && el.source === 'database');
 
     // Sem banco do pedido nao ha escolha a mostrar: no caminho da numeracao
     // as colunas moram na propria peca, como sempre.
@@ -18691,10 +18691,9 @@ function desenharColunasDoModeloNoCard(idx, item, container, vinculo) {
         return;
     }
 
-    const cabecalho = (banco.csv_headers || []).map(String);
-    const mapa = (vinculo && vinculo.csv_mapa) || {};
+    const cabecalho = (num.csv_headers || []).map(String);
     const fichas = elementos.map(el => {
-        const col = window.BancoDoModelo.colunaDoElemento(mapa, el);
+        const col = String(el.csv_column || '').trim();
         const ok = col !== '' && cabecalho.indexOf(col) !== -1;
         const nome = String(el.name || '').trim() || 'Elemento';
         const titulo = ok ? (nome + ' lê a coluna ' + col) : (nome + ' ainda não tem coluna no banco');
