@@ -9,6 +9,7 @@
     let pronta = false, geracao = 0, exibindo = false, leitura = false, inicialPendente = null;
     let home = null, atual = null, dadosCarregados = false;
     let liberarModelo = null;
+    let liberarAmostras = null;
     const estado = () => typeof state === 'undefined' ? {} : state;
     const id = valor => (typeof valor === 'string' || typeof valor === 'number')
         && String(valor).length <= 160 ? String(valor) : null;
@@ -78,6 +79,7 @@
         if (!rota || JSON.stringify(rota) === JSON.stringify(atual)) return;
         geracao++;
         cancelarModelo();
+        liberarAmostras?.();
         inicialPendente = null;
         gravar(rota, substituir || !atual);
         atual = rota;
@@ -85,6 +87,7 @@
     function iniciarAcao() {
         const numero = ++geracao;
         cancelarModelo();
+        liberarAmostras?.();
         inicialPendente = null;
         return () => pronta && numero === geracao;
     }
@@ -120,23 +123,54 @@
         leitura = true;
         try { return fn(); } finally { leitura = anterior; }
     }
-    async function restaurar(rota, aindaAtual) {
+    function mostrarCargaDasAmostras(osId) {
+        const secao = document.getElementById('view-amostras');
+        const mensagem = document.createElement?.('p');
+        if (!mensagem || !secao) return null;
+        mensagem.setAttribute('role', 'status');
+        mensagem.textContent = 'Carregando artes do pedido #' + String(osId).replace(/^vibe_/, '') + '…';
+        const elementos = Array.from(secao.children, el => [el, el.style.display]);
+        for (const [el] of elementos) el.style.display = 'none';
+        secao.prepend(mensagem);
+        const liberar = () => {
+            if (liberarAmostras !== liberar) return;
+            liberarAmostras = null;
+            mensagem.remove();
+            for (const [el, display] of elementos) el.style.display = display;
+        };
+        liberarAmostras = liberar;
+        return liberar;
+    }
+    async function restaurar(rota, aindaAtual, pontual = false) {
         if (!aindaAtual()) return;
         const s = estado();
         try {
             if (!permitida(rota.view)) throw new Error('Tela indisponível para este acesso.');
             if (rota.osId) {
-                if (!window.findOSInState(rota.osId)) await window.loadOrdens({ completa: true });
-                if (!aindaAtual()) return;
-                const os = window.findOSInState(rota.osId);
-                if (!os) throw new Error('O pedido não está disponível.');
-                const producao = rota.view === 'view-pedido';
-                const exigirModelos = producao && (os._source === 'vibecode' || String(os.id).startsWith('vibe_'));
-                const carregado = await window.loadOSItens(os.id, producao ? { atualizar: true, exigirModelos } : {});
-                if (!aindaAtual()) return;
-                if (carregado === false || (exigirModelos && !(window.getOSItens(os.id) || []).every(i => i._pedidoModeloId != null && i._dbLoaded === true))) {
-                    throw new Error('Não foi possível confirmar os modelos deste pedido.');
+                let os;
+                if (pontual) {
+                    const liberar = mostrarCargaDasAmostras(rota.osId);
+                    try {
+                        os = await window.prepararRestauracaoDeArte(rota.osId, aindaAtual, dadosCarregados);
+                    } finally {
+                        liberar?.();
+                    }
+                    if (!aindaAtual()) return;
+                } else {
+                    if (!window.findOSInState(rota.osId)) await window.loadOrdens({ completa: true });
+                    if (!aindaAtual()) return;
+                    os = window.findOSInState(rota.osId);
+                    if (os) {
+                        const producao = rota.view === 'view-pedido';
+                        const exigirModelos = producao && (os._source === 'vibecode' || String(os.id).startsWith('vibe_'));
+                        const carregado = await window.loadOSItens(os.id, producao ? { atualizar: true, exigirModelos } : {});
+                        if (!aindaAtual()) return;
+                        if (carregado === false || (exigirModelos && !(window.getOSItens(os.id) || []).every(i => i._pedidoModeloId != null && i._dbLoaded === true))) {
+                            throw new Error('Não foi possível confirmar os modelos deste pedido.');
+                        }
+                    }
                 }
+                if (!os) throw new Error('O pedido não está disponível.');
                 if (rota.view === 'view-amostras') {
                     s.amostrasOSAtivo = os.id;
                     exibir(rota.view, aindaAtual);
@@ -213,6 +247,17 @@
             if (fallback) { atual = fallback; exibir(home, aindaAtual); gravar(fallback, true); }
         }
     }
+    function solicitarRestauracao(rota, aindaAtual, inicial = false) {
+        const numero = rota.view === 'view-amostras' && !window.IDGEN_CONTEXTO
+            && /^(?:vibe_)?(\d{1,9})$/.exec(rota.osId || '');
+        const pontual = numero && Number(numero[1]) > 0 && typeof window.prepararRestauracaoDeArte === 'function';
+        if (inicial || pontual || !dadosCarregados) exibir(rota.view, aindaAtual);
+        if (pontual) {
+            const conta = dono(), entrada = caminho();
+            void restaurar(rota, () => aindaAtual() && dono() === conta && caminho() === entrada && permitida(rota.view), true);
+        } else if (dadosCarregados) void restaurar(rota, aindaAtual);
+        else inicialPendente = { rota, aindaAtual };
+    }
     function iniciar(telaInicial) {
         home = telaInicial;
         const eraPronta = pronta;
@@ -235,10 +280,7 @@
         if (!rota) return;
         atual = rota;
         gravar(rota, true);
-        // O shell abre após as permissões. Detalhes esperam os catálogos.
-        exibir(rota.view, aindaAtual);
-        if (dadosCarregados) void restaurar(rota, aindaAtual);
-        else inicialPendente = { rota, aindaAtual };
+        solicitarRestauracao(rota, aindaAtual, true);
     }
     function dadosProntos() {
         dadosCarregados = true;
@@ -246,7 +288,13 @@
         inicialPendente = null;
         if (pendente) void restaurar(pendente.rota, pendente.aindaAtual);
     }
-    function suspender() { pronta = false; geracao++; cancelarModelo(); inicialPendente = null; }
+    function suspender() {
+        pronta = false;
+        geracao++;
+        cancelarModelo();
+        liberarAmostras?.();
+        inicialPendente = null;
+    }
     function encerrarSessao() {
         suspender();
         atual = null;
@@ -278,8 +326,7 @@
         const rota = ler() || validar({ view: home });
         if (!rota) return;
         atual = rota;
-        if (dadosCarregados) void restaurar(rota, aindaAtual);
-        else { exibir(rota.view, aindaAtual); inicialPendente = { rota, aindaAtual }; }
+        solicitarRestauracao(rota, aindaAtual);
     });
     window.NavegacaoPainel = { iniciar, registrar, iniciarAcao, exibir, concluir,
         dadosProntos, suspender, encerrarSessao, guardarRetornoLogin,
