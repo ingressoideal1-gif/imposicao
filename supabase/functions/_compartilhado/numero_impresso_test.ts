@@ -40,7 +40,6 @@ Deno.test("consulta só contratos dos pares necessários, em lotes abaixo do tet
     igual(init?.method, "GET");
     const url = new URL(String(input));
     igual(url.pathname, "/rest/v1/producao_acesso_qr_contratos");
-    igual(url.searchParams.get("versao"), "eq.2");
     const filtro = url.searchParams.get("or") || "";
     chamadas.push(filtro);
     const modelos = [...filtro.matchAll(/modelo\.eq\.(\d+)/g)].map(m => Number(m[1]));
@@ -49,10 +48,10 @@ Deno.test("consulta só contratos dos pares necessários, em lotes abaixo do tet
   };
   try {
     const lista = Array.from({ length: 105 }, (_, i) => ({ ...credencial, id: `c${i}`, modelo_id: 1005802 + i }));
-    const resposta = await numerosImpressos([...lista, { ...credencial, id: "cliente", origem: "cliente" }]);
+    const resposta = await numerosImpressos([...lista, { ...credencial, id: "cliente", origem: "cliente" }], {});
     igual(chamadas.length, 3);
     igual(resposta.size, 105);
-    igual(resposta.get("c0"), 250);
+    igual(resposta.get("c0"), { ni: 250 });
     igual(resposta.has("cliente"), false);
   } finally {
     globalThis.fetch = original;

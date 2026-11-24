@@ -81,13 +81,17 @@ export function planejar(fonte: any[]): PlanoModelo[] {
   return planos;
 }
 
-export function conteudoDoIngresso(pool: Uint8Array | null, pedido: number, m: PlanoModelo, i: number): string {
+export function sequenciaDoIngresso(m: PlanoModelo, i: number): { via: Via; valor: number } {
   // A via já adotada mantém os ordinais 1..QTD. As demais ocupam os blocos
   // seguintes, com numeração contínua exigida pela RPC de preparação.
   const celulas = m.quantidade / (m.vias?.length ?? 1);
   const via = m.vias?.[Math.floor(i / celulas)] ?? m;
   const celula = m.vias ? i % celulas : i;
-  const valor = m.inicio + celula * m.passo + via.posicao - 1;
+  return { via, valor: m.inicio + celula * m.passo + via.posicao - 1 };
+}
+
+export function conteudoDoIngresso(pool: Uint8Array | null, pedido: number, m: PlanoModelo, i: number): string {
+  const { via, valor } = sequenciaDoIngresso(m, i);
   if (m.tipo !== "QR_IDEAL") return via.prefix + String(valor).padStart(via.pad, "0") + via.suffix;
   if (!pool || pool.byteLength !== POOL_BYTES) throw new Error("Base privada indisponível.");
   const offset = (m.qr_contrato ? indiceContrato(pedido, m.modelo, valor, m.qr_contrato) : indiceQr(pedido, m.modelo, valor)) * 8;

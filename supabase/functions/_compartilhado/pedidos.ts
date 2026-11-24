@@ -123,7 +123,19 @@ export async function fonteDosCodigos(pedidoIdInt: number) {
     `pedidos_modelos?id_int=eq.${pedidoIdInt}` +
       "&select=id,nome_modelo,quantidade,numeracao_inicio,amostra_num_id&order=ordem.asc",
   )) ?? [];
+  return incluirNumeracoes(modelos);
+}
 
+export async function fonteDosCodigosPorModelo(pares: { pedido: number; modelo: number }[]) {
+  const filtro = pares.map(p => `and(id_int.eq.${p.pedido},id.eq.${p.modelo})`).join(",");
+  const modelos = (await banco(
+    "GET",
+    `pedidos_modelos?or=(${filtro})&select=id,id_int,quantidade,numeracao_inicio,amostra_num_id&limit=${pares.length}`,
+  )) ?? [];
+  return incluirNumeracoes(modelos);
+}
+
+async function incluirNumeracoes(modelos: any[]) {
   const ids: string[] = [...new Set<string>(
     modelos.map((m: any) => idDeNumeracao(m.amostra_num_id)).filter(Boolean) as string[],
     )].sort();
