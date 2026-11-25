@@ -80,7 +80,6 @@ import {
 } from "./puro.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
-import { basePrivada } from "../_compartilhado/preparacao_nuvem.ts";
 import { type ContratoQr, planoDoModelo, type PlanoModelo, sequenciaDoContrato } from "../_compartilhado/preparacao_codigos.ts";
 
 const SEGREDO_AGENTE = "ACESSO_AGENTE_SEGREDO";
@@ -132,7 +131,6 @@ async function gravarLote(pedidoIdInt: number, itens: unknown[]): Promise<number
       ...sequenciaDoContrato(c), modelo: c.modelo, setor: "", tipo: "QR_IDEAL", qr_contrato: c,
     });
   }
-  const pool = v2.length ? await basePrivada(2) : null;
 
   // `on_conflict=chave_dedup` e o que torna a publicacao repetivel: a rede cai
   // no meio, o agente reenvia o lote inteiro, e nada duplica.
@@ -147,7 +145,7 @@ async function gravarLote(pedidoIdInt: number, itens: unknown[]): Promise<number
     const plano = planoDoModelo(m);
     if (plano && plano.tipo !== "QR_IDEAL") planos.set(plano.modelo, plano);
   }
-  const credenciais = await expandirItensTicket(pedidoIdInt, itens, planos, linha.sal, pool);
+  const credenciais = await expandirItensTicket(pedidoIdInt, itens, planos, linha.sal);
   await banco(
     "POST",
     "producao_acesso_credenciais?on_conflict=chave_dedup",

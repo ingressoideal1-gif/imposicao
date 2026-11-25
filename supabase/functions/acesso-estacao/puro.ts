@@ -1,5 +1,6 @@
 import { conteudoDoIngresso, type PlanoModelo } from "../_compartilhado/preparacao_codigos.ts";
 import { hashCodigo } from "../_compartilhado/hash.ts";
+import { conteudoQrV2EmBlocos } from "../_compartilhado/qr_blocos.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
 
 /**
@@ -113,7 +114,7 @@ export async function expandirItensTicket(
   itens: unknown[],
   planos: ReadonlyMap<number, PlanoModelo>,
   sal: string,
-  poolQr: Uint8Array | null = null,
+  gerarQr12 = conteudoQrV2EmBlocos,
 ): Promise<unknown[]> {
   const resultado: unknown[] = [];
   for (const bruto of itens) {
@@ -127,7 +128,9 @@ export async function expandirItensTicket(
     const celulas = plano.quantidade / vias;
     for (let via = 0; via < vias; via++) {
       const numero = Number(item.numero) + via * celulas;
-      const codigo = conteudoDoIngresso(poolQr, pedido, plano, numero - 1);
+      const codigo = plano.tipo === "QR_IDEAL"
+        ? await gerarQr12(pedido, plano, numero - 1)
+        : conteudoDoIngresso(null, pedido, plano, numero - 1);
       const hash = await hashCodigo(codigo, sal);
       if (plano.tipo === "QR_IDEAL" && via === 0 && item.hash !== hash) {
         throw new Recusa(409, "QR diverge do contrato; atualize a estação antes de imprimir");

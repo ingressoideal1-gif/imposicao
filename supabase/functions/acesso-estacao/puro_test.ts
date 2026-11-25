@@ -14,7 +14,8 @@ import {
   pedacosDaRota,
 } from "./puro.ts";
 import { hashCodigo } from "../_compartilhado/hash.ts";
-import { conteudoDoIngresso, planoDoModelo, POOL_BYTES, sequenciaDoContrato } from "../_compartilhado/preparacao_codigos.ts";
+import { conteudoDoIngresso, planoDoModelo, type PlanoModelo, POOL_BYTES, sequenciaDoContrato } from "../_compartilhado/preparacao_codigos.ts";
+import { conteudoQrV2EmBlocos } from "../_compartilhado/qr_blocos.ts";
 import { Recusa } from "../_compartilhado/sessao.ts";
 
 Deno.test("rota: os formatos que o Supabase entrega", () => {
@@ -91,10 +92,17 @@ Deno.test("QR12 TICKET: cada extremo da faixa física publica dois ordinais e ex
   const planos = new Map([[c.modelo, plano]]);
   const itens = await Promise.all([credencial(1), credencial(1000)]);
   const esperado = await Promise.all([credencial(1), credencial(1001), credencial(1000), credencial(2000)]);
-  assertEquals(await expandirItensTicket(c.pedido, itens, planos, sal, pool), esperado);
+  const indices: number[] = [];
+  const gerarQr12 = (pedido: number, plano: PlanoModelo, indice: number) =>
+    conteudoQrV2EmBlocos(pedido, plano, indice, (i) => {
+      indices.push(i);
+      return Promise.resolve(String(i).padStart(8, "0"));
+    });
+  assertEquals(await expandirItensTicket(c.pedido, itens, planos, sal, gerarQr12), esperado);
+  assertEquals(indices, [0, 1, 1998, 1999]);
   assertEquals(new Set(esperado.map(item => item.hash)).size, 4);
   await assertRejects(
-    () => expandirItensTicket(c.pedido, [{ ...itens[0], hash: esperado[1].hash }], planos, sal, pool),
+    () => expandirItensTicket(c.pedido, [{ ...itens[0], hash: esperado[1].hash }], planos, sal, gerarQr12),
     Recusa,
     "QR diverge do contrato",
   );
