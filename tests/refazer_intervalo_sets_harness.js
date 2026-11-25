@@ -70,6 +70,65 @@ function extract(name) {
             assert(result.reset);
             assert(result.largura<=390);
             assert.deepEqual(errors,[]);
+            const draw = extract('drawPedPreview');
+            const limite = draw.indexOf('    // ─── REFAZER CÉLULA: A PRÉVIA');
+            assert(limite > 0);
+            await page.addScriptTag({content: extract('buildStrictAssemblySets') + '\n' + draw.slice(0, limite) + '}'});
+            const ticket = await page.evaluate(() => {
+                for (const [tag, id] of [['canvas', 'ped-preview-canvas'], ['select', 'ped-preview-set-input']]) {
+                    const el = document.createElement(tag);
+                    el.id = id;
+                    document.body.appendChild(el);
+                }
+                const linhas = Array.from({length: 8000}, (_, i) => ({codigo: String(200003 + i * 5)}));
+                const num = {id: 't', tipo: 'TICKET', ticket_qtd: 5, csv_data: linhas};
+                const item = {id: 'm', formato_id: 'f', numeracao_id: 't', saida_id: 's',
+                    qtd: 8000, numeracao_inicio: 200003, numeracao_fim: 240002};
+                Object.assign(window, {
+                    state: {
+                        activeOSItem: {osId: 'p', itemId: 'm'}, osItens: {p: [item]},
+                        formatos: [{id: 'f', default_schema: 'cut_stack', default_saida_id: 's', default_cut_stack_mode: 'strict_assembly', cols: 30, rows: 1, width_mm: 20, height_mm: 20}],
+                        saidas: [{id: 's', width_mm: 650, height_mm: 400}], numeracoes: [num],
+                        csvData: [...linhas, {__ativo: false}], printMode: 'front'
+                    },
+                    atualizarIndicadorModeloComVerso() {},
+                    blocagemDoModelo: () => ({folhas: 10}),
+                    faixaEfetivaDoModelo: () => ({inicio: 200003, fim: 240002}),
+                    modoDeVersoDoModelo: () => 'front',
+                    mostrarControleDaPrevia(el, mostrar) { el.style.display = mostrar ? 'inline-block' : 'none'; },
+                    linhasAtivasCsv: rows => rows.filter(row => row.__ativo !== false)
+                });
+                const modo = document.createElement('input');
+                modo.id = 'ped-cutstack-mode';
+                modo.value = 'strict_assembly';
+                document.body.appendChild(modo);
+                const el = id => document.getElementById('ped-refazer-' + id);
+                const lerTotais = () => ({
+                    celulas: window.pedRefazerTotalCelulas,
+                    setDe: el('set').options.length,
+                    setAte: el('set-ate').options.length - 1,
+                    folhasFinais: window.pedRefazerFolhasPorSet.at(-1)
+                });
+                drawPedPreview();
+                const banco = lerTotais();
+                el('set').value = '1';
+                el('set-ate').value = '27';
+                el('de').value = '10';
+                el('ate').value = '7';
+                const intervalo = intervaloRefazerFolhas();
+                el('ate').value = '8';
+                const fora = intervaloRefazerFolhas();
+                state.csvData = null;
+                num.csv_data = [];
+                drawPedPreview();
+                return {banco, sequencial: lerTotais(), intervalo, fora};
+            });
+            assert.deepEqual(ticket.banco, {celulas: 8000, setDe: 27, setAte: 27, folhasFinais: 7});
+            assert.deepEqual(ticket.sequencial, ticket.banco);
+            assert.equal(ticket.intervalo.total, 258);
+            assert.match(ticket.fora.erro, /não existe/);
+            assert.deepEqual(errors, []);
+            console.log(html + ': TICKET de 5 vias com 8000 células, 27 sets e limite do último set OK');
             await page.close();
             console.log(html+': intervalo 3/10 a 20/30, limites, legado, capacidade e 390px OK');
         }
