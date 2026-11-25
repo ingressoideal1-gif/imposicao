@@ -1,6 +1,6 @@
 import { banco } from "./banco.ts";
 import { hashCodigo } from "./hash.ts";
-import { conteudoDoIngresso, planejar, PlanoModelo, POOL_BYTES, POOL_OBJETO, POOL_SHA256, POOL_V2_OBJETO, POOL_V2_SHA256 } from "./preparacao_codigos.ts";
+import { conteudoDoIngresso, planejar, PlanoModelo, POOL_BYTES, POOL_OBJETO, POOL_SHA256, POOL_V2_OBJETO, POOL_V2_SHA256, sequenciaDoContrato } from "./preparacao_codigos.ts";
 
 const basesEmMemoria = new Map<number, Promise<Uint8Array>>();
 export async function basePrivada(versao = 1): Promise<Uint8Array> {
@@ -37,10 +37,14 @@ export async function prepararEvento(evento: string): Promise<{ concluida: boole
         const contratos = await banco("POST", "rpc/producao_acesso_qr_contratos_obter", { p_pedido: p.pedido_id_int });
         for (const m of plano.filter(m => m.tipo === "QR_IDEAL")) {
           const c = contratos.find((c: any) => c.modelo === m.modelo);
-          if (!c || c.inicio !== m.inicio || c.passo !== m.passo || c.posicao !== m.posicao || c.quantidade !== m.quantidade) {
+          const vias = (m.vias ?? [m]).map(v => v.posicao);
+          if (!c || c.inicio !== m.inicio || c.passo !== m.passo ||
+              c.quantidade * vias.length !== m.quantidade || !vias.includes(c.posicao) ||
+              (c.posicoes != null && (vias.length !== c.posicoes.length ||
+                vias.some((p, i) => p !== c.posicoes[i])))) {
             throw new Error("Plano QR diverge do contrato de emissão. Confira na gráfica.");
           }
-          m.qr_contrato = c;
+          Object.assign(m, sequenciaDoContrato(c), { qr_contrato: c });
         }
       }
       const esperado = plano.reduce((s,m) => s+m.quantidade,0);

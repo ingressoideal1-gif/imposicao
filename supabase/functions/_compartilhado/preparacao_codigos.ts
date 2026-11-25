@@ -21,7 +21,25 @@ export type PlanoModelo = Via & {
 
 export type ContratoQr = { pedido: number; modelo: number; versao: number; inicio: number;
   passo: number; posicao: number; quantidade: number; deslocamento: number | null;
-  capacidade: number; pool_revisao: string; fonte_hash: string };
+  capacidade: number; pool_revisao: string; fonte_hash: string; posicoes?: number[] | null };
+
+type SequenciaModelo = Via & Pick<PlanoModelo, "quantidade" | "inicio" | "passo" | "vias">;
+
+export function sequenciaDoContrato(c: Pick<ContratoQr, "inicio" | "passo" | "posicao" | "posicoes" | "quantidade">): SequenciaModelo {
+  const posicoes = c.posicoes ?? [c.posicao];
+  const quantidade = c.quantidade * posicoes.length;
+  if (!Number.isSafeInteger(c.quantidade) || c.quantidade < 1 ||
+      !Number.isSafeInteger(c.inicio) || c.inicio < 0 ||
+      !Number.isSafeInteger(c.passo) || c.passo < 1 || !Number.isSafeInteger(quantidade) ||
+      !Number.isSafeInteger(c.inicio + c.quantidade * c.passo - 1) ||
+      !Array.isArray(posicoes) || posicoes[0] !== c.posicao ||
+      posicoes.some((p, i) => !Number.isSafeInteger(p) || p < 1 || p > c.passo ||
+        (i > 0 && p <= posicoes[i - 1]))) {
+    throw new Error("Posições TICKET inválidas no contrato QR.");
+  }
+  const vias = posicoes.map(posicao => ({ posicao, prefix: "", suffix: "", pad: 0 }));
+  return { quantidade, inicio: c.inicio, passo: c.passo, ...vias[0], vias: vias.length > 1 ? vias : undefined };
+}
 
 export function indiceContrato(pedido: number, modelo: number, valor: number, c: ContratoQr): number {
   if (c.pedido !== pedido || c.modelo !== modelo) throw new Error("Contrato QR de outro pedido/modelo.");
@@ -51,9 +69,10 @@ export function planoDoModelo(m: any): PlanoModelo | null {
   const inicio = Number(m.inicio ?? 1);
   const celulas = Number(m.quantidade);
   const porVia = new Map<number, Via>();
-  const elementos = ticket && primeiro.type !== "QR_IDEAL" ? codigos : [primeiro];
+  const elementos = !ticket ? [primeiro]
+    : primeiro.type === "QR_IDEAL" ? codigos.filter(el => el.type === "QR_IDEAL") : codigos;
   for (const el of elementos) {
-    const posicao = ticket ? Number(el.ticket_pos || 1) : 1;
+    const posicao = ticket ? Number(primeiro.type === "QR_IDEAL" ? el.ticket_pos ?? 1 : el.ticket_pos || 1) : 1;
     if (!Number.isSafeInteger(posicao) || posicao < 1 || posicao > passo) {
       throw new Error("Posição TICKET inválida. Confira a numeração na gráfica.");
     }
@@ -63,6 +82,7 @@ export function planoDoModelo(m: any): PlanoModelo | null {
     });
   }
   const vias = [...porVia.values()];
+  if (primeiro.type === "QR_IDEAL") vias.sort((a, b) => a.posicao - b.posicao);
   const quantidade = celulas * vias.length;
   if (!Number.isSafeInteger(celulas) || celulas < 1 || !Number.isSafeInteger(quantidade) ||
       !Number.isSafeInteger(inicio) || inicio < 0 || !Number.isSafeInteger(passo) || passo < 1 ||
@@ -81,7 +101,7 @@ export function planejar(fonte: any[]): PlanoModelo[] {
   return planos;
 }
 
-export function sequenciaDoIngresso(m: PlanoModelo, i: number): { via: Via; valor: number } {
+export function sequenciaDoIngresso(m: SequenciaModelo, i: number): { via: Via; valor: number } {
   // A via já adotada mantém os ordinais 1..QTD. As demais ocupam os blocos
   // seguintes, com numeração contínua exigida pela RPC de preparação.
   const celulas = m.quantidade / (m.vias?.length ?? 1);

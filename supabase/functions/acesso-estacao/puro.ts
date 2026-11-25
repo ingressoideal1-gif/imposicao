@@ -1,5 +1,6 @@
 import { conteudoDoIngresso, type PlanoModelo } from "../_compartilhado/preparacao_codigos.ts";
 import { hashCodigo } from "../_compartilhado/hash.ts";
+import { Recusa } from "../_compartilhado/sessao.ts";
 
 /**
  * As pecas da publicacao da faixa que nao tocam em rede nem em banco.
@@ -104,18 +105,19 @@ export function conferirItens(
   return null;
 }
 
-/** A estação envia um ordinal físico por célula. O servidor resolve as vias
- * convencionais com o mesmo gabarito e ordenação usados na preparação em nuvem.
+/** A estação envia um ordinal físico por célula. O servidor resolve os
+ * ordinais por via, na mesma ordem usada na preparação em nuvem.
  */
 export async function expandirItensTicket(
   pedido: number,
   itens: unknown[],
   planos: ReadonlyMap<number, PlanoModelo>,
   sal: string,
+  poolQr: Uint8Array | null = null,
 ): Promise<unknown[]> {
   const resultado: unknown[] = [];
   for (const bruto of itens) {
-    const item = bruto as { modelo_id: number; numero: number };
+    const item = bruto as { modelo_id: number; numero: number; hash: string };
     const plano = planos.get(Number(item.modelo_id));
     if (!plano) {
       resultado.push(item);
@@ -125,8 +127,12 @@ export async function expandirItensTicket(
     const celulas = plano.quantidade / vias;
     for (let via = 0; via < vias; via++) {
       const numero = Number(item.numero) + via * celulas;
-      const codigo = conteudoDoIngresso(null, pedido, plano, numero - 1);
-      resultado.push({ modelo_id: plano.modelo, numero, hash: await hashCodigo(codigo, sal) });
+      const codigo = conteudoDoIngresso(poolQr, pedido, plano, numero - 1);
+      const hash = await hashCodigo(codigo, sal);
+      if (plano.tipo === "QR_IDEAL" && via === 0 && item.hash !== hash) {
+        throw new Recusa(409, "QR diverge do contrato; atualize a estação antes de imprimir");
+      }
+      resultado.push({ modelo_id: plano.modelo, numero, hash });
     }
   }
   return resultado;

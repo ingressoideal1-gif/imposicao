@@ -4,7 +4,7 @@
  * Rodar (da pasta `supabase/functions`):
  *   npx deno test acesso-estacao/puro_test.ts
  */
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
   conferirItens,
   expandirItensTicket,
@@ -14,7 +14,8 @@ import {
   pedacosDaRota,
 } from "./puro.ts";
 import { hashCodigo } from "../_compartilhado/hash.ts";
-import { planoDoModelo } from "../_compartilhado/preparacao_codigos.ts";
+import { conteudoDoIngresso, planoDoModelo, POOL_BYTES, sequenciaDoContrato } from "../_compartilhado/preparacao_codigos.ts";
+import { Recusa } from "../_compartilhado/sessao.ts";
 
 Deno.test("rota: os formatos que o Supabase entrega", () => {
   assertEquals(
@@ -71,6 +72,32 @@ Deno.test("Ticket: a estação publica as vias a partir de um ordinal físico", 
   ];
   assertEquals(await expandirItensTicket(20508, itens, planos, sal), esperado);
   assertEquals(await expandirItensTicket(20508, itens, planos, sal), esperado);
+});
+
+Deno.test("QR12 TICKET: cada extremo da faixa física publica dois ordinais e exige o hash da primeira via", async () => {
+  const c = {
+    pedido: 123, modelo: 1000283, versao: 2, inicio: 1, passo: 2, posicao: 1, posicoes: [1, 2],
+    quantidade: 1000, deslocamento: 0, capacidade: 2000, pool_revisao: "ideal-qr12-1", fonte_hash: "teste",
+  };
+  const plano = { ...sequenciaDoContrato(c), modelo: c.modelo, setor: "", tipo: "QR_IDEAL", qr_contrato: c };
+  const pool = new Uint8Array(POOL_BYTES);
+  const encoder = new TextEncoder();
+  for (const i of [0, 1, 1998, 1999]) pool.set(encoder.encode(String(i).padStart(8, "0")), i * 8);
+  const sal = "ab".repeat(32);
+  const credencial = async (numero: number) => ({
+    modelo_id: c.modelo, numero,
+    hash: await hashCodigo(conteudoDoIngresso(pool, c.pedido, plano, numero - 1), sal),
+  });
+  const planos = new Map([[c.modelo, plano]]);
+  const itens = await Promise.all([credencial(1), credencial(1000)]);
+  const esperado = await Promise.all([credencial(1), credencial(1001), credencial(1000), credencial(2000)]);
+  assertEquals(await expandirItensTicket(c.pedido, itens, planos, sal, pool), esperado);
+  assertEquals(new Set(esperado.map(item => item.hash)).size, 4);
+  await assertRejects(
+    () => expandirItensTicket(c.pedido, [{ ...itens[0], hash: esperado[1].hash }], planos, sal, pool),
+    Recusa,
+    "QR diverge do contrato",
+  );
 });
 
 Deno.test("trava: modelo de outro pedido e recusado", () => {

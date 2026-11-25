@@ -82,6 +82,42 @@ for(const file of ['script.js','cliente.js']) {
         checks++;
     }
     modelo.numeracao_inicio = anterior;
+
+    // A prévia deve manter a ordem do gabarito mesmo que a via 2 venha primeiro.
+    const duasVias = {
+        tipo: 'TICKET', ticket_qtd: 2, formato_id: 'fmt',
+        elements: [2, undefined].map(ticket_pos => ({
+            type: 'QR', ticket_pos, x_mm: 10, y_mm: 10, pad: 0
+        }))
+    };
+    const milCelulas = { ...modelo, quantidade: 1000, numeracao_inicio: 1 };
+    linhas = [];
+    for (let pagina = 1; pagina <= milCelulas.quantidade; pagina++) {
+        draw(ctx, duasVias, milCelulas, pagina, 1000, 500, 'front');
+    }
+    const qrSequenciais = values.qr.splice(0);
+    assert.equal(new Set(qrSequenciais).size, 2000, file + ': QRs sequenciais distintos');
+    assert.deepEqual(qrSequenciais.slice(0, 2), ['2', '1']);
+    assert.deepEqual(qrSequenciais.slice(-2), ['2000', '1999']);
+
+    const bancoDuasVias = {
+        csv_headers: ['QR'],
+        csv_data: Array.from({ length: 2000 }, (_, i) => ({ QR: `qr-banco-${i + 1}` }))
+    };
+    const qrDoBanco = window.BancoDoModelo.numeracaoResolvida({
+        ...duasVias, elements: duasVias.elements.map(el => ({ ...el, source: 'database', csv_column: 'QR' }))
+    }, bancoDuasVias, null, milCelulas);
+    linhas = qrDoBanco.csv_data;
+    assert.equal(linhas.length, milCelulas.quantidade, file + ': quantidade física do banco');
+    for (let pagina = 1; pagina <= milCelulas.quantidade; pagina++) {
+        draw(ctx, qrDoBanco, milCelulas, pagina, 1000, 500, 'front');
+    }
+    const qrImportados = values.qr.splice(0);
+    assert.equal(new Set(qrImportados).size, 2000, file + ': QRs importados distintos');
+    assert.deepEqual(qrImportados.slice(0, 2), ['qr-banco-2', 'qr-banco-1']);
+    assert.deepEqual(qrImportados.slice(-2), ['qr-banco-2000', 'qr-banco-1999']);
+    checks += 2;
+
     linhas = banco.csv_data;
     for (const pagina of [1, 2]) {
         const grupo = urls.slice((pagina - 1) * 5, pagina * 5);

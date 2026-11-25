@@ -3,15 +3,14 @@ import { hashCodigo } from "./hash.ts";
 import { fonteDosCodigosPorModelo } from "./pedidos.ts";
 import {
   conteudoDoIngresso,
+  type ContratoQr,
   type PlanoModelo,
   planoDoModelo,
+  sequenciaDoContrato,
   sequenciaDoIngresso,
 } from "./preparacao_codigos.ts";
 
-type Contrato = {
-  pedido: number; modelo: number; versao: number;
-  inicio: number; passo: number; posicao: number; quantidade: number;
-};
+type Contrato = Pick<ContratoQr, "pedido" | "modelo" | "versao" | "inicio" | "passo" | "posicao" | "posicoes" | "quantidade">;
 type Par = { pedido: number; modelo: number };
 type Exibicao = { ni: number; np?: number };
 type PlanoPublicado = { plano: PlanoModelo; publicados: number };
@@ -25,16 +24,12 @@ export function numeroImpresso(credencial: any, contrato?: Contrato): number | u
   if (contrato.pedido !== credencial.pedido_id_int || contrato.modelo !== credencial.modelo_id) {
     throw new Error("Contrato de numeração de outra credencial.");
   }
-  const { inicio, passo, posicao, quantidade } = contrato;
+  const sequencia = sequenciaDoContrato(contrato);
   const ordem = credencial.numero;
-  if (![inicio, passo, posicao, quantidade, ordem].every(Number.isSafeInteger) ||
-      inicio < 0 || passo < 1 || posicao < 1 || posicao > passo ||
-      quantidade < 1 || ordem < 1 || ordem > quantidade) {
+  if (!Number.isSafeInteger(ordem) || ordem < 1 || ordem > sequencia.quantidade) {
     throw new Error("Contrato de numeração inválido para a credencial.");
   }
-  const valor = inicio + (ordem - 1) * passo + posicao - 1;
-  if (!Number.isSafeInteger(valor)) throw new Error("Número impresso fora do limite seguro.");
-  return valor;
+  return sequenciaDoIngresso(sequencia, ordem - 1).valor;
 }
 
 function chave(pedido: number, modelo: number): string {
@@ -126,7 +121,7 @@ export async function numerosImpressos(
     const filtro = lista.slice(i, i + 50).map(p =>
       `and(pedido.eq.${p.pedido},modelo.eq.${p.modelo})`).join(",");
     const linhas = await banco("GET",
-      `producao_acesso_qr_contratos?or=(${filtro})&select=pedido,modelo,versao,inicio,passo,posicao,quantidade&limit=50`);
+      `producao_acesso_qr_contratos?or=(${filtro})&select=pedido,modelo,versao,inicio,passo,posicao,posicoes,quantidade&limit=50`);
     if (!Array.isArray(linhas)) throw new Error("Resposta de contratos de numeração inválida.");
     for (const c of linhas) contratos.set(chave(c.pedido, c.modelo), c);
   }
