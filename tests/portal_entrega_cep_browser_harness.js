@@ -16,10 +16,18 @@ const raiz = path.resolve(__dirname, '..');
         await page.setContent('<html lang="pt-BR"><body><main id="secao-entrega" style="max-width:650px;margin:auto"></main></body></html>');
         await page.addStyleTag({ content: fs.readFileSync(path.join(raiz,'frontend/style.css'),'utf8').replace(/^@import[^\r\n]*$/gm, '') });
         await page.evaluate(() => {
-            window.portalDados = { endereco: null, cliente: null, pedido: { frete_escolhido: 'PAC' }, enderecos_entrega: [
-                { tipo_endereco: 'PRINCIPAL', recebedor: 'Pessoa Cadastrada', cpf_recebedor: '52998224725',
-                  cep: '01001000', endereco: 'Rua Cadastrada', numero: '80', complemento: '', bairro: 'Centro', cidade: 'São Paulo', uf: 'SP' }
-            ] };
+            const local = { cep: '01001-000', endereco: 'Rua Cadastrada', numero: '80', complemento: null,
+                bairro: 'Centro', cidade: 'São Paulo', uf: 'SP' };
+            const entrega = { ...local, recebedor: 'Pessoa Cadastrada', cpf_recebedor: '529.982.247-25' };
+            const principal = { ...local, recebedor: 'Empresa Cadastrada', cpf_recebedor: '11.222.333/0001-81' };
+            const idEntrega = '00000000-0000-0000-0000-000000000001';
+            const idPrincipal = '00000000-0000-0000-0000-000000000002';
+            window.portalDados = { endereco: { ...entrega, do_cadastro: false }, endereco_entrega_id: idEntrega,
+                cliente: null, pedido: { frete_escolhido: 'PAC' }, enderecos_entrega: [
+                    { ...entrega, id: idEntrega, tipo_endereco: 'ENTREGA' },
+                    { ...principal, id: idPrincipal, tipo_endereco: 'PRINCIPAL' }
+                ] };
+            window.gravacoesDeEndereco = [];
             window.clienteState = { numero: '123', token: 'teste', pedidoFinalizado: false };
             window.state = {};
             window.SECOES = ['entrega','faturamento'];
@@ -45,7 +53,18 @@ const raiz = path.resolve(__dirname, '..');
                     bairro: 'Bela Vista', municipio: 'São Paulo', uf: 'SP' }
                 : { cep: '01001-000', logradouro: 'Rua de teste', bairro: 'Centro', localidade: 'São Paulo', uf: 'SP' } });
             window.supabaseClient = {
-                rpc: async (nome, args) => ({ data: { ok: true, numero: '123', endereco: { ...args.p_endereco, do_cadastro: false } } }),
+                rpc: async (nome, args) => {
+                    gravacoesDeEndereco.push({ nome, ...args });
+                    const endereco_id = args.p_endereco_id
+                        || '00000000-0000-0000-0000-00000000000' + (gravacoesDeEndereco.length + 1);
+                    const enderecos_entrega = portalDados.enderecos_entrega.filter(e =>
+                        e.tipo_endereco === 'PRINCIPAL' || e.id === endereco_id);
+                    if (args.p_acao === 'criar') {
+                        enderecos_entrega.unshift({ ...args.p_endereco, id: endereco_id, tipo_endereco: 'ENTREGA' });
+                    }
+                    return { data: { ok: true, numero: '123', endereco_id,
+                        endereco: { ...args.p_endereco, do_cadastro: false }, enderecos_entrega } };
+                },
                 functions: { invoke: async (nome, opcoes) => {
                     const d = opcoes.body.documento;
                     if (d.length === 11) return { data: { ok: true, tipo: 'cpf', cpf: d, nome: 'Pessoa Cadastrada' }, error: null };
@@ -61,15 +80,25 @@ const raiz = path.resolve(__dirname, '..');
         assert.equal(await page.$('[onclick="buscarCepEntrega()"]'), null);
         assert.ok((await page.$eval('#secao-entrega', e => e.textContent)).includes('Alterar Endereço'));
         assert.equal(await page.$eval('[onclick="abrirEnderecosEntrega()"]', e => getComputedStyle(e).backgroundColor), 'rgb(249, 115, 22)');
+        await page.click('[onclick="decidirDados(\'entrega\', true)"]');
+        await page.waitForFunction(() => portalConfirmacoes.entrega === true);
         await page.click('[onclick="abrirEnderecosEntrega()"]');
         await page.waitForFunction(() => document.getElementById('portal-modal-enderecos').open);
         const enderecoCadastrado = await page.$eval('.portal-endereco-opcao', e => e.textContent);
         assert.ok(enderecoCadastrado.includes('Rua Cadastrada, 80'));
         assert.ok(enderecoCadastrado.includes('Pessoa Cadastrada'));
         assert.ok(enderecoCadastrado.includes('529.982.247-25'));
-        await page.click('[onclick="selecionarEnderecoEntrega(0)"]');
-        await page.waitForFunction(() => document.getElementById('secao-entrega').textContent.includes('Rua Cadastrada, 80'));
+        await page.click('[onclick="selecionarEnderecoEntrega(1)"]');
+        await page.waitForFunction(() => document.getElementById('secao-entrega').textContent.includes('Empresa Cadastrada'));
         await page.waitForFunction(() => portalConfirmacoes.entrega === true);
+        const gravacoesExistentes = await page.evaluate(() => gravacoesDeEndereco);
+        assert.deepEqual(gravacoesExistentes.map(g => [g.nome, g.p_acao, g.p_endereco_id]), [
+            ['link_cliente_definir_endereco_entrega', 'confirmar', '00000000-0000-0000-0000-000000000001'],
+            ['link_cliente_definir_endereco_entrega', 'selecionar', '00000000-0000-0000-0000-000000000002']
+        ]);
+        assert.equal(gravacoesExistentes[1].p_endereco.cpf_recebedor, '11.222.333/0001-81');
+        assert.equal(gravacoesExistentes[1].p_endereco.complemento, null);
+        assert.equal((await page.$$('.portal-endereco-opcao')).length, 1, 'exibe as opções devolvidas pelo banco');
         assert.equal(await page.$('#entrega-endereco'), null);
         await page.click('[onclick="abrirEnderecosEntrega()"]');
         await page.waitForFunction(() => document.getElementById('portal-modal-enderecos').open);
@@ -129,7 +158,9 @@ const raiz = path.resolve(__dirname, '..');
         await page.waitForFunction(() => window.avancou === 'faturamento');
         assert.equal(await page.evaluate(() => portalDados.endereco.numero), '100');
         assert.equal(await page.$('#entrega-recebedor'), null);
+        const novosEnderecos = await page.evaluate(() => gravacoesDeEndereco.slice(2));
+        assert.deepEqual(novosEnderecos.map(g => [g.p_acao, g.p_endereco_id]), [['criar', null], ['criar', null]]);
         assert.deepEqual(erros, []);
-        console.log('OK: navegador móvel — preencher, consultar CEP, salvar, confirmar e avançar.');
+        console.log('OK: navegador móvel — confirmar e selecionar por ID, criar pelo formulário e avançar.');
     } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });
