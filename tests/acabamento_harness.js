@@ -887,7 +887,66 @@ function ambienteComPedidos(pedidos, modelosPorPedido) {
     amb.painel.render();
     ok(linhas() === 0,
        'e os entregues nao voltam para a tela inicial -- a regra de 27/08 continua de pe');
+
+    amb.elementos['os-search-acabamento'].value = '300';
+    amb.painel.render();
+    ok(linhas() === 30 && contador() === '96 Pedidos', 'a busca geral pagina todo o histórico correspondente');
+    amb.janela.irParaPaginaExpedicao(4);
+    ok(linhas() === 6, 'a busca geral alcança a última página de resultados');
 })();
+
+(function aBuscaCruzaAFilaEOHistorico() {
+    const statuses = ['EM PRODUCAO', 'EXPEDIÇÃO', 'EM TRÂNSITO', 'ENTREGUE', 'RETIRADO'];
+    const pedidos = statuses.map((status, i) => pedido(95001 + i, null, {
+        cliente: 'Cliente da Feira', status_interno: status,
+    }));
+    const amb = ambienteComPedidos(pedidos, {});
+    amb.janela.state.todasArtes = pedidos.map(os => ({ id_int: os.numero, nome_evento: 'Exposição de Inverno' }));
+    amb.painel.render();
+    const campo = amb.elementos['os-search-acabamento'];
+    const achou = numero => amb.elementos['tbody-acabamento'].innerHTML.includes(`>${numero}<`);
+
+    campo.value = '95002';
+    for (const prazo of ['geral', 'hoje', 'atrasados', 'expedicao']) {
+        amb.painel.setFiltroPrazo(prazo);
+        ok(achou(95002) && !achou(95001), `o número do expedido é encontrado em ${prazo}`);
+    }
+
+    for (const termo of ['cliente da feira', 'exposição de inverno']) {
+        campo.value = termo;
+        amb.painel.render();
+        ok(pedidos.every(os => achou(os.numero)), `a busca por ${termo} combina fila e histórico`);
+    }
+    ok(String(amb.elementos['stat-acab-pedidos-fila'].textContent) === '1', 'o histórico não aumenta a contagem da fila');
+
+    campo.value = '';
+    amb.painel.render();
+    ok(!achou(95001) && achou(95002) && achou(95003) && achou(95004) && !achou(95005),
+       'limpar a busca restaura o recorte do botão Expedição');
+    amb.painel.setFiltroPrazo('geral');
+    ok(achou(95001) && !achou(95002) && !achou(95003) && !achou(95004) && !achou(95005),
+       'a fila Geral sem busca continua mostrando o trabalho ativo');
+})();
+
+async function aBuscaCarregaOEstagioComOHistoricoEmCache() {
+    const os = pedido(95010, null, { status_interno: 'ENTREGUE' });
+    const amb = ambienteComPedidos([os], { 95010: [{ id: 95010, status_impressao: 'Impresso' }] });
+    amb.banco._modelosDoBanco = [{ id: 95010, id_int: 95010, acabamento_status: 'Pronto' }];
+    const solicitouRecorte = new Promise(resolve => {
+        amb.janela.solicitarRecorteDoPainel = () => {
+            resolve();
+            return Promise.resolve(true);
+        };
+    });
+
+    amb.documento.getElementById('os-search-acabamento').value = '95010';
+    amb.painel.pesquisar();
+    await solicitouRecorte;
+    await new Promise(resolve => setImmediate(resolve));
+    const html = amb.elementos['tbody-acabamento'].innerHTML;
+    ok(html.includes('>95010<') && html.includes('Revisado'),
+       'a busca consulta o estágio do pedido histórico mesmo quando a carga existente não redesenha a lista');
+}
 
 // A regra e a MESMA nos dois paineis, escrita uma vez so.
 (function aRegraVemDoScriptJs() {
@@ -4749,6 +4808,22 @@ async function oPedidoJaExpedidoNaoOferecerEnviarDeNovo() {
        'e nao ha mais o que clicar para enviar de novo');
 }
 
+async function abrirHistoricoPelaBuscaNaoOfereceReenvio() {
+    for (const status of ['EXPEDIÇÃO', 'EM TRÂNSITO', 'ENTREGUE', 'RETIRADO']) {
+        const amb = ambienteDeExpedicao(status);
+        amb.painel.render();
+        amb.elementos['os-search-acabamento'].value = '200';
+        amb.painel.render();
+        ok(amb.elementos['tbody-acabamento'].innerHTML.includes('>200<'), `a busca encontra o pedido ${status}`);
+        await amb.painel.abrirPedido('os-200');
+        ok(!telaDoPedido(amb).includes('AcabamentoPainel.expedir('), `o pedido ${status} abre sem ação de encaminhar`);
+        amb.painel.expedir('os-200');
+        ok(amb.documento.getElementById('acab-expedicao').style.display !== 'flex', `o pedido ${status} não abre confirmação`);
+        await amb.painel.confirmarExpedicao('os-200');
+        ok(amb.banco._propostasGravadas.length === 0, `o pedido ${status} não é enviado novamente`);
+    }
+}
+
 async function mandarParaExpedicaoNaoFazOPedidoSumir() {
     const avisos = [];
     const amb = ambienteDeExpedicao('EM PRODUCAO');
@@ -5018,6 +5093,8 @@ async function semAColunaNoBancoNaoFicaPerguntandoParaSempre() {
     await oExpedidoAparecerSobOFiltroPronto();
     await oExpedidoNaoContaComoFila();
     await oPedidoJaExpedidoNaoOferecerEnviarDeNovo();
+    await abrirHistoricoPelaBuscaNaoOfereceReenvio();
+    await aBuscaCarregaOEstagioComOHistoricoEmCache();
     await mandarParaExpedicaoNaoFazOPedidoSumir();
     await oPedidoDevolvidoPelaExpedicaoVoltaParaABancada();
     await asContasDoRecorteDaListaSaoPuras();

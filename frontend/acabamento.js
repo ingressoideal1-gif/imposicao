@@ -315,7 +315,7 @@
      * troca o status para EM TRANSITO e o pedido sai daqui sozinho.
      */
     function ehExpedido(os) {
-        return (os.status_interno || '').toUpperCase() === 'EXPEDICAO';
+        return normalizar(os.status_interno) === 'EXPEDICAO';
     }
 
     function pedidosEmProducao() {
@@ -347,10 +347,16 @@
         return f ? !!f(os) : false;
     }
 
-    function pedidosDoPainel() {
+    function pedidosDoPainel(busca = termoDaBusca()) {
         const todos = (estado().ordens || [])
             .filter(os => !fn('pedidoIgnoradoNosPaineis') || !fn('pedidoIgnoradoNosPaineis')(os))
             .filter(os => !tela.encerradosTeste.has(String(os.numero)));
+
+        if (busca) {
+            return todos.filter(os => String(os.numero || '').includes(busca)
+                || clienteDoPedido(os).toLowerCase().includes(busca)
+                || eventoDoPedido(os).toLowerCase().includes(busca));
+        }
 
         // ── O botão "Expedição" é ARQUIVO, e vê tudo o que já saiu ───────────
         //
@@ -984,26 +990,16 @@
 
     // ─── A lista de pedidos ─────────────────────────────────────────────────
 
-    function filtrar(ordens) {
+    function termoDaBusca() {
         const campoBusca = document.getElementById('os-search-acabamento');
         // Mesma guarda da Produção: o Chrome ignora autocomplete=off e enfia o
         // e-mail salvo no campo de busca, e a lista some sem explicação.
         if (campoBusca && campoBusca.value.includes('@')) campoBusca.value = '';
-        const busca = (campoBusca ? campoBusca.value : '').trim().toLowerCase();
+        return (campoBusca ? campoBusca.value : '').trim().toLowerCase();
+    }
 
-        const s = estado();
-        const rotulo = fn('rotuloDoCliente');
-
+    function filtrar(ordens) {
         return ordens.filter(os => {
-            if (busca) {
-                const num = String(os.numero || '');
-                const cli = (rotulo ? rotulo(os) : (os.cliente || '')).toLowerCase();
-                const numInt = parseInt(os.numero);
-                const arte = (s.todasArtes || []).find(a => a.id_int === numInt && a.nome_evento);
-                const evento = arte ? String(arte.nome_evento).toLowerCase() : '';
-                if (!num.includes(busca) && !cli.includes(busca) && !evento.includes(busca)) return false;
-            }
-
             // O RECORTE, e não mais o pedido inteiro. Com card aceso, tudo o
             // que vem abaixo passa a falar só dos modelos daquele setor — ver a
             // seção "O recorte por setor".
@@ -1102,7 +1098,7 @@
         return lista.slice(inicio, inicio + tamanho);
     }
 
-    function desenharRodapeDaExpedicao(visivel, total) {
+    function desenharPaginacao(visivel, total, busca) {
         const desenhar = fn('desenharRodapeDePaginas');
         const caixa = document.getElementById('paginacao-acabamento');
         if (!desenhar) {
@@ -1111,10 +1107,10 @@
         }
         const totalPaginas = Math.max(1, Math.ceil(total / porPagina()));
         desenhar('paginacao-acabamento', visivel, tela.paginaExpedicao, totalPaginas, total,
-                 'irParaPaginaExpedicao', 'na expedição');
+                 'irParaPaginaExpedicao', busca ? 'na busca' : 'na expedição');
     }
 
-    /** Troca a página do botão "Expedição" e redesenha a lista. */
+    /** Troca a página da busca ou da Expedição e redesenha a lista. */
     function irParaPaginaExpedicao(pagina) {
         tela.paginaExpedicao = Math.max(1, parseInt(pagina) || 1);
         render();
@@ -1166,7 +1162,9 @@
         // Aqui entra o que já foi para a expedição, e nas métricas acima não:
         // o operador precisa reencontrar o pedido que acabou de enviar, mas ele
         // não é mais trabalho na fila. Ver `pedidosDoPainel`.
-        let lista = filtrar(pedidosDoPainel()).filter(passaNoPrazo);
+        const busca = termoDaBusca();
+        let lista = filtrar(pedidosDoPainel(busca));
+        if (!busca) lista = lista.filter(passaNoPrazo);
 
         // A ordem da bancada é o PRAZO DE ENTREGA, do menor para o maior
         // (02/09/2026), como no Painel de Produção. O botão "Expedição" fica de
@@ -1185,18 +1183,10 @@
         const contador = document.getElementById('os-acabamento-count-badge');
         if (contador) contador.textContent = `${lista.length} ${lista.length === 1 ? 'Pedido' : 'Pedidos'}`;
 
-        // ── O recorte de páginas, só no botão "Expedição" ───────────────────
-        //
-        // Por último, depois de filtrar e ordenar: o contador acima já foi
-        // escrito com o total, então ele continua dizendo quantos pedidos a
-        // busca achou na expedição inteira, e a pesquisa alcança o pedido que
-        // está na página 8. Cortar antes de filtrar faria a busca enxergar só a
-        // página aberta — o mesmo defeito de esconder histórico, por outra
-        // porta. As telas de trabalho (Geral, Para Hoje, Atrasados) continuam
-        // inteiras.
-        const naExpedicao = tela.prazo === 'expedicao';
-        const naTela = naExpedicao ? recortarPagina(lista) : lista;
-        desenharRodapeDaExpedicao(naExpedicao, lista.length);
+        // A busca e o arquivo paginam depois de filtrar, com o total no contador.
+        const paginar = !!busca || tela.prazo === 'expedicao';
+        const naTela = paginar ? recortarPagina(lista) : lista;
+        desenharPaginacao(paginar, lista.length, busca);
 
         const vazio = document.getElementById('empty-acabamento');
         const tabela = document.getElementById('table-acabamento');
@@ -1212,7 +1202,8 @@
             escrever('empty-acabamento-texto', recorte
                 ? `Nenhum pedido com material em ${recorte} neste recorte. `
                   + 'Clique em "Todos os Setores" para ver a fila inteira.'
-                : 'Nenhum pedido em produção encontrado para o acabamento.');
+                : busca ? 'Nenhum pedido encontrado para esta busca.'
+                    : 'Nenhum pedido em produção encontrado para o acabamento.');
             if (vazio) vazio.style.display = 'block';
             if (tabela) tabela.style.display = 'none';
             return;
@@ -3590,16 +3581,21 @@
         // pedido que já saiu convidaria a uma segunda escrita sem sentido, e
         // esconder o botão deixaria o operador sem saber se o envio pegou.
         const aberto = (estado().ordens || []).find(o => String(o.id) === String(tela.pedidoAberto));
-        if (aberto && ehExpedido(aberto)) {
+        if (!aberto) return '';
+        if (jaPassouDaGrafica(aberto)) {
+            const expedido = ehExpedido(aberto);
+            const status = expedido ? '📦 NA EXPEDIÇÃO'
+                : aberto.status_interno.trim().toUpperCase().replace('EM TRANSITO', 'EM TRÂNSITO');
             return `
             <div style="${ESTILO_RODAPE_DA_EXPEDICAO}">
                 ${aviso}
                 <span style="background: rgba(76,200,240,0.12); border: 1px solid #4cc8f0; color: #4cc8f0;
                              border-radius: 8px; padding: 12px 14px; font-size: 0.9rem; font-weight: 800;
-                             letter-spacing: 0.04em; width: 100%; text-align: center;">📦 NA EXPEDIÇÃO</span>
-                <span style="font-size: 0.72rem; color: #7fa9d4;">já entregue — sai da lista ao embarcar</span>
+                             letter-spacing: 0.04em; width: 100%; text-align: center;">${esc(status)}</span>
+                ${expedido ? '<span style="font-size: 0.72rem; color: #7fa9d4;">já entregue à expedição</span>' : ''}
             </div>`;
         }
+        if (!ehDeProducao(aberto)) return '';
 
         const pronto = pedidoProntoParaExpedicao(itens);
         const pendentes = setoresPendentes(itens);
@@ -3879,6 +3875,10 @@
         const s = estado();
         const os = (s.ordens || []).find(o => String(o.id) === String(osId));
         if (!os) return;
+        if (!ehDeProducao(os)) {
+            fecharPopupDaExpedicao();
+            return;
+        }
         const itens = modelosDoPedido(os);
         const idInt = parseInt(os.numero);
 
@@ -4020,7 +4020,7 @@
     function abrirPopupDaExpedicao(osId) {
         const s = estado();
         const os = (s.ordens || []).find(o => String(o.id) === String(osId));
-        if (!os) return;
+        if (!os || !ehDeProducao(os)) return;
 
         const itens = modelosDoPedido(os);
         const grupos = modelosPorSetor(itens);
@@ -7704,10 +7704,11 @@
         pesquisar() {
             render();
             clearTimeout(tela.timerPesquisa);
-            tela.timerPesquisa = setTimeout(() => {
+            tela.timerPesquisa = setTimeout(async () => {
                 if (!document.getElementById('view-acabamento')?.classList.contains('active')) return;
                 const carregar = fn('solicitarRecorteDoPainel');
-                if (carregar) carregar();
+                if (carregar) await carregar();
+                completarEstagiosDaLista();
             }, 400);
         },
 
