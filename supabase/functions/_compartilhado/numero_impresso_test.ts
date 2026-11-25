@@ -17,6 +17,11 @@ Deno.test("inícios 1, 0, 801, 901 e última célula TICKET", () => {
   }
   igual(numeroImpresso(credencial, { ...contrato, passo: 3, posicao: 2 }), 549);
 });
+Deno.test("número impresso QR12 TICKET segue a via congelada para cada bloco de ordinais", () => {
+  const ticket = { ...contrato, passo: 2, posicoes: [1, 2], quantidade: 1000 };
+  igual([1, 1000, 1001, 2000].map(numero => numeroImpresso({ ...credencial, numero }, ticket)),
+    [101, 2099, 102, 2100]);
+});
 Deno.test("legado, sem contrato e código do cliente conservam apresentação anterior", () => {
   igual(numeroImpresso(credencial), undefined);
   igual(numeroImpresso(credencial, { ...contrato, versao: 1 }), undefined);
@@ -24,7 +29,8 @@ Deno.test("legado, sem contrato e código do cliente conservam apresentação an
 });
 Deno.test("não aceita outra identidade, posição inválida ou estouro", () => {
   for (const alteracao of [{ pedido: 1 }, { modelo: 1 }, { inicio: null }, { passo: 0 },
-    { quantidade: 149 }, { posicao: 2 }, { inicio: Number.MAX_SAFE_INTEGER }]) {
+    { quantidade: 149 }, { posicao: 2 }, { inicio: Number.MAX_SAFE_INTEGER },
+    { posicoes: [] }, { passo: 2, posicoes: [1, 1] }, { passo: 2, posicoes: [2, 1] }]) {
     let recusou = false;
     try { numeroImpresso(credencial, { ...contrato, ...alteracao } as any); } catch { recusou = true; }
     igual(recusou, true);

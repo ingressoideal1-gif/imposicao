@@ -1,4 +1,4 @@
-import { conteudoDoIngresso, indiceQr, planejar, POOL_BYTES } from "../supabase/functions/_compartilhado/preparacao_codigos.ts";
+import { conteudoDoIngresso, indiceQr, planejar, POOL_BYTES, sequenciaDoContrato, sequenciaDoIngresso } from "../supabase/functions/_compartilhado/preparacao_codigos.ts";
 import { prepararEvento } from "../supabase/functions/_compartilhado/preparacao_nuvem.ts";
 import { hashCodigo } from "../supabase/functions/_compartilhado/hash.ts";
 import { usarQrEvento } from "../supabase/functions/_compartilhado/qr_evento.ts";
@@ -26,6 +26,34 @@ Deno.test("Ticket convencional publica cada via legível e conserva os ordinais 
     ] },
   }]);
   assert(ideal.tipo === "QR_IDEAL" && ideal.quantidade === 75 && ideal.vias === undefined);
+});
+
+Deno.test("QR Ideal TICKET: mil células geram duas mil identidades QR12 nas vias configuradas", () => {
+  const [plano] = planejar([{
+    ...ticketDuasVias[0], quantidade: 1000,
+    numeracao: { ...ticketDuasVias[0].numeracao, elements: [
+      { type: "QR_IDEAL", ticket_pos: 2 },
+      { type: "QR_IDEAL" },
+      { type: "QR_IDEAL", ticket_pos: 2 },
+      { type: "QR", ticket_pos: 1 },
+    ] },
+  }]);
+  const c = {
+    pedido: 123, modelo: plano.modelo, versao: 2, inicio: 1, passo: 2, posicao: 1, posicoes: [1, 2],
+    quantidade: 1000, deslocamento: 50, capacidade: 2000, pool_revisao: "ideal-qr12-1", fonte_hash: "teste",
+  };
+  assert(plano.quantidade === 2000 && plano.vias?.map(v => v.posicao).join(",") === "1,2");
+  const contrato = { ...plano, ...sequenciaDoContrato(c), qr_contrato: c };
+  const pool = new Uint8Array(POOL_BYTES);
+  const encoder = new TextEncoder();
+  for (let i = 0; i < c.capacidade; i++) {
+    pool.set(encoder.encode(String(i).padStart(8, "0")), (c.deslocamento + i) * 8);
+  }
+  const valores = [0, 999, 1000, 1999].map(i => sequenciaDoIngresso(contrato, i).valor);
+  assert(valores.join(",") === "1,1999,2,2000");
+  const codigos = Array.from({ length: contrato.quantidade }, (_, i) =>
+    conteudoDoIngresso(pool, c.pedido, contrato, i));
+  assert(codigos.every(codigo => codigo.length === 12) && new Set(codigos).size === 2000);
 });
 Deno.test("posição, virada de coluna, início, TICKET e formato iguais à impressão", () => {
  assert(indiceQr(19521,1000160,1) === 1800000);

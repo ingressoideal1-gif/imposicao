@@ -14,7 +14,7 @@
  */
 import { banco } from "./banco.ts";
 import { idDeNumeracao, numeracaoDoModelo } from "./modelos.ts";
-import { planoDoModelo } from "./preparacao_codigos.ts";
+import { type ContratoQr, planoDoModelo, sequenciaDoContrato } from "./preparacao_codigos.ts";
 
 /**
  * 32 bytes sorteados, em hexadecimal. Porte de `qr_ideal.gerar_sal`.
@@ -159,7 +159,14 @@ async function incluirNumeracoes(modelos: any[]) {
 
 /** Quantidade de credenciais da publicação. A tiragem dos setores é física. */
 export async function quantidadeDeCredenciais(pedidoIdInt: number): Promise<number> {
-  return (await fonteDosCodigos(pedidoIdInt)).reduce((total: number, m: any) => {
+  const [fonte, contratos] = await Promise.all([
+    fonteDosCodigos(pedidoIdInt),
+    banco("GET", `producao_acesso_qr_contratos?pedido=eq.${pedidoIdInt}&select=modelo,inicio,passo,posicao,posicoes,quantidade`),
+  ]);
+  const porModelo = new Map<number, ContratoQr>((contratos ?? []).map((c: ContratoQr) => [c.modelo, c]));
+  return fonte.reduce((total: number, m: any) => {
+    const c = porModelo.get(Number(m.id));
+    if (c) return total + sequenciaDoContrato(c).quantidade;
     if (!numeracaoDoModelo(m.numeracao?.elements)) return total;
     const celulas = Number(m.quantidade ?? 0);
     const plano = m.numeracao?.tipo === "TICKET" && celulas > 0 ? planoDoModelo(m) : null;

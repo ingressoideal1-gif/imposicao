@@ -80,9 +80,7 @@ import {
 } from "./puro.ts";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
-import { basePrivada } from "../_compartilhado/preparacao_nuvem.ts";
-import { conteudoDoIngresso, planoDoModelo, type PlanoModelo } from "../_compartilhado/preparacao_codigos.ts";
-import { hashCodigo } from "../_compartilhado/hash.ts";
+import { type ContratoQr, planoDoModelo, type PlanoModelo, sequenciaDoContrato } from "../_compartilhado/preparacao_codigos.ts";
 
 const SEGREDO_AGENTE = "ACESSO_AGENTE_SEGREDO";
 
@@ -124,17 +122,14 @@ async function gravarLote(pedidoIdInt: number, itens: unknown[]): Promise<number
   const tiragem = Object.fromEntries(fonte.map((m: any) => [m.id, Number(m.quantidade ?? 0)]));
   const recusa = conferirItens(pedidoIdInt, itens, tiragem);
   if (recusa) throw new Recusa(recusa.status, recusa.detail);
-  const contratos = await banco("POST", "rpc/producao_acesso_qr_contratos_obter", { p_pedido: pedidoIdInt });
-  const v2 = contratos.filter((c: any) => c.versao === 2);
-  if (v2.length) {
-    const pool = await basePrivada(2);
-    for (const item of itens as any[]) {
-      const c = v2.find((c: any) => c.modelo === Number(item.modelo_id));
-      if (!c) continue;
-      const plano = { ...c, setor: "", tipo: "QR_IDEAL", prefix: "", suffix: "", pad: 0, qr_contrato: c };
-      const esperado = await hashCodigo(conteudoDoIngresso(pool, pedidoIdInt, plano, item.numero - 1), linha.sal);
-      if (item.hash !== esperado) throw new Recusa(409, "QR diverge do contrato; atualize a estação antes de imprimir");
-    }
+  const contratos: ContratoQr[] = await banco("POST", "rpc/producao_acesso_qr_contratos_obter", { p_pedido: pedidoIdInt });
+  const selecionados = new Set(itens.map((item: any) => Number(item.modelo_id)));
+  const v2 = contratos.filter(c => c.versao === 2 && selecionados.has(c.modelo));
+  const planos = new Map<number, PlanoModelo>();
+  for (const c of v2) {
+    planos.set(c.modelo, {
+      ...sequenciaDoContrato(c), modelo: c.modelo, setor: "", tipo: "QR_IDEAL", qr_contrato: c,
+    });
   }
 
   // `on_conflict=chave_dedup` e o que torna a publicacao repetivel: a rede cai
@@ -145,14 +140,12 @@ async function gravarLote(pedidoIdInt: number, itens: unknown[]): Promise<number
   // entao o item 1 dos tres saiu impresso com o mesmo `000001`. Texto igual e
   // sal igual -- o sal e por pedido -- dao hash igual, e o banco aceitou a
   // IMPRENSA e descartou em silencio a PISTA e o CAMAROTE.
-  const tickets = new Map<number, PlanoModelo>();
-  const selecionados = new Set(itens.map((item: any) => Number(item.modelo_id)));
   for (const m of fonte) {
-    if (!selecionados.has(Number(m.id)) || m.numeracao?.tipo !== "TICKET") continue;
+    if (!selecionados.has(Number(m.id)) || planos.has(Number(m.id)) || m.numeracao?.tipo !== "TICKET") continue;
     const plano = planoDoModelo(m);
-    if (plano && plano.tipo !== "QR_IDEAL") tickets.set(plano.modelo, plano);
+    if (plano && plano.tipo !== "QR_IDEAL") planos.set(plano.modelo, plano);
   }
-  const credenciais = await expandirItensTicket(pedidoIdInt, itens, tickets, linha.sal);
+  const credenciais = await expandirItensTicket(pedidoIdInt, itens, planos, linha.sal);
   await banco(
     "POST",
     "producao_acesso_credenciais?on_conflict=chave_dedup",
