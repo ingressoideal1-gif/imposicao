@@ -1007,15 +1007,16 @@ function drawPedPreview() {
     if (num && num.tipo === "TICKET") {
         ticket_qtd = parseInt(num.ticket_qtd) || 1;
     }
-    let raw_items = Math.max(1, end - start + 1);
-    if (state.csvData) {
-        raw_items = state.csvData.length;
-    } else if (schema === 'pdf_multiple') {
+    // Banco e PDF já contam células físicas. A faixa sem banco conta números.
+    const linhasTicket = num?.tipo === 'TICKET' && state.csvData && typeof linhasAtivasCsv === 'function'
+        ? linhasAtivasCsv(state.csvData) : null;
+    let total_items = Math.ceil(Math.max(1, end - start + 1) / ticket_qtd);
+    if (schema === 'pdf_multiple') {
         const totalPages = state.pedArtPdfDoc ? state.pedArtPdfDoc.numPages : 1;
-        raw_items = state.printMode === 'duplex' ? Math.ceil(totalPages / 2) : totalPages;
+        total_items = state.printMode === 'duplex' ? Math.ceil(totalPages / 2) : totalPages;
+    } else if (state.csvData) {
+        total_items = (linhasTicket || state.csvData).length;
     }
-
-    let total_items = raw_items;
     if (schema === "multi_artes" || isMultiSelected) {
         const artesList = isMultiSelected ? tempMultiArtes : state.impMultiArtes;
         let sum_physical = 0;
@@ -1031,12 +1032,6 @@ function drawPedPreview() {
             sum_physical += q;
         }
         total_items = sum_physical;
-    } else {
-        if (num && num.tipo === "TICKET") {
-            total_items = Math.ceil(raw_items / ticket_qtd);
-        } else {
-            total_items = raw_items;
-        }
     }
 
     const poses_per_sheet = cols * rows;
@@ -2075,8 +2070,8 @@ function drawPedPreview() {
                 // Na folha combinada cada modelo tem seu proprio banco e sua
                 // propria fatia. `state.csvData` descreve apenas o modelo aberto
                 // e nao pode alimentar Foto e Setor ao mesmo tempo.
-                const linhasDaNumeracao = Array.isArray(currentNum.csv_data)
-                    ? currentNum.csv_data : state.csvData;
+                const linhasDaNumeracao = !multiArteItem && currentNum === num && linhasTicket
+                    ? linhasTicket : (Array.isArray(currentNum.csv_data) ? currentNum.csv_data : state.csvData);
                 const indiceDaLinha = multiArteItem ? multiArteLocalIndex : item_index;
                 const linhaAtual = linhasDaNumeracao && linhasDaNumeracao[indiceDaLinha]
                     ? linhasDaNumeracao[indiceDaLinha] : null;
@@ -3494,9 +3489,14 @@ function updatePedSummary() {
         // esta tela e um clone dele e ficou para tras quando a fatia nasceu, o
         // que fazia o pedido 20495 impor as 238 linhas do caderno em cada um dos
         // oito paises.
-        state.csvData = (typeof fatiaCsvDoItem === 'function')
-            ? fatiaCsvDoItem(itemAtivoDoPedido(), num)
-            : num.csv_data;
+        const item = itemAtivoDoPedido();
+        if (num.tipo === 'TICKET' && item && !item.csv_selecao
+            && typeof linhasDoModeloNoPayload === 'function'
+            && typeof vinculoDeBancoDoModelo === 'function' && vinculoDeBancoDoModelo(item)) {
+            state.csvData = linhasDoModeloNoPayload(item, num);
+        } else {
+            state.csvData = typeof fatiaCsvDoItem === 'function' ? fatiaCsvDoItem(item, num) : num.csv_data;
+        }
         state.csvDataDerivado = true;   // e da numeracao: nao serve a nenhuma outra
 
         state.csvFile = null; // Banco embutido
@@ -3640,7 +3640,8 @@ function updatePedSummary() {
     }
 
     const perSheet = fmt.cols * fmt.rows;
-    const total_impressions = (num && num.tipo === "TICKET") ? Math.ceil(total / ticket_qtd) : total;
+    const usaFaixaNumerica = !isPdfMultiple && schema !== 'multi_artes' && !state.csvData;
+    const total_impressions = usaFaixaNumerica ? Math.ceil(total / ticket_qtd) : total;
     let sheets = Math.ceil(total_impressions / perSheet);
 
     const cutstackMode = document.getElementById('ped-cutstack-mode')?.value;

@@ -51,7 +51,7 @@ function assignment(name) {
                     {id:'bcfixed',type:'BARCODE',fixed:true,x_mm:0,y_mm:0});
                 state.numElements[0].ticket_pos=3;saveNumHistory();renderElementsList();
                 const selectors=state.numElements.map(el => !!document.querySelector('#elcard-'+el.id+' select[onchange*="ticket_pos"]'));
-                const note=document.getElementById('elcard-bank').textContent.includes('uma linha por célula');
+                const note=document.getElementById('elcard-bank').textContent.includes('via fornece os dados');
                 const bankData=JSON.stringify(state.numElements.slice(-3));
                 const beforeReduction=JSON.stringify(state);
                 qtd.value='2';onTicketQtdChange();
@@ -80,7 +80,7 @@ function assignment(name) {
                     bankPreserved:JSON.stringify(state.numElements.filter(e=>['bank','qrbank','bcfixed'].includes(e.id)))===bankData};
             });
             assert(result.disabled && result.blocked && result.note && result.unlocked && result.bankPreserved);
-            assert.deepEqual(result.selectors,[true,true,true,true,false,false,false,false]);
+            assert.deepEqual(result.selectors,[true,true,true,true,false,true,true,false]);
             assert.deepEqual(result.refused,['3',true]);
             assert.equal(result.undo,'3');assert.equal(result.redo,'4');
             assert.deepEqual(result.invalidQuantities,['4','4','4','4']);

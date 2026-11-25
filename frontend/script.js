@@ -1317,9 +1317,9 @@ function modelosComElementoSemColuna() {
             if (!v) return;
             const banco = window.BancoDoModelo.bancoDoModelo(v, state.bancosDoPedido || []);
             if (!banco) return;   // esse caso e da trava do banco nao baixado
-            const soltos = window.BancoDoModelo.elementosSemColunaNoBanco(
-                pecaDoModelo(it), banco, v.csv_mapa);
-            if (soltos.length) fora.push(it);
+            const num = numeracaoDoModelo(it);
+            const soltos = window.BancoDoModelo.elementosSemColunaNoBanco(num, num || banco, null);
+            if (num?.erro_banco_ticket || soltos.length) fora.push(it);
         });
     });
     return fora;
@@ -4984,8 +4984,7 @@ function familiasDaNumeracao(elementos) {
 }
 
 function elementoUsaPosicaoTicket(el) {
-    return el.type === 'QR_IDEAL' || (['TEXT', 'QR', 'BARCODE'].includes(el.type)
-        && !el.fixed && el.source !== 'database' && !el.database_text);
+    return el.type === 'QR_IDEAL' || (['TEXT', 'QR', 'BARCODE'].includes(el.type) && !el.fixed);
 }
 
 function erroDaNumeracaoTicket(tipo, quantidade, elementos) {
@@ -4994,7 +4993,7 @@ function erroDaNumeracaoTicket(tipo, quantidade, elementos) {
     if (typeof quantidade === 'boolean' || !Number.isSafeInteger(qtd) || qtd < 1) return 'Informe uma quantidade inteira de Tickets por célula, maior que zero.';
     if (familiasDaNumeracao(elementos).length) return 'Remova os elementos de Teatro ou Camarote antes de usar o tipo Ticket.';
     const invalidos = (elementos || []).filter(el => {
-        const pos = el.ticket_pos === undefined ? 1 : el.ticket_pos;
+        const pos = el.ticket_pos ?? 1;
         return elementoUsaPosicaoTicket(el) && (typeof pos === 'boolean'
             || !Number.isSafeInteger(Number(pos)) || Number(pos) < 1 || Number(pos) > qtd);
     });
@@ -8218,7 +8217,8 @@ function renderNavegacaoDosElementosDaNumeracao() {
         nome.textContent = (el.name || rotulo) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
         const detalhe = document.createElement('small');
         const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
-        detalhe.textContent = rotulo + ' · ' + face + (tipo === 'TICKET' && elementoUsaPosicaoTicket(el) ? ' · Ticket ' + (el.ticket_pos ?? 1) : '');
+        detalhe.textContent = rotulo + ' · ' + face + (tipo === 'TICKET' && elementoUsaPosicaoTicket(el)
+            ? ((el.source === 'database' || el.database_text) && el.ticket_pos == null ? ' · Posição automática' : ' · Ticket ' + (el.ticket_pos ?? 1)) : '');
         texto.append(nome, detalhe);
         botao.append(ponto, texto);
         botao.onclick = event => selectEl(el.id, event);
@@ -8242,7 +8242,8 @@ function atualizarSelecaoVisualDaNumeracao() {
             botao.querySelector('strong').textContent = (el.name || botao.dataset.elementLabel) + (el.locked ? ' 🔒' : '') + (el.group_id ? ' 🔗' : '');
             const face = el.face === 'front' ? 'Frente' : el.face === 'back' ? 'Verso' : 'Frente e verso';
             const ticket = document.getElementById('num-tipo')?.value === 'TICKET' && elementoUsaPosicaoTicket(el);
-            botao.querySelector('small').textContent = botao.dataset.elementLabel + ' · ' + face + (ticket ? ' · Ticket ' + (el.ticket_pos ?? 1) : '');
+            botao.querySelector('small').textContent = botao.dataset.elementLabel + ' · ' + face + (ticket
+                ? ((el.source === 'database' || el.database_text) && el.ticket_pos == null ? ' · Posição automática' : ' · Ticket ' + (el.ticket_pos ?? 1)) : '');
         }
     });
     const vazio = document.getElementById('num-properties-empty');
@@ -8663,8 +8664,11 @@ function renderElementsList() {
         const numTipoSelect = document.getElementById('num-tipo');
         if (numTipoSelect && numTipoSelect.value === 'TICKET' && elementoUsaPosicaoTicket(el)) {
             const ticketQtd = parseInt(document.getElementById('num-ticket-qtd').value) || 1;
-            const pos = Number(el.ticket_pos === undefined ? 1 : el.ticket_pos);
-            let options = typeof el.ticket_pos !== 'boolean' && Number.isSafeInteger(pos) && pos >= 1 && pos <= ticketQtd ? ''
+            const automatico = (el.source === 'database' || el.database_text) && el.ticket_pos == null;
+            const pos = automatico ? null : Number(el.ticket_pos ?? 1);
+            let options = automatico
+                ? '<option value="" selected disabled>Posição automática do gabarito</option>'
+                : typeof el.ticket_pos !== 'boolean' && Number.isSafeInteger(pos) && pos >= 1 && pos <= ticketQtd ? ''
                 : '<option value="" selected disabled>Posição inválida — selecione um Ticket</option>';
             for (let i = 1; i <= ticketQtd; i++) {
                 options += `<option value="${i}" ${pos === i ? 'selected' : ''}>Ticket ${i}</option>`;
@@ -8677,8 +8681,9 @@ function renderElementsList() {
                     </select>
                 </div>
             `;
-        } else if (numTipoSelect?.value === 'TICKET' && (el.source === 'database' || el.database_text || el.type === 'FOTO')) {
-            ticketPosHTML = '<div class="form-group el-full"><small>Banco: uma linha por célula, compartilhada entre os Tickets. Para dados diferentes nas vias, selecione colunas diferentes da mesma linha.</small></div>';
+        }
+        if (numTipoSelect?.value === 'TICKET' && (el.source === 'database' || el.database_text) && elementoUsaPosicaoTicket(el)) {
+            ticketPosHTML += '<div class="form-group el-full"><small>A posição indica qual via fornece os dados deste campo.</small></div>';
         }
 
         return `
@@ -17962,6 +17967,7 @@ async function salvarCamposDaNumeracao(numId, patch) {
  * do modelo que esta sendo desenhado.
  */
 function linhasDaAmostra(item, num) {
+    if (num?.erro_banco_ticket) return [];
 
     if (num && num.csv_data && num.csv_data.length) {
 
@@ -18353,8 +18359,8 @@ function desenharColunasDoModeloNoCard(idx, item, container, vinculo) {
     const banco = window.BancoDoModelo
         ? window.BancoDoModelo.bancoDoModelo(vinculo, state.bancosDoPedido || [])
         : null;
-    const peca = pecaDoModelo(item);
-    const elementos = ((peca && peca.elements) || []).filter(el => el && el.source === 'database');
+    const num = banco && window.BancoDoModelo.numeracaoResolvida(pecaDoModelo(item), banco, vinculo.csv_mapa, item);
+    const elementos = (num?.elements || []).filter(el => el && el.source === 'database');
 
     // Sem banco do pedido nao ha escolha a mostrar: no caminho da numeracao
     // as colunas moram na propria peca, como sempre.
@@ -18364,10 +18370,9 @@ function desenharColunasDoModeloNoCard(idx, item, container, vinculo) {
         return;
     }
 
-    const cabecalho = (banco.csv_headers || []).map(String);
-    const mapa = (vinculo && vinculo.csv_mapa) || {};
+    const cabecalho = (num.csv_headers || []).map(String);
     const fichas = elementos.map(el => {
-        const col = window.BancoDoModelo.colunaDoElemento(mapa, el);
+        const col = String(el.csv_column || '').trim();
         const ok = col !== '' && cabecalho.indexOf(col) !== -1;
         const nome = String(el.name || '').trim() || 'Elemento';
         const titulo = ok ? (nome + ' lê a coluna ' + col) : (nome + ' ainda não tem coluna no banco');
@@ -19217,11 +19222,12 @@ async function atualizarBancoDaPlanilha(bancoId, osId) {
 }
 window.atualizarBancoDaPlanilha = atualizarBancoDaPlanilha;
 
-/** Lê o CSV escolhido, cria o banco do pedido e liga este modelo nele. */
+/** Lê o CSV escolhido e cria um banco disponível para os modelos do pedido. */
 async function subirBancoDoPedido() {
     const alvo = _bancoPedidoPendente;
     const inp = document.getElementById('banco-pedido-file');
     if (!alvo || !inp || !inp.files || !inp.files.length) return;
+    _bancoPedidoPendente = null;
     const file = inp.files[0];
 
     const texto = await new Promise((ok, err) => {
@@ -19231,32 +19237,108 @@ async function subirBancoDoPedido() {
         r.readAsText(file);
     });
 
-    const parsed = window.CsvEditor.parseCsv(texto);
-    if (!parsed.rows.length) throw new Error('O arquivo não tem nenhuma linha.');
+    const porVia = alvo.modeloTicketId != null;
+    const parsed = porVia
+        ? window.CsvEditor.parseCsv(texto, undefined, {
+            preservarLinhasVazias: true, semCabecalho: alvo.semCabecalho
+        })
+        : window.CsvEditor.parseCsv(texto);
+    let dados = parsed;
+    if (porVia) {
+        const modelo = (state.osItens[alvo.osId] || []).find(item => String(item.id) === alvo.modeloTicketId);
+        const num = pecaDoModelo(modelo);
+        const qtd = quantidadeContratada(modelo);
+        if (num?.tipo !== 'TICKET' || String(num.id) !== alvo.numeracaoId
+                || Number(num.ticket_qtd) !== alvo.vias || qtd !== alvo.celulas) {
+            throw new Error('A quantidade ou a numeração do modelo mudou. Escolha o modelo novamente.');
+        }
+        if (!alvo.semCabecalho && parsed.headers.some(coluna => /^https?:\/\//i.test(coluna))) {
+            throw new Error('A primeira linha parece conter um link de ticket. Se ela já for um dado, marque "CSV sem cabeçalho" e importe novamente.');
+        }
+        dados = agruparBancoPorViaDeTicket(parsed, qtd, alvo.vias);
+    }
+    if (!dados.rows.length) throw new Error('O arquivo não tem nenhuma linha.');
 
     const idInt = idIntDoPedido(alvo.osId);
-    const banco = await criarBancoDoPedido(idInt, file.name.replace(/\.csv$/i, ''),
-        parsed.headers, parsed.rows, file.name);
+    const nome = file.name.replace(/\.csv$/i, '') + (porVia ? ` (Ticket ${alvo.vias})` : '');
+    const banco = await criarBancoDoPedido(idInt, nome, dados.headers, dados.rows, file.name);
 
     // Criar NAO vincula (28/08/2026, redesenho do usuario): o banco e do
     // pedido, e a adocao e sempre uma escolha feita no card, no "Vem de:".
     // Sem vinculo automatico tambem nao ha vinculo acidental — e nao ha o que
     // desfazer se algo falhar depois do insert.
-    _bancoPedidoPendente = null;
-    toast(`Banco "${banco.nome}" criado com ${parsed.rows.length} linha(s). `
-        + 'Escolha-o no "Vem de:" dos modelos que vão ler dele.', 'success');
+    if (porVia) {
+        toast(`${parsed.rows.length} vias agrupadas em ${dados.rows.length} células. `
+            + 'Escolha o banco no "Vem de:" do modelo e associe as vias em "Colunas".', 'success');
+    } else {
+        toast(`Banco "${banco.nome}" criado com ${dados.rows.length} linha(s). `
+            + 'Escolha-o no "Vem de:" dos modelos que vão ler dele.', 'success');
+    }
     renderAmostrasOSItens(alvo.osId);
 }
 window.subirBancoDoPedido = subirBancoDoPedido;
 
+function agruparBancoPorViaDeTicket({ headers, rows }, celulas, vias) {
+    return window.BancoDoModelo.agruparPorVia({ headers, rows }, celulas, vias);
+}
+
 /** O botao 📤 do box: abre o seletor de arquivo para criar um banco do pedido. */
-function subirBancoPeloBox(osId) {
-    _bancoPedidoPendente = { osId };
+function subirBancoPeloBox(osId, modeloTicketId, semCabecalho = false) {
+    const alvo = { osId };
+    if (modeloTicketId !== undefined) {
+        const modelo = (state.osItens[osId] || []).find(item => String(item.id) === modeloTicketId);
+        const num = pecaDoModelo(modelo);
+        const celulas = quantidadeContratada(modelo);
+        const vias = Number(num?.ticket_qtd);
+        if (num?.tipo !== 'TICKET' || celulas < 1 || !Number.isSafeInteger(vias) || vias < 1) {
+            toast('Escolha um modelo TICKET com quantidade e vias definidas.', 'error');
+            return;
+        }
+        Object.assign(alvo, { modeloTicketId, numeracaoId: String(num.id), celulas, vias, semCabecalho });
+    }
+    _bancoPedidoPendente = alvo;
     const inp = _inputDoBancoDoPedido();
     inp.value = '';
     inp.click();
 }
 window.subirBancoPeloBox = subirBancoPeloBox;
+
+function formularioBancoPorViaDeTicket(osId) {
+    const opcoes = (state.osItens[osId] || []).flatMap((item, idx) => {
+        const num = pecaDoModelo(item);
+        if (num?.tipo !== 'TICKET') return [];
+        const celulas = quantidadeContratada(item);
+        const vias = Number(num.ticket_qtd);
+        const linhas = celulas * vias;
+        if (celulas < 1 || vias < 1 || !Number.isSafeInteger(vias) || !Number.isSafeInteger(linhas)) return [];
+        const rotulo = `${rotuloDoModelo(item, idx)} · Ticket ${vias} · ${linhas.toLocaleString('pt-BR')} linhas`;
+        return [`<option value="${escDoBanco(String(item.id))}">${escDoBanco(rotulo)}</option>`];
+    });
+    if (!opcoes.length) return '';
+    return `
+        <details id="banco-ticket-${escDoBanco(osId)}" style="margin:8px 16px;">
+            <summary>Importar CSV por via de Ticket</summary>
+            <form style="display:flex; flex-wrap:wrap; align-items:end; gap:8px; margin-top:8px;"
+                onsubmit="event.preventDefault(); subirBancoPeloBox('${escapeJsAttr(osId)}', this.elements.modeloTicket.value, this.elements.semCabecalho.checked)">
+                <label style="flex:1; min-width:180px;">
+                    Modelo e quantidade de linhas esperada
+                    <select class="form-control" name="modeloTicket" required>${opcoes.join('')}</select>
+                </label>
+                <label><input type="checkbox" name="semCabecalho"> CSV sem cabeçalho</label>
+                <button class="btn btn-sm btn-secondary" type="submit">Escolher CSV</button>
+            </form>
+            <small>Ordene as linhas por célula e por via, começando pelo Ticket 1 de cada célula.</small>
+        </details>`;
+}
+
+window.abrirBancoPorViaDeTicket = function (osId, modeloId) {
+    const detalhes = document.getElementById(`banco-ticket-${osId}`);
+    if (!detalhes) return;
+    detalhes.open = true;
+    const seletor = detalhes.querySelector('select[name="modeloTicket"]');
+    seletor.value = modeloId;
+    seletor.focus();
+};
 
 /**
  * O modelo ficou sem nenhuma linha do banco? Devolve o que dizer, ou null.
@@ -19359,6 +19441,7 @@ function numeracaoConfirmadaDoModelo(num, item) {
     if (!num) return null;
     let copia = JSON.parse(JSON.stringify(resolverNumeracaoParaModelo(num, item)));
     if (copia.teatro_snapshot_erro) throw Error(copia.teatro_snapshot_erro);
+    if (copia.erro_banco_ticket) throw Error(copia.erro_banco_ticket);
     if (copia.csv_data?.length) {
         if (item?.csv_selecao) copia.csv_data = fatiaCsvDoItem(item, copia);
         else if (vinculoDeBancoDoModelo(item)) copia.csv_data = linhasDoModeloNoPayload(item, copia);
@@ -19534,7 +19617,8 @@ function resolverNumeracaoParaModelo(num, item) {
     return window.BancoDoModelo.numeracaoResolvida(
         num,
         window.BancoDoModelo.bancoDoModelo(vinculo, state.bancosDoPedido || []),
-        vinculo.csv_mapa
+        vinculo.csv_mapa,
+        item
     );
 }
 window.resolverNumeracaoParaModelo = resolverNumeracaoParaModelo;
@@ -19985,6 +20069,7 @@ function bancoDeDadosIncompletoDoModelo(item) {
         } catch (e) { return { motivo: 'mapa_teatro', texto: e.message }; }
     }
     if (!num) return null;
+    if (num.erro_banco_ticket) return { motivo: 'ticket_banco', texto: num.erro_banco_ticket };
     const deBanco = (num.elements || []).filter(el => el && el.source === 'database');
     if (!deBanco.length) return null;
     const rows = Array.isArray(num.csv_data) ? num.csv_data : [];
@@ -35967,6 +36052,10 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
         // o card avisa e o PRONTO fica trancado, como na regra de células.
         const bancoIncompleto = ehTelaDoCliente ? null : bancoDeDadosIncompletoDoModelo(item);
         const travaDeBanco = !!bancoIncompleto;
+        const ticketPorVia = ehTelaDoCliente ? null : numeracaoDoModelo(item)?.banco_ticket_por_via;
+        const resumoTicketPorVia = ticketPorVia ? `<div class="amostra-banco-ticket" style="font-size:.8rem;color:var(--text-dim);margin-bottom:8px;">
+            ${ticketPorVia.linhas.toLocaleString('pt-BR')} vias em ${ticketPorVia.celulas.toLocaleString('pt-BR')} células
+            ${ticketPorVia.excedentes ? ` · ${ticketPorVia.excedentes.toLocaleString('pt-BR')} linha(s) fora da faixa, disponíveis no banco original` : ''}</div>` : '';
         // ── Caractere que a fonte não desenha ──
         // O buraco do nome estrangeiro: a tela mostra "Ondřej Pek" porque o
         // navegador cobre o `ř` com outra fonte; o papel sai "Ond ej Pek".
@@ -35999,12 +36088,20 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     <button class="btn btn-sm btn-secondary" style="margin-top:8px;" onclick="removerDistribuicaoDoModelo(${idx}, '${osId}')">🧹 Remover a distribuição</button></span>
                 </div>` : '';
 
+        const pecaComDivergencia = travaDeCelulas ? pecaDoModelo(item) : null;
+        const viasDoBanco = pecaComDivergencia?.tipo === 'TICKET' ? Number(pecaComDivergencia.ticket_qtd) : 0;
+        const linhasPorVia = divergenciaCelulas?.qtd * viasDoBanco;
+        const orientacaoBancoTicket = viasDoBanco > 1 && Number.isSafeInteger(linhasPorVia) && linhasPorVia > 0
+            ? `<br>Para arquivo com uma linha por via, o CSV precisa ter ${linhasPorVia.toLocaleString('pt-BR')} linhas de dados.
+                <button class="btn btn-sm btn-secondary" type="button" style="margin-top:8px;"
+                    onclick="abrirBancoPorViaDeTicket('${escapeJsAttr(osId)}', '${escapeJsAttr(item.id)}')">Importar CSV por via de Ticket</button>`
+            : '';
         const faixaDivergenciaCelulas = travaDeCelulas ? `
                 <div style="margin: 0 0 10px 0; padding: 9px 12px; border-radius: 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.35); color: #f87171; font-size: 0.8rem; font-weight: 600; display: flex; align-items: flex-start; gap: 8px;">
                     <span style="font-size: 1rem;">⚠️</span>
                     <span>O banco não fecha com a quantidade do pedido, então este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(textoDaDivergenciaDeCelulas(divergenciaCelulas))}</span><br>
-                    Corrija as linhas em <b>📊 Ver / editar</b> ou <b>🧩 Linhas</b>. A quantidade do pedido não se altera aqui — ela vem do sistema comercial.</span>
+                    Corrija as linhas em <b>📊 Ver / editar</b> ou <b>🧩 Linhas</b>. A quantidade do pedido não se altera aqui — ela vem do sistema comercial.${orientacaoBancoTicket}</span>
                 </div>` : '';
 
         const faixaBancoIncompleto = travaDeBanco ? `
@@ -36012,7 +36109,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                     <span style="font-size: 1rem;">⚠️</span>
                     <span>A numeração usa banco de dados, mas ele não está completo — este modelo não pode ser marcado PRONTO.<br>
                     <span style="font-weight:700;color:#fca5a5;">${escapeHtml(bancoIncompleto.texto)}</span><br>
-                    ${bancoIncompleto.motivo === 'mapa_teatro'
+                    ${bancoIncompleto.motivo === 'ticket_banco' ? '' : bancoIncompleto.motivo === 'mapa_teatro'
                         ? 'Confira o setor associado em <b>Mapa de Teatro</b>, sua quantidade no ERP e os elementos de teatro da numeração.'
                         : 'Adicione o banco em <b>Gerenciamento de Bancos de Dados</b> do pedido, selecione-o em <b>Vem de:</b> e associe as colunas no modelo.'}</span>
                 </div>` : '';
@@ -36305,6 +36402,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                         ${faixaDistribuicaoOrfa}
                         ${faixaDivergenciaCelulas}
                         ${faixaBancoIncompleto}
+                        ${resumoTicketPorVia}
                         ${faixaMapaERP}
                         ${faixaSemGlifo}
                         ${faixaCelulasRepetidas}
@@ -36472,6 +36570,7 @@ function renderAmostrasOSItens(osId, opcoes = {}) {
                                 <button class="btn btn-sm btn-secondary" onclick="abrirMapaTeatroDoPedido('${osId}')" style="font-size: 0.78rem; font-weight: 700; padding: 5px 12px;">🗺️ Mapa de Teatro</button>
                             </div>
                         </div>
+                        ${formularioBancoPorViaDeTicket(osId)}
                         <div class="card-body" style="padding: 12px 16px 16px 16px; display: flex; flex-direction: column; gap: 8px;" id="bancos-pedido-lista-${osId}"></div>
                     </div>
 
@@ -38900,6 +38999,10 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
     const seqStart = parseInt(
         item?.numeracao_inicio || item?.num_inicial || item?.NUMERACAO_INICIO || 1
     ) || 1;
+    const linhas = typeof linhasDaAmostra === 'function'
+        ? linhasDaAmostra(item, num)
+        : (num.csv_data || item?.csv_data || []);
+    const csvRow = linhas[pageNum - 1] || null;
 
     elementosNaOrdemDeComposicao(num.elements).forEach(el => {
         const elFace = el.type === 'PICOTE' ? 'both' : (el.face || 'both');
@@ -38907,6 +39010,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             ? (elFace === 'back' || elFace === 'both')
             : (elFace === 'front' || elFace === 'both');
         if (!visivel) return;
+        if (window.BancoDoModelo?.mostrarCampoNaPrevia?.(num, item, el, csvRow, linhas.length) === false) return;
 
         const x = el.x_mm * Sx;
         const y = el.y_mm * Sy;
@@ -38947,13 +39051,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 label = `${el.prefix || ''}${String(pageNum).padStart(el.pad || 0, '0')}/${String(_lCamB).padStart(el.pad || 0, '0')}`;
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                // A pagina N do PDF mostra a linha N da FATIA deste modelo. Antes
-                // indexava o banco inteiro: um modelo cuja fatia comeca na linha
-                // 601 exibia a linha 1 na primeira pagina.
-                const csvData = (typeof linhasDaAmostra === 'function')
-                    ? linhasDaAmostra(item, num)
-                    : (num?.csv_data || item?.csv_data || []);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (el.database_text && csvRow) {
                     label = window.formatarTextoDoBanco(el, csvRow[colName]);
                 } else if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
@@ -38999,10 +39096,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 qrText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = (typeof linhasDaAmostra === 'function')
-                    ? linhasDaAmostra(item, num)
-                    : (num?.csv_data || item?.csv_data || []);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     qrText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -39028,10 +39121,6 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
                 bcText = el.fixed_value || '';
             } else if (el.source === 'database') {
                 const colName = el.csv_column || '';
-                const csvData = (typeof linhasDaAmostra === 'function')
-                    ? linhasDaAmostra(item, num)
-                    : (num?.csv_data || item?.csv_data || []);
-                const csvRow = csvData[pageNum - 1] || null;
                 if (csvRow && typeof csvRow[colName] !== 'undefined' && csvRow[colName] !== '') {
                     bcText = `${el.prefix || ''}${csvRow[colName]}${el.suffix || ''}`;
                 } else {
@@ -39060,10 +39149,7 @@ function drawNumeracaoElementsOverCanvas(ctx, num, item, pageNum, canvasWidth, c
             // modelo, nao do banco inteiro — a mesma regra do texto variavel logo
             // acima. Indexar o banco inteiro faria o modelo cuja fatia comeca na
             // linha 601 estampar o rosto da pessoa 1.
-            const _linhasFoto = (typeof linhasDaAmostra === 'function')
-                ? linhasDaAmostra(item, num)
-                : (num?.csv_data || item?.csv_data || []);
-            desenharElementoFoto(ctx, el, S, false, _linhasFoto[pageNum - 1] || null, null);
+            desenharElementoFoto(ctx, el, S, false, csvRow, null);
         } else if (el.type === 'SVG' || el.type === 'PDF') {
             // Sem este ramo, o modo PDF (multipaginas) desenhava todos os outros tipos
             // e simplesmente pulava SVG e PDF: o forEach caia fora de todos os else-if
@@ -39955,10 +40041,9 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
         // uma vez, antes do laco: todos os elementos variaveis leem a mesma
         // pagina, senao a tela mostraria a linha 3 do banco no ingresso 1 --
         // uma peca que o motor nunca vai imprimir.
-        const _linhaCsv = (typeof linhaDaAmostra === 'function') ? linhaDaAmostra(item, num, osId) : null;
-        const _pagAmostra = (typeof paginaDaAmostra === 'function' && typeof linhasDaAmostra === 'function')
-            ? paginaDaAmostra(item, linhasDaAmostra(item, num).length, osId)
-            : 0;
+        const linhas = typeof linhasDaAmostra === 'function' ? linhasDaAmostra(item, num) : [];
+        const _pagAmostra = typeof paginaDaAmostra === 'function' ? paginaDaAmostra(item, linhas.length, osId) : 0;
+        const _linhaCsv = linhas[_pagAmostra] || null;
         // O numero inicial do modelo (NI), base de tudo o que anda com a pagina.
         const _niAmostra = parseInt(
             item?.numeracao_inicio || item?.num_inicial ||
@@ -39975,6 +40060,7 @@ async function drawAmostraFace(item, face, canvas, empty, fmt, cor, num, idx, os
             } else {
                 if (elFace !== 'front' && elFace !== 'both' && el.type !== 'PICOTE') return;
             }
+            if (window.BancoDoModelo?.mostrarCampoNaPrevia?.(num, item, el, _linhaCsv, linhas.length) === false) return;
 
             let x = el.x_mm * S;
             const y = el.y_mm * S;

@@ -95,7 +95,161 @@
         });
     }
 
-    function numeracaoResolvida(num, banco, mapa) {
+    function agruparPorVia({ headers, rows }, celulas, vias) {
+        const esperado = celulas * vias;
+        if (!Number.isSafeInteger(celulas) || celulas < 1 || !Number.isSafeInteger(vias)
+                || vias < 1 || !Number.isSafeInteger(esperado)) {
+            throw new Error('Confira a quantidade de células e as vias do gabarito TICKET.');
+        }
+        if (!headers.length || rows.length !== esperado) {
+            const diferenca = esperado - rows.length;
+            const complemento = diferenca > 0 ? ` Faltam ${diferenca}.` : diferenca < 0 ? ` Sobram ${-diferenca}.` : '';
+            throw new Error(`Este modelo exige ${esperado} linhas de dados (${celulas} células × ${vias} vias). O CSV tem ${rows.length}.${complemento}`);
+        }
+        const colunas = Array.from({ length: vias }, (_, via) =>
+            headers.map(origem => ({ origem, destino: `Ticket ${via + 1} · ${origem}` })));
+        const agrupadas = [];
+        for (let inicio = 0; inicio < rows.length; inicio += vias) {
+            const celula = {};
+            for (let via = 0; via < vias; via++) {
+                const linha = rows[inicio + via];
+                if (!linha || !headers.some(coluna => String(linha[coluna] ?? '').trim() !== '')) {
+                    throw new Error(`A linha de dados ${inicio + via + 1} (Ticket ${via + 1}) está vazia.`);
+                }
+                for (const { origem, destino } of colunas[via]) celula[destino] = linha[origem];
+            }
+            agrupadas.push(celula);
+        }
+        return { headers: colunas.flat().map(coluna => coluna.destino), rows: agrupadas };
+    }
+
+    // Um excedente só pode ficar fora da geração se a coluna comprovar a
+    // sequência inteira desde o NI, inclusive o excedente.
+    function sequenciaDesde(rows, coluna, inicio) {
+        if (!Number.isSafeInteger(inicio) || inicio < 0 || !Number.isSafeInteger(inicio + rows.length)) return false;
+        const separar = valor => /^((?:https?:\/\/[^\s]+\/)?)(\d+)$/i.exec(String(valor ?? '').trim());
+        const primeiro = separar(rows[0]?.[coluna]);
+        return !!primeiro && rows.every((linha, i) => {
+            const parte = separar(linha?.[coluna]);
+            return !!parte && parte[1] === primeiro[1] && Number(parte[2]) === inicio + i;
+        });
+    }
+
+    function atribuirVias(campos, vias) {
+        const grupos = new Map();
+        for (const campo of campos) {
+            const el = campo.el;
+            campo.face = el.face || 'both';
+            if (el.ticket_pos != null) {
+                campo.via = Number(el.ticket_pos);
+                if (typeof el.ticket_pos === 'boolean' || !Number.isSafeInteger(campo.via)
+                        || campo.via < 1 || campo.via > vias) throw new Error('Confira a posição do Ticket nos campos do banco.');
+            }
+            const chave = `${campo.face}:${el.type}`;
+            if (!grupos.has(chave)) grupos.set(chave, []);
+            grupos.get(chave).push(campo);
+        }
+        const ancoras = new Map();
+        const prioridade = tipo => ({ QR: 3, BARCODE: 2, TEXT: 1 }[tipo] || 0);
+        for (const grupo of grupos.values()) {
+            if (grupo.length !== vias) continue;
+            const ocupadas = new Set(grupo.filter(c => c.via).map(c => c.via));
+            if (ocupadas.size === vias - 1 && grupo.filter(c => !c.via).length === 1) {
+                const faltante = Array.from({length: vias}, (_, i) => i + 1).find(via => !ocupadas.has(via));
+                grupo.find(c => !c.via).via = faltante;
+            }
+            if (new Set(grupo.map(c => c.via)).size === vias && grupo.every(c => c.via)) {
+                const anterior = ancoras.get(grupo[0].face);
+                if (!anterior || prioridade(grupo[0].el.type) > prioridade(anterior[0].el.type)) {
+                    ancoras.set(grupo[0].face, grupo);
+                }
+            }
+        }
+        // Gabaritos antigos podem ter texto alinhado aos QRs sem ticket_pos.
+        // Usa a separação predominante das vias e exige pareamento inequívoco.
+        for (const grupo of grupos.values()) {
+            const pendentes = grupo.filter(c => !c.via);
+            if (!pendentes.length) continue;
+            const base = ancoras.get(grupo[0].face) || ancoras.get('both');
+            if (!base) throw new Error('Defina a posição do Ticket nos campos do banco.');
+            const medida = eixo => base.map(c => Number(c.el[eixo]));
+            const amplitude = pontos => Math.max(...pontos) - Math.min(...pontos);
+            const eixo = amplitude(medida('y_mm')) > amplitude(medida('x_mm')) ? 'y_mm' : 'x_mm';
+            const pontos = medida(eixo);
+            const ocupadas = new Set(grupo.filter(c => c.via).map(c => c.via));
+            for (const campo of pendentes) {
+                const pos = Number(campo.el[eixo]);
+                const perto = base.map((c, i) => ({ via: c.via, d: Math.abs(pos - pontos[i]) })).sort((a, b) => a.d - b.d);
+                if (campo.el[eixo] == null || !perto.every(c => Number.isFinite(c.d))
+                        || Math.abs(perto[0].d - perto[1].d) < 0.000001
+                        || ocupadas.has(perto[0].via)) throw new Error('Defina a posição do Ticket nos campos do banco.');
+                campo.via = perto[0].via;
+                ocupadas.add(campo.via);
+            }
+        }
+    }
+
+    const cachePorBanco = new WeakMap();
+
+    function bancoPorVia(num, banco, mapa, item) {
+        const vias = Number(num.ticket_qtd);
+        const celulas = Number(item?.qtd ?? item?.quantidade);
+        const total = celulas * vias;
+        const rows = banco.csv_data;
+        if (num.tipo !== 'TICKET' || !Number.isSafeInteger(vias) || vias < 2
+                || !Number.isSafeInteger(celulas) || celulas < 1 || !Number.isSafeInteger(total)
+                || !Array.isArray(rows) || rows.length <= celulas) return null;
+        const headers = (banco.csv_headers || []).map(String);
+        if (headers.some(col => /^Ticket \d+ · /.test(col))) return null;
+        const campos = (num.elements || []).filter(el => el?.source === 'database' && !el.fixed)
+            .map(el => ({ el, coluna: colunaDoElemento(mapa, el) || (headers.length === 1 ? headers[0] : '') }));
+        const chaves = campos.filter(c => c.coluna)
+            .map(c => JSON.stringify([c.el.face || 'both', c.el.type, c.coluna]));
+        // O banco já distribuído em colunas diferentes permanece no formato por célula.
+        if (new Set(chaves).size === chaves.length) return null;
+
+        const inicioBruto = item?.numeracao_inicio ?? item?.num_inicial ?? item?.NUMERACAO_INICIO;
+        const inicio = inicioBruto == null || inicioBruto === '' ? NaN : Number(inicioBruto);
+        const selecao = item?.csv_selecao;
+        const posicoes = JSON.stringify(campos.map(({ el, coluna }) =>
+            [el.id, el.type, el.face, el.ticket_pos, el.x_mm, el.y_mm, coluna]));
+        const cache = cachePorBanco.get(banco);
+        if (cache?.num === num && cache.elements === num.elements && cache.rows === rows && cache.headers === banco.csv_headers
+                && cache.posicoes === posicoes && cache.celulas === celulas && cache.vias === vias
+                && Object.is(cache.inicio, inicio) && cache.selecao === selecao) return cache.resultado;
+        let resultado;
+        try {
+            if (selecao || rows.some(linha => linha?.__ativo === false)) {
+                throw new Error('Confira a seleção e as linhas inativas do banco antes de agrupar as vias.');
+            }
+            const colunas = [...new Set(campos.map(c => c.coluna))];
+            if (colunas.some(col => !headers.includes(col))) throw new Error('Associe as colunas do banco aos campos do Ticket.');
+            const codigos = [...new Set(campos.filter(c => ['QR', 'BARCODE'].includes(c.el.type)).map(c => c.coluna))];
+            const identificadores = codigos.length ? codigos : colunas;
+            if (rows.length > total && !identificadores.every(col => sequenciaDesde(rows, col, inicio))) {
+                throw new Error(`São esperadas ${total} linhas por via. Confira os registros excedentes e a faixa do modelo.`);
+            }
+            const agrupada = agruparPorVia({ headers, rows: rows.slice(0, total) }, celulas, vias);
+            atribuirVias(campos, vias);
+            const porElemento = new Map(campos.map(c => [c.el, `Ticket ${c.via} · ${c.coluna}`]));
+            const usadas = [...new Set(porElemento.values())];
+            if (agrupada.rows.some(linha => usadas.some(col => !String(linha[col] ?? '').trim()))) {
+                throw new Error('Há campos vazios em uma ou mais vias. Confira as colunas e as linhas do banco.');
+            }
+            resultado = {
+                csv_headers: agrupada.headers, csv_data: agrupada.rows,
+                elements: (num.elements || []).map(el => porElemento.has(el)
+                    ? { ...el, csv_column: porElemento.get(el) } : el),
+                banco_ticket_por_via: { linhas: total, celulas, excedentes: rows.length - total }
+            };
+        } catch (erro) {
+            resultado = { csv_data: [], erro_banco_ticket: erro.message };
+        }
+        cachePorBanco.set(banco, { num, elements: num.elements, rows, headers: banco.csv_headers, posicoes, celulas, vias, inicio, selecao, resultado });
+        return resultado;
+    }
+
+    function numeracaoResolvida(num, banco, mapa, item) {
         if (!num) return num;
         if (!banco && _vazio(mapa)) return num;   // o caminho de hoje, intacto
         var saida = Object.assign({}, num);
@@ -106,6 +260,21 @@
             saida.csv_url = banco.csv_url || '';
         }
         saida.elements = elementosDoModelo(num.elements, mapa);
+        if (banco && item) {
+            const porVia = bancoPorVia(num, banco, mapa, item);
+            if (porVia) Object.assign(saida, porVia);
+            else if (num.tipo === 'TICKET') {
+                const headers = saida.csv_headers.map(String);
+                saida.elements = saida.elements.map(el => {
+                    if (el?.source !== 'database' || el.fixed || el.ticket_pos == null || !el.csv_column) return el;
+                    const familia = /^Ticket \d+ · (.+)$/.exec(el.csv_column);
+                    const nome = familia?.[1] ?? el.csv_column;
+                    if (!familia && !headers.some(h => /^Ticket \d+ · /.test(h) && h.slice(h.indexOf(' · ') + 3) === nome)) return el;
+                    const destino = `Ticket ${el.ticket_pos} · ${nome}`;
+                    return destino === el.csv_column ? el : { ...el, csv_column: destino };
+                });
+            }
+        }
         return saida;
     }
 
@@ -209,13 +378,29 @@
         return mapaLimpo(novo, pedidas, elementos);
     }
 
+    function mostrarCampoNaPrevia(num, item, el, linha, total) {
+        if (num?.erro_banco_ticket && el.source === 'database' && !el.fixed) return false;
+        if (num?.tipo !== 'TICKET' || el.fixed || el.source !== 'database'
+                || (el.type !== 'QR' && el.type !== 'TEXT')) return true;
+
+        // Cada linha da prévia representa uma célula física. Um CSV ainda
+        // organizado por via não serve para desenhar a célula do pedido.
+        const qtd = Number(item?.qtd ?? item?.quantidade);
+        if (Number.isSafeInteger(qtd) && qtd > 0 && total !== qtd) return false;
+        const coluna = el.csv_column;
+        return Boolean(coluna && linha && Object.prototype.hasOwnProperty.call(linha, coluna)
+            && String(linha[coluna] ?? '').trim());
+    }
+
     escopo.BancoDoModelo = {
+        agruparPorVia: agruparPorVia,
         bancoDoModelo: bancoDoModelo,
         colunaDoModelo: colunaDoModelo,
         colunaDoElemento: colunaDoElemento,
         elementosDoModelo: elementosDoModelo,
         elementosSemColunaNoBanco: elementosSemColunaNoBanco,
         numeracaoResolvida: numeracaoResolvida,
+        mostrarCampoNaPrevia: mostrarCampoNaPrevia,
         colunasQueAPecaPede: colunasQueAPecaPede,
         colunasQueFaltam: colunasQueFaltam,
         mapaLimpo: mapaLimpo,
