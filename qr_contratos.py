@@ -68,7 +68,21 @@ def _validar(pedido, contratos):
         if c.get("modelo") in modelos:
             raise ValueError("Contrato QR repetido")
         modelos.add(c.get("modelo"))
+        if c.get("posicoes") is not None:
+            _posicoes_contratadas(c)
         qr_ideal.indice_contrato(pedido, c.get("modelo"), c.get("inicio"), c)
+
+
+def _posicoes_contratadas(contrato):
+    posicoes = contrato.get("posicoes")
+    if posicoes is None:
+        return {contrato["posicao"]}
+    if (contrato["versao"] != 2 or not isinstance(posicoes, list) or len(posicoes) < 2
+            or posicoes[0] != contrato["posicao"]
+            or any(type(pos) is not int or not 1 <= pos <= contrato["passo"] for pos in posicoes)
+            or posicoes != sorted(set(posicoes))):
+        raise ValueError("Contrato QR invalido")
+    return set(posicoes)
 
 
 def preparar_config(config):
@@ -99,12 +113,17 @@ def preparar_config(config):
             qtd = int(arte.get("qtd", 0))
             if passo != contrato["passo"] or qtd < 1 or int(config.seq_increment) != 1:
                 raise ValueError("QR Ideal: passo ou quantidade diverge do contrato")
+            posicoes_contratadas = _posicoes_contratadas(contrato)
+            posicoes_usadas = set()
             for el in els:
                 pos = int(el.get("ticket_pos", 1)) if passo > 1 else 1
-                if el.get("source") == "database" or el.get("fixed") or pos != contrato["posicao"]:
+                if el.get("source") == "database" or el.get("fixed") or pos not in posicoes_contratadas:
                     raise ValueError("QR Ideal: elemento diverge da posicao contratada")
+                posicoes_usadas.add(pos)
                 for valor in (inicio + pos - 1, inicio + (qtd - 1) * passo + pos - 1):
                     qr_ideal.indice_contrato(pedido, modelo, valor, contrato)
+            if posicoes_usadas != posicoes_contratadas:
+                raise ValueError("QR Ideal: faltam vias contratadas na numeracao")
         usados.append(contrato)
     if usados:
         import qr_base_v2
