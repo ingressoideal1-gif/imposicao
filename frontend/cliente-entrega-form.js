@@ -32,7 +32,8 @@ function dadosDoFormularioEntrega() {
         rascunhoEntrega = {
             valores: {}, consultado: '', buscando: false, erro: '', anterior: dados.endereco || null,
             alterando: window.portalConfirmacoes.entrega === false,
-            telaEnderecos: 'lista', documentoLiberado: false, origemCnpj: false
+            telaEnderecos: 'lista', documentoLiberado: false, origemCnpj: false,
+            operacao: null, erroGravacao: ''
         };
         CAMPOS_ENTREGA.forEach(k => { rascunhoEntrega.valores[k] = String(anterior[k] || ''); });
         rascunhoEntrega.valores.recebedor ||= fisica ? dados.cliente.nome || '' : '';
@@ -366,6 +367,7 @@ async function selecionarEnderecoEntrega(indice) {
     if (!escolhido || !confirmarMudancaDeCidadePaga(escolhido.cidade)
         || !(await liberarEdicaoEntrega()) || window.portalGravandoConfirmacao) return;
     const r = dadosDoFormularioEntrega();
+    r.operacao = { acao: 'selecionar', endereco: escolhido };
     CAMPOS_ENTREGA.forEach(k => { r.valores[k] = String(escolhido[k] || ''); });
     r.consultado = r.valores.cep.replace(/\D/g, '');
     r.documentoLiberado = true;
@@ -377,9 +379,11 @@ async function selecionarEnderecoEntrega(indice) {
 }
 
 async function informarOutroEnderecoEntrega() {
-    if (!(await liberarEdicaoEntrega())) return;
+    if (!(await liberarEdicaoEntrega()) || window.portalGravandoConfirmacao) return;
     const r = dadosDoFormularioEntrega();
     CAMPOS_ENTREGA.forEach(k => { r.valores[k] = ''; });
+    r.operacao = null;
+    r.erroGravacao = '';
     r.consultado = '';
     r.documentoLiberado = false;
     r.origemCnpj = false;
@@ -400,19 +404,19 @@ function voltarListaEnderecosEntrega() {
 async function usarNovoEnderecoEntrega() {
     if (window.portalGravandoConfirmacao || clienteState.pedidoFinalizado) return;
     const r = dadosDoFormularioEntrega();
-    const documento = r.valores.cpf_recebedor.replace(/\D/g, '');
-    const valores = Object.fromEntries(CAMPOS_ENTREGA.map(k => [k, String(r.valores[k] || '').trim()]));
+    const valores = normalizarEnderecoEntrega(r.valores);
     if (!r.documentoLiberado || !r.consultado || r.buscando
-        || !valores.recebedor || !documentoDoRecebedorValido(documento)
-        || !/^\d{8}$/.test(valores.cep.replace(/\D/g, ''))
+        || !valores.recebedor || !documentoDoRecebedorValido(valores.cpf_recebedor)
+        || !/^\d{8}$/.test(valores.cep)
         || ['endereco', 'numero', 'bairro', 'cidade', 'uf'].some(k => !valores[k])) {
         r.erro = 'Complete os dados obrigatórios antes de usar este endereço.';
         reabrirMeusEnderecos();
         return;
     }
     if (!confirmarMudancaDeCidadePaga(valores.cidade)) return;
-    r.valores.cpf_recebedor = documento;
-    r.valores.cep = valores.cep.replace(/\D/g, '');
+    r.valores.cpf_recebedor = valores.cpf_recebedor;
+    r.valores.cep = valores.cep;
+    r.operacao = { acao: 'criar' };
     r.telaEnderecos = 'lista';
     r.erro = '';
     fecharEnderecosEntrega();
@@ -431,37 +435,71 @@ function cartaoDeDecisaoEntrega() {
         + (gravando || confirmado ? 'disabled ' : '') + 'onclick="decidirDados(\'entrega\', true)">'
         + icone('check', 17) + (gravando === 'entrega' ? 'Salvando...' : confirmado ? 'Confirmado' : 'Confirmar entrega') + '</button>'
         + '<button type="button" class="portal-botao atencao" ' + (gravando ? 'disabled ' : '')
-        + 'onclick="abrirEnderecosEntrega()">' + icone('pin', 17) + 'Alterar Endereço</button>' + (window.portalErroConfirmacao.entrega ? '<div class="portal-erro-confirmacao" role="alert">Não conseguimos salvar. Confira os dados e tente novamente.</div>' : '') + '</div>'
+        + 'onclick="abrirEnderecosEntrega()">' + icone('pin', 17) + 'Alterar Endereço</button>'
+        + (window.portalErroConfirmacao.entrega ? '<div class="portal-erro-confirmacao" role="alert">'
+            + escapeHtml(r.erroGravacao || 'Não conseguimos salvar. Confira os dados e tente novamente.') + '</div>' : '') + '</div>'
         + '</div>' + modalEnderecosEntrega();
+}
+
+function camposDoEnderecoEntrega(endereco) {
+    return Object.fromEntries(CAMPOS_ENTREGA.map(k => [k, endereco?.[k] ?? null]));
+}
+
+function normalizarEnderecoEntrega(endereco) {
+    const valores = Object.fromEntries(CAMPOS_ENTREGA.map(k => [k, String(endereco[k] ?? '').trim()]));
+    valores.cep = valores.cep.replace(/\D/g, '');
+    valores.cpf_recebedor = valores.cpf_recebedor.replace(/\D/g, '');
+    return valores;
+}
+
+function falhaAoPersistirEnderecoEntrega(r, mensagem) {
+    r.erroGravacao = mensagem;
+    throw new Error(mensagem);
 }
 
 async function persistirEnderecoEntrega() {
     const r = dadosDoFormularioEntrega();
-    const valores = Object.fromEntries(CAMPOS_ENTREGA.map(k => [k, r.valores[k].trim()]));
-    valores.cep = valores.cep.replace(/\D/g, '');
-    valores.cpf_recebedor = valores.cpf_recebedor.replace(/\D/g, '');
-    if (r.alterando && (r.buscando || !r.consultado || r.consultado !== valores.cep))
-        throw new Error('Digite o CEP e use Buscar endereço pelo CEP antes de confirmar.');
+    const dados = window.portalDados;
+    const acao = r.operacao?.acao || 'confirmar';
+    const selecionado = r.operacao?.endereco;
+    const id = acao === 'criar' ? null : (selecionado ? selecionado.id : dados.endereco_entrega_id);
+    const rascunho = normalizarEnderecoEntrega(r.valores);
+    const endereco = acao === 'criar' ? rascunho : camposDoEnderecoEntrega(selecionado || r.anterior);
+    const valores = acao === 'criar' ? rascunho : normalizarEnderecoEntrega(endereco);
+    r.erroGravacao = '';
+    if (acao === 'criar' && (r.buscando || !r.consultado || r.consultado !== valores.cep))
+        falhaAoPersistirEnderecoEntrega(r, 'Digite o CEP e use Buscar endereço pelo CEP antes de confirmar.');
     if (!/^\d{8}$/.test(valores.cep))
-        throw new Error('Use Alterar para informar e consultar o CEP da entrega.');
+        falhaAoPersistirEnderecoEntrega(r, 'Use Alterar Endereço para selecionar ou cadastrar um endereço com CEP válido.');
     if (!valores.recebedor || !documentoDoRecebedorValido(valores.cpf_recebedor))
-        throw new Error('Informe o recebedor e um CPF ou CNPJ válido.');
+        falhaAoPersistirEnderecoEntrega(r, 'Use Alterar Endereço para selecionar ou cadastrar um endereço com recebedor e CPF ou CNPJ válido.');
     if (['endereco', 'numero', 'bairro', 'cidade', 'uf'].some(k => !valores[k]))
-        throw new Error('Complete endereço, número (ou S/N) e bairro antes de confirmar.');
-    const { data, error } = await supabaseClient.rpc('link_cliente_salvar_entrega', {
+        falhaAoPersistirEnderecoEntrega(r, 'Use Alterar Endereço para selecionar ou cadastrar um endereço completo.');
+    if (acao === 'confirmar' && CAMPOS_ENTREGA.some(k => rascunho[k] !== valores[k]))
+        falhaAoPersistirEnderecoEntrega(r, 'Use Alterar Endereço para selecionar ou salvar o endereço antes de confirmar.');
+    const avisoEnderecosMudaram = 'Reabra o link para carregar os endereços atualizados.';
+    if (acao !== 'criar' && !id) falhaAoPersistirEnderecoEntrega(r, avisoEnderecosMudaram);
+    const { data, error } = await supabaseClient.rpc('link_cliente_definir_endereco_entrega', {
         p_numero: String(clienteState.numero), p_token: clienteState.token,
-        p_endereco: valores, p_anterior: r.anterior
+        p_acao: acao, p_endereco_id: id, p_endereco: endereco, p_anterior: r.anterior
     });
+    if (error?.message === 'o endereço mudou; reabra o link antes de salvar'
+        || error?.message === 'endereço indisponível para este pedido')
+        falhaAoPersistirEnderecoEntrega(r, avisoEnderecosMudaram);
+    const gravado = data?.endereco;
+    const conferido = acao === 'criar' && gravado ? normalizarEnderecoEntrega(gravado) : gravado;
     if (error || !data || data.ok !== true || String(data.numero) !== String(clienteState.numero)
-        || !data.endereco || CAMPOS_ENTREGA.some(k => data.endereco[k] !== valores[k]))
-        throw new Error('O banco não confirmou a gravação do endereço. Tente novamente.');
-    window.portalDados.endereco = data.endereco;
-    const cadastrados = enderecosCadastradosEntrega();
-    const jaExiste = cadastrados.some(e => CAMPOS_ENTREGA.every(k => String(e[k] || '') === valores[k]));
-    if (!jaExiste) {
-        window.portalDados.enderecos_entrega = [Object.assign({ tipo_endereco: 'ENTREGA' }, valores), ...cadastrados];
-    }
-    r.anterior = data.endereco;
+        || typeof data.endereco_id !== 'string' || !data.endereco_id || (id && data.endereco_id !== id)
+        || !Array.isArray(data.enderecos_entrega) || !conferido
+        || CAMPOS_ENTREGA.some(k => conferido[k] !== endereco[k]))
+        falhaAoPersistirEnderecoEntrega(r, 'O banco não confirmou a gravação do endereço. Tente novamente.');
+    dados.endereco = gravado;
+    dados.endereco_entrega_id = data.endereco_id;
+    dados.enderecos_entrega = data.enderecos_entrega;
+    r.anterior = gravado;
+    CAMPOS_ENTREGA.forEach(k => { r.valores[k] = String(gravado[k] ?? ''); });
+    r.consultado = valores.cep;
+    r.operacao = null;
     r.erro = '';
 }
 
