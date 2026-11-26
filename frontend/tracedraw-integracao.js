@@ -96,7 +96,11 @@
               throw Error('Um dos modelos foi aprovado ou impresso durante a preparação. Reabra o pedido.');
             if(draft.atomic_document===true) {
               binding.feedback.textContent=`Publicando documento com ${prepared.length} modelo(s)…`;
-              const receipt=await adapter.request('publish_document',{...identity,parts:prepared.map(({part,samples})=>({model:Number(part.model),operation:part.operation,samples}))});
+              const parts=prepared.map(({part,samples})=>({
+                model:Number(part.model),operation:part.operation,samples,
+                ...(Object.hasOwn(part,'numbering_id')?{numbering_id:part.numbering_id}:{}),
+              }));
+              const receipt=await adapter.request('publish_document',{...identity,parts});
               const received=receipt.receipts;
               if(receipt.confirmed!==true||Number(receipt.pedido)!==identity.order||!Array.isArray(received)||received.length!==prepared.length)
                 throw Error('Documento sem todos os recibos de publicação.');
