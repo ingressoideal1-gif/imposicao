@@ -148,8 +148,18 @@
     }
     const item={...original,arte_url:draft.files.front,verso_arte_url:draft.files.back||null,_dbLoaded:true,_needsSnapshot:false};
     delete item._snapshotTimer;delete item._cacheArteAmostra;
+    const hasNumberingId=Object.hasOwn(draft,'numbering_id');
+    if(hasNumberingId) {
+      const numberingId=String(draft.numbering_id ?? '');
+      item.amostra_num_id=numberingId;
+      item.numeracao_id=numberingId;
+    }
     const cor=state.cores.find(row=>String(row.id)===String(item.amostra_cor_id));
     let num=state.numeracoes.find(row=>String(row.id)===String(item.amostra_num_id));
+    if(hasNumberingId) {
+      if(!item.amostra_num_id||!num)throw Error(`Numeração do modelo ${binding.model} confirmada pela Ponte indisponível no catálogo. Reabra o pedido.`);
+      window.VersoDoModelo.aplicar(item,num);
+    }
     num=resolverNumeracaoParaModelo(num,item);
     const fmt=formatoDoModelo(item,cor,num);
     if(!fmt?.width_mm||!fmt?.height_mm)throw Error('Formato da composiÃ§Ã£o nÃ£o confirmado.');

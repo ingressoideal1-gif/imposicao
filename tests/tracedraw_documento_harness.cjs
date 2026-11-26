@@ -5,12 +5,19 @@ class Element{constructor(){this.children=[];this.dataset={};this.style={};this.
  vm.runInNewContext(fs.readFileSync('frontend/tracedraw-integracao.js','utf8'),{window,document});
  const hosts=[new Element(),new Element()],anchors=hosts.map(h=>{const a=new Element();h.append(a);return a;});
  const container={id:'amostras-itens-container',querySelector:s=>anchors[Number(s.split('-').at(-1))]};
- let calls=[],reloads=0,fail=false,atomic=false;
+ let calls=[],reloads=0,fail=false,atomic=false,numberingIds=false;
  window.ImpositionTraceDraw.configure({canEdit:()=>true,
- request:async(action,data)=>{calls.push([action,data.model]);if(action==='prepare'){assert.equal(data.editor,undefined);assert.equal(data.use_open_editor,true);return {editor:'tracedraw',atomic_document:atomic,drafts:[{model:7,operation:'a',files:{front:'a'}},{model:8,operation:'b',files:{front:'b'}}]};}
+ request:async(action,data)=>{calls.push([action,data.model]);if(action==='prepare'){
+   assert.equal(data.editor,undefined);assert.equal(data.use_open_editor,true);
+   const drafts=[{model:7,operation:'a',files:{front:'a'}},{model:8,operation:'b',files:{front:'b'}}];
+   if(numberingIds) { drafts[0].numbering_id='001';drafts[1].numbering_id='num-b'; }
+   return {editor:'tracedraw',atomic_document:atomic,drafts};
+ }
  if(action==='publish_document') {
    assert.equal(data.editor,'tracedraw');
    assert.deepEqual(Array.from(data.parts,p=>p.model),[7,8]);
+   if(numberingIds) assert.deepEqual(Array.from(data.parts,p=>p.numbering_id),['001','num-b']);
+   else assert.ok(data.parts.every(part=>!Object.hasOwn(part,'numbering_id')));
    if(fail)throw Error('Conflito no lote');
    return {confirmed:true,pedido:123,receipts:[{modelo:7,pedido:123,operacao:'a'},{modelo:8,pedido:123,operacao:'b'}]};
  }
@@ -27,12 +34,16 @@ class Element{constructor(){this.children=[];this.dataset={};this.style={};this.
  await hosts[1].children[1].children.find(b=>b.textContent==='Atualizar').onclick();
  assert.deepEqual(calls,[['prepare',8],['compose',7],['compose',8],['publish_document',8]],'qualquer modelo publica o documento inteiro uma vez');
  assert.equal(reloads,3);
+ numberingIds=true;calls=[];
+ await hosts[1].children[1].children.find(b=>b.textContent==='Atualizar').onclick();
+ assert.deepEqual(calls,[['prepare',8],['compose',7],['compose',8],['publish_document',8]]);
+ assert.equal(reloads,4);
  fail=true;calls=[];await hosts[0].children[1].children.find(b=>b.textContent==='Atualizar').onclick();
  assert.match(hosts[0].children[1].children[5].textContent,/0\/2 modelos confirmados/);
- assert.equal(reloads,3,'erro atomico nao recarrega como publicacao parcial');
+ assert.equal(reloads,4,'erro atomico nao recarrega como publicacao parcial');
  fail=false;calls=[];
  await window.ImpositionTraceDraw.artRemoved('order',7);
  assert.deepEqual(calls,[['clear',7]],'exclusao limpa nativo sem preparar ou publicar PDF');
- assert.equal(reloads,3);
+ assert.equal(reloads,4);
  console.log('Documento: duas composicoes antes de publicar, duas publicacoes e falha parcial explicita OK');
 })().catch(e=>{console.error(e);process.exitCode=1;});
