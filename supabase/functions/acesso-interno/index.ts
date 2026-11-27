@@ -50,6 +50,7 @@ import { contasDoCliente, liberarAcesso, novaSenhaProvisoria } from "../_compart
 // e 409 la, as duas telas abertas ao mesmo tempo, sem como saber qual acertou.
 import {
   dashboard,
+  exportarLeiturasDoEvento,
   listarIngressos,
   numerosDoSetor,
 } from "../_compartilhado/relatorio.ts";
@@ -99,13 +100,17 @@ function uuid(valor: string, oque: string): string {
 
 // ── Leitura ─────────────────────────────────────────────────────────────────
 
-async function eventoDoPedido(pedidoIdInt: number): Promise<any> {
-  return ((await banco(
+async function eventoDoPedido(pedidoIdInt: number, exigirVinculoUnico = false): Promise<any> {
+  const vinculos = (await banco(
     "GET",
     `producao_acesso_pedidos?pedido_id_int=eq.${pedidoIdInt}&select=` +
       "pedido_id_int,evento_id,publicado_em,total_credenciais,qr_gerado_em," +
       "qr_revogado_em,status,created_at",
-  )) ?? [])[0] ?? null;
+  )) ?? [];
+  if (exigirVinculoUnico && vinculos.length > 1) {
+    throw new Recusa(409, "este pedido tem mais de um vinculo de evento");
+  }
+  return vinculos[0] ?? null;
 }
 
 /**
@@ -708,6 +713,17 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       await setoresDoEvento(eventoId, pedido),
       contratado,
     ));
+  }
+  if (
+    metodo === "GET" && p.length === 3 && p[0] === "pedidos" &&
+    p[2] === "leituras" && q.get("exportar") === "1"
+  ) {
+    const pedido = inteiro(p[1], "path", "pedido");
+    const eventoId = (await eventoDoPedido(pedido, true))?.evento_id;
+    if (!eventoId) throw new Recusa(404, "este pedido ainda nao virou evento");
+    const resposta = ok(await exportarLeiturasDoEvento(eventoId));
+    resposta.headers.set("Cache-Control", "no-store");
+    return resposta;
   }
   if (metodo === "GET" && p.length === 3 && p[0] === "setores" && p[2] === "ingressos") {
     return ok(await ingressosDoSetor(

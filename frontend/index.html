@@ -3809,6 +3809,9 @@
                     <div id="ic-dashboard-secao" style="display:none;">
                         <h3 class="ic-secao-titulo">Gerenciamento de público</h3>
                         <button id="ic-dashboard-abrir" class="btn btn-sm btn-outline">Ver o painel de público</button>
+                        <button id="ic-dashboard-exportar" class="btn btn-sm btn-outline" type="button">Baixar leituras do evento</button>
+                        <p class="ic-ajuda">CSV das leituras sincronizadas do evento, incluindo recusas.</p>
+                        <p id="ic-dashboard-exportar-aviso" class="ic-ajuda" role="status" hidden></p>
                         <div id="ic-dashboard-numeros" style="display:none;">
                         <div id="ic-dashboard" class="ic-kpis"></div>
                         <div class="ic-duas-colunas">
@@ -4698,7 +4701,8 @@
     <script src="acesso-estacao.js?v=1400"></script>
     <script src="dashboard-arte.js?v=20261058"></script>
     <script src="qr-evento-envio.js?v=948"></script>
-    <script src="ideal-control.js?v=20261135"></script>
+    <script src="ideal-control-csv.js?v=20261181"></script>
+    <script src="ideal-control.js?v=20261181"></script>
     <script src="idgen.js?v=1103"></script>
     <script src="idgen-editor.js?v=20261026"></script>
     <script src="criador-arte.js?v=20261152"></script>

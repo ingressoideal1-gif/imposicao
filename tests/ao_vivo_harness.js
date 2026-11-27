@@ -71,6 +71,7 @@ async function rodar(caso) {
     });
 
     await page.addScriptTag({ path: path.join(REPO, 'frontend', 'botao-espera.js') });
+    await page.addScriptTag({ path: path.join(REPO, 'frontend', 'ideal-control-csv.js') });
     await page.addScriptTag({ path: path.join(REPO, 'frontend', 'ao-vivo.js') });
     // O arquivo liga os botões no DOMContentLoaded, que já passou quando ele
     // entrou. Um disparo manual roda os ouvintes registrados depois — é a
