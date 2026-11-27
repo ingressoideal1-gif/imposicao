@@ -17,6 +17,7 @@ function ambiente(resposta, conectado = true) {
     const writes = [], notices = [], reads = [];
     const query = {
         eq(k, v) { writes.push([k, v]); return this; },
+        or() { return this; },
         select() { return resposta; }
     };
     const ctx = {
@@ -39,7 +40,7 @@ function ambiente(resposta, conectado = true) {
         avisarCorrecaoDeArte() {}
     };
     vm.createContext(ctx);
-    for (const name of ['normalizarStatusImpressao', 'pedidoBateNosSetores',
+    for (const name of ['normalizarStatusImpressao', 'modeloEmCorrecaoDeArte', 'pedidoBateNosSetores',
         'updateItemImpressao', 'autoSaveOSItemField', 'impQueueUpdateField']) {
         vm.runInContext(extract(name), ctx);
     }
