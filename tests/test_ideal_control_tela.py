@@ -45,13 +45,16 @@ def _secao_do_index():
 def test_o_arquivo_entra_na_lista_que_as_estacoes_baixam():
     import security_config
     assert "ideal-control.js" in security_config.PAINEL_ARQUIVOS
+    assert "ideal-control-csv.js" in security_config.PAINEL_ARQUIVOS
 
 
 def test_o_index_carrega_o_script_DEPOIS_do_script_principal():
     """`showView` mora no script.js e chama `window.IdealControl.iniciar()`.
     Carregar antes deixaria a tela sem quem a abre."""
     html = _ler("frontend/index.html")
-    assert html.index("script.js?v=") < html.index("ideal-control.js?v=")
+    assert html.index("script.js?v=") < html.index("ideal-control-csv.js?v=") < html.index("ideal-control.js?v=")
+    versoes_ic = re.findall(r'ideal-control(?:-csv)?\.js\?v=(\d+)', html)
+    assert len(versoes_ic) == 2 and versoes_ic[0] == versoes_ic[1]
 
 
 def test_a_versao_do_script_novo_acompanha_as_outras():
@@ -217,7 +220,8 @@ def _no_navegador(script_extra, aceitar_dialogo=False, config_real=False,
         '<link rel="stylesheet" href="/style.css"></head><body>'
         '<main class="main-content">' + _secao_do_index() + '</main>'
         + config +
-        '<script src="/qr-evento-envio.js"></script><script src="/ideal-control.js"></script></body></html>'
+        '<script src="/qr-evento-envio.js"></script><script src="/ideal-control-csv.js"></script>'
+        '<script src="/ideal-control.js"></script></body></html>'
     )
 
     driver = f"""
@@ -343,6 +347,182 @@ SERVIDOR = """
     window.__chamadas = chamadas;
     IdealControl.iniciar();
 """
+
+
+PREPARAR_EXPORTACAO = """
+    const botaoCsv = document.getElementById('ic-dashboard-exportar');
+    const avisoCsv = document.getElementById('ic-dashboard-exportar-aviso');
+    const secao = document.getElementById('view-ideal-control');
+    const publico = () => document.getElementById('ic-aba-publico').click();
+    const esperar = () => new Promise(resolve => setTimeout(resolve, 0));
+    const olhar = () => ({ ocupado: botaoCsv.disabled, aviso: avisoCsv.textContent });
+    const concluir = async () => {
+        const limite = Date.now() + 5000;
+        while (botaoCsv.disabled && Date.now() < limite) await esperar();
+        if (botaoCsv.disabled) throw new Error('A exportação permaneceu ocupada.');
+        return olhar();
+    };
+    const blobs = new Map(), arquivos = [];
+    URL.createObjectURL = blob => {
+        const url = 'blob:ideal-control-teste-' + blobs.size;
+        blobs.set(url, blob);
+        return url;
+    };
+    URL.revokeObjectURL = url => blobs.delete(url);
+    HTMLAnchorElement.prototype.click = function () {
+        arquivos.push({ nome: this.download, blob: blobs.get(this.getAttribute('href')) });
+    };
+    secao.classList.add('active');
+"""
+
+
+def test_publico_exporta_leituras_em_uma_consulta_com_sessao_do_painel():
+    r = _no_navegador(PREPARAR_EXPORTACAO + r"""
+        const chamadas = [];
+        const linhas = Array.from({ length: 3230 }, (_, i) => ({
+            numero: String(i + 1).padStart(4, '0'),
+            momento: '2026-11-15T01:20:00Z',
+            resultado: i ? 'permitido' : 'negado',
+            rotulo_motivo: i ? null : 'Já entrou',
+        }));
+        window.fetch = async (url, opcoes) => {
+            const destino = new URL(url);
+            const caminho = destino.pathname.replace('/functions/v1/acesso-interno', '');
+            if (caminho === '/pedidos') return Response.json({ pedidos: [] });
+            if (caminho === '/pedidos/18560') return Response.json(window.PAINEL);
+            chamadas.push({ rota: caminho + destino.search, token: opcoes.headers.Authorization,
+                            temSinal: opcoes.signal instanceof AbortSignal });
+            return Response.json({ leituras: linhas, ha_mais: false });
+        };
+        await IdealControl.iniciar();
+        await IdealControl.abrirPedido(18560);
+        const foraDoPublico = botaoCsv.closest('[role=tabpanel]').hidden;
+        botaoCsv.click();
+        publico();
+        const antesDoClique = chamadas.length;
+        botaoCsv.click();
+        const inicio = olhar();
+        const fim = await concluir();
+        const arquivo = arquivos[0];
+        const texto = (await arquivo.blob.text()).split('\r\n');
+        const bom = Array.from(new Uint8Array(await arquivo.blob.slice(0, 3).arrayBuffer()));
+        return { chamadas, foraDoPublico, antesDoClique, inicio, fim,
+                 nome: arquivo.nome, linhas: texto.length - 1, primeira: texto[1],
+                 ultima: texto.at(-1), bom };
+    """, config_real=True)
+    assert r['foraDoPublico'] and r['antesDoClique'] == 0
+    assert r['inicio']['ocupado'] and 'Consultando' in r['inicio']['aviso']
+    assert r['fim'] == {'ocupado': False, 'aviso': '3.230 leituras no arquivo.'}
+    assert len(r['chamadas']) == 1
+    assert r['chamadas'][0] == {
+        'rota': '/pedidos/18560/leituras?exportar=1',
+        'token': 'Bearer jwt-do-painel',
+        'temSinal': True,
+    }
+    assert r['nome'] == 'ideal-control-baile-do-hawaii.csv'
+    assert r['bom'] == [239, 187, 191] and r['linhas'] == 3230
+    assert '"0001"' in r['primeira'] and '"negado"' in r['primeira'] and '"Já entrou"' in r['primeira']
+    assert '"14/11/2026 22:20:00"' in r['primeira']
+    assert '"3230"' in r['ultima']
+
+
+@pytest.mark.parametrize('falha, mensagem', [
+    ('401', 'Sua sessão expirou'),
+    ('403', 'Sua conta não tem acesso'),
+    ('404', 'não está vinculado a um evento'),
+    ('503', 'O servidor não conseguiu'),
+    ('rede', 'Confira a internet'),
+    ('antigo', 'O servidor não conseguiu'),
+    ('timeout', 'demorou mais que o esperado'),
+])
+def test_publico_recupera_botao_apos_falha_da_exportacao(falha, mensagem):
+    r = _no_navegador(SERVIDOR + PREPARAR_EXPORTACAO + f"const falha = {json.dumps(falha)};" + """
+        const pedirOriginal = IdealControl._pedirParaTeste;
+        const timer = window.setTimeout.bind(window);
+        window.setTimeout = (fn, ms, ...args) => timer(fn, ms === 60000 ? 50 : ms, ...args);
+        let tentativas = 0, abortou = false;
+        IdealControl._pedirParaTeste = async (caminho, opcoes) => {
+            if (!caminho.endsWith('?exportar=1')) return pedirOriginal(caminho, opcoes);
+            if (++tentativas === 1) {
+                if (falha === 'antigo') return { pagina: 1, por_pagina: 100, leituras: [], ha_mais: false };
+                if (falha === 'rede') throw new TypeError('Rede de teste indisponível.');
+                if (falha === 'timeout') {
+                    opcoes.signal.addEventListener('abort', () => { abortou = true; });
+                    return new Promise(() => {});
+                }
+                throw Object.assign(new Error('Falha simulada.'), { status: Number(falha) });
+            }
+            return { leituras: [], ha_mais: false };
+        };
+        await IdealControl.abrirPedido(18560);
+        publico();
+        botaoCsv.click();
+        const falhou = await concluir();
+        const quantidadeNaFalha = arquivos.length;
+        botaoCsv.click();
+        const novaTentativa = olhar();
+        const fim = await concluir();
+        return { falhou, quantidadeNaFalha, novaTentativa, fim, abortou, arquivos: arquivos.length };
+    """)
+    assert mensagem in r['falhou']['aviso'] and not r['falhou']['ocupado']
+    assert r['quantidadeNaFalha'] == 0
+    assert r['novaTentativa']['ocupado'] and 'Consultando' in r['novaTentativa']['aviso']
+    assert r['fim'] == {'ocupado': False, 'aviso': '0 leituras no arquivo.'}
+    assert r['arquivos'] == 1
+    assert r['abortou'] == (falha == 'timeout')
+
+
+@pytest.mark.parametrize('navegacao', ['pedido', 'aba', 'menu'])
+def test_publico_cancela_download_ao_sair_e_ignora_resposta_antiga(navegacao):
+    r = _no_navegador(SERVIDOR + PREPARAR_EXPORTACAO + f"const navegacao = {json.dumps(navegacao)};" + """
+        const pedirOriginal = IdealControl._pedirParaTeste;
+        const pendencias = [], sinais = [];
+        IdealControl._pedirParaTeste = (caminho, opcoes) => {
+            if (!caminho.endsWith('?exportar=1')) return pedirOriginal(caminho, opcoes);
+            sinais.push(opcoes.signal);
+            return new Promise(resolve => pendencias.push(resolve));
+        };
+        await IdealControl.abrirPedido(18560);
+        publico();
+        botaoCsv.click();
+        await esperar();
+        if (navegacao === 'pedido') {
+            window.PAINEL = { ...window.PAINEL, pedido: 18561,
+                             evento: { ...window.PAINEL.evento, id: 'ev-2', nome_evento: 'Novo evento' } };
+            await IdealControl.abrirPedido(18561);
+        } else if (navegacao === 'menu') {
+            secao.classList.remove('active');
+        } else {
+            document.getElementById('ic-aba-setores').click();
+        }
+        await esperar();
+        const cancelou = olhar();
+        const antigas = { leituras: [{ numero: 18560 }], ha_mais: false };
+        if (navegacao === 'pedido') {
+            publico();
+            botaoCsv.click();
+            await esperar();
+            pendencias[0](antigas);
+            await esperar();
+            const antigasBaixadas = arquivos.length;
+            const aindaOcupado = olhar().ocupado;
+            pendencias[1]({ leituras: [{ numero: 18561 }], ha_mais: false });
+            const fim = await concluir();
+            return { cancelou, antigasBaixadas, aindaOcupado, fim, abortou: sinais[0].aborted,
+                     nomes: arquivos.map(a => a.nome) };
+        }
+        pendencias[0](antigas);
+        await esperar();
+        return { cancelou, fim: olhar(), abortou: sinais[0].aborted,
+                 nomes: arquivos.map(a => a.nome) };
+    """)
+    assert r['abortou'] and r['cancelou'] == {'ocupado': False, 'aviso': ''}
+    if navegacao == 'pedido':
+        assert r['antigasBaixadas'] == 0 and r['aindaOcupado']
+        assert r['nomes'] == ['ideal-control-novo-evento.csv']
+        assert r['fim']['aviso'] == '1 leitura no arquivo.'
+    else:
+        assert r['nomes'] == [] and r['fim'] == r['cancelou']
 
 
 def test_a_tela_abre_um_pedido_e_desenha_tudo():

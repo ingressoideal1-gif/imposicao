@@ -47,6 +47,8 @@
     // pela porta 9000 recebia 404 em tudo. Agora fala com a nuvem, como o resto
     // desta tela sempre precisou.
     var BASE = 'https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/acesso-interno';
+    var TEMPO_EXPORTACAO_MS = 60000;
+    var exportacaoEmCurso = null;
 
     var estado = {
         cliente: null,       // o número do cliente pesquisado
@@ -217,6 +219,7 @@
         });
         abas($('ic-conteudo'), 'ic-aba', itens, layout.aba, function (chave) {
             layout.aba = chave;
+            if (chave !== 'publico') cancelarExportacao();
             if (chave !== 'aparelhos') document.querySelectorAll('#ic-aparelhos .ic-aparelho').forEach(function (el) { if (el._ocultarSenha) el._ocultarSenha(); });
             atualizarLayout();
         });
@@ -336,7 +339,9 @@
         }).then(function (r) {
             var s = (r && r.data && r.data.session) || null;
             if (!s || !s.access_token) {
-                throw new Error('Sua sessão expirou. Entre de novo no painel.');
+                var erro = new Error('Sua sessão expirou. Entre de novo no painel.');
+                erro.status = 401;
+                throw erro;
             }
             return { 'Authorization': 'Bearer ' + s.access_token,
                      'Content-Type': 'application/json' };
@@ -491,6 +496,7 @@
             avisar('Digite o número do pedido.', 'warning');
             return Promise.resolve();
         }
+        cancelarExportacao();
         // A lista de ingressos aberta só é jogada fora quando o PEDIDO muda.
         // Toda gravação termina aqui (`recarregar`), e limpar sempre fecharia
         // a lista debaixo de quem estava procurando um ingresso — no instante
@@ -522,9 +528,11 @@
         // fora. Nesta tela, ficar carregando é o pior fim possível: o atendente
         // espera, e não há o que ele possa fazer.
         return pedir('/pedidos/' + n).then(function (p) {
+            if (estado.pedido !== n) return;
             estado.painel = p;
             desenhar();
         }).catch(function (e) {
+            if (estado.pedido !== n) return;
             estado.painel = null;
             $('ic-carregando').style.display = 'none';
             $('ic-conteudo').style.display = 'none';
@@ -552,6 +560,7 @@
             avisar('Digite o número do cliente.', 'warning');
             return Promise.resolve();
         }
+        cancelarExportacao();
         estado.cliente = n;
         // O painel do pedido some: ele e de OUTRO cliente ate alguem tocar num
         // pedido desta lista, e deixa-lo na tela faria o atendente configurar o
@@ -694,6 +703,7 @@
         $('ic-dashboard-abrir').style.display = estado.dashboard ? 'none' : '';
         $('ic-dashboard-abrir').disabled = false;
         $('ic-dashboard-abrir').textContent = 'Ver o painel de público';
+        $('ic-dashboard-exportar').hidden = !p.evento;
         desenharDashboard();
         desenharEvento();
         desenharSetores();
@@ -1353,6 +1363,95 @@
             botao.disabled = false;
             botao.textContent = 'Ver o painel de público';
             avisar((e && e.message) || 'Não consegui carregar o painel.', 'error');
+        });
+    }
+
+    function avisarExportacao(mensagem) {
+        var aviso = $('ic-dashboard-exportar-aviso');
+        aviso.textContent = mensagem;
+        aviso.hidden = !mensagem;
+    }
+
+    function encerrarExportacao(operacao) {
+        if (exportacaoEmCurso !== operacao) return;
+        exportacaoEmCurso = null;
+        clearTimeout(operacao.prazo);
+        var botao = $('ic-dashboard-exportar');
+        botao.disabled = false;
+        botao.removeAttribute('aria-busy');
+        botao.textContent = 'Baixar leituras do evento';
+    }
+
+    function cancelarExportacao() {
+        var operacao = exportacaoEmCurso;
+        if (operacao) {
+            encerrarExportacao(operacao);
+            operacao.interromper(new Error('Exportação cancelada.'));
+        }
+        avisarExportacao('');
+    }
+
+    function mensagemDeExportacao(erro) {
+        if (erro.name === 'TimeoutError') return 'A planilha demorou mais que o esperado. Tente baixar novamente.';
+        if (erro.status === 401) return 'Sua sessão expirou. Entre novamente no painel.';
+        if (erro.status === 403) return 'Sua conta não tem acesso às leituras deste evento.';
+        if (erro.status === 404) return 'Este pedido não está vinculado a um evento disponível.';
+        if (erro.name === 'TypeError') return 'Não foi possível conectar. Confira a internet e tente novamente.';
+        return 'O servidor não conseguiu gerar a planilha agora. Tente novamente em instantes.';
+    }
+
+    function exportarLeituras() {
+        var painel = estado.painel;
+        var pedido = estado.pedido;
+        if (exportacaoEmCurso || layout.aba !== 'publico' || !painel || !painel.evento
+                || String(painel.pedido) !== String(pedido)) return;
+
+        var nomeEvento = painel.evento.nome_evento || 'evento-pedido-' + pedido;
+        var controlador = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var operacao = {};
+        exportacaoEmCurso = operacao;
+        var botao = $('ic-dashboard-exportar');
+        botao.disabled = true;
+        botao.setAttribute('aria-busy', 'true');
+        botao.textContent = 'Montando…';
+        avisarExportacao('Consultando as leituras do evento…');
+
+        // Este prazo também encerra a espera quando a sessão ainda não respondeu.
+        var limite = new Promise(function (_, rejeitar) {
+            operacao.interromper = function (erro) {
+                rejeitar(erro);
+                if (controlador) controlador.abort();
+            };
+            operacao.prazo = setTimeout(function () {
+                var erro = new Error('Prazo da exportação excedido.');
+                erro.name = 'TimeoutError';
+                operacao.interromper(erro);
+            }, TEMPO_EXPORTACAO_MS);
+        });
+        var consulta = pedir('/pedidos/' + pedido + '/leituras?exportar=1', {
+            cache: 'no-store', signal: controlador && controlador.signal
+        });
+
+        Promise.race([consulta, limite]).then(function (resposta) {
+            if (exportacaoEmCurso !== operacao) return;
+            if (!window.IdealControlCsv || !window.IdealControlCsv.respostaValida(resposta)) {
+                throw new Error('Resposta inválida da exportação.');
+            }
+            var leituras = resposta.leituras;
+            try {
+                window.IdealControlCsv.baixar(nomeEvento, leituras);
+            } catch (erro) {
+                avisarExportacao('Não foi possível iniciar o download neste navegador. Tente novamente.');
+                return;
+            }
+            var total = numero(leituras.length) + (leituras.length === 1 ? ' leitura' : ' leituras');
+            avisarExportacao(resposta.ha_mais
+                ? 'Baixei as primeiras ' + total + '. O evento tem mais leituras.'
+                : total + ' no arquivo.');
+        }).catch(function (erro) {
+            if (exportacaoEmCurso === operacao) avisarExportacao(mensagemDeExportacao(erro || {}));
+        }).finally(function () {
+            encerrarExportacao(operacao);
         });
     }
 
@@ -2165,6 +2264,12 @@
             if (ev.key === 'Enter') { abrirCliente($('ic-busca').value); }
         });
         $('ic-dashboard-abrir').addEventListener('click', carregarDashboard);
+        $('ic-dashboard-exportar').addEventListener('click', exportarLeituras);
+        var secaoIdealControl = $('view-ideal-control');
+        new MutationObserver(function () {
+            if (!secaoIdealControl.classList.contains('active')) cancelarExportacao();
+        }).observe(secaoIdealControl, { attributes: true, attributeFilter: ['class'] });
+        window.addEventListener('pagehide', cancelarExportacao);
         $('ic-ev-salvar').addEventListener('click', function () {
             gravar('/eventos/' + estado.painel.evento.id, {
                 nome_evento: $('ic-ev-nome').value,
