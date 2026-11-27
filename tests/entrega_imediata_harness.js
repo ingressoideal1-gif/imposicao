@@ -20,6 +20,8 @@
 //     fim, e nao a cada lote.
 const fs = require('fs');
 const path = require('path');
+const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const RAIZ = path.join(__dirname, '..');
 const SCRIPT = fs.readFileSync(path.join(RAIZ, 'frontend', 'script.js'), 'utf8');
 const PEDIDO = fs.readFileSync(path.join(RAIZ, 'frontend', 'pedido.js'), 'utf8');
@@ -308,16 +310,88 @@ function montarCenario(opcoes) {
 })();
 
 (function aReversaDesligaOcorte() {
-    // Reversa inverte as paginas DENTRO de cada arquivo. Cortado em lotes isso
-    // viraria "lote 1 invertido, depois lote 2 invertido" -- a tiragem sairia
-    // na ordem errada, e so o papel contaria a historia.
+    // A reversa precisa receber o último bloco antes do primeiro envio.
     const i = PEDIDO.indexOf('entregar_por_bloco: document.getElementById');
     ok(i > 0, 'achei a escolha no payload');
     const trecho = PEDIDO.slice(i, i + 320);
-    ok(/ped-print-reverse/.test(trecho),
-       'a impressao reversa desliga o corte em lotes: invertida por lote, a tiragem '
-       + 'sai na ordem errada', trecho);
+    ok(/&& !impressaoReversa/.test(trecho),
+       'a impressao reversa desliga o corte em lotes progressivos', trecho);
 })();
+
+(async function imprimirBlocosEmReversa() {
+    const ARTE = fs.readFileSync(path.join(RAIZ, 'frontend', 'arte-de-impressao.js'), 'utf8');
+    const inicioConferencia = ARTE.indexOf('    function criarConferenciaStream(');
+    const fimConferencia = ARTE.indexOf('\n    raiz.criarConferenciaStream', inicioConferencia);
+    const inicioReversa = PEDIDO.indexOf('function reverterBlocosDaImpressao(');
+    const fimReversa = PEDIDO.indexOf('\n}', inicioReversa) + 2;
+    const inicioResposta = PEDIDO.indexOf('        if (contentType && contentType.includes("text/event-stream"))');
+    const fimResposta = PEDIDO.indexOf('        const blob = await selecionarFacesDoPdfDoPedido(await res.blob()', inicioResposta);
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    const executar = new AsyncFunction('res', 'window', 'impressaoReversa', 'sendPrintJobDirect', 'hashArquivo', `
+        ${ARTE.slice(inicioConferencia, fimConferencia)}
+        ${PEDIDO.slice(inicioReversa, fimReversa)}
+        const contentType = res.headers.get('Content-Type');
+        const mode = 'print', payload = {}, overlay = null, faceDoTrabalho = 'both';
+        const opcoesDeFace = { impressaoReversa }, formData = new Map([['payload', '{}']]);
+        const rotacionarPares = false, isRefazer = true, alvosDoTrabalho = [];
+        const toast = () => {}, selecionarFacesDoPdfDoPedido = async blob => blob;
+        ${PEDIDO.slice(inicioResposta, fimResposta)}
+    `);
+    const janela = { _printCancelRequested: false };
+    const nomesEntregues = [];
+    const nomes = [
+        'pedido_set1_01_capa.pdf', 'pedido_set1_02_miolo.pdf', 'pedido_set1_03_contracapa.pdf',
+        'pedido_set2_01_02_miolo.pdf', 'pedido_set2_02_01_capa.pdf', 'pedido_set2_02_02_miolo.pdf',
+        'pedido_set2_02_03_contracapa.pdf', 'pedido_lote003.pdf',
+    ];
+    const esperados = [7, 4, 5, 6, 3, 0, 1, 2].map(i => nomes[i]);
+    const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+    const dados = nomes.map((name, i) => ({
+        name, index: i + 1, data: Buffer.from(name).toString('base64'), sha256: sha256(name),
+    }));
+    const evento = (tipo, data) => new TextEncoder().encode(`event: ${tipo}\ndata: ${JSON.stringify(data)}\n\n`);
+    function stream(arquivos, { concluir = true, cancelar = false } = {}) {
+        const partes = arquivos.map(item => evento('file', item));
+        if (concluir) partes.push(evento('done', { files: arquivos.length }));
+        return {
+            headers: new Headers({ 'Content-Type': 'text/event-stream' }),
+            body: { getReader: () => ({
+                async read() {
+                    assert.equal(nomesEntregues.length, 0, 'reversa espera todo o trabalho');
+                    const value = partes.shift();
+                    if (cancelar && !partes.length) janela._printCancelRequested = true;
+                    return { value, done: !value };
+                },
+                async cancel() {},
+            }) },
+        };
+    }
+    async function testar(res, reversa = true) {
+        nomesEntregues.length = 0;
+        janela._printCancelRequested = false;
+        await executar(res, janela, reversa, async (fila, opcoes) => {
+            assert.equal(opcoes.impressaoReversa, reversa);
+            nomesEntregues.push(...fila.map(item => item.name));
+            return true;
+        }, async blob => sha256(Buffer.from(await blob.arrayBuffer())));
+    }
+    await testar(stream(dados));
+    assert.deepEqual(nomesEntregues, esperados);
+    await assert.rejects(testar(stream(dados, { concluir: false })), /trabalho completo/);
+    assert.deepEqual(nomesEntregues, []);
+    await assert.rejects(testar(stream([{ ...dados[0], sha256: 'corrompido' }])), /Integridade do lote/);
+    assert.deepEqual(nomesEntregues, []);
+    await assert.rejects(testar(stream([{ ...dados[0], token_entrega: 'lote-atual' }])), /entrega imediata/);
+    assert.deepEqual(nomesEntregues, []);
+    await testar(stream(dados, { cancelar: true }));
+    assert.deepEqual(nomesEntregues, []);
+    const json = () => Response.json({ type: 'multi_file', files: dados });
+    await testar(json());
+    assert.deepEqual(nomesEntregues, esperados);
+    await testar(json(), false);
+    assert.deepEqual(nomesEntregues, nomes);
+    ok(true, 'reversa aguarda o stream íntegro, mantém partes juntas e respeita falha e cancelamento');
+})().catch(e => { console.error(e); process.exitCode = 1; });
 
 (async function faceUnicaNoDriver() {
     const c = montarCenario({campos: {
@@ -329,6 +403,11 @@ function montarCenario(opcoes) {
     ok(c.opcoesEnviadas[0].duplex === 1, 'face única usa simplex na entrega ao driver');
     await c.criar.sendPrintJobDirect([{name: 'ambas.pdf', blob: {}}]);
     ok(c.opcoesEnviadas[1].duplex === 2, 'trabalho seguinte preserva o duplex configurado');
+    await c.criar.sendPrintJobDirect([{name: 'reversa.pdf', blob: {}}], {impressaoReversa: true});
+    ok(c.opcoesEnviadas[2].impressao_reversa === true, 'envio mantém a reversa capturada na geração');
+    c.campos['ped-print-reverse'].checked = true;
+    await c.criar.sendPrintJobDirect([{name: 'normal.pdf', blob: {}}], {impressaoReversa: false});
+    ok(c.opcoesEnviadas[3].impressao_reversa === false, 'envio mantém a ordem normal capturada na geração');
 })();
 
 // ─── Fim ───────────────────────────────────────────────────────────────────
