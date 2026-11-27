@@ -259,7 +259,11 @@ async function main() {
     assert.match(pedido, /const multiBlobs = await Promise.all\(data.files.map\(async f =>/);
     assert.match(pedido, /blob: await selecionarFacesDoPdfDoPedido\([\s\S]*?payload.print_mode, f, rotacionarPares\)/);
     assert.match(pedido, /const blob = await selecionarFacesDoPdfDoPedido\(await res.blob\(\), faceDoTrabalho, payload.print_mode, \{\}, rotacionarPares\)/);
-    for (const queue of ['printBlobQueue', 'multiBlobs', 'queue']) assert(pedido.includes('sendPrintJobDirect(' + queue + ', opcoesDeFace)'));
+    for (const queue of ['printBlobQueue', 'multiBlobs']) {
+        assert(pedido.includes(`const fila = impressaoReversa ? reverterBlocosDaImpressao(${queue}) : ${queue};`));
+    }
+    assert.equal(pedido.match(/sendPrintJobDirect\(fila, opcoesDeFace\)/g)?.length, 2);
+    assert(pedido.includes('sendPrintJobDirect(queue, opcoesDeFace)'));
     assert(pedido.includes('criarEntregaDeImpressao(opcoesDeFace)'));
     console.log('OK: HTMLs reais, modos vinculados, faces, troca de modelo, PDFs reais, ICC, erros e destinos.');
 }

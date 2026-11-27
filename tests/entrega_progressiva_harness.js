@@ -2,9 +2,10 @@ const fs = require('fs');
 const assert = require('assert/strict');
 const path = require('path');
 const fonte = fs.readFileSync(path.join(__dirname, '../frontend/pedido.js'), 'utf8');
+const captura = fonte.match(/const impressaoReversa = [^;]+;/)[0];
 const inicio = fonte.indexOf("        folha_a_folha: mode === 'print'");
 const fim = fonte.indexOf('        // CAMAROTE:', inicio);
-const escolhas = new Function('mode', 'document', `return ({${fonte.slice(inicio, fim)}});`);
+const escolhas = new Function('mode', 'document', 'testeModelo', `${captura} return ({${fonte.slice(inicio, fim)}});`);
 for (const folha of [false, true]) {
     for (const bloco of [false, true]) {
         for (const reversa of [false, true]) {
@@ -21,6 +22,9 @@ for (const folha of [false, true]) {
         }
     }
 }
+const configuracaoAtual = { getElementById: () => ({ checked: true }) };
+assert.equal(escolhas('print', configuracaoAtual, { options: { impressao_reversa: false } }).confirmar_entrega, true);
+assert.equal(escolhas('print', configuracaoAtual, { options: { impressao_reversa: true } }).confirmar_entrega, false);
 
 const a = fonte.indexOf('await entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, headers, impositionAbortController.signal);');
 const b = fonte.indexOf('\n                                    } else {', a);
