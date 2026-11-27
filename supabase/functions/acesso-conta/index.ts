@@ -1,4 +1,4 @@
-import { aoVivo } from "../_compartilhado/ao_vivo.ts";
+import { aoVivo, consultarRelatorio } from "../_compartilhado/ao_vivo.ts";
 import { painel } from "../_compartilhado/painel_evento.ts";
 /**
  * A tela do cliente: as 19 rotas de `/api/acesso/*` que o dono do evento usa.
@@ -67,10 +67,7 @@ import {
 import { idDeNumeracao, numeracaoDoModelo } from "../_compartilhado/modelos.ts";
 // Os numeros do evento sao os MESMOS que a tela da grafica mostra, e por isso
 // vem de la e nao daqui. Ver o cabecalho de `aoVivo`, mais abaixo.
-import {
-  leiturasDoEvento,
-  listarIngressos,
-} from "../_compartilhado/relatorio.ts";
+import { listarIngressos } from "../_compartilhado/relatorio.ts";
 import {
   numeroDaPagina,
   tamanhoDaPagina,
@@ -899,16 +896,11 @@ async function rotear(req: Request, url: URL): Promise<Response> {
       busca === null ? null : termoSeguro(busca).trim(),
     ));
   }
-  // A base do arquivo que o dono baixa no fim da noite. Pagina, porque ele
-  // baixa o evento inteiro -- e o teto de 1.000 linhas do PostgREST cortaria em
-  // silencio um evento grande, que e exatamente o que ele quer conferir.
   if (metodo === "GET" && p.length === 3 && p[0] === "eventos" && p[2] === "leituras") {
     const evento = await eventoDoDono(p[1], usuario);
-    return ok(await leiturasDoEvento(
-      evento.id,
-      numeroDaPagina(url.searchParams.get("pagina") ?? 1),
-      tamanhoDaPagina(url.searchParams.get("por_pagina")),
-    ));
+    const resposta = ok(await consultarRelatorio(evento, "leituras", url.searchParams));
+    if (url.searchParams.get("exportar") === "1") resposta.headers.set("Cache-Control", "no-store");
+    return resposta;
   }
   if (metodo === "POST" && p.length === 3 && p[0] === "eventos" && p[2] === "elevar") {
     const c = await corpo();

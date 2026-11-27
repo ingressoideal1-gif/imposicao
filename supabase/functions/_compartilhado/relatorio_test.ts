@@ -14,9 +14,10 @@
  *
  * Rodar: npx deno test --allow-env _compartilhado/relatorio_test.ts
  */
-import { deepStrictEqual as assertEquals } from "node:assert";
+import { deepStrictEqual as assertEquals, rejects as assertRejects } from "node:assert";
 import {
   dashboard,
+  exportarLeiturasDoEvento,
   leiturasDoEvento,
   listarIngressos,
 } from "./relatorio.ts";
@@ -27,6 +28,8 @@ const fetchDeVerdade = globalThis.fetch;
 interface Ida {
   caminho: string;
   contagem: boolean;
+  metodo: string | undefined;
+  corpo: BodyInit | null | undefined;
 }
 
 /**
@@ -38,7 +41,7 @@ interface Ida {
  * que e o que o PostgREST faz.
  */
 async function comBanco<T>(
-  tabelas: Record<string, any[]>,
+  tabelas: Record<string, unknown>,
   contagens: Record<string, number>,
   tarefa: () => Promise<T>,
   metricas: Record<string, unknown> = {},
@@ -49,7 +52,7 @@ async function comBanco<T>(
   globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
     const caminho = String(url).replace("https://banco.de.mesa/rest/v1/", "");
     const contagem = (init?.headers as Record<string, string>)?.Prefer === "count=exact";
-    idas.push({ caminho, contagem });
+    idas.push({ caminho, contagem, metodo: init?.method, corpo: init?.body });
 
     if (caminho === "rpc/producao_acesso_metricas") {
       return Promise.resolve(new Response(JSON.stringify({ entraram: 0, sairam: 0, recusadas: 0,
@@ -241,56 +244,89 @@ Deno.test("dashboard: bloqueados soma as faixas, contando as duas pontas", async
 
 // ── leiturasDoEvento ────────────────────────────────────────────────────────
 
-Deno.test("leituras: a NEGADA sobe junto, com o motivo traduzido", async () => {
-  // E ela que responde "por que a fila parou as 22h". Um relatorio so de quem
-  // entrou esconderia exatamente a parte que precisa de explicacao.
-  const { resultado } = await comBanco(
-    {
-      "producao_acesso_leituras": [
-        {
-          id: "l1", momento: "2026-09-04T22:00:00+00:00",
-          recebido_em: "2026-09-04T22:03:00+00:00", tipo: "entrada",
-          resultado: "negado", motivo: "setor_bloqueado",
-          setor_id: "vip", dispositivo_id: "a1", credencial_id: "c1",
-        },
-      ],
-      "producao_acesso_setores": [{ id: "vip", nome: "VIP" }],
-      "producao_acesso_dispositivos": [{ id: "a1", nome: "Portão 1" }],
-      "producao_acesso_credenciais": [{ id: "c1", numero: 42 }],
-    },
-    {},
-    () => leiturasDoEvento("e1", 1, 100),
-  );
-  assertEquals(resultado.leituras, [{
-    momento: "2026-09-04T22:00:00+00:00",
-    recebido_em: "2026-09-04T22:03:00+00:00",
-    tipo: "entrada",
-    resultado: "negado",
-    motivo: "setor_bloqueado",
-    rotulo_motivo: "Setor desligado pelo dono",
-    setor: "VIP",
-    aparelho: "Portão 1",
-    numero: 42,
-  }]);
-});
+const LEITURA_SEM_ROTULO = {
+  momento: "2026-09-04T22:00:00+00:00",
+  recebido_em: "2026-09-04T22:03:00+00:00",
+  tipo: "entrada",
+  resultado: "negado",
+  motivo: "setor_bloqueado",
+  setor: "VIP",
+  aparelho: "Portao 1",
+  numero: 42,
+};
+const LEITURA_ROTULADA = { ...LEITURA_SEM_ROTULO, rotulo_motivo: "Setor desligado pelo dono" };
 
-Deno.test("leituras: os nomes vem em TRES consultas, e nao uma por linha", async () => {
-  // Uma pagina de 200 leituras faria 600 idas ao banco, e este relatorio e
-  // baixado inteiro, pagina a pagina, por um celular no fim do evento.
-  const linhas = Array.from({ length: 20 }, (_, n) => ({
-    id: `l${n}`, momento: "2026-09-04T22:00:00+00:00", tipo: "entrada",
-    resultado: "permitido", setor_id: "vip", dispositivo_id: "a1",
-    credencial_id: `c${n}`,
-  }));
-  const { idas } = await comBanco(
-    { "producao_acesso_leituras": linhas },
+Deno.test("leituras: uma consulta por pagina preserva recusas sem vinculos e o formato paginado", async () => {
+  const semVinculos = {
+    ...LEITURA_SEM_ROTULO,
+    setor: null,
+    aparelho: null,
+    numero: null,
+  };
+  const { numero, ...leitura } = LEITURA_SEM_ROTULO;
+  const { resultado, idas } = await comBanco(
+    { "producao_acesso_leituras": [
+      { ...leitura, setor: { nome: "VIP" }, aparelho: { nome: "Portao 1" }, credencial: { numero } },
+      { ...leitura, setor: null, aparelho: null, credencial: null },
+      ...Array(499).fill({ ...leitura, setor: null, aparelho: null, credencial: null }),
+    ] },
     {},
-    () => leiturasDoEvento("e1", 1, 100),
+    () => leiturasDoEvento("e1", 2, 500),
   );
-  assertEquals(idas.length, 4); // a pagina de leituras + setores + aparelhos + numeros
+
+  assertEquals(resultado.pagina, 2);
+  assertEquals(resultado.por_pagina, 500);
+  assertEquals(resultado.ha_mais, true);
+  assertEquals(resultado.leituras.length, 500);
+  assertEquals(resultado.leituras[0], LEITURA_ROTULADA);
+  assertEquals(resultado.leituras[1], { ...semVinculos, rotulo_motivo: LEITURA_ROTULADA.rotulo_motivo });
+  assertEquals(idas.length, 1);
+  assertEquals(idas[0].metodo, "GET");
+  const { searchParams } = new URL("https://banco.de.mesa/" + idas[0].caminho);
+  assertEquals(searchParams.get("offset"), "500");
+  assertEquals(searchParams.get("limit"), "501");
+  assertEquals(searchParams.get("order"), "momento.asc,id.asc");
+  assertEquals(searchParams.get("evento_id"), "eq.e1");
+  assertEquals(searchParams.get("setor.evento_id"), "eq.e1");
+  assertEquals(searchParams.get("aparelho.evento_id"), "eq.e1");
+  assertEquals(searchParams.get("credencial.or"), "(evento_id.eq.e1,evento_id.is.null)");
+  assertEquals(searchParams.get("select")?.includes("credencial:producao_acesso_credenciais!credencial_id(numero)"), true);
+  assertEquals(searchParams.get("select")?.includes("!inner"), false);
+  assertEquals(idas[0].caminho.includes("id=in."), false);
 });
 
 Deno.test("leituras: pagina vazia nao vai buscar nome nenhum", async () => {
-  const { idas } = await comBanco({}, {}, () => leiturasDoEvento("e1", 1, 100));
+  const { resultado, idas } = await comBanco({}, {}, () => leiturasDoEvento("e1", 1, 100));
+  assertEquals(resultado, { pagina: 1, por_pagina: 100, ha_mais: false, leituras: [] });
   assertEquals(idas.length, 1);
+});
+
+const RPC_EXPORTACAO = "rpc/producao_acesso_exportar_leituras_v1";
+
+Deno.test("exportacao: um snapshot do evento, com indicador de corte e motivos da pagina normal", async () => {
+  const semMotivo = { ...LEITURA_SEM_ROTULO, resultado: "permitido", motivo: null };
+  const outroMotivo = { ...LEITURA_SEM_ROTULO, motivo: "motivo_novo" };
+  const { resultado, idas } = await comBanco(
+    { [RPC_EXPORTACAO]: { leituras: [LEITURA_SEM_ROTULO, semMotivo, outroMotivo], ha_mais: true } },
+    {},
+    () => exportarLeiturasDoEvento("e1"),
+  );
+
+  assertEquals(resultado, {
+    leituras: [LEITURA_ROTULADA, { ...semMotivo, rotulo_motivo: null }, { ...outroMotivo, rotulo_motivo: "motivo_novo" }],
+    ha_mais: true,
+  });
+  assertEquals(idas, [{
+    caminho: RPC_EXPORTACAO,
+    contagem: false,
+    metodo: "POST",
+    corpo: JSON.stringify({ p_evento_id: "e1" }),
+  }]);
+});
+
+Deno.test("exportacao: dados invalidos da RPC nao parecem uma planilha vazia", async () => {
+  await assertRejects(
+    () => comBanco({ [RPC_EXPORTACAO]: { leituras: [], ha_mais: null } }, {}, () => exportarLeiturasDoEvento("e1")),
+    /Resposta invalida da exportacao de leituras/,
+  );
 });

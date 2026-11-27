@@ -277,103 +277,73 @@ export async function listarIngressos(
   return { pagina, por_pagina: porPagina, ha_mais: haMais, ingressos };
 }
 
-/**
- * As leituras do evento, uma por linha, para a conferencia da noite.
- *
- * E a base do arquivo que o dono baixa. Traz a leitura NEGADA junto -- e ela
- * que responde "por que a fila parou as 22h", e um relatorio que so mostrasse
- * quem entrou esconderia exatamente a parte que precisa de explicacao.
- *
- * As DUAS horas saem daqui: a do aparelho (que pode estar offline ha tres
- * horas) e a do servidor. Uma so nao conta a historia -- foi a diferenca entre
- * as duas que explicou, em mais de uma noite, por que a fila do relatorio nao
- * bate com a lembranca de quem estava na porta.
- */
-export async function leiturasDoEvento(
-  eventoId: string,
-  pagina: number,
-  porPagina: number,
-): Promise<any> {
-  let linhas = (await banco(
+type LeituraDoRelatorio = {
+  momento: string;
+  recebido_em: string | null;
+  tipo: string;
+  resultado: string;
+  motivo: string | null;
+  setor: string | null;
+  aparelho: string | null;
+  numero: number | null;
+};
+
+type LeituraPaginada = Omit<LeituraDoRelatorio, "setor" | "aparelho" | "numero"> & {
+  setor: { nome: string } | null;
+  aparelho: { nome: string } | null;
+  credencial: { numero: number | null } | null;
+};
+
+function comRotuloDoMotivo(leitura: LeituraDoRelatorio) {
+  return {
+    ...leitura,
+    motivo: leitura.motivo ?? null,
+    rotulo_motivo: leitura.motivo ? (MOTIVOS[leitura.motivo] ?? leitura.motivo) : null,
+  };
+}
+
+/** Uma pagina de leituras, inclusive recusas e registros sem credencial vinculada. */
+export async function leiturasDoEvento(eventoId: string, pagina: number, porPagina: number) {
+  const linhas: LeituraPaginada[] = (await banco(
     "GET",
     `producao_acesso_leituras?evento_id=eq.${eventoId}` +
-      "&select=id,momento,recebido_em,resultado,motivo,tipo,setor_id," +
-      "dispositivo_id,credencial_id" +
+      "&select=momento,recebido_em,resultado,motivo,tipo," +
+      "setor:producao_acesso_setores!setor_id(nome)," +
+      "aparelho:producao_acesso_dispositivos!dispositivo_id(nome)," +
+      "credencial:producao_acesso_credenciais!credencial_id(numero)" +
+      `&setor.evento_id=eq.${eventoId}&aparelho.evento_id=eq.${eventoId}` +
+      `&credencial.or=(evento_id.eq.${eventoId},evento_id.is.null)` +
       "&order=momento.asc,id.asc" +
       `&offset=${(pagina - 1) * porPagina}&limit=${porPagina + 1}`,
   )) ?? [];
-  const haMais = linhas.length > porPagina;
-  linhas = linhas.slice(0, porPagina);
-
-  const nomes = await nomesDeApoio(eventoId, linhas);
 
   return {
     pagina,
     por_pagina: porPagina,
-    ha_mais: haMais,
-    leituras: linhas.map((l: any) => ({
-      momento: l.momento,
-      recebido_em: l.recebido_em,
-      tipo: l.tipo,
-      resultado: l.resultado,
-      motivo: l.motivo ?? null,
-      // O nome que a pessoa entende, ao lado do nome cru -- o cru fica porque
-      // e ele que se procura no log quando alguem quiser investigar.
-      rotulo_motivo: l.motivo ? (MOTIVOS[String(l.motivo)] ?? String(l.motivo)) : null,
-      setor: l.setor_id ? (nomes.setores[String(l.setor_id)] ?? null) : null,
-      aparelho: l.dispositivo_id ? (nomes.aparelhos[String(l.dispositivo_id)] ?? null) : null,
-      numero: l.credencial_id ? (nomes.numeros[String(l.credencial_id)] ?? null) : null,
-    })),
+    ha_mais: linhas.length > porPagina,
+    leituras: linhas.slice(0, porPagina).map(({ setor, aparelho, credencial, ...leitura }) =>
+      comRotuloDoMotivo({
+        ...leitura,
+        setor: setor?.nome ?? null,
+        aparelho: aparelho?.nome ?? null,
+        numero: credencial?.numero ?? null,
+      })
+    ),
   };
 }
 
-/**
- * Os nomes de setor, de aparelho e os numeros de ingresso desta pagina.
- *
- * Em TRES consultas, e nao uma por linha: uma pagina de 200 leituras faria 600
- * idas ao banco, e este relatorio e baixado inteiro, pagina a pagina, por um
- * celular no fim do evento.
- */
-async function nomesDeApoio(eventoId: string, linhas: any[]): Promise<{
-  setores: Record<string, string>;
-  aparelhos: Record<string, string>;
-  numeros: Record<string, number>;
-}> {
-  const setores: Record<string, string> = {};
-  const aparelhos: Record<string, string> = {};
-  const numeros: Record<string, number> = {};
-  if (!linhas.length) return { setores, aparelhos, numeros };
-
-  for (
-    const s of (await banco(
-      "GET",
-      `producao_acesso_setores?evento_id=eq.${eventoId}&select=id,nome`,
-    )) ?? []
-  ) {
-    setores[String(s.id)] = s.nome ?? "";
+/** Um unico snapshot das leituras, com limite e indicador de corte calculados no banco. */
+export async function exportarLeiturasDoEvento(eventoId: string) {
+  const resultado: { leituras: LeituraDoRelatorio[]; ha_mais: boolean } | null = await banco(
+    "POST",
+    "rpc/producao_acesso_exportar_leituras_v1",
+    { p_evento_id: eventoId },
+  );
+  if (!Array.isArray(resultado?.leituras) || typeof resultado.ha_mais !== "boolean") {
+    throw new Error("Resposta invalida da exportacao de leituras");
   }
-  for (
-    const a of (await banco(
-      "GET",
-      `producao_acesso_dispositivos?evento_id=eq.${eventoId}&select=id,nome`,
-    )) ?? []
-  ) {
-    aparelhos[String(a.id)] = a.nome ?? "";
-  }
-
-  const ids = [...new Set(
-    linhas.filter((l) => l.credencial_id).map((l) => String(l.credencial_id)),
-  )];
-  if (ids.length) {
-    const lista = ids.map((i) => `"${i}"`).join(",");
-    for (
-      const c of (await banco(
-        "GET",
-        `producao_acesso_credenciais?id=in.(${lista})&select=id,numero`,
-      )) ?? []
-    ) {
-      numeros[String(c.id)] = c.numero;
-    }
-  }
-  return { setores, aparelhos, numeros };
+  return {
+    leituras: resultado.leituras.map(comRotuloDoMotivo),
+    ha_mais: resultado.ha_mais,
+  };
 }

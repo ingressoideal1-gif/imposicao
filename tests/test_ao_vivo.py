@@ -358,3 +358,93 @@ def test_relatorio_liberado_continua_sem_renovar_autorizacao_de_edicao():
     assert r['quantasPin'] == 1 and r['consultaLeitura']
     assert not r['pediuEntrar'] and not r['contaConsultada']
     assert r['liberacaoVisivel'] and not r['corpoEscondido']
+
+
+def exportar(**opcoes):
+    return _chamar(None, [], exportacao=True, **opcoes)
+
+
+def test_download_exporta_3230_leituras_incluindo_recusas_em_uma_consulta():
+    import csv as modulo_csv
+    import io
+
+    r = exportar(quantidade=3230)
+    assert r['inicio']['ocupado'] and 'Consultando' in r['inicio']['aviso']
+    assert r['chamadas'] == [{
+        'caminho': '/eventos/e1/leituras?exportar=1', 'token': 'Bearer conta-teste',
+        'signal': True, 'abortada': False,
+    }]
+    assert r['fim']['aviso'] == '3.230 leituras no arquivo.'
+    arquivo, = r['arquivos']
+    assert arquivo['nome'] == 'ideal-control-evento-e1.csv'
+    assert arquivo['mime'] == 'text/csv;charset=utf-8'
+    assert arquivo['bom'] == [239, 187, 191]
+    linhas = list(modulo_csv.DictReader(io.StringIO(arquivo['texto']), delimiter=';'))
+    assert [l['Numero'] for l in linhas] == [f'{n:04d}' for n in range(1, 3231)]
+    assert linhas[0]['Resultado'] == 'negado'
+    assert linhas[0]['Motivo'] == 'Ingresso já usado'
+    assert linhas[0]['Leitura (Brasília)'] == '14/11/2026 22:20:00'
+    assert all(l['Resultado'] == 'permitido' for l in linhas[1:])
+
+
+@pytest.mark.parametrize('modo', ['pin', 'leitura'])
+def test_download_reutiliza_autorizacao_do_aparelho_com_sinal_de_cancelamento(modo):
+    r = exportar(modo=modo, quantidade=0)
+    assert r['chamadas'] == [{
+        'caminho': '/eventos/e1/leituras?exportar=1', 'token': 'Bearer aparelho-teste',
+        'signal': True, 'abortada': False,
+    }]
+    arquivo, = r['arquivos']
+    assert arquivo['texto'].startswith('Leitura (Brasília);')
+    assert '\r\n' not in arquivo['texto']
+    assert r['fim']['aviso'] == '0 leituras no arquivo.'
+
+
+def test_download_informa_quando_a_exportacao_tem_limite():
+    r = exportar(cortado=True)
+    assert 'Baixei as primeiras' in r['fim']['aviso']
+    assert 'O evento tem mais do que isso' in r['fim']['aviso']
+
+
+@pytest.mark.parametrize('acao, mensagem', [
+    ('rede', 'Confira a internet'),
+    ('servidor', 'O servidor não conseguiu'),
+    ('autorizacao', 'Sua autorização expirou'),
+    ('proibido', 'não tem acesso à planilha'),
+    ('invalido', 'O servidor não conseguiu'),
+    ('primitivo', 'O servidor não conseguiu'),
+    ('antigo', 'O servidor não conseguiu'),
+    ('download', 'Não foi possível iniciar o download'),
+    ('timeout-rede', 'demorou mais que o esperado'),
+    ('timeout-sessao', 'demorou mais que o esperado'),
+])
+def test_download_falha_sem_arquivo_e_permite_nova_tentativa(acao, mensagem):
+    r = exportar(acao=acao, repetir=True)
+    assert mensagem in r['depoisDaFalha']['aviso']
+    assert r['depoisDaFalha']['arquivos'] == 0
+    assert not r['depoisDaFalha']['ocupado']
+    assert 'Baixar a planilha' in r['depoisDaFalha']['rotulo']
+    assert r['novaTentativa']['ocupado'] and 'Consultando' in r['novaTentativa']['aviso']
+    assert r['fim']['arquivos'] == 1 and not r['fim']['ocupado']
+    assert r['fim']['aviso'] == '1 leitura no arquivo.'
+    assert len(r['chamadas']) == (1 if acao == 'timeout-sessao' else 2)
+    if acao == 'timeout-rede':
+        assert r['chamadas'][0]['abortada']
+
+
+def test_trocar_de_evento_descarta_csv_antigo_sem_parar_a_nova_exportacao():
+    r = exportar(acao='troca')
+    assert r['chamadas'][0]['abortada'] and not r['chamadas'][1]['abortada']
+    assert [c['caminho'] for c in r['chamadas']] == [
+        '/eventos/e1/leituras?exportar=1', '/eventos/e2/leituras?exportar=1',
+    ]
+    assert r['depoisDaTroca']['aviso'] == '' and not r['depoisDaTroca']['ocupado']
+    assert r['depoisDaRespostaAntiga']['arquivos'] == 0
+    assert r['depoisDaRespostaAntiga']['ocupado']
+    assert [a['nome'] for a in r['arquivos']] == ['ideal-control-evento-e2.csv']
+
+
+def test_voltar_da_tela_cancela_a_exportacao():
+    r = exportar(acao='fechar')
+    assert r['chamadas'][0]['abortada']
+    assert r['arquivos'] == [] and r['fim']['aviso'] == '' and not r['fim']['ocupado']
