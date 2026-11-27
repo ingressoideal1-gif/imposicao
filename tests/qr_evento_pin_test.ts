@@ -9,6 +9,7 @@ import { Recusa } from "../supabase/functions/_compartilhado/sessao.ts";
 
 const E = "11111111-1111-4111-8111-111111111111", I = "22222222-2222-4222-8222-222222222222";
 const A = "33333333-3333-4333-8333-333333333333", S = "44444444-4444-4444-8444-444444444444";
+const RPC_EXPORTACAO = "rpc/producao_acesso_exportar_leituras_v1";
 const KEY = "ab".repeat(32), TOKEN = "cd".repeat(32), PIN = "042815"; // exclusivamente fictícios
 Deno.env.set("SUPABASE_URL", "https://banco-sintetico.invalid");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "sintetico-sem-validade");
@@ -46,7 +47,11 @@ globalThis.fetch = (async (input: any, options: any = {}) => {
   else if (t === "producao_acesso_dispositivos") r = [aparelho];
   else if (t === "producao_acesso_setores") r = u.searchParams.get("status") === "eq.ativo" && !semSetores ? [{id:S}] : [];
   else if (t === "producao_acesso_credenciais") r = semIngressos ? [] : [{id:A}];
-  else if (t === "producao_acesso_eventos") r = [{ id: E, status: "ativo", ao_vivo_na_leitura: aoVivoLiberado, ...c }];
+  else if (t === "producao_acesso_eventos") r = [{ id: E, status: "ativo", dono_auth_id: I,
+    id_cliente: 42, ao_vivo_na_leitura: aoVivoLiberado, ...c }];
+  else if (t === "producao_acesso_contas") r = u.searchParams.get("auth_user_id") === "eq." + S &&
+    u.searchParams.get("ativo") === "eq.true" ? [{ id_cliente: 42 }] : [];
+  else if (t === RPC_EXPORTACAO) r = { leituras: [], ha_mais: false };
   else if (t === "producao_acesso_auditoria_pin") r = [{ id: S, ...c }];
   else if (t === "producao_acesso_bloqueios" || t === "producao_acesso_leituras") r = [];
   else if (t === "rpc/producao_acesso_metricas") r = { por_setor: [], recusas: [], entraram: 42, sairam: 0, recusadas: 0, ingressos_utilizados: 42, publicados_utilizados: 42 };
@@ -143,6 +148,21 @@ Deno.test("HTTP: portaria exige token para editar e gráfica exige papel para co
     const liberado = await portaria(new Request(relatorioUrl + "?evento_id=" + A, { headers: auth }));
     assert(liberado.status === 200 && liberado.headers.get("Cache-Control") === "no-store");
     assert((await liberado.json()).evento.id === E); // URL não troca o evento do token.
+    chamadas = [];
+    const exportarUrl = relatorioUrl + "?recurso=leituras&exportar=1&evento_id=" + S;
+    const opcoesExportar = { headers: auth };
+    assert((await portaria(new Request(exportarUrl))).status === 401);
+    assert(!chamadas.some(r => r.t === RPC_EXPORTACAO));
+    const exportacao = await portaria(new Request(exportarUrl, opcoesExportar));
+    assert(exportacao.status === 200 && exportacao.headers.get("Cache-Control") === "no-store");
+    const { leituras, ha_mais, pagina } = await exportacao.json();
+    assert(leituras.length === 0 && ha_mais === false && pagina === undefined);
+    const exportacoes = chamadas.filter(r => r.t === RPC_EXPORTACAO);
+    assert(exportacoes.length === 1 && exportacoes[0].method === "POST" && exportacoes[0].c.p_evento_id === E);
+    aoVivoLiberado = false;
+    assert((await portaria(new Request(exportarUrl, opcoesExportar))).status === 403);
+    assert(chamadas.filter(r => r.t === RPC_EXPORTACAO).length === 1);
+    aoVivoLiberado = true;
     const inicial = await portaria(new Request("https://local.invalid/functions/v1/portaria/evento", { headers: auth }));
     assert((await inicial.json()).evento.entradas === 42);
     aoVivoLiberado = false;
@@ -194,6 +214,52 @@ Deno.test("AO VIVO por PIN: reutiliza bilhete e restringe evento, instalação e
   await recusa(() => editarComPin({ ...c, caminho: "/eventos/" + E + "/ingressos?setor_id=" + A }, aparelho), 403);
   const l = await editarComPin({ ...c, caminho: "/eventos/" + E + "/leituras?pagina=1&por_pagina=20" }, aparelho);
   assert(l.leituras.length === 0);
+});
+
+Deno.test("Exportacao por PIN: exige bilhete vigente e evento do aparelho", async () => {
+  reset();
+  await registrarPin({ chave: KEY, pin: PIN });
+  const b = await elevarPin({ chave: KEY, pin: PIN }, aparelho);
+  const c = { chave: KEY, elevacao: b.token, metodo: "GET", caminho: "/eventos/" + E + "/leituras?exportar=1" };
+  chamadas = [];
+  await recusa(() => editarComPin({ ...c, elevacao: "invalida" }, aparelho), 401);
+  await recusa(() => editarComPin({ ...c, caminho: "/eventos/" + S + "/leituras?exportar=1" }, aparelho), 403);
+  assert(!chamadas.some(r => r.t === RPC_EXPORTACAO));
+  const r = await editarComPin(c, aparelho);
+  assert(r.leituras.length === 0 && r.ha_mais === false && r.pagina === undefined);
+  const exportacoes = chamadas.filter(r => r.t === RPC_EXPORTACAO);
+  assert(exportacoes.length === 1 && exportacoes[0].method === "POST" && exportacoes[0].c.p_evento_id === E);
+});
+
+Deno.test("Exportacao pela conta: exige dono ou cliente vinculado e preserva a rota paginada", async () => {
+  reset();
+  const original = Deno.serve;
+  let handler: (r: Request) => Promise<Response>;
+  Deno.serve = ((h: typeof handler) => { handler = h; return {} as any; }) as typeof Deno.serve;
+  try {
+    await import("../supabase/functions/acesso-conta/index.ts");
+    const conta = handler!;
+    const url = "https://local.invalid/functions/v1/acesso-conta/eventos/" + E + "/leituras";
+    function opcoes(id: string) {
+      return { headers: { Authorization: "Bearer x." + btoa(JSON.stringify({sub: id})) + ".x" } };
+    }
+    assert((await conta(new Request(url + "?exportar=1"))).status === 401);
+    assert((await conta(new Request(url + "?exportar=1", opcoes(A)))).status === 403);
+    assert(!chamadas.some(r => r.t === RPC_EXPORTACAO));
+    for (const usuario of [I, S]) {
+      const resposta = await conta(new Request(url + "?exportar=1", opcoes(usuario)));
+      assert(resposta.status === 200 && resposta.headers.get("Cache-Control") === "no-store");
+      const r = await resposta.json();
+      assert(r.leituras.length === 0 && r.ha_mais === false && r.pagina === undefined);
+    }
+    const paginado = await conta(new Request(url + "?pagina=2&por_pagina=25&exportar=0", opcoes(I)));
+    const r = await paginado.json();
+    assert(paginado.status === 200 && r.pagina === 2 && r.por_pagina === 25 && r.leituras.length === 0);
+    const exportacoes = chamadas.filter(x => x.t === RPC_EXPORTACAO);
+    assert(exportacoes.length === 2 && exportacoes.every(x => x.method === "POST" && x.c.p_evento_id === E));
+  } finally {
+    Deno.serve = original;
+  }
 });
 
 Deno.test("AO VIVO na leitura: liberação global é conferida a cada consulta", async () => {

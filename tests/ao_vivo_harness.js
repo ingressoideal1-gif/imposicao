@@ -5,7 +5,7 @@
 // por isso — os testes da tela do Ideal Control passavam com a tela quebrada
 // porque o arnês criava um `window.supabaseClient` que o `supabase-config.js`
 // nunca cria. Aqui o `controle.html` é servido como está, e os `<script>` dele
-// respondem vazio; só o `ao-vivo.js` é o de verdade.
+// respondem vazio; os módulos exercitados pelo caso são carregados em seguida.
 //
 // Recebe pelo stdin: {chamada, argumentos}. Imprime, em JSON:
 //   { resultado, titulo, nome, sub, resumo, setores, horas,
@@ -66,11 +66,11 @@ async function rodar(caso) {
                 return Promise.resolve(window.__resposta || {});
             }
         };
-        window.botaoEspera = { comecar: function () {}, terminar: function () {} };
         window.listaEventos = { recarregar: function () { return Promise.resolve(); } };
         window.Controle = { fecharEngrenagem: function () { window.__configFechada = true; return Promise.resolve(); } };
     });
 
+    await page.addScriptTag({ path: path.join(REPO, 'frontend', 'botao-espera.js') });
     await page.addScriptTag({ path: path.join(REPO, 'frontend', 'ao-vivo.js') });
     // O arquivo liga os botões no DOMContentLoaded, que já passou quando ele
     // entrou. Um disparo manual roda os ouvintes registrados depois — é a
@@ -82,6 +82,15 @@ async function rodar(caso) {
         console.error('ao-vivo.js nao registrou window.aoVivo');
         await browser.close();
         process.exit(1);
+    }
+
+    if (caso.exportacao) {
+        try {
+            console.log(JSON.stringify(await testarExportacao(page, caso)));
+        } finally {
+            await browser.close();
+        }
+        return;
     }
 
     const saida = await page.evaluate(async (c) => {
@@ -179,4 +188,150 @@ async function rodar(caso) {
 
     await browser.close();
     console.log(JSON.stringify(saida));
+}
+
+async function testarExportacao(page, caso) {
+    await page.addScriptTag({ path: path.join(REPO, 'frontend', 'acesso-conta.js') });
+    if (caso.modo === 'pin') {
+        await page.addScriptTag({ path: path.join(REPO, 'frontend', 'pin-instalacao.js') });
+    }
+    return page.evaluate(async (c) => {
+        const botao = document.getElementById('btn-ao-vivo-csv');
+        const aviso = document.getElementById('ao-vivo-aviso-csv');
+        const chamadas = [], pendencias = [], arquivos = [], blobs = new Map();
+        const passo = () => new Promise(resolve => setTimeout(resolve, 0));
+        const status = () => ({
+            ocupado: botao.disabled && botao.getAttribute('aria-busy') === 'true',
+            rotulo: botao.textContent,
+            aviso: aviso.textContent,
+            arquivos: arquivos.length,
+        });
+        const resposta = (objeto, status = 200) =>
+            new Response(JSON.stringify(objeto), { status });
+        let sessaoPendente;
+        const obterSessao = () => Promise.resolve({ data: { session: { access_token: 'conta-teste' } } });
+        window.supabaseClient = { auth: { getSession: obterSessao } };
+        window.chaveiro = {
+            procurar: () => ({ por_qr: true, token: 'aparelho-teste' })
+        };
+        if (c.acao === 'timeout-rede' || c.acao === 'timeout-sessao') {
+            const timer = window.setTimeout.bind(window);
+            window.setTimeout = (fn, ms, ...args) => timer(fn, ms === 60000 ? 75 : ms, ...args);
+        }
+        URL.createObjectURL = blob => {
+            const url = 'blob:exportacao-' + blobs.size;
+            blobs.set(url, blob);
+            return url;
+        };
+        URL.revokeObjectURL = url => blobs.delete(url);
+        let bloquearDownload = c.acao === 'download';
+        HTMLAnchorElement.prototype.click = function () {
+            if (bloquearDownload) {
+                bloquearDownload = false;
+                throw new Error('Download indisponível no navegador de teste.');
+            }
+            arquivos.push({ nome: this.download, blob: blobs.get(this.getAttribute('href')) });
+        };
+        const leituras = Array.from({ length: c.quantidade ?? 1 }, (_, i) => ({
+            momento: '2026-11-15T01:20:00Z', recebido_em: '2026-11-15T04:45:00Z',
+            numero: String(i + 1).padStart(4, '0'), setor: 'Público; geral', aparelho: 'Portão 1',
+            tipo: 'entrada', resultado: i ? 'permitido' : 'negado',
+            rotulo_motivo: i ? null : 'Ingresso já usado',
+        }));
+        window.fetch = async (url, opcoes) => {
+            const destino = new URL(url);
+            let caminho = destino.pathname.replace('/functions/v1/acesso-conta', '') + destino.search;
+            if (destino.pathname.endsWith('/elevar-pin')) {
+                return resposta({ token: 'elevacao-teste', expira_em: Date.now() / 1000 + 60 });
+            }
+            if (destino.pathname.endsWith('/editar-pin')) {
+                caminho = JSON.parse(opcoes.body).caminho;
+            }
+            if (destino.pathname.endsWith('/relatorio')) {
+                caminho = '/eventos/e1/' + destino.searchParams.get('recurso')
+                    + (destino.searchParams.has('exportar') ? '?exportar=1' : '');
+            }
+            const id = caminho.split('/')[2];
+            if (caminho.endsWith('/ao-vivo')) {
+                return resposta({ evento: { id, nome_evento: 'Evento ' + id, status: 'finalizado' } });
+            }
+            const chamada = {
+                caminho, token: opcoes.headers.Authorization, signal: !!opcoes.signal,
+                abortada: false,
+            };
+            chamadas.push(chamada);
+            if (opcoes.signal) opcoes.signal.addEventListener('abort', () => { chamada.abortada = true; });
+            const tentativa = chamadas.length;
+            const resultado = { leituras, ha_mais: !!c.cortado };
+            if (c.acao === 'troca' || c.acao === 'fechar' || (c.acao === 'timeout-rede' && tentativa === 1)) {
+                // A resposta atrasada simula uma rede que ignora o cancelamento.
+                return new Promise(resolve => pendencias.push(() => resolve(resposta(resultado))));
+            }
+            if (tentativa === 1) {
+                if (c.acao === 'rede') throw new TypeError('Falha de rede simulada.');
+                if (c.acao === 'servidor') return resposta({ detail: 'Falha no PostgREST' }, 503);
+                if (c.acao === 'autorizacao') return resposta({}, 401);
+                if (c.acao === 'proibido') return resposta({}, 403);
+                if (c.acao === 'invalido') return resposta({ leituras: [null], ha_mais: false });
+                if (c.acao === 'primitivo') return resposta('resposta inesperada');
+                if (c.acao === 'antigo') return resposta({ ...resultado, pagina: 1, por_pagina: 100 });
+            }
+            return resposta(resultado);
+        };
+        if (c.modo === 'pin') {
+            localStorage.setItem('ideal_control_pin_configurado', 'instalacao-teste');
+            localStorage.setItem('ideal_control_instalacao', 'instalacao-teste');
+            const autorizar = window.pinInstalacao.autorizar('e1');
+            await passo();
+            document.querySelector('dialog input[name=pin]').value = '123456';
+            document.querySelector('dialog [data-pin-salvar]').click();
+            await autorizar;
+        }
+        await window.aoVivo.abrir('e1', 'Evento e1', c.modo === 'pin', c.modo === 'leitura');
+        if (c.acao === 'timeout-sessao') {
+            window.supabaseClient.auth.getSession = () => new Promise(resolve => { sessaoPendente = resolve; });
+        }
+        const esperarConclusao = async () => {
+            const limite = Date.now() + 5000;
+            while (botao.disabled && Date.now() < limite) await passo();
+            if (botao.disabled) throw new Error('Botão da exportação permaneceu ocupado.');
+        };
+        botao.click();
+        const inicio = status();
+        await passo();
+        let depoisDaTroca, depoisDaRespostaAntiga, novaTentativa, depoisDaFalha;
+        if (c.acao === 'troca') {
+            await window.aoVivo.abrir('e2', 'Evento e2');
+            depoisDaTroca = status();
+            botao.click();
+            await passo();
+            pendencias[0]();
+            await passo();
+            depoisDaRespostaAntiga = status();
+            pendencias[1]();
+        } else if (c.acao === 'fechar') {
+            await window.aoVivo.fechar();
+            pendencias[0]();
+            await passo();
+        } else if (c.repetir) {
+            await esperarConclusao();
+            depoisDaFalha = status();
+            if (sessaoPendente) {
+                window.supabaseClient.auth.getSession = obterSessao;
+                sessaoPendente(await obterSessao());
+            }
+            botao.click();
+            novaTentativa = status();
+            if (pendencias.length) pendencias[0]();
+        }
+        await esperarConclusao();
+        return {
+            chamadas, inicio, depoisDaTroca, depoisDaRespostaAntiga, novaTentativa, depoisDaFalha,
+            fim: status(),
+            arquivos: await Promise.all(arquivos.map(async a => ({
+                nome: a.nome, mime: a.blob.type, texto: await a.blob.text(),
+                bom: [...new Uint8Array(await a.blob.slice(0, 3).arrayBuffer())],
+            }))),
+        };
+    }, caso);
 }

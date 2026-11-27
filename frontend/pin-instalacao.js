@@ -12,10 +12,10 @@
         }
         return v;
     }
-    async function rede(rota, dados, token) {
+    async function rede(rota, dados, token, signal) {
         var h = { 'Content-Type': 'application/json' };
         if (token) h.Authorization = 'Bearer ' + token;
-        var r = await fetch(BASE + '/' + rota, { method: 'POST', headers: h, body: JSON.stringify(dados) });
+        var r = await fetch(BASE + '/' + rota, { method: 'POST', headers: h, body: JSON.stringify(dados), signal: signal });
         var corpo = await r.json();
         if (!r.ok) {
             var vinculo = r.status === 401 && corpo.detail === 'aparelho nao pareado ou revogado';
@@ -95,13 +95,13 @@
         }
     }
     // Consulta reutiliza a autorização das Configurações sem abrir diálogo de senha.
-    async function consultar(eventoId, caminho) {
+    async function consultar(eventoId, caminho, signal) {
         var a = aparelho(eventoId), b = bilhetes[eventoId];
         if (!a || !b || b.expira_em * 1000 <= Date.now()) {
             var e = new Error('A autorização expirou. Volte às Configurações para liberar o acesso.');
             e.status = 401; throw e;
         }
-        return rede('editar-pin', { chave: chave(), elevacao: b.token, caminho: caminho, metodo: 'GET', corpo: null }, a.token);
+        return rede('editar-pin', { chave: chave(), elevacao: b.token, caminho: caminho, metodo: 'GET', corpo: null }, a.token, signal);
     }
     window.pinInstalacao = { consultar: consultar, preparar: preparar, chave: chave, aparelho: aparelho, autorizar: autorizar, pedir: pedir,
         encerrar: function () { bilhetes = {}; } };

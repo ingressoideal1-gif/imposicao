@@ -49,11 +49,7 @@
     // ao servidor e mais a ela.
     var INTERVALO_MS = 30000;
 
-    // Teto do arquivo que o dono baixa. Um evento de 12.000 leituras são 60
-    // páginas; parar em algum lugar é obrigatório, e parar DIZENDO é o que
-    // separa um arquivo incompleto de um arquivo que mente. Ver `baixarCsv`.
-    var POR_PAGINA_CSV = 500;
-    var MAXIMO_PAGINAS_CSV = 60;
+    var TEMPO_EXPORTACAO_MS = 60000;
 
     var estado = {
         evento_id: null,
@@ -61,6 +57,7 @@
         dados: null,
         voltarConfiguracao: false,
         relogio: null,
+        exportacao: null,
         // A busca em andamento, para uma resposta atrasada não pintar por cima
         // de uma busca mais nova. Sem isto, digitar `12` e depois `123`
         // depressa pode terminar mostrando o resultado do `12`.
@@ -88,13 +85,18 @@
         return isNaN(data.getTime()) ? null : data;
     }
 
+    var formatadores = {};
     function horarioDoRelatorio(iso, faixa) {
         var data = dataDoRelatorio(iso);
         if (!data) return '';
-        var opcoes = { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit',
-            hour: '2-digit', hourCycle: 'h23' };
-        if (!faixa) { opcoes.year = 'numeric'; opcoes.minute = '2-digit'; opcoes.second = '2-digit'; }
-        var partes = new Intl.DateTimeFormat('pt-BR', opcoes).formatToParts(data);
+        var chave = faixa ? 'faixa' : 'data';
+        if (!formatadores[chave]) {
+            var opcoes = { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit',
+                hour: '2-digit', hourCycle: 'h23' };
+            if (!faixa) { opcoes.year = 'numeric'; opcoes.minute = '2-digit'; opcoes.second = '2-digit'; }
+            formatadores[chave] = new Intl.DateTimeFormat('pt-BR', opcoes);
+        }
+        var partes = formatadores[chave].formatToParts(data);
         var p = {};
         partes.forEach(function (parte) { p[parte.type] = parte.value; });
         return p.day + '/' + p.month + (faixa ? ' ' + p.hour + 'h' :
@@ -361,20 +363,29 @@
                 && estado.dados.evento.ao_vivo_na_leitura === true)) return Promise.resolve({ daLeitura: true });
         return acessoPorPin() ? Promise.resolve({ porPin: true }) : window.AcessoConta.sessao();
     }
-    function pedirRelatorio(caminho, sessao) {
+    function pedirRelatorio(caminho, sessao, signal) {
+        var partes = caminho.split('?');
+        var rota = partes[0].split('/');
+        var eventoId = rota[2];
         if (sessao.daLeitura) {
-            var a = window.chaveiro.procurar(estado.evento_id);
-            if (!a || !a.token) return Promise.reject(new Error('Este celular não está vinculado ao evento.'));
-            var partes = caminho.split('?'), recurso = partes[0].split('/').pop();
+            var a = window.chaveiro.procurar(eventoId);
+            if (!a || !a.token) {
+                var e = new Error('Este celular não está vinculado ao evento.');
+                e.status = 403;
+                return Promise.reject(e);
+            }
+            var recurso = rota[3];
             return fetch('https://vwbtitjlpelrcnsytzqw.supabase.co/functions/v1/portaria/relatorio?recurso=' + recurso + '&' + (partes[1] || ''), {
-                headers: { Authorization: 'Bearer ' + a.token }, cache: 'no-store'
+                headers: { Authorization: 'Bearer ' + a.token }, cache: 'no-store', signal: signal
             }).then(function (r) { return r.json().then(function (d) {
                 if (!r.ok) { var e = new Error(d.detail || 'Não foi possível abrir o relatório.'); e.status = r.status; throw e; }
                 return d;
             }); });
         }
-        if (sessao.porPin) return window.pinInstalacao.consultar(estado.evento_id, caminho);
-        return window.AcessoConta.pedir(caminho, { headers: { Authorization: 'Bearer ' + sessao.access_token } });
+        if (sessao.porPin) return window.pinInstalacao.consultar(eventoId, caminho, signal);
+        return window.AcessoConta.pedir(caminho, {
+            headers: { Authorization: 'Bearer ' + sessao.access_token }, signal: signal
+        });
     }
 
     function procurar(sessao) {
@@ -430,65 +441,123 @@
         return linhas.join('\r\n');
     }
 
-    function baixarCsv(sessao, botao) {
-        var todas = [];
-        var pagina = 1;
-        var cortado = false;
-
-        function proxima() {
-            return pedirRelatorio(
-                '/eventos/' + estado.evento_id + '/leituras?pagina=' + pagina
-                + '&por_pagina=' + POR_PAGINA_CSV,
-                sessao
-            ).then(function (r) {
-                todas = todas.concat((r && r.leituras) || []);
-                if (r && r.ha_mais) {
-                    if (pagina >= MAXIMO_PAGINAS_CSV) { cortado = true; return; }
-                    pagina += 1;
-                    return proxima();
-                }
-            });
-        }
-
-        return proxima().then(function () {
-            var nome = 'ideal-control-'
-                + String((estado.dados && estado.dados.evento
-                          && estado.dados.evento.nome_evento) || estado.nome || 'evento')
-                    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-                + '.csv';
-            // O BOM na frente: sem ele o Excel em Windows lê o arquivo como
-            // ANSI e "Portão" vira "PortÃ£o" na primeira coluna que o dono olha.
-            var blob = new Blob(['﻿' + csvDe(todas)],
-                                { type: 'text/csv;charset=utf-8' });
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = nome;
-            document.body.appendChild(a);
+    function baixarCsv(nomeEvento, leituras) {
+        var nome = 'ideal-control-'
+            + String(nomeEvento).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            + '.csv';
+        // O BOM mantém os acentos ao abrir o arquivo no Excel para Windows.
+        var blob = new Blob(['﻿' + csvDe(leituras)], { type: 'text/csv;charset=utf-8' });
+        var a = document.createElement('a');
+        var url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = nome;
+        document.body.appendChild(a);
+        try {
             a.click();
+        } finally {
             document.body.removeChild(a);
-            // Soltar depois do clique, e não na hora: revogar antes faz o
-            // download nascer morto em alguns navegadores.
+            // O navegador ainda pode usar a URL depois do clique.
             setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+        }
+    }
 
-            var aviso = $('ao-vivo-aviso-csv');
-            aviso.textContent = cortado
-                ? ('Baixei as primeiras ' + numero(todas.length)
+    function avisarExportacao(mensagem) {
+        var aviso = $('ao-vivo-aviso-csv');
+        aviso.textContent = mensagem;
+        aviso.classList.toggle('sumindo', !mensagem);
+    }
+
+    function encerrarExportacao(operacao) {
+        if (estado.exportacao !== operacao) return;
+        estado.exportacao = null;
+        clearTimeout(operacao.prazo);
+        window.botaoEspera.terminar(operacao.botao);
+    }
+
+    function cancelarExportacao() {
+        var operacao = estado.exportacao;
+        if (!operacao) return;
+        encerrarExportacao(operacao);
+        operacao.interromper(new Error('Exportação cancelada.'));
+        avisarExportacao('');
+    }
+
+    function mensagemDeExportacao(erro) {
+        if (erro.prazoExcedido) return 'A planilha demorou mais que o esperado. Tente baixar novamente.';
+        if (erro.status === 401) return 'Sua autorização expirou. Entre novamente ou libere o acesso nas Configurações.';
+        if (erro.status === 403 || erro.status === 404) return 'Esta conta ou aparelho não tem acesso à planilha do evento.';
+        if (erro.name === 'TypeError') return 'Não foi possível conectar para baixar a planilha. Confira a internet e tente novamente.';
+        return 'O servidor não conseguiu gerar a planilha agora. Tente novamente em instantes.';
+    }
+
+    function exportarCsv(botao) {
+        if (!estado.evento_id || estado.exportacao) return;
+        var eventoId = estado.evento_id;
+        var dadosEvento = estado.dados && estado.dados.evento;
+        var nomeEvento = (dadosEvento && dadosEvento.id === eventoId && dadosEvento.nome_evento)
+            || estado.nome || 'evento';
+        var controlador = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var operacao = { botao: botao };
+        estado.exportacao = operacao;
+        avisarExportacao('Consultando as leituras do evento…');
+        window.botaoEspera.comecar(botao, 'Montando…');
+
+        // O prazo também cobre a espera pela sessão, que não aceita AbortSignal.
+        var limite = new Promise(function (_, rejeitar) {
+            operacao.interromper = function (erro) {
+                rejeitar(erro);
+                if (controlador) controlador.abort();
+            };
+            operacao.prazo = setTimeout(function () {
+                var erro = new Error('Prazo da exportação excedido.');
+                erro.prazoExcedido = true;
+                operacao.interromper(erro);
+            }, TEMPO_EXPORTACAO_MS);
+        });
+        var consulta = Promise.resolve().then(function () {
+            if (estado.exportacao === operacao) return sessaoDoRelatorio();
+        }).then(function (sessao) {
+            if (estado.exportacao !== operacao) return;
+            if (!sessao) {
+                var erro = new Error('Sessão indisponível.');
+                erro.status = 401;
+                throw erro;
+            }
+            return pedirRelatorio('/eventos/' + eventoId + '/leituras?exportar=1',
+                                  sessao, controlador && controlador.signal);
+        });
+
+        Promise.race([consulta, limite]).then(function (resposta) {
+            if (estado.exportacao !== operacao) return;
+            // Servidores anteriores devolvem uma página mesmo com exportar=1.
+            if (!resposta || typeof resposta !== 'object' || 'pagina' in resposta || 'por_pagina' in resposta
+                    || !Array.isArray(resposta.leituras) || typeof resposta.ha_mais !== 'boolean'
+                    || !resposta.leituras.every(function (l) { return l && typeof l === 'object' && !Array.isArray(l); })) {
+                throw new Error('Resposta inválida da exportação.');
+            }
+            var leituras = resposta.leituras;
+            try {
+                baixarCsv(nomeEvento, leituras);
+            } catch (erro) {
+                avisarExportacao('Não foi possível iniciar o download neste aparelho. Tente novamente.');
+                return;
+            }
+            avisarExportacao(resposta.ha_mais
+                ? ('Baixei as primeiras ' + numero(leituras.length)
                    + ' leituras. O evento tem mais do que isso — peça o restante à gráfica.')
-                : (numero(todas.length) + ' leitura'
-                   + (todas.length === 1 ? '' : 's') + ' no arquivo.');
-            aviso.classList.remove('sumindo');
-        }).catch(function () {
-            var aviso = $('ao-vivo-aviso-csv');
-            aviso.textContent = 'Não consegui montar o arquivo agora. '
-                + 'Confira a internet e tente de novo.';
-            aviso.classList.remove('sumindo');
+                : (numero(leituras.length) + ' leitura'
+                   + (leituras.length === 1 ? '' : 's') + ' no arquivo.'));
+        }).catch(function (erro) {
+            if (estado.exportacao === operacao) avisarExportacao(mensagemDeExportacao(erro || {}));
+        }).finally(function () {
+            encerrarExportacao(operacao);
         });
     }
 
     // ── Buscar, abrir e fechar ──────────────────────────────────────────────
 
     function pedirParaEntrar() {
+        cancelarExportacao();
         var id = estado.evento_id;
         var nome = estado.nome;
         var configuracao = estado.voltarConfiguracao;
@@ -498,18 +567,22 @@
     }
 
     function buscar(sessao) {
+        var eventoId = estado.evento_id;
         return pedirRelatorio(
-            '/eventos/' + estado.evento_id + '/ao-vivo',
+            '/eventos/' + eventoId + '/ao-vivo',
             sessao
         ).then(function (d) {
+            if (estado.evento_id !== eventoId) return false;
             desenhar(d);
             return true;
         }).catch(function (e) {
+            if (estado.evento_id !== eventoId) return false;
             if (e && e.status === 401) {
                 if (!sessao.porPin && !sessao.daLeitura) return pedirParaEntrar();
                 pararRelogio();
             }
             if (sessao.daLeitura && e && (e.status === 401 || e.status === 403)) {
+                cancelarExportacao();
                 pararRelogio(); $('ao-vivo-corpo').classList.add('sumindo');
             }
             var aviso = $('ao-vivo-aviso');
@@ -566,6 +639,7 @@
     }
 
     function abrir(eventoId, nome, voltarConfiguracao, daLeitura) {
+        cancelarExportacao();
         estado.daLeitura = !!daLeitura;
         estado.evento_id = eventoId;
         estado.nome = nome || '';
@@ -588,7 +662,7 @@
             $('ao-vivo-corpo').classList.add('sumindo');
             $('ao-vivo-busca').value = '';
             $('ao-vivo-achados').innerHTML = '';
-            $('ao-vivo-aviso-csv').classList.add('sumindo');
+            avisarExportacao('');
             $('ao-vivo-nome').textContent = estado.nome;
             $('ao-vivo-sub').textContent = '';
             var aviso = $('ao-vivo-aviso');
@@ -599,6 +673,7 @@
     }
 
     function fechar() {
+        cancelarExportacao();
         pararRelogio();
         // `sumindo` em si mesmo ANTES de pedir a tela inicial de volta: é o que
         // o contrato do `conta.js` exige de quem fecha um estado de topo.
@@ -665,12 +740,7 @@
 
         var baixar = $('btn-ao-vivo-csv');
         baixar.addEventListener('click', function () {
-            window.botaoEspera.comecar(baixar, 'Montando…');
-            comASessao(function (s) { return baixarCsv(s, baixar); }).then(function () {
-                window.botaoEspera.terminar(baixar);
-            }, function () {
-                window.botaoEspera.terminar(baixar);
-            });
+            exportarCsv(baixar);
         });
     }
 

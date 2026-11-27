@@ -2,7 +2,7 @@ import { Recusa } from "./sessao.ts";
 import { numeroDaPagina, tamanhoDaPagina, termoSeguro } from "./relatorio_puro.ts";
 import { banco } from "./banco.ts";
 import { setoresDoEvento } from "./painel_evento.ts";
-import { dashboard, listarIngressos, leiturasDoEvento } from "./relatorio.ts";
+import { dashboard, exportarLeiturasDoEvento, listarIngressos, leiturasDoEvento } from "./relatorio.ts";
 
 // O mesmo relatório para conta e instalação autorizada por PIN.
 export async function aoVivo(evento: any): Promise<any> {
@@ -39,7 +39,14 @@ export async function aoVivo(evento: any): Promise<any> {
 
 export async function consultarRelatorio(evento: any, acao: string, parametros: URLSearchParams): Promise<any> {
   if (acao === "ao-vivo") return await aoVivo(evento);
-  if (acao === "leituras") return await leiturasDoEvento(evento.id, numeroDaPagina(parametros.get("pagina") ?? 1), tamanhoDaPagina(parametros.get("por_pagina")));
+  if (acao === "leituras") {
+    if (parametros.get("exportar") === "1") return await exportarLeiturasDoEvento(evento.id);
+    return await leiturasDoEvento(
+      evento.id,
+      numeroDaPagina(parametros.get("pagina") ?? 1),
+      tamanhoDaPagina(parametros.get("por_pagina")),
+    );
+  }
   if (acao === "ingressos") {
     const setor = parametros.get("setor_id");
     if (setor && (!/^[a-f0-9-]{36}$/i.test(setor) || !(await banco("GET", `producao_acesso_setores?id=eq.${setor}&evento_id=eq.${evento.id}&select=id`))?.length)) throw new Recusa(403, "Setor de outro evento ou indisponível.");
