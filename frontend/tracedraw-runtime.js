@@ -194,21 +194,6 @@
       delete pdfViewerState[key];delete pdfViewerState[idx];delete state.osItens[osKey];host.remove();
     }
   }
-  window.aguardarBackupTraceDraw=async function(osId,model=null) {
-    if(window._currentPerms?.perm_lista_arte_edit!==true)return;
-    const item=(state.osItens[osId]||[]).find(i=>model===null||String(i.id)===String(model));
-    if(!item)throw Error('Modelo não localizado para conferir o backup.');
-    const order=Number(item.id_int);
-    if(!Number.isSafeInteger(order)||order<=0)throw Error('Pedido não confirmado para conferir backup.');
-    for(let attempt=0;attempt<37;attempt++) {
-      const {data,error}=await supabaseClient.rpc('imposition_tracedraw_backup_estado',{p_pedido:order,p_modelo:model===null?null:Number(model)});
-      if(error)throw Error('Não foi possível conferir o backup no Drive. Tente novamente.');
-      if(data?.pending===false)return;
-      if(attempt===0&&typeof toast==='function')toast('Aguardando confirmação do backup no Drive…','info');
-      await new Promise(resolve=>setTimeout(resolve,5000));
-    }
-    throw Error('Backup no Drive continua pendente. O PDF está atualizado; tente concluir novamente em instantes.');
-  };
   window.ImpositionTraceDraw.configure({request,compose,
     async baixarCdr({order,model,item}) {
       const {data,error}=await supabaseClient.auth.getSession();

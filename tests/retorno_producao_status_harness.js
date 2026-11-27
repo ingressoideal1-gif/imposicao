@@ -223,6 +223,23 @@ caso('Voltar para Atendimento prepara o link da arte inicial pronta', async () =
     assert.equal(a.banco.pedidos_artes[0].status, 'Enviar Arte');
     assert.equal(a.log.preparosLink, 1);
 });
+caso('Pronto e Voltar para Atendimento independem do andamento do backup no Drive', async () => {
+    const a = ambiente('', 'Em Alteração');
+    a.banco.pedidos_modelos[0].status_arte = 'REPROVADA_CLIENTE';
+    await a.recarregar();
+    let consultas = 0;
+    // Simula uma aba que ainda carrega o runtime antigo da Ponte.
+    a.contexto.window.aguardarBackupTraceDraw = async () => {
+        consultas++;
+        throw new Error('Backup no Drive pendente');
+    };
+    assert.equal(await a.contexto.decisionAmostraItem(1002001, a.osId, 'PRONTO'), true);
+    assert.equal(a.banco.pedidos_modelos[0].status_arte, 'AGUARDANDO_CLIENTE');
+    await a.contexto.voltarParaAtendimento();
+    assert.equal(a.banco.pedidos_artes[0].status, 'Enviar Arte');
+    assert.equal(a.log.preparosLink, 1);
+    assert.equal(consultas, 0);
+});
 caso('Voltar para Atendimento bloqueia cancelado e informa falha do consolidado', async () => {
     const cancelado = ambiente('CANCELADO'); await cancelado.recarregar();
     await cancelado.contexto.voltarParaAtendimento();

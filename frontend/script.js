@@ -37561,10 +37561,6 @@ window.marcarPendenteInformacao = marcarPendenteInformacao;
  */
 async function voltarParaAtendimento() {
     const osId = state.amostrasOSAtivo;
-    if(osId&&window.aguardarBackupTraceDraw) {
-        try { await window.aguardarBackupTraceDraw(osId); }
-        catch(error) { toast(error.message,'warning');return; }
-    }
     if (!osId) {
         toast('Nenhum pedido ativo na tela de Amostras.', 'warning');
         return;
@@ -41877,10 +41873,6 @@ async function decisionAmostraItem(itemId, osId, status, opts = {}) {
     // também passa por aqui, e travar o cliente seria travar justamente quem
     // não tem como consertar a numeração.
     if (status === 'PRONTO' && state.amostrasContainerId !== 'cliente-amostras-itens-container') {
-        if(window.aguardarBackupTraceDraw) {
-            try { await window.aguardarBackupTraceDraw(osId,itemId); }
-            catch(error) { toast(error.message,'warning');return false; }
-        }
         const itens = state.osItens[osId] || [];
         const idxAlvo = itens.findIndex(i => String(i.id) === String(itemId));
         const itemAlvo = idxAlvo >= 0 ? itens[idxAlvo] : null;
