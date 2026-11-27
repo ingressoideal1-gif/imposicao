@@ -29120,7 +29120,7 @@ function getStatusBadge(status) {
 const STATUS_CORRIGIR_ARTE = 'Corrigir Arte';
 
 /**
- * O recado de tela de quem acabou de marcar (ou desmarcar) "Corrigir Arte".
+ * O recado de tela de quem acabou de marcar "Corrigir Arte".
  *
  * Existe porque a marca faz coisas em telas que quem marcou não está vendo: o
  * pedido muda de card na Lista de Arte e a impressora para para aquele modelo.
@@ -33378,6 +33378,7 @@ function formatDateTime(dateStr) {
  */
 async function updateItemImpressao(itemId, osId, novoStatus, { permitirRetornoManual = false } = {}) {
     let horarioConfirmado = {};
+    let semLinhaAtualizada = false;
     try {
         if (normalizarStatusImpressao(novoStatus) === STATUS_CORRIGIR_ARTE) {
             const confirmado = await devolverArteParaAlteracao(itemId, osId);
@@ -33413,12 +33414,16 @@ async function updateItemImpressao(itemId, osId, novoStatus, { permitirRetornoMa
                     p_status_registrado_em: itemAtual.status_impressao_registrado_em || null
                 });
             } else {
-                let query = supabaseClient.from('pedidos_modelos').update({ status_impressao: novoStatus });
-                query = query.eq('id', isNumericId ? parseInt(itemId, 10) : itemId);
-                resposta = await query.eq('id_int', Number(numero)).select('id,id_int,status_impressao,status_impressao_em,status_impressao_registrado_em');
+                // Protege o estado persistido mesmo quando esta aba foi aberta antes da correção.
+                resposta = await supabaseClient.from('pedidos_modelos').update({ status_impressao: novoStatus })
+                    .eq('id', isNumericId ? parseInt(itemId, 10) : itemId)
+                    .eq('id_int', Number(numero))
+                    .or('status_impressao.is.null,status_impressao.not.imatch."^[[:space:]]*CORRIGIR[ _-]ARTE[[:space:]]*$"')
+                    .select('id,id_int,status_impressao,status_impressao_em,status_impressao_registrado_em');
             }
             const { data, error } = resposta;
             if (error) throw error;
+            semLinhaAtualizada = Array.isArray(data) && data.length === 0;
             if (!Array.isArray(data) || data.length !== 1
                 || String(data[0].id) !== String(itemId).trim()
                 || String(data[0].id_int) !== String(Number(numero))
@@ -33469,10 +33474,19 @@ async function updateItemImpressao(itemId, osId, novoStatus, { permitirRetornoMa
     } catch (e) {
         console.error('Erro ao atualizar impressão:', e);
         const errMessage = e.message || e.details || (typeof e === 'object' ? JSON.stringify(e) : String(e));
-        toast('Erro ao atualizar impressão: ' + errMessage, 'error');
-        // Recarregar para reverter
-        try { await loadOSItens(osId, { atualizar: true }); }
+        if (!semLinhaAtualizada) toast('Erro ao atualizar impressão: ' + errMessage, 'error');
+        let recarregado = false;
+        try { recarregado = await loadOSItens(osId, { atualizar: true }) !== false; }
         catch (erroCarga) { console.warn('Não foi possível reler o status de impressão:', erroCarga); }
+        if (semLinhaAtualizada) {
+            const item = (state.osItens[osId] || []).find(i => String(i.id) === String(itemId));
+            if (recarregado && modeloEmCorrecaoDeArte(item)) {
+                toast('O modelo está em Corrigir Arte. O designer deve marcar Pronto para liberar a impressão.', 'warning');
+                renderOrdens();
+            } else {
+                toast('Erro ao atualizar impressão: ' + errMessage, 'error');
+            }
+        }
         return false;
     }
 }

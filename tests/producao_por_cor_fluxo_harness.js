@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { randomUUID } = require('node:crypto');
 const assert = require('assert/strict');
 const root = path.join(__dirname, '..');
 const read = name => fs.readFileSync(path.join(root, 'frontend', name), 'utf8').replace(/\r\n/g, '\n');
@@ -80,8 +81,8 @@ async function statusFixture(response) {
     await f.start(); await f.ctx.loadOSItens('vibe_1');
     const filters = [];
     f.ctx.supabaseClient = { from() { return { update() { return this; }, eq(k, v) { filters.push([k, v]); return this; },
-        select() { return Promise.resolve(response); } }; } };
-    vm.runInContext(extract(main, 'updateItemImpressao'), f.ctx);
+        or() { return this; }, select() { return Promise.resolve(response); } }; } };
+    vm.runInContext(extract(main, 'modeloEmCorrecaoDeArte') + '\n' + extract(main, 'updateItemImpressao'), f.ctx);
     return { ...f, filters };
 }
 (async () => {
@@ -244,7 +245,8 @@ async function statusFixture(response) {
         f.ctx.state.osItens.vibe_1 = [{ id: 'vibe_item_99' }];
         const writes = [];
         f.ctx.supabaseClient = { from() { return { update(data) { writes.push(data); return this; }, eq() { return this; },
-            select() { return Promise.resolve({ data: [{ id: 11, status_impressao: 'Corrigir Arte', status_arte: 'REPROVADA_CLIENTE', observacao_arte: 'Ajustar o nome' }], error: null }); } }; } };
+            select() { return Promise.resolve({ data: [{ id: 11, ...writes.at(-1) }], error: null }); } }; } };
+        f.ctx.crypto = { randomUUID };
         f.ctx.prompt = () => 'Ajustar o nome';
         f.ctx.avisarCorrecaoDeArte = () => {};
         vm.runInContext(extract(main, 'devolverArteParaAlteracao') + '\n' + extract(main, 'updateItemImpressao'), f.ctx);
@@ -339,7 +341,9 @@ async function statusFixture(response) {
             f.ctx.guardarPdfDoVersoDaPrevia = value => { f.ctx.state.pedVersoDoc = value; };
             f.ctx.loadPedArtFile = async file => { f.ctx.state.pedArtFile = file; };
             f.ctx.enviarParaImposicao = async () => {};
-            vm.runInContext(extract(pedido, 'enviarParaPedido'), f.ctx);
+            const prepararPedido = [extract(pedido, 'enviarParaPedido'), extract(pedido, 'carregarModeloParaPedido'),
+                extract(main, 'preencherFaixaDoModelo'), extract(main, 'faixaEfetivaDoModelo')];
+            vm.runInContext(prepararPedido.join('\n'), f.ctx);
             const opening = f.api.openModel(11, 'vibe_1');
             await tick(); await tick();
             assert.equal(f.ctx.PedidoJanelaExterna.validarGeracao()(), false);
@@ -364,7 +368,8 @@ async function statusFixture(response) {
         f.ctx.recarregarNumeracoesDoPedido = () => d.promise;
         f.ctx.garantirCsvDoTrabalho = () => { throw new Error('abertura cancelada avançou'); };
         f.ctx.idsDeNumeracaoDoTrabalho = () => [];
-        vm.runInContext(extract(main, 'enviarParaImposicao'), f.ctx);
+        vm.runInContext(['enviarParaImposicao', 'carregarModeloParaImposicao']
+            .map(nome => extract(main, nome)).join('\n'), f.ctx);
         const job = f.ctx.enviarParaImposicao(11, 'vibe_1', false, { aindaAtual: () => current });
         current = false; f.ctx.state.activeOSItem = { itemId: 22, osId: 'vibe_2' }; d.resolve(); await job;
         assert.equal(f.ctx.state.activeOSItem.itemId, 22);
@@ -373,14 +378,19 @@ async function statusFixture(response) {
         for (const mode of ['pdf', 'print']) {
             const f = fixture(); await f.start();
             const start = pedido.indexOf('window.runPedImposition =');
-            vm.runInContext(pedido.slice(start, pedido.indexOf('\n};', start) + 3), f.ctx);
+            vm.runInContext(pedido.slice(start, pedido.indexOf('\n};', start) + 3)
+                + '\n' + extract(pedido, 'executarPedImposition'), f.ctx);
+            f.ctx.confirmarRetomadaImpressao = () => true;
+            f.ctx.conferirModoVibeDoTrabalho = async () => true;
+            f.ctx.garantirMapaTeatroDoTrabalho = async () => true;
+            f.ctx.folha1DoPedido = () => null;
             let downloads = 0; const d = deferred();
             f.ctx.idsDeNumeracaoDoTrabalho = () => [];
             f.ctx.garantirCsvDoTrabalho = () => { downloads++; return d.promise; };
             await f.ctx.runPedImposition(mode); assert.equal(downloads, 0);
             assert(f.notices.some(n => n[0].includes('terminar de carregar')));
             await f.api.openModel(11, 'vibe_1');
-            const generation = f.ctx.runPedImposition(mode); assert.equal(downloads, 1);
+            const generation = f.ctx.runPedImposition(mode); await tick(); assert.equal(downloads, 1);
             f.api.leavePage(); d.resolve(); await generation;
             assert.equal(f.ctx.isImposing, undefined);
         }
@@ -389,7 +399,7 @@ async function statusFixture(response) {
         const f = fixture(); await f.start(); await f.api.openModel(11, 'vibe_1');
         const start = pedido.indexOf('    const alvosDoTrabalho =');
         const end = pedido.indexOf(';', start) + 1;
-        vm.runInContext(`const isRefazer = false; ${pedido.slice(start, end)}`, f.ctx);
+        vm.runInContext(`const isRefazer = false, folha1 = null; ${pedido.slice(start, end)}`, f.ctx);
         f.ctx.state.activeOSItem = { itemId: 22, osId: 'vibe_2' };
         f.ctx.state.selectedOSItems = [{ itemId: 33, osId: 'vibe_3' }];
         for (const branch of pedido.matchAll(/const alvoImpressao = .*alvosDoTrabalho.*;/g)) {

@@ -23,7 +23,7 @@ const nomes = ['confirmarTransicaoDaArte', 'confirmarModeloPronto', 'assinaturaD
     'atualizarPedidoArteConfirmado', 'marcarEstagioDaArteNoErp', 'devolverArteParaAlteracao',
     'buscarModeloPersistidoDaDecisao', 'salvarSaidaCorrecaoArteConfirmada', 'decisionAmostraItem',
     'promoverPedidoSeTodosProntos', 'reconciliarStatusPersistidosDaListaArte',
-    'pedidoCancelado', 'pedidoSaiuDaArte', 'normalizarStatusImpressao', 'modeloEmCorrecaoDeArte',
+    'pedidoCancelado', 'pedidoSaiuDaArte', 'normalizarStatusImpressao', 'modeloEmCorrecaoDeArte', 'updateItemImpressao',
     'modeloEstaAprovado', 'planoDaAcaoEmLote', 'nomeDoModeloParaLista', 'textoDoPlanoEmLote',
     'voltarParaAtendimento'];
 const constantes = ['ARTE_APROVADOS', 'ARTE_REPROVADOS', 'STATUS_CORRIGIR_ARTE',
@@ -41,26 +41,35 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         pedidos_artes: [{ id: 'arte-1', id_int: numero, status: statusArte, entrega_dados: 'APROVADO', observacoes: {} }],
         pedidos_links_cliente: [{ os_id: osId, status_arte: 'APROVADO' }]
     };
-    const log = { updates: [], overrides: [], avisos: [], erros: [], preparosLink: 0 };
+    const log = { updates: [], overrides: [], avisos: [], erros: [], eventos: [], preparosLink: 0 };
     let falharConsolidado = false;
     const cliente = { from(tabela) {
         assert(banco[tabela], 'tabela simulada: ' + tabela);
-        const filtros = []; let payload;
+        const filtros = []; let payload, regexCorrecao;
         const executar = unico => {
             const linhas = banco[tabela].filter(linha => filtros.every(([k, v]) => (Array.isArray(v) ? v.map(String).includes(String(linha[k])) : String(linha[k]) === String(v))));
+            const elegiveis = regexCorrecao
+                ? linhas.filter(linha => linha.status_impressao == null || !regexCorrecao.test(linha.status_impressao))
+                : linhas;
             if (payload && tabela === 'pedidos_artes' && falharConsolidado) {
                 return { data: null, error: { message: 'falha simulada no consolidado' } };
             }
             if (payload) {
-                linhas.forEach(linha => Object.assign(linha, structuredClone(payload)));
+                elegiveis.forEach(linha => Object.assign(linha, structuredClone(payload)));
                 log.updates.push({ tabela, payload: structuredClone(payload) });
             }
-            return { data: structuredClone(unico ? linhas[0] || null : linhas), error: null };
+            return { data: structuredClone(unico ? elegiveis[0] || null : elegiveis), error: null };
         };
         return {
             select() { return this; }, update(p) { payload = p; return this; },
             in(k, v) { filtros.push([k, v]); return this; }, range() { return this; },
             eq(k, v) { filtros.push([k, v]); return this; }, order() { return this; },
+            or(filtro) {
+                const partes = filtro.match(/^status_impressao\.is\.null,status_impressao\.not\.imatch\."?([^"]+)"?$/);
+                assert(partes, 'filtro de impressão simulado: ' + filtro);
+                regexCorrecao = new RegExp(partes[1].replaceAll('[[:space:]]', '\\s'), 'i');
+                return this;
+            },
             single() { return Promise.resolve(executar(true)); },
             maybeSingle() { return Promise.resolve(executar(true)); },
             then(resolver, rejeitar) { return Promise.resolve(executar(false)).then(resolver, rejeitar); }
@@ -80,7 +89,8 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
     const contexto = {
         crypto: require("node:crypto").webcrypto,
         numeracaoIdDoItem: () => null, modoDeVersoDoModelo: () => 'simplex', pdfImparFrenteVersoParDoModelo: () => false,
-        window: {}, state, supabaseClient: cliente, vibeClient: cliente,
+        window: { dispatchEvent: evento => log.eventos.push(evento) }, state, supabaseClient: cliente, vibeClient: cliente,
+        CustomEvent: function (tipo, { detail }) { this.type = tipo; this.detail = detail; },
         document: { getElementById: () => null }, ESCALA_DA_AMOSTRA: 1,
         console: { warn: (...a) => log.erros.push(a), error: (...a) => log.erros.push(a), log() {} },
         toast: (texto, tipo) => log.avisos.push({ texto, tipo }), confirm: () => true, prompt: () => 'Ajustar o nome',
@@ -90,7 +100,7 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         distribuicaoOrfaDoModelo: () => null, divergenciaDeCelulasDoModelo: () => null,
         bancoDeDadosIncompletoDoModelo: () => null, fonteSemGlifoDoModelo: () => null,
         garantirTabelasDaAmostra: async () => {}, regenerarAmostraDoModelo: async () => {},
-        renderAmostrasOSItens() {}, loadOSItens: recarregar, findOSInState: () => os,
+        renderAmostrasOSItens() {}, renderOrdens() {}, loadOSItens: recarregar, findOSInState: () => os,
         substituirPendenteInformacao: async () => {}, garantirLinhaDePedidoArte: async () => true,
         getOrCreateLinkCliente: async () => 'link-sintetico',
         prepararLinkDaArtePronta: async () => { log.preparosLink++; await contexto.confirmarTransicaoDaArte(numero, 'enviar'); return { ok: true }; },
@@ -108,7 +118,7 @@ function ambiente(statusInterno = 'EM PRODUCAO', statusArte = 'APROVADO') {
         let correcao=false;
         if (args.p_acao === 'pronto') {
             const m=banco.pedidos_modelos.find(m=>m.id===args.p_modelo);
-            correcao=m.status_impressao==='Corrigir Arte';
+            correcao=contexto.modeloEmCorrecaoDeArte(m);
             m.status_arte=correcao?'APROVADA':'AGUARDANDO_CLIENTE';
             if(correcao)m.status_impressao='Aguardando';
             log.updates.push({tabela:'pedidos_modelos',payload:{status_arte:m.status_arte,status_impressao:m.status_impressao}});
@@ -159,6 +169,37 @@ for (const lote of [false, true]) {
         assert.equal(a.log.overrides.length, 0);
     });
 }
+for (const [tentativa, statusCorrecao] of [['Aguardando', 'Corrigir Arte'], ['Impresso', ' corrigir_arte ']]) {
+    caso('aba de produção desatualizada não troca a correção por ' + tentativa, async () => {
+        const a = ambiente(); await a.recarregar();
+        const id = 1002001;
+        const abaAntiga = structuredClone(a.state.osItens[a.osId]);
+        assert.equal(await a.contexto.devolverArteParaAlteracao(id, a.osId), true);
+        const modelo = a.banco.pedidos_modelos[0];
+        modelo.status_impressao = statusCorrecao;
+        a.state.osItens[a.osId] = abaAntiga;
+        assert.equal(await a.contexto.updateItemImpressao(id, a.osId, tentativa), false);
+        assert.equal(modelo.status_impressao, statusCorrecao);
+        assert.equal(modelo.status_arte, 'REPROVADA_CLIENTE');
+        assert.equal(a.state.osItens[a.osId][0].status_impressao, statusCorrecao);
+        assert.equal(a.log.eventos.length, 0);
+        assert(!a.log.avisos.some(aviso => aviso.tipo === 'success'));
+        assert(a.log.avisos.some(aviso => aviso.texto.includes('marcar Pronto para liberar a impressão')));
+
+        assert.equal(await a.contexto.decisionAmostraItem(id, a.osId, 'PRONTO'), true);
+        assert.equal(modelo.status_arte, 'APROVADA');
+        assert.equal(modelo.status_impressao, 'Aguardando');
+        assert.equal(a.banco.pedidos_links_cliente[0].status_arte, 'APROVADO');
+    });
+}
+caso('impressão de modelo aprovado com status anterior nulo continua funcionando', async () => {
+    const a = ambiente();
+    const modelo = a.banco.pedidos_modelos[0];
+    modelo.status_impressao = null;
+    await a.recarregar();
+    assert.equal(await a.contexto.updateItemImpressao(modelo.id, a.osId, 'Impresso'), true);
+    assert.equal(modelo.status_impressao, 'Impresso');
+});
 caso('Voltar para Atendimento apos correcao preserva arte e link aprovados', async () => {
     const a = ambiente(); await a.recarregar();
     await a.contexto.devolverArteParaAlteracao(1002001, a.osId);
