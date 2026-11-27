@@ -22,7 +22,7 @@ function extrair(nome) {
             'blocoDeArteDoModelo', 'modeloEstaAprovado', 'bloqueioDeModeloAprovado',
             'toggleModoPdf', 'escalaDaArteDoModelo', 'atualizarCaixaDeEscalaDaArte',
             'formatoDoProduto', 'formatoDoModelo', 'salvarEscalaDaArte', 'pdfViewerAindaAtual',
-            'atualizarEstadoDoPdf', 'initPdfViewer', 'renderPdfViewerPage',
+            'urlDoPdfOriginalDoModelo', 'abrirPdfOriginalDoModelo', 'atualizarEstadoDoPdf', 'initPdfViewer', 'renderPdfViewerPage',
             'pdfViewerPrevPage', 'pdfViewerNextPage', 'limparVisualizadorPdf',
             'onItemArteUpload', 'drawAmostraFace', 'getPdfUrlForItem',
             'renderImageModeInPdfViewer', 'itemTemArte', 'ehRenderComposto',
@@ -117,10 +117,24 @@ function extrair(nome) {
             await pdfViewerPrevPage(0, 'outro-pedido');
             ok(info().includes('3 / 4'), 'Outro pedido nao pode controlar o canvas atual');
 
+            const aberturas = [];
+            window.open = (...args) => aberturas.push(args);
+            const pdfOriginal = 'https://artes.example/paginado.pdf?versao=2';
+            const abrirOriginal = () => el('amostra-pdf-original-0');
+            item.arte_url = pdfOriginal;
             item.status_arte = 'APROVADA_CLIENTE';
             await renderPdfViewerPage('os-1_0', 3, 0);
             document.querySelector('main').dataset.modeloAprovado = '1';
+            window.podeCopiarDeModeloAprovado = () => true;
             travarCardsDeModelosAprovados(document.body);
+            ok(abrirOriginal().style.display !== 'none' && !abrirOriginal().disabled, 'Aprovado permite abrir o PDF a quem pode copiar a arte');
+            abrirOriginal().click();
+            ok(JSON.stringify(aberturas[0]) === JSON.stringify([pdfOriginal, '_blank', 'noopener,noreferrer']),
+                'Abre diretamente o PDF vinculado e inteiro, sem trocar pela URL da prévia');
+            window.podeCopiarDeModeloAprovado = () => false;
+            travarCardsDeModelosAprovados(document.body);
+            abrirPdfOriginalDoModelo(0);
+            ok(abrirOriginal().disabled && aberturas.length === 1, 'Aprovado limita acesso ao arquivo original');
             ok(el('amostra-escala-h-0').disabled && !botoes()[0].disabled, 'Modelo aprovado permite folhear, mantendo escala bloqueada');
             const antes = gravacoes.length;
             el('amostra-escala-h-0').value = '120'; el('amostra-escala-v-0').value = '90';
@@ -143,6 +157,14 @@ function extrair(nome) {
             await drawAmostraFace(item, 'front', null, null, null, null, null, 0, 'os-1', 1);
             ok(el('amostra-escala-0').style.display === 'flex' && el('amostra-escala-h-0').disabled, 'PDF ausente nao faz a escala sumir');
             ok(info().includes('original') && botoes()[0].disabled && botoes()[1].disabled, 'PDF ausente tem aviso explicito');
+            ok(abrirOriginal().style.display === 'none', 'Sem original, a ação de abrir não aparece');
+            item.arte_url = 'https://artes.example/amostras_renderizadas/previa.pdf';
+            abrirPdfOriginalDoModelo(0);
+            ok(aberturas.length === 1, 'A ação não abre a amostra composta no lugar da arte');
+            item.arte_url = 'https://artes.example/arte.jpg?nome=arquivo.pdf';
+            abrirPdfOriginalDoModelo(0);
+            ok(aberturas.length === 1, 'A ação não confunde imagem vinculada com PDF');
+            item.arte_url = null;
             // Uma previa PNG nao possui as paginas do PDF original.
             item.amostra_arte_base64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==';
             await drawAmostraFace(item, 'front', null, null, null, null, null, 0, 'os-1', 1);

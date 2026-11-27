@@ -35976,6 +35976,8 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                 <div style="font-size:0.82rem; margin-top:6px;">Foto não cadastrada ou indisponível.</div>
             </div>`;
     }
+    const botaoPdfOriginal = `<button type="button" id="amostra-pdf-original-${idx}" class="btn btn-sm btn-secondary"
+        data-libera-copia="1" style="display:none" onclick="abrirPdfOriginalDoModelo(${idx})">Abrir PDF original</button>`;
     return ((item.verso || pdfImparFrenteVersoParDoModelo(item) || pdfDuplicarParaVersoDoModelo(item)) ? `
                         <div style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
                             <!-- Janela vertical (formato mais alto que largo): as duas
@@ -35997,11 +35999,12 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                                          que comparar, e la o 400px continua, deixando espaco para as
                                          setas do folheador. -->
                                     <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 450px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
-                                    <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                                    <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; flex-wrap:wrap; gap:12px; margin-top:10px;">
                                         <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerPrevPage(${idx}, '${osId}')">◀</button>
                                         <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
                                         <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerNextPage(${idx}, '${osId}')">▶</button>
                                         <button id="amostra-pdf-retry-${idx}" class="btn btn-sm btn-secondary" data-navegacao-pdf style="display:none" onclick="renderItemAmostraCombinada(${idx}, '${osId}')">Tentar novamente</button>
+                                        ${botaoPdfOriginal}
                                     </div>
                                 </div>
                                 ` : `
@@ -36044,11 +36047,12 @@ function blocoDeArteDoModelo(item, idx, osId, escalaArteHtml, ladoALado) {
                         ${item.modo_pdf ? `
                         <div id="amostra-pdf-viewer-${idx}" data-pdf-os="${osId}" style="text-align: center;">
                             <canvas id="amostra-pdf-canvas-${idx}" style="max-width: 100%; max-height: 400px; object-fit: contain; margin: 0 auto; display: none; box-shadow: var(--shadow); background: #ffffff; cursor: zoom-in;" onclick="abrirAmostraModal(${idx}, '${osId}')" title="Clique para ver ampliado"></canvas>
-                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; gap:12px; margin-top:10px;">
+                            <div id="amostra-pdf-nav-${idx}" style="display:none; align-items:center; justify-content:center; flex-wrap:wrap; gap:12px; margin-top:10px;">
                                 <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerPrevPage(${idx}, '${osId}')">◀</button>
                                 <span id="amostra-pdf-page-info-${idx}" style="font-weight:700; font-size:0.9rem; color:var(--text);">Página 1 / 1</span>
                                 <button class="btn btn-sm btn-secondary" data-navegacao-pdf onclick="pdfViewerNextPage(${idx}, '${osId}')">▶</button>
                                 <button id="amostra-pdf-retry-${idx}" class="btn btn-sm btn-secondary" data-navegacao-pdf style="display:none" onclick="renderItemAmostraCombinada(${idx}, '${osId}')">Tentar novamente</button>
+                                ${botaoPdfOriginal}
                             </div>
                             ${escalaArteHtml}
                             <div id="amostra-item-empty-${idx}" style="text-align: center; color: var(--text-dim); padding: 20px;">
@@ -39250,6 +39254,20 @@ function pdfViewerAindaAtual(viewer) {
     return !card?.dataset?.pdfOs || card.dataset.pdfOs === String(viewer.osId);
 }
 
+function urlDoPdfOriginalDoModelo(item) {
+    const url = item?.modo_pdf ? item.arte_url : null;
+    return typeof url === 'string' && /^https?:\/\/[^?#]+\.pdf(?:[?#]|$)/i.test(url) && !ehRenderComposto(url)
+        ? url : null;
+}
+
+function abrirPdfOriginalDoModelo(idx) {
+    const osId = document.getElementById(`amostra-pdf-viewer-${idx}`)?.dataset.pdfOs;
+    const item = state.osItens[osId]?.[idx];
+    const url = urlDoPdfOriginalDoModelo(item);
+    if (!url || (modeloEstaAprovado(item) && !podeCopiarDeModeloAprovado())) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function atualizarEstadoDoPdf(idx, item, situacao, viewer = null) {
     const nav = document.getElementById(`amostra-pdf-nav-${idx}`);
     const info = document.getElementById(`amostra-pdf-page-info-${idx}`);
@@ -39286,6 +39304,8 @@ function atualizarEstadoDoPdf(idx, item, situacao, viewer = null) {
     }
     const retry = document.getElementById(`amostra-pdf-retry-${idx}`);
     if (retry) retry.style.display = situacao === 'erro' ? 'inline-block' : 'none';
+    const abrirOriginal = document.getElementById(`amostra-pdf-original-${idx}`);
+    if (abrirOriginal) abrirOriginal.style.display = urlDoPdfOriginalDoModelo(item) ? 'inline-flex' : 'none';
     atualizarCaixaDeEscalaDaArte(idx, item);
     const caixa = document.getElementById(`amostra-escala-${idx}`);
     if (caixa?.querySelectorAll) caixa.querySelectorAll('input, button').forEach(el => {
