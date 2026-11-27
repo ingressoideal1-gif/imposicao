@@ -6234,6 +6234,19 @@ window.runPedImposition = async function (mode, isRefazer) {
     catch (erro) { toast('Impressão bloqueada: ' + erro.message, 'error'); }
     finally { window._preparacaoImpressao = false; }
 };
+
+function reverterBlocosDaImpressao(fila) {
+    const blocos = new Map();
+    for (const arquivo of fila) {
+        // As partes do mesmo set (e da mesma camada, quando houver) saem juntas.
+        const set = /^(.*_set\d+(?:_\d+)?)_(?:01_capa|02_miolo|03_contracapa)\.pdf$/i.exec(arquivo.name);
+        const chave = set ? set[1].toLowerCase() : Symbol();
+        if (!blocos.has(chave)) blocos.set(chave, []);
+        blocos.get(chave).push(arquivo);
+    }
+    return [...blocos.values()].reverse().flat();
+}
+
 async function entregarLoteComAcompanhamento(entrega, fileObj, fBlob, baseUrl, headers, signal) {
     // Agentes antigos ignoram campos desconhecidos na confirmacao. Nunca enviar
     // renovacao a eles: isso confirmaria o lote antes de terminar a impressao.
@@ -6764,6 +6777,8 @@ async function executarPedImposition(mode, isRefazer) {
     const _pedidoQr = _osDoTrabalho ? _osDoTrabalho.numero : null;
     const _modeloQr = state.activeOSItem ? state.activeOSItem.itemId : null;
 
+    const impressaoReversa = mode === 'print' && document.getElementById('ped-print-reverse')?.checked === true;
+    if (mode === 'print') opcoesDeFace.impressaoReversa = impressaoReversa;
     const payload = {
 
         pedido: _pedidoQr,
@@ -6836,22 +6851,18 @@ async function executarPedImposition(mode, isRefazer) {
         // motor, antes, e cada lote ja sai entregue. Ver `_folhas_por_lote` no
         // engine.py.
         //
-        // A IMPRESSÃO REVERSA DESLIGA O CORTE. Ela inverte as páginas DENTRO de
-        // cada arquivo que chega à tela; com o trabalho inteiro num arquivo só
-        // isso é a inversão do trabalho, mas cortado em lotes viraria "lote 1
-        // invertido, depois lote 2 invertido" — a tiragem sairia na ordem
-        // errada, e só o papel contaria a história. Enquanto a reversa estiver
-        // marcada, o motor devolve o arquivo único de sempre.
+        // A reversa precisa receber o trabalho inteiro antes de enviar o último bloco.
+        // Mantém a divisão em PDFs dos sets que o motor já gera separadamente.
         entregar_por_bloco: document.getElementById('ped-entregar-por-bloco')?.checked === true
-            && !(mode === 'print' && document.getElementById('ped-print-reverse')?.checked === true),
+            && !impressaoReversa,
 
         folha_a_folha: mode === 'print'
             && document.getElementById('ped-print-sheet-by-sheet')?.checked === true
-            && document.getElementById('ped-print-reverse')?.checked !== true,
+            && !impressaoReversa,
         confirmar_entrega: mode === 'print'
             && (document.getElementById('ped-print-sheet-by-sheet')?.checked === true
                 || document.getElementById('ped-entregar-por-bloco')?.checked === true)
-            && document.getElementById('ped-print-reverse')?.checked !== true,
+            && !impressaoReversa,
 
         // CAMAROTE: C_INI, Q_CAM e L_CAM do item da OS (lidos automaticamente via campos hidden ou fallback do item ativo)
         c_ini: (state.activeOSItem ? parseInt(state.activeOSItem.c_ini) : null) || parseInt(document.getElementById('ped-c-ini')?.value || 1) || 1,
@@ -7253,11 +7264,8 @@ async function executarPedImposition(mode, isRefazer) {
             // primeiro lote em 4 s e a impressora não via nada até a última das
             // 1.400 folhas ficar pronta.
             //
-            // Agora cada lote é entregue assim que chega, dentro deste mesmo
-            // laço. A `printBlobQueue` continua aqui como rede: se o
-            // `criarEntregaDeImpressao` do script.js não estiver disponível, o
-            // comportamento antigo volta inteiro em vez de o trabalho se
-            // perder.
+            // Cada lote normal é entregue assim que chega. A fila guarda os PDFs
+            // da reversa e atende o caminho sem entrega imediata.
             const printBlobQueue = [];
             let entrega = null;
             let cancelouNoMeio = false;
@@ -7303,7 +7311,7 @@ async function executarPedImposition(mode, isRefazer) {
                                 // guarda para poder dizer, no cancelamento,
                                 // exatamente ate que folha o operador precisa
                                 // conferir antes de remandar.
-                                if (fileObj.folhas_entregues) {
+                                if (!impressaoReversa && fileObj.folhas_entregues) {
                                     window._entregaEmCurso = {
                                         folhas: fileObj.folhas_entregues,
                                         total: fileObj.folhas_no_trabalho || null,
@@ -7326,6 +7334,11 @@ async function executarPedImposition(mode, isRefazer) {
                                 };
 
                                 if (mode === 'print') {
+                                    if (impressaoReversa) {
+                                        if (fileObj.token_entrega) throw new Error('O motor exigiu entrega imediata. Nenhum bloco foi enviado em ordem reversa.');
+                                        printBlobQueue.push({ name: fileObj.name, blob: fBlob });
+                                        continue;
+                                    }
                                     if (payload.limite_paginas_envio && fileObj.limite_paginas_envio !== 10) {
                                         throw new Error('Atualize o NewProd para enviar trechos de até 10 páginas. Nenhum trecho foi enviado por este painel.');
                                     }
@@ -7416,9 +7429,10 @@ async function executarPedImposition(mode, isRefazer) {
                 return;
             }
 
-            if (cancelouNoMeio) return;
+            if (cancelouNoMeio || window._printCancelRequested) return;
 
             if (mode === 'print' && printBlobQueue.length > 0) {
+                const fila = impressaoReversa ? reverterBlocosDaImpressao(printBlobQueue) : printBlobQueue;
                 if (overlay) overlay.classList.remove('active');
                 toast(`Imposição concluída. Enviando ${printBlobQueue.length} arquivo(s) para a impressora...`, 'info');
                 // Refazer é reimpressão de uma parte: o modelo já estava impresso
@@ -7428,12 +7442,12 @@ async function executarPedImposition(mode, isRefazer) {
                 // ver alvosDaImpressao().
                 const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
                 if (typeof sendPrintJobDirect === 'function') {
-                    const ok = await sendPrintJobDirect(printBlobQueue, opcoesDeFace);
+                    const ok = await sendPrintJobDirect(fila, opcoesDeFace);
                     // Não marca sozinho: pergunta ao operador antes de mudar o status
                     if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                 } else {
                     if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
-                    await openPrintModalQueue(printBlobQueue);
+                    await openPrintModalQueue(fila);
                 }
                 return;
             }
@@ -7459,17 +7473,19 @@ async function executarPedImposition(mode, isRefazer) {
                 }));
 
                 if (mode === 'print') {
+                    if (impressaoReversa && window._printCancelRequested) return;
+                    const fila = impressaoReversa ? reverterBlocosDaImpressao(multiBlobs) : multiBlobs;
                     if (overlay) overlay.classList.remove('active');
                     toast(`Imposição concluída. Enviando ${multiBlobs.length} arquivo(s) para a impressora...`, 'info');
                     // Mesma razão do caminho por stream: refazer não muda status.
                     const alvoImpressao = isRefazer ? [] : alvosDoTrabalho;
                     if (typeof sendPrintJobDirect === 'function') {
-                        const ok = await sendPrintJobDirect(multiBlobs, opcoesDeFace);
+                        const ok = await sendPrintJobDirect(fila, opcoesDeFace);
                         // Não marca sozinho: pergunta ao operador antes de mudar o status
                         if (ok && alvoImpressao.length) await confirmarImpressaoModelos(alvoImpressao);
                     } else {
                         if (typeof marcarConfirmacaoPendente === 'function') marcarConfirmacaoPendente(alvoImpressao);
-                        await openPrintModalQueue(multiBlobs);
+                        await openPrintModalQueue(fila);
                     }
                     return;
                 }

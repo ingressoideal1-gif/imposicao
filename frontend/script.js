@@ -46894,8 +46894,9 @@ async function processPrintQueueOptions(queue, options) {
 // `sendPrintJobDirect` continua com a mesma assinatura, agora escrito em cima
 // disto — os caminhos que já têm a fila inteira na mão (o fallback sem
 // streaming, o modal) não mudaram de comportamento.
-function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historicoContexto = null } = {}) {
+function criarEntregaDeImpressao({ total = null, apenasUmaFace = false, historicoContexto = null, impressaoReversa } = {}) {
     const { printerName, options } = getPedPrintOptions();
+    if (impressaoReversa !== undefined) options.impressao_reversa = impressaoReversa;
     if (apenasUmaFace) options.duplex = 1;
     const hotFolder = options.hot_folder_path || '';
 
@@ -47078,8 +47079,8 @@ window.criarEntregaDeImpressao = criarEntregaDeImpressao;
 
 // Envia os blobs gerados diretamente para a impressora configurada no painel lateral
 // sem abrir o modal (modo "print sem modal")
-async function sendPrintJobDirect(queue, { apenasUmaFace = false, historicoContexto = null } = {}) {
-    const entrega = criarEntregaDeImpressao({ total: (queue || []).length, apenasUmaFace, historicoContexto });
+async function sendPrintJobDirect(queue, { apenasUmaFace = false, historicoContexto = null, impressaoReversa } = {}) {
+    const entrega = criarEntregaDeImpressao({ total: (queue || []).length, apenasUmaFace, historicoContexto, impressaoReversa });
     if (!entrega) return false;
     try {
         await entrega.entregar(queue);

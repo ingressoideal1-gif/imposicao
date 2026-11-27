@@ -2,9 +2,10 @@ const fs = require('fs');
 const assert = require('assert/strict');
 const path = require('path');
 const fonte = fs.readFileSync(path.join(__dirname, '../frontend/pedido.js'), 'utf8');
+const captura = fonte.match(/const impressaoReversa = .*;/)[0];
 const inicio = fonte.indexOf("        folha_a_folha: mode === 'print'");
 const fim = fonte.indexOf('        // CAMAROTE:', inicio);
-const escolhas = new Function('mode', 'document', `return ({${fonte.slice(inicio, fim)}});`);
+const escolhas = new Function('mode', 'document', `${captura} return ({${fonte.slice(inicio, fim)}});`);
 for (const folha of [false, true]) {
     for (const bloco of [false, true]) {
         for (const reversa of [false, true]) {
